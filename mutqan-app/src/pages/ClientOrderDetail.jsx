@@ -17,7 +17,7 @@ import { useWarrantyPolicy } from '../hooks/useWarranty'
 import { orderWarranty, warrantyText } from '../warranty'
 import { useAcConfig } from '../hooks/useAcConfig'
 import InstantService from '../components/InstantService'
-import { buildOrderMessage, waLink } from '../lib/waOrder'
+import { buildOrderMessage, waLink, sealOrder } from '../lib/waOrder'
 
 export default function ClientOrderDetail() {
   const { id } = useParams()
@@ -25,6 +25,15 @@ export default function ClientOrderDetail() {
   const { data: orders, loading } = useLiveShared('orders', { limit: 200 })
   const order = useMemo(() => orders.find((o) => o.id === id), [orders, id])
   const [busy, setBusy] = useState(false)
+  const [qs] = useSearchParams()
+  const [verifyUrl, setVerifyUrl] = useState(null)
+  useEffect(() => {
+    if (!order || qs.get('wa') !== '1' || verifyUrl) return
+    let live = true
+    sealOrder({ draft: { specialtyId: order.specialtyId, preferredTime: order.preferredTime, priority: order.priority, locationText: order.address, coords: order.lat ? { address: order.address } : null }, price: order.acQuote?.total || order.agreedPrice, orderId: order.id }).then((u) => { if (live && u) setVerifyUrl(u) })
+    return () => { live = false }
+    // eslint-disable-next-line
+  }, [order?.id])
   const [ratingVal, setRatingVal] = useState(5)
   const [comment, setComment] = useState('')
   const [methods, setMethods] = useState(null)
@@ -32,7 +41,6 @@ export default function ClientOrderDetail() {
   const [payMsg, setPayMsg] = useState('')
   const { policy: warrantyPolicy } = useWarrantyPolicy()
   const { cfg: acCfg } = useAcConfig()
-  const [qs] = useSearchParams()
 
   useEffect(() => { paymentMethods().then(setMethods) }, [])
   // Payment truth = the provider's verified record. Re-check on return and on every live payment poke.
@@ -120,6 +128,7 @@ export default function ClientOrderDetail() {
         {qs.get('wa') === '1' && ['new', 'forced'].includes(order.status) && (
           <a
             href={waLink(acCfg?.waNumber, buildOrderMessage({
+              verifyUrl,
               draft: { specialtyId: order.specialtyId, qty: order.qty, problem: order.serviceDetails || order.description, preferredTime: order.preferredTime, priority: order.priority, welcomeDiscountPct: order.welcomeDiscountPct, welcomeOff: order.acQuote?.welcomeOff, coords: order.lat ? { lat: order.lat, lng: order.lng, address: order.address } : null },
               who: { name: order.clientName, phone: order.clientPhone },
               price: order.acQuote?.total || order.agreedPrice,

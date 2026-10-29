@@ -1,7 +1,17 @@
 // Builds the full order message and opens the customer's own WhatsApp toward the business number.
 import { specialtyLabel } from '../constants'
+import { post } from './_api'
 
-export function buildOrderMessage({ draft = {}, who = {}, price, orderId, detail }) {
+// Registers the order's key facts on the server and returns a short verification link (null if offline).
+export async function sealOrder({ draft = {}, price, orderId }) {
+  try {
+    const c = draft.coords || {}
+    const r = await post('/shop', { op: 'seal', service: specialtyLabel(draft.specialtyId) || 'خدمة', price: Number(price) || 0, time: draft.preferredTime || (draft.priority === 'urgent' ? 'عاجل — الآن' : 'أقرب وقت'), address: c.address || draft.locationText || '', ref: orderId ? String(orderId).slice(-5) : '' })
+    return r?.url || null
+  } catch { return null }
+}
+
+export function buildOrderMessage({ draft = {}, who = {}, price, orderId, detail, verifyUrl }) {
   const c = draft.coords || {}
   const lines = [
     '🔔 *طلب جديد — متقن*',
@@ -16,6 +26,7 @@ export function buildOrderMessage({ draft = {}, who = {}, price, orderId, detail
     price ? `💰 السعر المتفق: ${price} ر.س` : null,
     c.address || draft.locationText ? `🏠 العنوان: ${c.address || draft.locationText}` : null,
     c.lat ? `📍 الموقع: https://maps.google.com/?q=${c.lat},${c.lng}` : null,
+    verifyUrl ? `✅ للتحقق من صحة الطلب: ${verifyUrl}` : null,
   ]
   return lines.filter(Boolean).join('\n')
 }
