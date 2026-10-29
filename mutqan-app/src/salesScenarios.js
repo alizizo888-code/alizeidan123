@@ -143,5 +143,5 @@ const MAP = [
   [/اللي /g, 'اللي '], [/نكمل؟/g, 'نكمل؟'], [/أحجز لك/g, 'أحجزلك'], [/أحوّلك/g, 'أحولك'], [/أرتب لك/g, 'أرتبلك'],
   [/أعطيك/g, 'أديك'], [/أسوي لك/g, 'أعملك'], [/أحسب لك/g, 'أحسبلك'], [/نزلتها/g, 'نزلتهالك'], [/بصراحة/g, 'بصراحة'],
 ]
-const toEg = (s) => MAP.reduce((a, [re, to]) => a.replace(re, to), s)
+export const toEg = (s) => MAP.reduce((a, [re, to]) => a.replace(re, to), s)
 export const SALES = Object.fromEntries(Object.entries(SA).map(([k, v]) => [k, { sa: v, eg: v.map(toEg) }]))

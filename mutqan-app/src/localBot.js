@@ -5,16 +5,20 @@ import { SPECIALTIES, STATUS_META } from './constants'
 import { computeQuote } from './pricing'
 import { acQuote, acQuoteFromAcq } from './acPricing'
 import { INTENTS, SPEC_WORDS, R, norm, detectDialect, dialectFromPref } from './botData'
-import { KB } from './kbData'
+import { KB as KB_BASE } from './kbData'
+import { KB_MORE } from './kbMore'
+import { LEX_INTENTS, LEX_SPECS } from './lexiconMore'
+const KB = [...KB_BASE, ...KB_MORE]
 import { SALES } from './salesScenarios'
+import { extraTopic } from './botExtras'
 import { checkMakkahArea } from './data/makkah'
 
 export { detectDialect }
 
 // ── precompute ───────────────────────────────────────────────────────────────
-const NI = Object.fromEntries(Object.entries(INTENTS).map(([k, a]) => [k, [...new Set(a.map(norm))].filter(Boolean)]))
+const NI = Object.fromEntries(Object.entries(INTENTS).map(([k, a]) => [k, [...new Set([...a, ...(LEX_INTENTS[k] || [])].map(norm))].filter(Boolean)]))
 const cd = (x) => x.replace(/(.)\1/g, '$1')
-const NS = SPEC_WORDS.map(([id, a]) => [id, [...new Set(a.map((w) => cd(norm(w))))].filter(Boolean)])
+const NS = SPEC_WORDS.map(([id, a]) => [id, [...new Set([...a, ...(LEX_SPECS.find(([i]) => i === id)?.[1] || [])].map((w) => cd(norm(w))))].filter(Boolean)])
 const PRIORITY = ['human', 'frustrated', 'complaint', 'cancel_order', 'track', 'warranty', 'join_tech', 'reschedule', 'competitor', 'budget', 'expensive', 'discount_ask', 'hesitate', 'urgent', 'price_ask', 'offers_ask', 'includes_ask', 'payment_ask', 'time_ask_when', 'area_ask', 'location_ask', 'parts', 'rating', 'howitworks', 'whoareyou', 'accept', 'reject', 'repeat', 'thanks', 'bye', 'greet', 'smalltalk', 'offtopic', 'edit_time', 'edit_qty', 'ask_total_with_warranty', 'ask_vat', 'levant_gulf_price']
 
 const lev1 = (a, b) => {
@@ -127,7 +131,8 @@ export function localTurn(ctx) {
   const raw = userMsgs[userMsgs.length - 1] || ''
   const t = norm(raw)
   const toks = t.split(' ').filter(Boolean)
-  const D = dialectFromPref(ctx.dialect) || detectDialect(...userMsgs.slice(-3).reverse()) || 'sa'
+  // The assistant always speaks as a Saudi man; only an explicit dialect choice (e.g. 'eg') overrides it.
+  const D = dialectFromPref(ctx.dialect) || 'sa'
   const first = customer?.verified && customer?.name ? customer.name.split(' ')[0] : ''
   const nm = first ? ` ${first}` : ''
   const pickv = (arr, seed) => arr[hash(seed + userMsgs.length) % arr.length]
@@ -188,6 +193,19 @@ export function localTurn(ctx) {
     return out(rep('time_changed', { t: timePhrase(t, raw) }) + ' ' + (!draft.coords ? rep('location_prompt') : rep('ready')), { intent, action: !draft.coords ? 'location' : 'ready_to_order' })
   }
   if (is('reschedule') && orders.length) return out(rep('reschedule'), { action: 'handoff', escalation: 'customer_request' })
+
+  // ── discount-ask stems that the keyword lists miss (EG/SA) ──
+  if ((quote || draft.specialtyId) && /(هتنزل|هتنزلي|تنزل كم|تنزلها كم|كم تنزل|كام تنزل|اخر سعر|اخر كلام|اقل سعر|اقصي سعر|تنزلوا|تنزل لي|تنزلي)/.test(t)) scores.discount_ask = Math.max(scores.discount_ask, 1.2)
+
+  // ── conversation layer: rapport, trust, objections, budget, hours ──
+  {
+    const ex = extraTopic(t, toks, { spec, qty, hasQuote: !!quote, hasDraft: !!draft.specialtyId, problem: draft.problem })
+    if (ex && !(['hours', 'experience'].includes(ex.key) && kbMatch(t, toks))) {
+      const body = fmt(pickv(ex[D] || ex.sa, ex.key + t), {})
+      const ask = ['howru', 'tired', 'praise'].includes(ex.key) && draft.specialtyId ? ' ' + (!draft.preferredTime ? rep('time_prompt') : !draft.coords ? rep('location_prompt') : rep('ready')) : ''
+      return out(body + ask, { action: ex.key === 'objection' ? 'negotiate' : 'none', confidence: 0.85, sources: ['knowledge'] })
+    }
+  }
 
   // ── coverage: outside Makkah → partner branches via technical support ──
   if (areaInfo && areaInfo.inside === false && !(spec === 'moving' && /(?:^|\s)من\s/.test(t))) return out(rep('out_cov', { c: areaInfo.city }), { action: is('area_ask') || /هل|ممكن|تخدم/.test(t) ? 'none' : 'handoff', escalation: is('area_ask') || /هل|ممكن|تخدم/.test(t) ? null : 'customer_request', sources: ['knowledge'] })

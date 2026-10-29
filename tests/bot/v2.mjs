@@ -35,7 +35,7 @@ for (const m of ['قديش بتغسلوا المكيف', 'شنو سعر غسيل
 // suggestions
 { const r = converse(['ابغى غسيل 3 سبليت']).last; t('suggestions after quote', Array.isArray(r.suggestions) && r.suggestions.length >= 2, JSON.stringify(r.suggestions)) }
 { const r = converse(['السلام عليكم']).last; t('suggestions at start', r.suggestions.length >= 3, JSON.stringify(r.suggestions)) }
-{ const a = converse(['عايز غسيل مكيف']).last.suggestions.join(); const b = converse(['ابغى غسيل مكيف']).last.suggestions.join(); t('suggestions follow dialect', a !== b, a + ' | ' + b) }
+{ const a = converse(['عايز غسيل مكيف'], { dialect: 'egyptian' }).last.suggestions.join(); const b = converse(['ابغى غسيل مكيف']).last.suggestions.join(); t('suggestions follow dialect', a !== b, a + ' | ' + b) }
 // negotiation on a mixed order + warranty add-on still respects floor
 { const x = converse(['ابغى اغسل 3 سبليت و 2 شباك', 'اليوم عصر', { loc: 1 }, 'غالي', 'نزل', 'اخر سعر', 'اخر سعر لو سمحت']); const fl = quoteFor(x.draft).floor
   const prices = x.results.filter((r) => r.action === 'negotiate').flatMap((r) => [...r.reply.matchAll(/(\d{2,4}) ر\.س/g)].map((m) => Number(m[1])))
@@ -46,7 +46,7 @@ for (const m of ['قديش بتغسلوا المكيف', 'شنو سعر غسيل
 // long voice-style run-on
 { const r = converse(['السلام عليكم يا شباب كيف الحال انا عندي ثلاث مكيفات سبليت في البيت وابغى اغسلهم بكره العصر ان شاء الله وانا ساكن في حي الصفا']).last
   t('long voice-style message understood (qty/type/time/area)', r.intent.qty === 3 && /200/.test(r.reply) && /عصر/.test(r.intent.preferredTime || '') && /الصفا/.test(r.intent.locationText || ''), JSON.stringify(r.intent)) }
-{ const r = converse(['يا باشا عايز اغسل مكيفين شباك بكره الصبح ضروري']).last; t('Egyptian run-on', /100/.test(r.reply) && r.dialect === 'eg', r.reply) }
+{ const r = converse(['يا باشا عايز اغسل مكيفين شباك بكره الصبح ضروري']).last; t('Egyptian run-on (understood, answered as Saudi man)', /100/.test(r.reply) && r.dialect === 'sa', r.reply) }
 
 console.log(`v2: ${pass}/${pass + fail}`)
 process.exit(fail ? 1 : 0)

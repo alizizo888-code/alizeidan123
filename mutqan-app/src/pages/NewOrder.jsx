@@ -16,6 +16,9 @@ import MapView from '../components/MapView'
 import RegisterModal from '../components/RegisterModal'
 import { useSession } from '../hooks/useSession'
 import { SPECIALTIES } from '../constants'
+// One strong colour per specialty (selected = solid fill; idle = coloured edge) for quick recognition.
+const SPEC_COLORS = { ac: '#0369a1', electric: '#d97706', plumbing: '#0e7490', locks: '#6d28d9', appliances: '#be185d', satellite: '#4338ca', paint: '#c2410c', tiling: '#a16207', cameras: '#be123c', fridge: '#0891b2', cleaning: '#15803d', pest: '#b91c1c' }
+const specColor = (id) => SPEC_COLORS[id] || '#0f766e'
 import { isRegistered } from '../registration'
 import SpecialtyGallery from '../components/SpecialtyGallery'
 import FloatingContact from '../components/FloatingContact'
@@ -23,7 +26,7 @@ import AcCalculator from '../components/AcCalculator'
 import PermissionHelp from '../components/PermissionHelp'
 import { permissionState } from '../hooks/useLocator'
 
-const inputCls = 'w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 shadow-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15'
+const inputCls = 'w-full bg-white border-2 border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 shadow-sm focus:outline-none focus:border-sky-600 focus:ring-4 focus:ring-sky-200'
 
 export default function NewOrder() {
   const navigate = useNavigate()
@@ -230,13 +233,14 @@ export default function NewOrder() {
                 <button
                   key={s.id}
                   onClick={() => { setSpecialtyId(s.id); setChanging(false) }}
-                  className={`flex items-center gap-2 rounded-xl px-3 py-2.5 border text-xs font-bold transition-colors ${
+                  style={specialtyId === s.id ? { backgroundColor: specColor(s.id), borderColor: specColor(s.id) } : { borderRightColor: specColor(s.id) }}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-3 border-2 border-r-[6px] text-xs font-black transition-all ${
                     specialtyId === s.id
-                      ? 'bg-primary/10 border-primary text-primary'
-                      : 'bg-white border-slate-200 text-slate-600 shadow-sm hover:border-primary/40'
+                      ? 'text-white shadow-lg scale-[1.03]'
+                      : 'bg-white border-slate-300 text-slate-900 shadow-sm active:scale-95'
                   }`}
                 >
-                  <span className="text-base">{s.icon}</span> {s.label}
+                  <span className="text-lg">{s.icon}</span> {s.label}
                 </button>
               ))}
             </div>
@@ -259,14 +263,14 @@ export default function NewOrder() {
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="مثال: الدور الثاني — رن الجرس" className={`${inputCls} resize-none`} />
           </Field>
         ) : (
-          <button onClick={() => setNoteOpen(true)} className="self-start flex items-center gap-1.5 text-xs font-bold text-slate-500 active:scale-95 transition-transform">
+          <button onClick={() => setNoteOpen(true)} className="self-start flex items-center gap-1.5 text-xs font-black text-slate-800 bg-slate-100 border-2 border-slate-300 rounded-full px-3 py-1.5 active:scale-95 transition-transform">
             <PencilLine size={14} /> {description ? 'تعديل الملاحظة' : 'إضافة ملاحظة (اختياري)'}
           </button>
         )}
 
         <Field label="موقع الخدمة">
           {coords ? (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-start gap-2.5">
+            <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-3 flex items-start gap-2.5">
               <CheckCircle2 size={20} className="text-emerald-600 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-black text-emerald-800">تم تحديد موقعك تلقائيًا — وسيُرسل مع طلبك على واتساب</p>
@@ -286,8 +290,8 @@ export default function NewOrder() {
           )}
           {locDenied && <div className="mt-2"><PermissionHelp kind="location" onRetry={() => useMyLocation()} /></div>}
           <div className="flex gap-4 mt-2.5">
-            <button onClick={() => setMapOpen((v) => !v)} className="flex items-center gap-1 text-[11px] font-bold text-primary"><MapIcon size={13} /> {mapOpen ? 'إخفاء الخريطة' : 'اختر من الخريطة'}</button>
-            <button onClick={() => setLinkOpen((v) => !v)} className="flex items-center gap-1 text-[11px] font-bold text-primary"><Link2 size={13} /> لصق رابط خرائط جوجل</button>
+            <button onClick={() => setMapOpen((v) => !v)} className="flex items-center gap-1 text-xs font-black text-sky-700"><MapIcon size={13} /> {mapOpen ? 'إخفاء الخريطة' : 'اختر من الخريطة'}</button>
+            <button onClick={() => setLinkOpen((v) => !v)} className="flex items-center gap-1 text-xs font-black text-sky-700"><Link2 size={13} /> لصق رابط خرائط جوجل</button>
           </div>
           {linkOpen && (
             <div className="mt-2 flex gap-2">
@@ -320,11 +324,11 @@ export default function NewOrder() {
         <button
           onClick={submit}
           disabled={submitting}
-          className="w-full bg-primary text-white font-display font-black rounded-2xl py-4 disabled:opacity-50 active:scale-[0.98] transition-transform shadow-lg shadow-primary/20 hover:bg-primary/90"
+          className="w-full bg-gradient-to-l from-emerald-600 to-teal-600 text-white font-display font-black text-base rounded-2xl py-4 disabled:opacity-50 active:scale-[0.98] transition-transform shadow-xl shadow-emerald-300 ring-2 ring-emerald-200"
         >
           {submitting ? 'جارِ الإرسال…' : locating ? 'جارِ تحديد موقعك…' : coords ? 'تأكيد الطلب وإرسال الموقع عبر واتساب' : 'تحديد الموقع وتأكيد الطلب'}
         </button>
-        <p className="text-[11px] text-slate-400 text-center -mt-2 pb-4">
+        <p className="text-xs font-bold text-slate-600 text-center -mt-2 pb-4">
           {registered || knownGuest ? `يُرسل الطلب باسم ${(session?.name || '').trim() || 'حسابك'}` : 'بدون تسجيل — بعد الإرسال نتواصل معك على واتساب لتأكيد الموعد'}
         </p>
       </div>
@@ -347,7 +351,7 @@ export default function NewOrder() {
 function Field({ label, children }) {
   return (
     <div>
-      <label className="block text-xs font-bold text-slate-500 mb-1.5">{label}</label>
+      <label className="block text-sm font-black text-slate-900 mb-1.5 border-r-4 border-sky-600 pr-2">{label}</label>
       {children}
     </div>
   )

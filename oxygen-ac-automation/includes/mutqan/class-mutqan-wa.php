@@ -255,6 +255,23 @@ final class Mutqan_WA_Bot {
         if (!isset(self::$dc[$f])) { $j = @file_get_contents(__DIR__ . '/data/' . $f . '.json'); self::$dc[$f] = $j ? (json_decode($j, true) ?: []) : []; }
         return self::$dc[$f];
     }
+    /** Rapport / trust / objection topics. Returns reply text or null. Patterns come from data/extras.json (generated from the app bot). */
+    private static function extra($n, $hasService) {
+        $d = self::data('extras');
+        if (empty($d['patterns'])) { return null; }
+        $words = count(array_filter(explode(' ', $n)));
+        $svc = $hasService || (bool) preg_match('/(?:مكيف|سباك|كهرب|غسيل|تركيب|تسريب|فريون|مجاري|سخان|قفل|ثلاج)/u', $n);
+        $order = [['compare', 99, true], ['why_us', 99, true], ['triage', 99, true], ['howru', 5, false], ['tired', 5, false], ['praise', 5, false], ['budget', 99, true]];
+        foreach ($order as $o) {
+            [$k, $max, $any] = $o;
+            if ($words > $max || (!$any && $svc) || empty($d['patterns'][$k]) || empty($d['replies'][$k])) { continue; }
+            if (@preg_match('/' . str_replace('/', '\\/', $d['patterns'][$k]) . '/u', $n)) {
+                $b = $d['replies'][$k];
+                return str_replace('{n}', '', $b[crc32($k . $n) % count($b)]);
+            }
+        }
+        return null;
+    }
     public static function say($key, $seed, $v = []) {
         $b = self::data('sales')[$key]['sa'] ?? [];
         if (!$b) { return ''; }
@@ -362,6 +379,11 @@ final class Mutqan_WA_Bot {
         $neg = (array) ($bot['neg'] ?? []);
         $isWash = !preg_match('/(?:^|\s)(?:كيف|طريقه|طريقة|شرح|فيديو)/u', $n) && (bool) preg_match('/(?:غسيل|غسل|تنظيف|اغسل)/u', $n) && (bool) preg_match('/(?:مكيف|سبليت|شباك|تكييف)/u', $n);
         $yes = self::has($n, ['نعم', 'ايوه', 'ايوا', 'اي نعم', 'حولني', 'حول', 'اوكي', 'تمام', 'موافق', 'ابشر']);
+        // conversation layer (rapport, trust, objections, budget) — same wording as the app bot, Saudi voice
+        if (!$step && !$neg) {
+            $ex = self::extra($n, !empty($bot['pendingWash']) || $isWash);
+            if ($ex !== null) { $r[] = $ex; return self::finish($out, $bot, $r, $hs, $hc, $ts); }
+        }
         // outside Makkah -> partner branches through technical support
         if ($ar && $ar['inside'] === false && !$step) {
             $r[] = self::say('out_cov', $n, ['c' => $ar['city']]);
