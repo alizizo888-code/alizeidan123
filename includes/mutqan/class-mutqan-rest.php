@@ -32,7 +32,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'push', 'promo', 'wa'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'push', 'promo', 'wa', 'shop'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -161,6 +161,10 @@ final class Mutqan_Rest {
     public static function h_wa($req, $p) {
         if (($p['kind'] ?? 'guest') !== 'user') { throw new Mutqan_Error('unauthorized', 'سجّل الدخول.', 401); }
         return Mutqan_WA::handle(self::body($req), $p);
+    }
+
+    public static function h_shop($req, $p) {
+        return Mutqan_Shop::handle(self::body($req), $p);
     }
 
     public static function h_promo($req, $p) {
