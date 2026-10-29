@@ -1,7 +1,7 @@
 <?php
 if (!defined('ABSPATH')) { exit; }
 
-/** WordPress admin screen "متقن": owner account + free AI providers. Secrets are write-only (never echoed back). */
+/** WordPress admin screen "أكسجين": owner account + free AI providers. Secrets are write-only (never echoed back). */
 final class Mutqan_Admin {
     const PAGE = 'mutqan-admin';
 
@@ -14,7 +14,7 @@ final class Mutqan_Admin {
     }
 
     public static function menu() {
-        add_menu_page('تطبيق متقن', 'تطبيق متقن', 'manage_options', self::PAGE, [__CLASS__, 'page'], 'dashicons-hammer', 56);
+        add_menu_page('تطبيق أكسجين', 'تطبيق أكسجين', 'manage_options', self::PAGE, [__CLASS__, 'page'], 'dashicons-hammer', 56);
     }
 
     private static function back($msg, $kind = 'success') {
@@ -97,7 +97,7 @@ final class Mutqan_Admin {
         ];
         ?>
         <div class="wrap" dir="rtl" style="max-width:980px">
-            <h1>تطبيق متقن</h1>
+            <h1>تطبيق أكسجين</h1>
             <?php if ($msg): ?><div class="notice notice-<?php echo esc_attr($kind === 'error' ? 'error' : ($kind === 'info' ? 'info' : 'success')); ?> is-dismissible"><p><?php echo esc_html($msg); ?></p></div><?php endif; ?>
             <p>رابط التطبيق: <a href="<?php echo esc_url($app); ?>" target="_blank" rel="noopener"><?php echo esc_html($app); ?></a>
                 <?php if (!$built): ?> — <strong style="color:#b45309">لم يُرفع ملف الواجهة بعد (مجلد app داخل الإضافة).</strong><?php endif; ?></p>
