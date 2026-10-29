@@ -1,0 +1,7 @@
+# Oxygen public homepage served from the plugin-dist deployment (docroot = plugin folder).
+DirectoryIndex index.html
+Options -Indexes
+# The plugin PHP files only make sense inside WordPress; never run them directly from the web root.
+<FilesMatch "\.php$">
+  Require all denied
+</FilesMatch>
