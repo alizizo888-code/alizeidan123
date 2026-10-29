@@ -4,7 +4,7 @@ import { specialtyLabel } from '../constants'
 export function buildOrderMessage({ draft = {}, who = {}, price, orderId, detail }) {
   const c = draft.coords || {}
   const lines = [
-    '🔔 *طلب جديد — متقن*',
+    '🔔 *طلب جديد — أكسجين*',
     orderId ? `رقم الطلب: #${String(orderId).slice(-5)}` : null,
     who.name ? `👤 الاسم: ${who.name}` : null,
     who.phone ? `📱 الجوال: ${who.phone}` : null,
