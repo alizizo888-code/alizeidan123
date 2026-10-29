@@ -3,7 +3,9 @@ import { Minus, Plus, ShieldCheck, Flame } from 'lucide-react'
 import { useAcConfig } from '../hooks/useAcConfig'
 import { AC_MODES, AC_TYPES, AC_WARRANTY, acQuote, hasDepth } from '../acPricing'
 
-const sel = 'w-full bg-white border border-slate-200 rounded-xl px-3 py-3 text-sm font-bold text-slate-800 shadow-sm focus:outline-none focus:border-primary'
+const sel = 'w-full bg-white border-2 border-slate-300 rounded-xl px-3 py-3 text-sm font-black text-slate-900 shadow-sm focus:outline-none focus:border-sky-600'
+// Strong, saturated colours per service mode so the choice is obvious at a glance.
+const MODE_ON = { wash: 'bg-sky-600 border-sky-700', install: 'bg-emerald-600 border-emerald-700', maintenance: 'bg-orange-600 border-orange-700' }
 
 // Shown only after the customer picks the "مكيفات" specialty: mode, type, quantity, warranty, VAT -> live price.
 export default function AcCalculator({ offerKey, onChange }) {
@@ -46,9 +48,9 @@ export default function AcCalculator({ offerKey, onChange }) {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-2xl">
+      <div className="grid grid-cols-3 gap-2 bg-slate-200/70 p-1.5 rounded-2xl">
         {AC_MODES.map((m) => (
-          <button key={m.id} onClick={() => setMode(m.id)} className={`py-2.5 rounded-xl text-xs font-black transition ${mode === m.id ? 'bg-white shadow text-primary' : 'text-slate-500'}`}>
+          <button key={m.id} onClick={() => setMode(m.id)} className={`py-2.5 rounded-xl text-xs font-black transition border-2 ${mode === m.id ? `${MODE_ON[m.id] || MODE_ON.wash} text-white shadow-lg scale-[1.02]` : 'bg-white text-slate-800 border-slate-300'}`}>
             <span className="block text-base">{m.icon}</span>{m.label}
           </button>
         ))}
@@ -66,27 +68,27 @@ export default function AcCalculator({ offerKey, onChange }) {
         </div>
       )}
 
-      <label className="block text-xs font-bold text-slate-500">نوع المكيف
+      <label className="block text-xs font-black text-slate-800">نوع المكيف
         <select value={type} onChange={(e) => setType(e.target.value)} className={`${sel} mt-1.5`}>
           {types.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
         </select>
       </label>
 
       {mode !== 'maintenance' && (
-        <div className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-sm">
-          <div><p className="text-xs font-black text-slate-800">عدد المكيفات</p><p className="text-[10px] text-slate-400">خصم تلقائي عند زيادة العدد</p></div>
+        <div className="flex items-center justify-between bg-white border-2 border-sky-300 rounded-xl px-3 py-2.5 shadow-sm">
+          <div><p className="text-xs font-black text-slate-800">عدد المكيفات</p><p className="text-[10px] font-bold text-emerald-700">خصم تلقائي عند زيادة العدد</p></div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center"><Minus size={14} /></button>
-            <span className="w-8 text-center font-black">{qty}</span>
-            <button onClick={() => setQty(Math.min(50, qty + 1))} className="w-9 h-9 rounded-lg bg-primary text-white flex items-center justify-center"><Plus size={14} /></button>
+            <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-10 h-10 rounded-lg bg-slate-800 text-white flex items-center justify-center active:scale-95"><Minus size={14} /></button>
+            <span className="w-9 text-center text-lg font-black text-slate-900">{qty}</span>
+            <button onClick={() => setQty(Math.min(50, qty + 1))} className="w-10 h-10 rounded-lg bg-sky-600 text-white flex items-center justify-center active:scale-95"><Plus size={14} /></button>
           </div>
         </div>
       )}
 
       {hasDepth(mode, type) && (
-        <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl">
+        <div className="grid grid-cols-2 gap-2 bg-slate-200/70 p-1.5 rounded-2xl">
           {[[true, 'داخلي وخارجي'], [false, 'داخلي فقط']].map(([v, l]) => (
-            <button key={l} onClick={() => setFull(v)} className={`py-2 rounded-xl text-xs font-black ${full === v ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}>{l}</button>
+            <button key={l} onClick={() => setFull(v)} className={`py-2.5 rounded-xl text-xs font-black border-2 ${full === v ? 'bg-indigo-600 border-indigo-700 text-white shadow-md' : 'bg-white border-slate-300 text-slate-800'}`}>{l}</button>
           ))}
         </div>
       )}
@@ -98,27 +100,27 @@ export default function AcCalculator({ offerKey, onChange }) {
       )}
 
       {mode === 'wash' && (
-        <label className="block text-xs font-bold text-slate-500"><span className="inline-flex items-center gap-1"><ShieldCheck size={13} className="text-amber-500" />مدة الضمان</span>
-          <select value={warranty} onChange={(e) => setWarranty(e.target.value)} className={`${sel} mt-1.5 border-amber-300`}>
+        <label className="block text-xs font-black text-slate-800"><span className="inline-flex items-center gap-1"><ShieldCheck size={13} className="text-amber-500" />مدة الضمان</span>
+          <select value={warranty} onChange={(e) => setWarranty(e.target.value)} className={`${sel} mt-1.5 !border-amber-500 bg-amber-50`}>
             {AC_WARRANTY.map((w) => <option key={w.v} value={w.v}>{w.l}</option>)}
           </select>
         </label>
       )}
 
-      <label className="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-3 shadow-sm text-xs font-black text-slate-700">
+      <label className="flex items-center justify-between bg-white border-2 border-slate-300 rounded-xl px-3 py-3 shadow-sm text-xs font-black text-slate-900">
         ضريبة القيمة المضافة ({cfg.vatPct}%)
         <input type="checkbox" checked={vat} onChange={(e) => setVat(e.target.checked)} className="w-5 h-5 accent-sky-600" />
       </label>
 
-      <div className="rounded-2xl bg-gradient-to-br from-sky-600 to-blue-700 text-white p-4 text-center shadow-md">
+      <div className="rounded-2xl bg-gradient-to-br from-blue-700 via-sky-600 to-cyan-600 text-white p-4 text-center shadow-xl ring-4 ring-sky-200">
         {q.onInspection && !q.total ? (
           <>
-            <p className="text-[11px] opacity-80">السعر</p>
+            <p className="text-xs font-bold opacity-95">السعر</p>
             <p className="text-lg font-black">{mode === 'maintenance' ? 'يُحدَّد بعد الفحص' : 'يُحدَّد بعد المعاينة'}</p>
           </>
         ) : (
           <>
-            <p className="text-[11px] opacity-80">{q.offer ? `🎉 عرض مفعّل: ${q.offer.title}` : 'الإجمالي التقديري'}</p>
+            <p className="text-xs font-bold opacity-95">{q.offer ? `🎉 عرض مفعّل: ${q.offer.title}` : 'الإجمالي التقديري'}</p>
             <p className="text-3xl font-black">{q.total} <span className="text-sm">ر.س</span></p>
             {q.warrantyAdd > 0 && <p className="text-[10px] opacity-80">يشمل إضافة الضمان {q.warrantyAdd} ر.س</p>}
           </>

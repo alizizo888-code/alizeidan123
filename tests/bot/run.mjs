@@ -15,7 +15,7 @@ const singles = [
   ['السلام عليكم', { re: /وعليكم|هلا|أهلاً|أهلين|يا هلا|نورتنا|أهلا/ }],
   ['هلا والله', { re: /هلا|أهلاً|أهلين/ }],
   ['صباح الخير', { re: /هلا|أهلاً|أهلين|يا هلا|نورتنا/ }],
-  ['ازيك عامل ايه', { dialect: 'eg' }],
+  ['ازيك عامل ايه', { dialect: 'sa', re: /بخير|الحمد لله|هلا|تحت أمرك|أخدمك|أخدمك/ }],
   ['شلونك يالطيب', {}],
   ['شكرا يعطيك العافيه', { re: /العفو|ولا يهمك|حياك|الله يعافيك|الله يسلمك|في الخدمة/ }],
   ['تسلم ايدك يا باشا', { re: /العفو|ولا يهمك|الله يسلمك|حياك/ }],
@@ -114,10 +114,10 @@ for (const [text, e] of singles) {
 
 // ── B) dialect mirroring ───────────────────────────────────────────────────────────────────
 for (const [text, want] of [
-  ['عايز اغسل مكيفين', 'eg'], ['ازاي احجز دلوقتي', 'eg'], ['فين الفني بتاعي', 'eg'], ['بكام الغسيل ده', 'eg'], ['ممكن اعرف الاسعار يا هندسة', 'eg'],
+  ['عايز اغسل مكيفين', 'sa'], ['ازاي احجز دلوقتي', 'sa'], ['فين الفني بتاعي', 'sa'], ['بكام الغسيل ده', 'sa'], ['ممكن اعرف الاسعار يا هندسة', 'sa'],
   ['ابغى اغسل مكيفين', 'sa'], ['وش الاسعار عندكم', 'sa'], ['وين الفني الحين', 'sa'], ['كم سعر الغسيل ابي اعرف', 'sa'], ['ابشر ابغى فني كهرباء', 'sa'],
 ]) { const r = one(text); t(`dialect(${want}): ${text}`, r.dialect === want, r.dialect) }
-{ const r = one('عايز اغسل مكيفين'); t('EG input -> EG-flavoured reply', EG.test(r.reply), r.reply) }
+{ const r = one('عايز اغسل مكيفين'); t('EG input -> Saudi-man reply (persona)', SA.test(r.reply) && !/ببلاش|النهارده/.test(r.reply), r.reply) }
 { const r = one('ابغى اغسل مكيفين'); t('SA input -> SA-flavoured reply', SA.test(r.reply) && !/ببلاش|النهارده/.test(r.reply), r.reply) }
 t('explicit pref egyptian overrides', converse(['ابغى غسيل مكيف'], { dialect: 'egyptian' }).last.dialect === 'eg')
 t('explicit pref saudi overrides', converse(['عايز غسيل مكيف'], { dialect: 'saudi' }).last.dialect === 'sa')
