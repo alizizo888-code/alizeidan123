@@ -2,22 +2,29 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShoppingBag, Sparkles, Wrench } from 'lucide-react'
 import { useLiveShared } from '../../lib/useLive'
+import UsedAcStore from '../../components/UsedAcStore'
 
 export default function Store() {
   const navigate = useNavigate()
   const { data: products, loading } = useLiveShared('products', { order: '-createdAt', limit: 50 })
+  const [tab, setTab] = useState('used')
 
   return (
     <div className="h-full overflow-y-auto pb-32 md:pb-10" dir="rtl">
       <header className="sticky top-0 z-20 bg-[#eaf3fc]/85 backdrop-blur-xl border-b border-sky-100/60 pt-[env(safe-area-inset-top,0px)]">
         <div className="max-w-4xl mx-auto w-full px-4 py-4">
           <h1 className="font-display text-lg font-black text-slate-900">المتجر</h1>
-          <p className="text-[11px] text-slate-500">أجهزة ومعدات أصلية مع التوريد والتركيب والضمان</p>
+          <p className="text-[11px] font-bold text-slate-600">أجهزة تكييف مستعملة بحالة موثّقة، وأجهزة ومعدات جديدة مع التركيب والضمان</p>
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            {[['used', '❄️ مكيفات مستعملة'], ['new', '🛍️ أجهزة ومعدات']].map(([id, l]) => (
+              <button key={id} onClick={() => setTab(id)} className={`py-2.5 rounded-xl text-xs font-black border-2 transition ${tab === id ? 'bg-sky-700 border-sky-800 text-white shadow-lg' : 'bg-white border-slate-300 text-slate-800'}`}>{l}</button>
+            ))}
+          </div>
         </div>
       </header>
 
       <div className="max-w-4xl mx-auto w-full px-4 pt-4">
-        {loading ? (
+        {tab === 'used' ? <UsedAcStore /> : loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="h-56 rounded-2xl bg-white border border-black/5 animate-pulse" />
             <div className="h-56 rounded-2xl bg-white border border-black/5 animate-pulse" />

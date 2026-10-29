@@ -21,6 +21,8 @@ final class Mutqan_Policy {
                 'pricing' => $pub, 'offers' => $pub, 'ac_media' => $pub, 'products' => $pub, 'coverage' => $pub,
                 'warranty_policy' => $pub, 'payment_methods' => $pub, 'wa_numbers' => $pub,
                 'notify_settings' => $pub, 'ai_settings' => $pub,
+                'used_ac' => $pub,
+                'used_ac_private' => ['read', 'write', 'write', 'write'], 'used_offers' => ['read', 'write', 'write', 'write'],
                 'assignment_settings' => ['staff', 'write', 'write', 'write'],
                 'pricing_internal' => ['read', 'write', 'write', 'write'],
                 'tech_profiles' => ['staff', 'authed', 'creator_or_write', 'write'],
@@ -154,7 +156,7 @@ final class Mutqan_Policy {
 
     /** Visibility a document is stored with, whatever the browser asked for. */
     public static function force_visibility($coll, $requested, $p) {
-        $public = ['pricing', 'offers', 'ac_media', 'products', 'coverage', 'warranty_policy', 'payment_methods', 'wa_numbers', 'notify_settings', 'ai_settings'];
+        $public = ['pricing', 'offers', 'ac_media', 'products', 'used_ac', 'coverage', 'warranty_policy', 'payment_methods', 'wa_numbers', 'notify_settings', 'ai_settings'];
         if (in_array($coll, $public, true)) { return 'everyone'; }
         if ($coll === 'tech_profiles' || $coll === 'assignment_settings') { return 'group'; }
         if ($coll === 'notifications') {

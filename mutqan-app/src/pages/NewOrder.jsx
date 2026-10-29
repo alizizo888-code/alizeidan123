@@ -22,6 +22,7 @@ const specColor = (id) => SPEC_COLORS[id] || '#0f766e'
 import { isRegistered } from '../registration'
 import SpecialtyGallery from '../components/SpecialtyGallery'
 import FloatingContact from '../components/FloatingContact'
+import InstantService from '../components/InstantService'
 import AcCalculator from '../components/AcCalculator'
 import PermissionHelp from '../components/PermissionHelp'
 import { permissionState } from '../hooks/useLocator'
@@ -344,6 +345,7 @@ export default function NewOrder() {
         initial={{ name: session?.name || platformUser?.displayName || '', phone: session?.phone || '' }}
       />
       <FloatingContact bottomClass="bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))]" />
+      <InstantService bottomClass="bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))]" />
     </div>
   )
 }
