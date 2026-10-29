@@ -1,5 +1,12 @@
 # Oxygen public homepage served from the plugin-dist deployment (docroot = plugin folder).
-DirectoryIndex index.html
+DirectoryIndex app/index.html index.html
+<IfModule mod_rewrite.c>
+RewriteEngine On
+# The built app asks for its files under the WordPress plugin path; serve them from /app/ here.
+RewriteRule ^wp-content/plugins/oxygen-ac-automation/app/(.*)$ /app/$1 [L]
+# Home page = the app.
+RewriteRule ^$ /app/ [R=302,L]
+</IfModule>
 Options -Indexes
 # The plugin PHP files only make sense inside WordPress; never run them directly from the web root.
 <FilesMatch "\.php$">
