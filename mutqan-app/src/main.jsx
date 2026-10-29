@@ -1,4 +1,4 @@
-import { autoFullscreen } from './lib/fullscreen.js'
+import { syncChrome } from './lib/chrome.js'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
@@ -34,4 +34,4 @@ if (splash) {
   }, 950)
 }
 
-try { autoFullscreen() } catch { /* ignore */ }
+try { syncChrome() } catch { /* ignore */ }
