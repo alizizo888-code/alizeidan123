@@ -1,3 +1,4 @@
+import { autoFullscreen } from './lib/fullscreen.js'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
@@ -32,3 +33,5 @@ if (splash) {
     setTimeout(() => splash.remove(), 400)
   }, 950)
 }
+
+try { autoFullscreen() } catch { /* ignore */ }
