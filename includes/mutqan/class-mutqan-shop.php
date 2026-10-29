@@ -14,6 +14,7 @@ final class Mutqan_Shop {
     public static function handle($in, $p) {
         $op = (string) ($in['op'] ?? '');
         if ($op === 'offer') { return self::offer($in); }
+        if ($op === 'seal') { return self::seal($in); }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
     }
 
@@ -70,5 +71,62 @@ final class Mutqan_Shop {
             $msg = 'هذا أقل سعر نقدر ننزل له: ' . $val . ' ر.س ولا نقدر بعده. تحب أثبّت لك الجهاز؟ وإذا حبيت تتفاهم مع فريقنا مباشرة اضغط «تواصل واتساب».';
         }
         return ['status' => $status, 'price' => $val, 'attempt' => $attempt, 'message' => $msg];
+    }
+
+    /* ---------------------------------------------------------------- order seal (verification link) */
+
+    private static function seal_fields($in) {
+        $c = function ($k, $n) use ($in) { return trim(mb_substr(wp_strip_all_tags((string) ($in[$k] ?? '')), 0, $n)); };
+        $price = isset($in['price']) && is_numeric($in['price']) ? (int) round((float) $in['price']) : 0;
+        return ['service' => $c('service', 120), 'price' => max(0, min(1000000, $price)), 'time' => $c('time', 80), 'address' => $c('address', 200), 'ref' => $c('ref', 24)];
+    }
+    private static function seal_chk($code, $f) {
+        return substr(hash_hmac('sha256', $code . '|' . wp_json_encode($f, JSON_UNESCAPED_UNICODE), wp_salt('auth')), 0, 6);
+    }
+    /** Store the order's key facts and return the short verification link that goes into the WhatsApp message. */
+    private static function seal($in) {
+        Mutqan_Limiter::hit('order_seal', 40, 3600);
+        $f = self::seal_fields($in);
+        if ($f['service'] === '') { throw new Mutqan_Error('bad_order', 'بيانات الطلب ناقصة.', 400); }
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $code = ''; for ($i = 0; $i < 8; $i++) { $code .= $alphabet[random_int(0, strlen($alphabet) - 1)]; }
+        $f['at'] = Mutqan_Store::iso(Mutqan_Store::now());
+        Mutqan_Store::upsert('order_seals', $f, $code, ['groupId' => 'admins', 'writableBy' => 'admins'], self::sys());
+        $chk = self::seal_chk($code, $f);
+        return ['code' => $code, 'url' => home_url('/v/' . $code . '-' . $chk)];
+    }
+    /** @return array [status(verified|invalid|missing), fields|null] */
+    public static function seal_check($token) {
+        if (!preg_match('/^([A-Z0-9]{8})(?:-([a-f0-9]{6}))?$/', (string) $token, $m)) { return ['missing', null]; }
+        $f = Mutqan_Store::get_raw('order_seals', $m[1]);
+        if (!$f) { return ['missing', null]; }
+        $stored = $f; unset($stored['at']);
+        $ok = isset($m[2]) && hash_equals(self::seal_chk($m[1], $f), $m[2]);
+        if (!$ok) { $ok2 = isset($m[2]) && hash_equals(self::seal_chk($m[1], $stored), $m[2]); $ok = $ok2; }
+        return [$ok ? 'verified' : 'invalid', $f];
+    }
+    public static function seal_page($token) {
+        Mutqan_Limiter::hit('seal_view', 120, 3600);
+        list($st, $f) = self::seal_check($token);
+        $map = ['verified' => ['✅ طلب موثّق', '#0a7d3b', 'بيانات الطلب مطابقة لما سُجّل في النظام.'], 'invalid' => ['⚠️ طلب غير مطابق (غلط)', '#b3261e', 'الرابط لا يطابق بيانات الطلب المسجّلة. لا تعتمد على الرسالة.'], 'missing' => ['❌ طلب غير موجود', '#6b6b6b', 'لا يوجد طلب بهذا الكود.']];
+        $m = $map[$st];
+        $rows = '';
+        if ($f) {
+            $L = ['service' => 'الخدمة', 'price' => 'السعر', 'time' => 'الموعد', 'address' => 'الموقع', 'ref' => 'رقم الطلب'];
+            foreach ($L as $k => $lab) {
+                if (!isset($f[$k]) || $f[$k] === '' || ($k === 'price' && !$f[$k])) { continue; }
+                $v = $k === 'price' ? $f[$k] . ' ر.س' : $f[$k];
+                $rows .= '<tr><td>' . esc_html($lab) . '</td><td><b>' . esc_html($v) . '</b></td></tr>';
+            }
+        }
+        nocache_headers();
+        header('Content-Type: text/html; charset=utf-8');
+        header('X-Robots-Tag: noindex');
+        echo '<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>توثيق الطلب</title>'
+            . '<body style="font-family:Tahoma,sans-serif;background:#eef4fb;margin:0;padding:24px"><div style="max-width:440px;margin:auto;background:#fff;border-radius:16px;padding:24px;box-shadow:0 4px 18px #0002;border-top:8px solid ' . $m[1] . '">'
+            . '<h1 style="margin:0 0 8px;color:' . $m[1] . ';font-size:24px">' . $m[0] . '</h1><p style="color:#444">' . $m[2] . '</p>'
+            . ($rows ? '<table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:15px">' . str_replace('<td>', '<td style="padding:8px;border-bottom:1px solid #eee">', $rows) . '</table>' : '')
+            . '</div></body></html>';
+        exit;
     }
 }
