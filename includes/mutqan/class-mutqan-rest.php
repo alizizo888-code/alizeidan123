@@ -335,7 +335,7 @@ final class Mutqan_Rest {
         $is_root = ($rel === '' || $rel === '/');
         if ($is_root) {
             // Domain front page opens the app (owner can switch it off in the Mutqan settings; ?site=wp bypasses it).
-            if (get_option('mutqan_root_app', '1') === '0') { return; }
+            if (get_option('mutqan_root_app2', '1') === '0') { return; }
             if (!empty($_GET['site']) || (defined('REST_REQUEST') && REST_REQUEST) || (function_exists('is_admin') && is_admin())) { return; }
             // Only a clean front-page visit (tracking params allowed) opens the app; any other query (rest_route, cron, preview, search…) is left to WordPress.
             foreach (array_keys($_GET) as $k) { if (!preg_match('/^(utm_[a-z_]+|fbclid|gclid|ref|source|v|pwa)$/i', (string) $k)) { return; } }

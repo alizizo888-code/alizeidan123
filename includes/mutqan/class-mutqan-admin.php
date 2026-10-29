@@ -41,7 +41,7 @@ final class Mutqan_Admin {
     public static function save_root() {
         if (!current_user_can('manage_options')) { wp_die('غير مصرح.'); }
         check_admin_referer('mutqan_save_root');
-        update_option('mutqan_root_app', isset($_POST['root_app']) ? '1' : '0', false);
+        update_option('mutqan_root_app2', isset($_POST['root_app']) ? '1' : '0', false);
         self::back('تم حفظ إعداد الصفحة الرئيسية.');
     }
 
@@ -122,7 +122,7 @@ final class Mutqan_Admin {
             <h2>الصفحة الرئيسية للدومين</h2>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="mutqan_save_root"><?php wp_nonce_field('mutqan_save_root'); ?>
-                <p><label><input type="checkbox" name="root_app" value="1" <?php checked(get_option('mutqan_root_app', '1') !== '0'); ?>> فتح التطبيق مباشرة عند زيارة <code><?php echo esc_html(home_url('/')); ?></code> (لعرض قالب ووردبريس بدلًا منه أضف <code>?site=wp</code> للرابط)</label></p>
+                <p><label><input type="checkbox" name="root_app" value="1" <?php checked(get_option('mutqan_root_app2', '1') !== '0'); ?>> فتح التطبيق مباشرة عند زيارة <code><?php echo esc_html(home_url('/')); ?></code> (لعرض قالب ووردبريس بدلًا منه أضف <code>?site=wp</code> للرابط)</label></p>
                 <?php submit_button('حفظ', 'secondary', 'submit', false); ?>
             </form>
             <h2>٢) مزودو الذكاء الاصطناعي المجانيون</h2>
