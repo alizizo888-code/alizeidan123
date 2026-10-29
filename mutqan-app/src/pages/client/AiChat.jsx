@@ -17,7 +17,7 @@ import { specialtyLabel, STATUS_META, ACTIVE_STATUSES } from '../../constants'
 import { usePricing } from '../../hooks/usePricing'
 import { acQuote, acQuoteFromAcq } from '../../acPricing'
 import { useAcConfig } from '../../hooks/useAcConfig'
-import { buildOrderMessage, openWhatsApp, waLink } from '../../lib/waOrder'
+import { buildOrderMessage, openWhatsApp, waLink, sealOrder } from '../../lib/waOrder'
 import { useAiSettings, logAi } from '../../hooks/useAiSettings'
 import { computeQuote, nextNegotiationStep, PARTS_RULES } from '../../pricing'
 import AiRegistration from '../../components/AiRegistration'
@@ -561,7 +561,8 @@ export default function AiChat() {
           sound: 'bell',
         })
       } catch {}
-      const waText = buildOrderMessage({ draft: d, who: { ...who, name: who.name || d.contact?.name, phone: who.phone || d.contact?.phone }, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
+      const verifyUrl = await sealOrder({ draft: d, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
+      const waText = buildOrderMessage({ verifyUrl, draft: d, who: { ...who, name: who.name || d.contact?.name, phone: who.phone || d.contact?.phone }, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
       const waNumber = ac.cfg.waNumber || '966549423050'
       openWhatsApp(waNumber, waText)
       setDraft(null)
