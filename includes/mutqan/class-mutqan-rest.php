@@ -12,6 +12,19 @@ final class Mutqan_Rest {
         add_action('init', ['Mutqan_Store', 'maybe_install'], 1);
         add_action('init', [__CLASS__, 'serve_app'], 2);
         add_action('rest_api_init', [__CLASS__, 'routes']);
+        // Cross-origin use (the static Oxygen front on oxygen11.com talks to this API). Token auth, no cookies -> safe to allow the brand origins.
+        add_action('rest_api_init', function () {
+            add_filter('rest_pre_serve_request', function ($served) {
+                $o = isset($_SERVER['HTTP_ORIGIN']) ? (string) $_SERVER['HTTP_ORIGIN'] : '';
+                if ($o !== '' && preg_match('#^https://([a-z0-9-]+\.)?oxygen11\.com$#i', $o)) {
+                    header('Access-Control-Allow-Origin: ' . $o);
+                    header('Vary: Origin');
+                    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Mutqan-Token, X-Mutqan-Anon, X-WP-Nonce');
+                    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+                }
+                return $served;
+            });
+        }, 20);
         add_action('mutqan_purge', ['Mutqan_Store', 'purge_expired']);
         add_action('init', function () { if (!wp_next_scheduled('mutqan_purge')) { wp_schedule_event(time() + 600, 'daily', 'mutqan_purge'); } }, 3);
     }
