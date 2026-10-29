@@ -32,4 +32,14 @@ $pub = Mutqan_Store::select('used_ac', [], [], $guest);
 $t('guest can read catalogue', is_array($pub) && count($pub) >= 1);
 $prv = Mutqan_Store::select('used_ac_private', [], [], $guest);
 $t('guest cannot read private floor', empty($prv));
+// order seal
+$sr = $S::handle(['op' => 'seal', 'service' => 'صيانة مكيف', 'price' => 250, 'time' => 'اليوم 5م', 'address' => 'مكة', 'ref' => 'AB123'], ['kind' => 'guest']);
+$t('seal returns short url', preg_match('#/v/[A-Z0-9]{8}-[a-f0-9]{6}$#', $sr['url']) === 1);
+$tok = substr($sr['url'], strrpos($sr['url'], '/v/') + 3);
+$t('seal verified', $S::seal_check($tok)[0] === 'verified');
+$t('seal wrong checksum -> invalid', $S::seal_check(substr($tok, 0, 9) . 'ffffff')[0] === 'invalid');
+$t('seal no checksum -> invalid', $S::seal_check(substr($tok, 0, 8))[0] === 'invalid');
+$t('seal unknown code -> missing', $S::seal_check('ZZZZZZZZ-aaaaaa')[0] === 'missing');
+$t('seal garbage -> missing', $S::seal_check('x')[0] === 'missing');
+$t('seal not readable by guest', empty(Mutqan_Store::select('order_seals', [], [], $guest)));
 exit($ok ? 0 : 1);
