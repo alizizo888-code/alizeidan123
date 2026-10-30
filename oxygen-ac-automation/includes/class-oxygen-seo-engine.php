@@ -9,7 +9,7 @@ class Oxygen_SEO_Engine {
     const OPT = 'oxygen_seo_settings';
     const LOG = 'oxygen_seo_log';
     const CRON = 'oxygen_seo_tick';
-    const LOG_MAX = 600;
+    const LOG_MAX = 3000;
     const MAIN = 'oxygen-ac-automation.php';
 
     /* ---------- data ---------- */
@@ -101,8 +101,35 @@ class Oxygen_SEO_Engine {
         }
         $k = count($plan) ? (self::salt() * 5) % count($plan) : 0;
         if ($k) { $plan = array_merge(array_slice($plan, $k), array_slice($plan, 0, $k)); }
-        foreach ($plan as $i => &$p) { $p['idx'] = $i; $p['title'] .= ' | ' . self::brand(); }
+        foreach ($plan as $i => &$p) { $p['idx'] = $i; $p['kind'] = 'base'; $p['title'] .= ' | ' . self::brand(); }
         unset($p);
+        $idx = count($plan);
+        // Same service, same site, different SEO: another title / focus keyword / meta and a different angle (never a copy).
+        $alts = [
+            ['t' => '{n} في {c}: الأسعار والضمان وطريقة الطلب', 'k' => 'سعر {n} في {c}', 'slug' => 's1'],
+            ['t' => 'كيف تحجز {n} في {c} بسرعة؟ دليل الخطوات', 'k' => 'حجز {n} {c} اليوم', 'slug' => 's2'],
+        ];
+        foreach ($alts as $ai => $alt) {
+            foreach ($svc as $sid => $sv) {
+                foreach ($variants as $v) {
+                    $c = $v['city'];
+                    $plan[] = ['key' => 'oxy-' . $sid . '-' . $v['slug'] . '-' . $alt['slug'], 'track' => 'commercial', 'kind' => 'seo', 'sid' => $sid, 'city' => $c, 'alt' => $ai + 1,
+                        'title' => str_replace(['{n}', '{c}'], [$sv['n'], $c], $alt['t']) . ' | ' . self::brand(), 'kw' => str_replace(['{n}', '{c}'], [$sv['n'], $c], $alt['k']),
+                        'dom' => $sv['spec'] ?? 'general', 'idx' => $idx++];
+                }
+            }
+        }
+        // Local variants: the service in a named Makkah neighbourhood (the order differs per site so two sites never publish the same one).
+        $dist = array_values(self::data('districts'));
+        $k = (self::salt() * 3) % max(1, count($dist));
+        if ($k) { $dist = array_merge(array_slice($dist, $k), array_slice($dist, 0, $k)); }
+        foreach ($dist as $di => $d) {
+            foreach ($svc as $sid => $sv) {
+                $plan[] = ['key' => 'oxy-' . $sid . '-d' . md5($d), 'track' => 'commercial', 'kind' => 'district', 'sid' => $sid, 'city' => 'حي ' . $d . ' بمكة المكرمة', 'district' => $d, 'alt' => 3 + ($di % 3),
+                    'title' => $sv['n'] . ' في حي ' . $d . ' بمكة المكرمة | ' . self::brand(), 'kw' => $sv['n'] . ' حي ' . $d . ' مكة',
+                    'dom' => $sv['spec'] ?? 'general', 'idx' => $idx++];
+            }
+        }
         return self::$cache['plan'] = $plan;
     }
     private static function domain($dom) {
@@ -171,6 +198,19 @@ class Oxygen_SEO_Engine {
             foreach ($s['signs'] as $it) { $html .= '<li>' . self::e($it) . '</li>'; }
             $html .= '</ul><h2>ما الذي يميز التعامل مع ' . self::brand() . ' في ' . self::e($item['city']) . '؟</h2>';
             foreach (self::rot($dm['paras'], $rev + self::salt(), 2) as $p) { $html .= '<p>' . self::e($p) . '</p>'; }
+            if (!empty($item['district'])) {
+                $dn = $item['district'];
+                $tpl = [
+                    'يطلب سكان حي ' . $dn . ' خدمة ' . $s['n'] . ' بحسب طبيعة المباني عندهم، ونحرص أن يكون الفني مجهزاً بما يناسب نوع الوحدة قبل الوصول.',
+                    'إذا كنت في حي ' . $dn . ' فاذكر في الطلب رقم الدور وأقرب معلم، فهذا يسرّع وصول الفني ويقلل المكالمات الإضافية.',
+                    'تختلف الأعطال في ' . $s['n'] . ' بين بيت وآخر داخل حي ' . $dn . '، ولذلك نبدأ بفحص الحالة ثم نعرض السعر قبل أي تنفيذ.',
+                    'يؤكد فريق الجدولة موعد زيارتك في حي ' . $dn . ' بعد استلام الطلب، وتصلك رسالة تأكيد على واتساب.',
+                    'نتعامل في حي ' . $dn . ' مع الشقق والفلل والمحلات، ويُحدَّد وقت الزيارة بحسب ازدحام اليوم وتوفر الفنيين.',
+                    'سواء كانت المشكلة بسيطة أو تحتاج قطعة غيار، تُشرح لك الخطوات في حي ' . $dn . ' قبل البدء حتى تقرر وأنت مطمئن.',
+                ];
+                $html .= '<h2>' . self::e($s['n']) . ' في حي ' . self::e($dn) . '</h2>';
+                foreach (self::rot($tpl, $item['idx'] + $rev + self::salt(), 3) as $p) { $html .= '<p>' . self::e($p) . '</p>'; }
+            }
             $html .= '<h2>خطوات الطلب</h2>' . self::steps_html($app, $wa);
             $faq = $s['faq'];
             $faq[] = ['هل تغطون ' . $item['city'] . ' بالكامل؟', 'نغطي معظم أحياء ' . $item['city'] . ' ويؤكد فريق الجدولة الموعد المناسب لموقعك بعد استلام الطلب.'];
@@ -210,7 +250,7 @@ class Oxygen_SEO_Engine {
 
     /* ---------- settings / log ---------- */
     public static function settings() {
-        $d = ['enabled' => 1, 'status' => 'publish', 'new_per_day' => 6, 'refresh_per_day' => 4, 'min_age_days' => 7, 'wa' => ''];
+        $d = ['enabled' => 1, 'status' => 'publish', 'new_per_day' => 10, 'seo_per_day' => 10, 'district_per_day' => 10, 'random_per_day' => 10, 'refresh_per_day' => 4, 'min_age_days' => 7, 'wa' => ''];
         $s = get_option(self::OPT, []);
         return array_merge($d, is_array($s) ? $s : []);
     }
@@ -288,11 +328,11 @@ class Oxygen_SEO_Engine {
         return is_array($t) ? (int) $t['term_id'] : 0;
     }
 
-    public static function create_next($force_status = null) {
+    public static function create_next($force_status = null, $kind = 'base') {
         $map = self::map();
         $s = self::settings();
         foreach (self::plan() as $item) {
-            if (isset($map[$item['key']])) { continue; }
+            if (($item['kind'] ?? 'base') !== $kind || isset($map[$item['key']])) { continue; }
             $ctx = self::ctx($item, $map);
             $b = self::build($item, 0, $ctx);
             $author = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID']);
@@ -303,6 +343,7 @@ class Oxygen_SEO_Engine {
             if (is_wp_error($id) || !$id) { return false; }
             update_post_meta($id, '_oxy_seo_key', $item['key']);
             update_post_meta($id, '_oxy_seo_track', $item['track']);
+            update_post_meta($id, '_oxy_seo_kind', $kind);
             update_post_meta($id, '_oxy_seo_kw', $item['kw']);
             update_post_meta($id, '_oxy_seo_rev', 0);
             update_post_meta($id, '_oxy_seo_angle', self::angle_label($item['idx'], 0));
@@ -312,7 +353,7 @@ class Oxygen_SEO_Engine {
             update_post_meta($id, '_oxy_seo_img', $ctx['img']);
             $cat = self::term($item['track'] === 'commercial' ? 'خدمات ' . self::brand() . '' : 'أدلة وإرشادات');
             if ($cat) { wp_set_post_categories($id, [$cat]); }
-            self::log('new', $id, $item['title'], ['track' => $item['track'], 'st' => get_post_status($id), 'rev' => 0]);
+            self::log($kind === 'seo' ? 'new_seo' : ($kind === 'district' ? 'new_dist' : 'new'), $id, $item['title'], ['track' => $item['track'], 'st' => get_post_status($id), 'rev' => 0, 'kind' => $kind]);
             if (get_post_status($id) === 'publish') { self::indexnow([get_permalink($id), home_url('/oxygen-seo-archive/')]); }
             return $id;
         }
@@ -333,9 +374,26 @@ class Oxygen_SEO_Engine {
         }
         if (!$cand) { return false; }
         usort($cand, function ($a, $b) { return $a[0] <=> $b[0] ?: $a[1] <=> $b[1]; });
-        list($rev, , $id, $key) = $cand[0];
-        $item = $by_key[$key];
-        $rev++;
+        return self::do_refresh($cand[0][2], $by_key[$cand[0][3]], $map, 'refresh');
+    }
+    /** Random refresh of an already published article (older than ~20 hours), so old pages keep getting fresh angles. */
+    public static function refresh_random() {
+        $map = self::map();
+        $by_key = [];
+        foreach (self::plan() as $it) { $by_key[$it['key']] = $it; }
+        $pool = [];
+        foreach ($map as $key => $id) {
+            if (!isset($by_key[$key]) || get_post_status($id) !== 'publish') { continue; }
+            $upd = strtotime((string) get_post_meta($id, '_oxy_seo_updated', true)) ?: 0;
+            if ($upd > time() - 20 * HOUR_IN_SECONDS) { continue; }
+            $pool[] = [$id, $key];
+        }
+        if (!$pool) { return false; }
+        $pick = $pool[array_rand($pool)];
+        return self::do_refresh($pick[0], $by_key[$pick[1]], $map, 'refresh_rand');
+    }
+    private static function do_refresh($id, $item, $map, $action) {
+        $rev = (int) get_post_meta($id, '_oxy_seo_rev', true) + 1;
         $ctx = self::ctx($item, $map);
         $b = self::build($item, $rev, $ctx);
         wp_update_post(['ID' => $id, 'post_title' => $item['title'], 'post_content' => $b['html'], 'post_excerpt' => $b['desc']]);
@@ -346,16 +404,27 @@ class Oxygen_SEO_Engine {
         update_post_meta($id, '_oxy_seo_faq', wp_json_encode($b['faq'], JSON_UNESCAPED_UNICODE));
         update_post_meta($id, '_oxy_seo_img', $ctx['img']);
         if (get_post_status($id) === 'publish') { self::indexnow([get_permalink($id)]); }
-        self::log('refresh', $id, $item['title'], ['track' => $item['track'], 'st' => get_post_status($id), 'rev' => $rev, 'angle' => self::angle_label($item['idx'], $rev)]);
+        self::log($action, $id, $item['title'], ['track' => $item['track'], 'st' => get_post_status($id), 'rev' => $rev, 'angle' => self::angle_label($item['idx'], $rev)]);
         return $id;
     }
-    /** Hourly: at most one action, within the daily quotas. */
+    /** Runs hourly (and on traffic): five streams, each paced evenly over the day, up to 3 catch-up actions per stream per run. */
     public static function tick() {
         if (!self::active()) { return; }
         self::ensure_hub();
         $s = self::settings();
-        if (self::today_count('new') < (int) $s['new_per_day'] && self::create_next()) { return; }
-        if (self::today_count('refresh') < (int) $s['refresh_per_day']) { self::refresh_next(); }
+        $hour = (int) wp_date('G');
+        $streams = [
+            ['new', (int) $s['new_per_day'], function () { return self::create_next(null, 'base'); }],
+            ['new_seo', (int) $s['seo_per_day'], function () { return self::create_next(null, 'seo'); }],
+            ['new_dist', (int) $s['district_per_day'], function () { return self::create_next(null, 'district'); }],
+            ['refresh_rand', (int) $s['random_per_day'], function () { return self::refresh_random(); }],
+            ['refresh', (int) $s['refresh_per_day'], function () { return self::refresh_next(); }],
+        ];
+        foreach ($streams as $st) {
+            list($act, $quota, $fn) = $st;
+            $allowed = min($quota, (int) ceil($quota * ($hour + 1) / 24));
+            for ($i = 0; $i < 3 && self::today_count($act) < $allowed; $i++) { if (!$fn()) { break; } }
+        }
     }
 
     /* ---------- front end ---------- */
@@ -430,7 +499,10 @@ class Oxygen_SEO_Engine {
         $s = self::settings();
         $s['enabled'] = !empty($_POST['enabled']) ? 1 : 0;
         $s['status'] = (($_POST['status'] ?? '') === 'draft') ? 'draft' : 'publish';
-        $s['new_per_day'] = max(0, min(24, (int) ($_POST['new_per_day'] ?? 6)));
+        $s['new_per_day'] = max(0, min(40, (int) ($_POST['new_per_day'] ?? 10)));
+        $s['seo_per_day'] = max(0, min(40, (int) ($_POST['seo_per_day'] ?? 10)));
+        $s['district_per_day'] = max(0, min(40, (int) ($_POST['district_per_day'] ?? 10)));
+        $s['random_per_day'] = max(0, min(40, (int) ($_POST['random_per_day'] ?? 10)));
         $s['refresh_per_day'] = max(0, min(24, (int) ($_POST['refresh_per_day'] ?? 4)));
         $s['min_age_days'] = max(0, min(365, (int) ($_POST['min_age_days'] ?? 7)));
         $s['wa'] = preg_replace('/\D/', '', (string) ($_POST['wa'] ?? ''));
@@ -483,7 +555,10 @@ class Oxygen_SEO_Engine {
         wp_nonce_field('oxy_seo_save');
         echo '<table class="form-table"><tr><th>تشغيل المحرك</th><td><label><input type="checkbox" name="enabled" value="1" ' . checked(!empty($s['enabled']), true, false) . '> مفعّل</label></td></tr>';
         echo '<tr><th>حالة المقال الجديد</th><td><select name="status"><option value="publish" ' . selected($s['status'], 'publish', false) . '>نشر مباشر</option><option value="draft" ' . selected($s['status'], 'draft', false) . '>مسودة للمراجعة قبل النشر</option></select></td></tr>';
-        echo '<tr><th>مقالات جديدة / يوم</th><td><input type="number" name="new_per_day" value="' . (int) $s['new_per_day'] . '" min="0" max="24"></td></tr>';
+        echo '<tr><th>مقالات جديدة / يوم</th><td><input type="number" name="new_per_day" value="' . (int) $s['new_per_day'] . '" min="0" max="40"></td></tr>';
+        echo '<tr><th>نفس الخدمة بعنوان وكلمات SEO مختلفة / يوم</th><td><input type="number" name="seo_per_day" value="' . (int) $s['seo_per_day'] . '" min="0" max="40"></td></tr>';
+        echo '<tr><th>نفس الخدمة بحي مختلف في مكة / يوم</th><td><input type="number" name="district_per_day" value="' . (int) $s['district_per_day'] . '" min="0" max="40"></td></tr>';
+        echo '<tr><th>تحديث مقالات قديمة عشوائياً / يوم</th><td><input type="number" name="random_per_day" value="' . (int) $s['random_per_day'] . '" min="0" max="40"></td></tr>';
         echo '<tr><th>تحديثات / يوم</th><td><input type="number" name="refresh_per_day" value="' . (int) $s['refresh_per_day'] . '" min="0" max="24"></td></tr>';
         echo '<tr><th>أقل عمر قبل التحديث (أيام)</th><td><input type="number" name="min_age_days" value="' . (int) $s['min_age_days'] . '" min="0" max="365"></td></tr>';
         echo '<tr><th>رقم واتساب للمقالات</th><td><input type="text" name="wa" value="' . esc_attr($s['wa']) . '" placeholder="9665xxxxxxxx"></td></tr></table>';
@@ -509,7 +584,7 @@ class Oxygen_SEO_Engine {
             echo '</tr>';
         }
         echo '</tbody></table><h2>سجل العمليات</h2><table class="widefat striped"><thead><tr><th>التاريخ</th><th>اليوم</th><th>الساعة</th><th>العملية</th><th>العنوان</th><th>الرابط</th></tr></thead><tbody>';
-        $names = ['new' => 'مقال جديد', 'refresh' => 'تحديث', 'publish' => 'نشر مسودة'];
+        $names = ['new' => 'مقال جديد', 'refresh' => 'تحديث', 'publish' => 'نشر مسودة', 'new_seo' => 'مقال بنفس الخدمة وSEO مختلف', 'new_dist' => 'مقال لحي في مكة', 'refresh_rand' => 'تحديث عشوائي'];
         foreach (array_slice($log, 0, 200) as $r) {
             $ts = (int) ($r['ts'] ?? 0);
             echo '<tr><td>' . esc_html(wp_date('Y-m-d', $ts)) . '</td><td>' . esc_html($days[(int) wp_date('w', $ts)]) . '</td><td>' . esc_html(wp_date('H:i', $ts)) . '</td><td>' . esc_html(($names[$r['a']] ?? $r['a']) . (isset($r['rev']) && $r['a'] === 'refresh' ? ' #' . $r['rev'] . ' — ' . ($r['angle'] ?? '') : '')) . '</td><td>' . esc_html($r['t'] ?? '') . '</td><td>' . (!empty($r['l']) ? '<a target="_blank" href="' . esc_url($r['l']) . '">فتح</a>' : '') . '</td></tr>';
