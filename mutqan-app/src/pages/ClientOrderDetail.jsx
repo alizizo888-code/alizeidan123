@@ -16,7 +16,6 @@ import { SPECIALTIES } from '../constants'
 import { useWarrantyPolicy } from '../hooks/useWarranty'
 import { orderWarranty, warrantyText } from '../warranty'
 import { useAcConfig } from '../hooks/useAcConfig'
-import InstantService from '../components/InstantService'
 import { buildOrderMessage, waLink, sealOrder } from '../lib/waOrder'
 
 export default function ClientOrderDetail() {
@@ -295,7 +294,6 @@ export default function ClientOrderDetail() {
           </button>
         )}
       </div>
-      <InstantService bottomClass="bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))]" />
     </div>
   )
 }

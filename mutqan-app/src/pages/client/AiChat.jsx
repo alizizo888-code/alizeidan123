@@ -18,7 +18,6 @@ import { specialtyLabel, STATUS_META, ACTIVE_STATUSES } from '../../constants'
 import { usePricing } from '../../hooks/usePricing'
 import { acQuote, acQuoteFromAcq } from '../../acPricing'
 import { useAcConfig } from '../../hooks/useAcConfig'
-import InstantService from '../../components/InstantService'
 import { buildOrderMessage, openWhatsApp, waLink, sealOrder } from '../../lib/waOrder'
 import { useAiSettings, logAi } from '../../hooks/useAiSettings'
 import { computeQuote, nextNegotiationStep, PARTS_RULES } from '../../pricing'
@@ -952,7 +951,6 @@ export default function AiChat() {
       </div>
 
       {showSettings && <SettingsSheet prefs={prefs} setPrefs={setPrefs} onClose={() => setShowSettings(false)} />}
-      <InstantService bottomClass="bottom-[7.5rem]" />
     </div>
   )
 }
