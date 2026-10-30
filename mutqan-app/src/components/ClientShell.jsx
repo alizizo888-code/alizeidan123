@@ -1,7 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { Home, ClipboardList, Calculator, LayoutGrid, User, Wrench, Percent, ShoppingBag, Snowflake, Sparkles } from 'lucide-react'
 import FloatingContact from './FloatingContact'
-import InstantService from './InstantService'
 
 // ترتيب التبويبات كما في الواجهة المعتمدة (من اليمين لليسار): طلباتي، حاسب الأسعار، الرئيسية، المزيد، حسابي
 const TABS = [
@@ -68,7 +67,6 @@ export default function ClientShell() {
       </div>
 
       <FloatingContact />
-      <InstantService />
 
       {/* Phone bottom tab bar — frosted ice glass with raised center action */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-20 bg-white/80 backdrop-blur-2xl border-t border-sky-100/80 rounded-t-[26px] shadow-[0_-10px_34px_rgba(8,60,130,0.16)] pb-[env(safe-area-inset-bottom,0px)]">
