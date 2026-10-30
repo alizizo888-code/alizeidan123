@@ -196,6 +196,8 @@ final class Mutqan_Policy {
             $data['paymentStatus'] = 'unpaid';
             $data['clientId'] = ($p['kind'] ?? '') === 'user' ? $p['id'] : null;
             $dev = $data['deviceId'] ?? '';
+            unset($data['remindedAt']);
+            if (isset($data['appointmentAt']) && (!is_string($data['appointmentAt']) || !strtotime($data['appointmentAt']))) { unset($data['appointmentAt']); }
             unset($data['deviceId'], $data['welcomeDiscountPct'], $data['welcomeDiscountMax'], $data['payLink'], $data['inhouse'], $data['inhouseAt']);
             if (self::inhouse_mode()) { $data['inhouse'] = true; $data['inhouseAt'] = gmdate('c'); }
             $pct = Mutqan_Promo::valid_device($dev) ? Mutqan_Promo::consume($dev) : 0;

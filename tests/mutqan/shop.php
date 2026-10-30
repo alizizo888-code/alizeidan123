@@ -42,4 +42,12 @@ $t('seal no checksum -> invalid', $S::seal_check(substr($tok, 0, 8))[0] === 'inv
 $t('seal unknown code -> missing', $S::seal_check('ZZZZZZZZ-aaaaaa')[0] === 'missing');
 $t('seal garbage -> missing', $S::seal_check('x')[0] === 'missing');
 $t('seal not readable by guest', empty(Mutqan_Store::select('order_seals', [], [], $guest)));
+// appointment reminder
+$soon = gmdate('c', time() + 600); $far = gmdate('c', time() + 7200);
+Mutqan_Store::insert('orders', ['specialtyId' => 'ac', 'status' => 'new', 'appointmentAt' => $soon, 'preferredTime' => 'اليوم 5م', 'clientId' => 'cu1', 'clientName' => 'x'], 'ordsoon', [], $sys);
+Mutqan_Store::insert('orders', ['specialtyId' => 'ac', 'status' => 'new', 'appointmentAt' => $far, 'clientId' => 'cu1'], 'ordfar', [], $sys);
+$t('reminder sent only for appointment within 15 min', Mutqan_REST::send_reminders() === 1);
+$t('reminder not repeated', Mutqan_REST::send_reminders() === 0);
+$pu = Mutqan_Store::select('_push', [], ['limit' => 20], $sys);
+$t('customer push created', count(array_filter($pu, function ($m) { return ($m['event'] ?? '') === 'appointment_reminder' && ($m['target']['user'] ?? '') === 'cu1'; })) === 1);
 exit($ok ? 0 : 1);
