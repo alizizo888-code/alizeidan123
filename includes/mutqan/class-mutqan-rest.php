@@ -26,6 +26,9 @@ final class Mutqan_Rest {
             });
         }, 20);
         add_action('mutqan_purge', ['Mutqan_Store', 'purge_expired']);
+        add_action('mutqan_remind', [__CLASS__, 'send_reminders']);
+        add_action('init', function () { if (!wp_next_scheduled('mutqan_remind')) { wp_schedule_event(time() + 120, 'mutqan_5min', 'mutqan_remind'); } }, 3);
+        add_filter('cron_schedules', function ($s) { $s['mutqan_5min'] = ['interval' => 300, 'display' => 'Mutqan 5 min']; return $s; });
         add_action('init', function () { if (!wp_next_scheduled('mutqan_purge')) { wp_schedule_event(time() + 600, 'daily', 'mutqan_purge'); } }, 3);
     }
 
@@ -207,9 +210,36 @@ final class Mutqan_Rest {
 
     /* ------------------------------------------------------------------ /push (in-app notifications) */
 
+    /** 15 minutes before a booked appointment: push to the customer (account) and to the team. Runs from cron and, throttled, from inbox polls. */
+    public static function send_reminders() {
+        $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
+        try {
+            $rows = Mutqan_Store::select('orders', ['appointmentAt' => ['gte' => gmdate('Y-m-d')]], ['limit' => 200], $sys);
+        } catch (Throwable $e) { return 0; }
+        $now = time(); $n = 0;
+        foreach ($rows as $o) {
+            if (!empty($o['remindedAt']) || empty($o['appointmentAt'])) { continue; }
+            if (in_array($o['status'] ?? '', ['completed', 'cancelled', 'done', 'closed'], true)) { continue; }
+            $at = strtotime((string) $o['appointmentAt']);
+            if (!$at || $at - $now > 15 * 60 || $at - $now < -30 * 60) { continue; }
+            $when = !empty($o['preferredTime']) ? $o['preferredTime'] : 'قريباً';
+            try {
+                Mutqan_Store::update('orders', $o['id'], ['remindedAt' => gmdate('c')], $sys);
+                $exp = ['expiresAt' => gmdate('c', time() + 2 * 86400)];
+                if (!empty($o['clientId'])) {
+                    Mutqan_Store::insert('_push', ['target' => ['user' => (string) $o['clientId']], 'title' => '⏰ موعدك بعد 15 دقيقة', 'body' => 'موعد خدمتك: ' . $when, 'url' => '#/order/' . $o['id'], 'sound' => 'bell', 'priority' => 'high', 'event' => 'appointment_reminder', 'from' => 'system'], null, $exp, $sys);
+                }
+                self::admin_alert('⏰ موعد خلال 15 دقيقة', trim((string) ($o['clientName'] ?? '') . ' · ' . $when . ' · ' . mb_substr((string) ($o['address'] ?? ''), 0, 40)), '#/staff/order/' . $o['id'], 'appointment_reminder', 'high', $o['id']);
+                $n++;
+            } catch (Throwable $e) { error_log('[mutqan] reminder: ' . $e->getMessage()); }
+        }
+        return $n;
+    }
+
     public static function h_push($req, $p) {
         $in = self::body($req);
         $op = (string) ($in['op'] ?? '');
+        if ($op === 'inbox' && !get_transient('mutqan_rem_lock')) { set_transient('mutqan_rem_lock', 1, 60); self::send_reminders(); }
         if (($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
         if ($op === 'inbox') {
             $raw = $in['since'] ?? 0;
