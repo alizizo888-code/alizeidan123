@@ -173,6 +173,11 @@ final class Mutqan_Policy {
         try { $d = Mutqan_Store::peek_doc('pricing', 'ops_mode'); } catch (Throwable $e) { return false; }
         return !empty($d['inhouse']);
     }
+    /** Owner switches (pricing/order_routing): where new orders go, and whether operations may create orders by hand. */
+    public static function routing() {
+        try { $d = Mutqan_Store::peek_doc('pricing', 'order_routing'); } catch (Throwable $e) { $d = []; }
+        return ['mode' => (($d['mode'] ?? '') === 'operations') ? 'operations' : 'whatsapp', 'opsCreate' => !empty($d['opsCreate'])];
+    }
     /** Payment links must be https and bounded; anything else is dropped. */
     public static function clean_pay_url($u) {
         if (!is_string($u)) { return null; }
@@ -189,6 +194,14 @@ final class Mutqan_Policy {
         if (!is_array($data)) { return $data; }
         $data = self::clean_pay_fields($coll, $data);
         $priv = self::has_power($p, 'write');
+        if ($coll === 'orders') {
+            unset($data['routing']);
+            $manual = (($data['source'] ?? '') === 'whatsapp_manual');
+            if ($manual && !$priv) { unset($data['source']); }
+            elseif ($manual && ($p['role'] ?? '') !== 'owner' && empty(self::routing()['opsCreate'])) { throw new Mutqan_Error('forbidden', 'إنشاء الطلبات اليدوية متوقف من المالك.', 403); }
+            elseif ($manual) { $data['routing'] = 'operations'; }
+            elseif (!$priv) { $data['routing'] = self::routing()['mode']; }
+        }
         if ($coll === 'orders' && !$priv) {
             Mutqan_Limiter::hit('order_insert', 6, 3600);
             foreach (['technicianId', 'technicianName', 'price', 'paidAt', 'paymentMethod', 'paidRecordedBy', 'escalation_override'] as $k) { unset($data[$k]); }

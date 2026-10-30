@@ -50,6 +50,23 @@ $t('reminder sent only for appointment within 15 min', Mutqan_REST::send_reminde
 $t('reminder not repeated', Mutqan_REST::send_reminders() === 0);
 $pu = Mutqan_Store::select('_push', [], ['limit' => 20], $sys);
 $t('customer push created', count(array_filter($pu, function ($m) { return ($m['event'] ?? '') === 'appointment_reminder' && ($m['target']['user'] ?? '') === 'cu1'; })) === 1);
+// order routing + manual orders
+$anon = ['id' => 'anon-1', 'role' => null, 'powers' => [], 'kind' => 'anon'];
+$ops = ['id' => 'ops1', 'role' => 'operations', 'powers' => ['read', 'write'], 'kind' => 'user'];
+$ord = function ($id, $p, $extra = []) { return Mutqan_Store::insert('orders', array_merge(['specialtyId' => 'ac', 'clientName' => 'x', 'description' => 'd', 'status' => 'new'], $extra), $id, [], $p); };
+$ord('rt1', $anon);
+$t('default routing = whatsapp for customer orders', (Mutqan_Store::get_raw('orders', 'rt1')['routing'] ?? '') === 'whatsapp');
+Mutqan_Store::upsert('pricing', ['serviceId' => 'order_routing', 'mode' => 'operations', 'opsCreate' => false], 'order_routing', ['groupId' => 'admins', 'writableBy' => 'admins'], $sys);
+$ord('rt2', $anon, ['routing' => 'whatsapp']);
+$t('operations routing stamped server-side (client cannot override)', (Mutqan_Store::get_raw('orders', 'rt2')['routing'] ?? '') === 'operations');
+$ord('rt3', $anon, ['source' => 'whatsapp_manual']);
+$t('customer cannot fake a manual order', !isset(Mutqan_Store::get_raw('orders', 'rt3')['source']));
+$blocked = false; try { $ord('rt4', $ops, ['source' => 'whatsapp_manual']); } catch (Mutqan_Error $e) { $blocked = $e->status === 403; }
+$t('ops manual order blocked while owner switch is off', $blocked);
+Mutqan_Store::update('pricing', 'order_routing', ['opsCreate' => true], $sys);
+$ord('rt5', $ops, ['source' => 'whatsapp_manual']);
+$m = Mutqan_Store::get_raw('orders', 'rt5');
+$t('ops manual order allowed when owner enables it, routed to operations', ($m['source'] ?? '') === 'whatsapp_manual' && ($m['routing'] ?? '') === 'operations');
 $ld = $S::handle(['op' => 'load'], ['kind' => 'guest']);
 $t('load returns booked times only', isset($ld['times']) && count($ld['times']) >= 1 && strpos(json_encode($ld), 'clientName') === false);
 Mutqan_Store::insert('schedule_cfg', ['openFrom' => '09:00'], 'main', [], $sys);
