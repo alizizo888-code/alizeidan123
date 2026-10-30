@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Zap, MessageCircle, Phone, X } from 'lucide-react'
 import { share } from '../lib/share'
 import { team } from '../lib/team'
@@ -33,10 +34,10 @@ export default function InstantService({ bottomClass = 'bottom-[calc(5.75rem+env
   }
   const call = () => { if (callPhone) window.location.href = `tel:+${String(callPhone).replace(/\D/g, '')}` }
 
-  return (
+  const node = (
     <>
       <button onClick={() => setOpen(true)} aria-label="طلب خدمة فورية"
-        className={`fixed right-3 md:right-6 ${bottomClass} z-20 flex items-center gap-2 bg-gradient-to-l from-red-600 to-orange-500 text-white font-display font-black text-sm rounded-full pl-4 pr-3 py-3 shadow-xl shadow-red-400/50 ring-2 ring-white active:scale-95 transition-transform`} dir="rtl">
+        className={`fixed right-3 md:right-6 ${bottomClass} z-[60] flex items-center gap-2 bg-gradient-to-l from-red-600 to-orange-500 text-white font-display font-black text-sm rounded-full pl-4 pr-3 py-3 shadow-xl shadow-red-400/50 ring-2 ring-white active:scale-95 transition-transform`} dir="rtl">
         <span className="relative flex w-7 h-7 items-center justify-center rounded-full bg-white/25"><span className="absolute inset-0 rounded-full bg-white/40 animate-ping" style={{ animationDuration: '1.8s' }} /><Zap size={16} className="relative" /></span>
         طلب خدمة فورية
       </button>
@@ -64,4 +65,6 @@ export default function InstantService({ bottomClass = 'bottom-[calc(5.75rem+env
       )}
     </>
   )
+  // Portal to <body>: never clipped / re-positioned by a page's own scroll container, transform or stacking context (the home page).
+  return typeof document !== 'undefined' ? createPortal(node, document.body) : node
 }

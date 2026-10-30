@@ -15,6 +15,7 @@ final class Mutqan_Shop {
         $op = (string) ($in['op'] ?? '');
         if ($op === 'offer') { return self::offer($in); }
         if ($op === 'seal') { return self::seal($in); }
+        if ($op === 'load') { return self::load(); }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
     }
 
@@ -128,5 +129,17 @@ final class Mutqan_Shop {
             . ($rows ? '<table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:15px">' . str_replace('<td>', '<td style="padding:8px;border-bottom:1px solid #eee">', $rows) . '</table>' : '')
             . '</div></body></html>';
         exit;
+    }
+
+    /** Appointment load for the scheduler: only the booked times (no names, phones or addresses). */
+    private static function load() {
+        Mutqan_Limiter::hit('sched_load', 240, 3600);
+        $rows = Mutqan_Store::select('orders', ['appointmentAt' => ['gte' => gmdate('Y-m-d')]], ['limit' => 500], self::sys());
+        $times = [];
+        foreach ($rows as $o) {
+            if (in_array($o['status'] ?? '', ['cancelled', 'completed', 'done', 'closed'], true)) { continue; }
+            if (!empty($o['appointmentAt']) && strtotime((string) $o['appointmentAt'])) { $times[] = gmdate('c', strtotime((string) $o['appointmentAt'])); }
+        }
+        return ['times' => $times, 'now' => Mutqan_Store::iso(Mutqan_Store::now())];
     }
 }

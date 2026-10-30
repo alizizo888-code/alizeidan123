@@ -131,6 +131,8 @@ function locationBlock(draft, area) {
 }
 
 let AC_CTX = null
+let SCHED_CTX = null
+export function setSchedContext(c) { SCHED_CTX = c }
 export function setAcContext(ctx) { AC_CTX = ctx }
 function acBlock() {
   if (!AC_CTX?.cfg) return ''
@@ -224,7 +226,7 @@ export async function runTurn(ctx) {
       out = json && typeof json === 'object' ? json : { reply: text || '', intent: {}, action: 'none' }
     } catch (e) { out = null }
   }
-  if (!out || !out.reply) out = localTurn({ ...ctx, ac: AC_CTX })
+  if (!out || !out.reply) out = localTurn({ ...ctx, ac: AC_CTX, sched: SCHED_CTX })
   const intent = out.intent || {}
   if (intent.specialtyId && !SPECIALTIES.some((s) => s.id === intent.specialtyId)) intent.specialtyId = null
   if (intent.priority !== 'urgent') intent.priority = 'normal'
@@ -254,10 +256,14 @@ export function mergeDraft(prev, intent) {
     delete next.negotiation
     delete next.agreedPrice
   }
-  for (const k of ['specialtyId', 'problem', 'priority', 'preferredTime', 'locationText', 'qty', 'acq', 'contact']) {
+  for (const k of ['specialtyId', 'problem', 'priority', 'preferredTime', 'locationText', 'qty', 'acq', 'contact', 'appointmentAt', 'acMode']) {
     const v = intent?.[k]
     if (v !== null && v !== undefined && v !== '' && v !== 'null') next[k] = v
   }
+  if (intent?.acAsk === true) next.acAsk = true
+  else if (intent?.acAsk === false) delete next.acAsk
+  if (intent?.slotOffer === false) delete next.slotOffer
+  else if (intent?.slotOffer && typeof intent.slotOffer === 'object') next.slotOffer = intent.slotOffer
   return next
 }
 

@@ -38,18 +38,18 @@ const singles = [
   ['خدمة زفت ومش راضي', { action: 'handoff' }],
   ['ابغى الغي الطلب', { action: 'handoff' }],
   ['عايز الغي الطلب', { action: 'handoff' }],
-  ['كم سعر غسيل مكيف سبليت', { re: /100/, spec: 'ac' }],
-  ['بكام غسيل المكيف السبليت', { re: /100/, spec: 'ac' }],
+  ['كم سعر غسيل مكيف سبليت', { action: 'collect', spec: 'ac', re: /العدد|كم|وحدة|وحدات/ }],
+  ['بكام غسيل المكيف السبليت', { action: 'collect', spec: 'ac', re: /العدد|كم|وحدة|وحدات/ }],
   ['كم سعر غسيل 3 مكيفات سبليت', { re: /200/, spec: 'ac' }],
   ['عايز اغسل تلات مكيفات سبليت', { re: /200/, spec: 'ac' }],
   ['ابي غسيل 6 مكيفات', { re: /380/, spec: 'ac' }],
-  ['بكم غسيل مكيف شباك', { re: /60/, spec: 'ac' }],
+  ['بكم غسيل مكيف شباك', { action: 'collect', spec: 'ac', re: /العدد|كم|وحدة|وحدات/ }],
   ['غسيل 2 شباك', { re: /100/, spec: 'ac' }],
   ['غسيل مكيف دكت', { spec: 'ac', re: /كم/ }],
   ['غسيل 1 مكيف دكت', { spec: 'ac', re: /180/ }],
-  ['اسعار غسيل المكيفات', { action: 'calculator' }],
-  ['كم تاخذون على غسيل مكيف داخلي بس', { spec: 'ac', re: /90/ }],
-  ['ابغى اركب مكيف', { spec: 'ac', re: /المعاينة|معاينة/ }],
+  ['اسعار غسيل المكيفات', { action: 'collect', spec: 'ac', re: /العدد|كم|وحدة|وحدات/ }],
+  ['كم تاخذون على غسيل مكيف داخلي بس', { action: 'collect', spec: 'ac', re: /العدد|كم|وحدة|وحدات/ }],
+  ['ابغى اركب مكيف', { action: 'collect', spec: 'ac', re: /العدد|كم|وحدة|وحدات/ }],
   ['عايز فك ونقل وتركيب مكيف', { spec: 'ac', re: /المعاينة|معاينة/ }],
   ['المكيف ما يبرد', { spec: 'ac', re: /فلتر|فريون|الفحص|الفني/ }],
   ['التكييف مش بيبرد خالص', { spec: 'ac' }],
@@ -103,7 +103,7 @@ const singles = [
   ['غسيل مكيييف سبلييت', { spec: 'ac' }],
   ['ابغا غسيل مكيف سبلت', { spec: 'ac' }],
   ['السلاااام عليكمممم', { re: /وعليكم|هلا|أهلاً|أهلين|يا هلا|نورتنا/ }],
-  ['كم سعر غسيل المكيف سبلت', { spec: 'ac', re: /100/ }],
+  ['كم سعر غسيل المكيف سبلت', { action: 'collect', spec: 'ac', re: /العدد|كم|وحدة|وحدات/ }],
   ['عايز فني كهربا بسرعه', { spec: 'electric' }],
 ]
 for (const [text, e] of singles) {
@@ -125,6 +125,33 @@ t('voice dialect helper: egyptian text', detectDialect('عايز', 'فين ال�
 t('voice dialect helper: saudi text', detectDialect('ابغى', 'وين الفني') === 'sa')
 t('voice dialect helper: neutral -> null', detectDialect('مكيف') === null)
 
+
+// ── D) guided AC flow (problem -> count -> price) and appointment negotiation ─────────────────
+import { normalizeSchedule } from '../../mutqan-app/src/lib/schedule.js'
+{
+  const x = converse(['كم سعر تكييف'])
+  t('guided: price ask without problem -> asks the problem first', x.last.action === 'collect' && !/\d+\s*ر/.test(x.last.reply) && /مشكلة|غسيل|صيانة|تركيب/.test(x.last.reply), x.last.reply)
+  const y = converse(['كم سعر تكييف', 'غسيل'])
+  t('guided: after the problem -> asks the count (no price yet)', /العدد|كم|وحدة/.test(y.last.reply) && !/\d{2,}\s*ر/.test(y.last.reply), y.last.reply)
+  const z = converse(['كم سعر تكييف', 'غسيل', '2'])
+  t('guided: after the count -> price given', /ر\.?س|ريال|\d{3}/.test(z.last.reply), z.last.reply)
+}
+{
+  const sched = { cfg: normalizeSchedule({}), times: [], now: new Date(2026, 9, 31, 10, 20).getTime() }
+  const x = converse(['ابغى غسيل 2 مكيف سبليت'], { sched })
+  t('sched: after the price the bot offers the nearest slot', !!x.draft.slotOffer && /أقرب موعد/.test(x.last.reply), x.last.reply)
+  const a = converse(['ابغى غسيل 2 مكيف سبليت', 'تمام يناسبني'], { sched })
+  t('sched: accept -> time + appointmentAt stored', !!a.draft.preferredTime && !!a.draft.appointmentAt && !a.draft.slotOffer, JSON.stringify(a.draft.preferredTime))
+  const b = converse(['ابغى غسيل 2 مكيف سبليت', 'أجّل ساعة'], { sched })
+  t('sched: postpone 1h -> new offer +1h', b.draft.slotOffer?.step === 1 && new Date(b.draft.slotOffer.at).getHours() === 13, b.last.reply)
+  const c = converse(['ابغى غسيل 2 مكيف سبليت', 'أجّل ساعة', 'بعد 3 ساعات'], { sched })
+  t('sched: postpone 3h -> +3h offer', c.draft.slotOffer?.step === 2 && new Date(c.draft.slotOffer.at).getHours() === 15, c.last.reply)
+  const d = converse(['ابغى غسيل 2 مكيف سبليت', 'خلال اليوم'], { sched })
+  t('sched: open window offer', d.draft.slotOffer?.kind === 'window' && /خلال اليوم/.test(d.last.reply), d.last.reply)
+  const e = converse(['ابغى غسيل 2 مكيف سبليت', 'خلال اليوم', 'تمام'], { sched })
+  t('sched: accept window -> stored', /خلال اليوم/.test(e.draft.preferredTime || '') && !!e.draft.appointmentAt, JSON.stringify(e.draft.preferredTime))
+}
+
 // ── C) full ordering flows ─────────────────────────────────────────────────────────────────
 for (const [name, opts, turns] of [
   ['SA wash 3', {}, ['ابغى غسيل 3 مكيفات سبليت', 'بكرة العصر', { loc: 1 }, 'تم']],
@@ -138,7 +165,7 @@ for (const [name, opts, turns] of [
 }
 { const x = converse(['ابغى غسيل 3 مكيفات سبليت', 'اليوم المغرب']); t('flow: time stored in draft', /مغرب/.test(x.draft.preferredTime || ''), JSON.stringify(x.draft)) }
 { const x = converse(['ابغى غسيل مكيف', 'بعد بكره الصبح', { loc: 1 }]); t('flow: time + location -> ready on next msg', converse(['ابغى غسيل مكيف', 'بعد بكره الصبح', { loc: 1 }, 'خلاص']).last.action === 'ready_to_order') }
-t('flow: all-in-one sentence skips questions', (() => { const r = converse(['ابغى غسيل مكيف بكرة العصر', { loc: 1 }, 'تمام']).last; return r.action === 'ready_to_order' })())
+t('flow: all-in-one sentence skips questions', (() => { const r = converse(['ابغى غسيل مكيف واحد بكرة العصر', { loc: 1 }, 'تمام']).last; return r.action === 'ready_to_order' })())
 
 // ── D) negotiation ──────────────────────────────────────────────────────────────────────────
 const NEG_START = ['ابغى غسيل 3 مكيفات سبليت']

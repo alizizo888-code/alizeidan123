@@ -10,7 +10,7 @@ let pass = 0, fail = 0
 const t = (n, ok, i) => { if (ok) pass++; else { fail++; console.log('FAIL', n, i || '') } }
 const rules = Object.fromEntries(SPECIALTIES.map((s) => [s.id, normalizeRule(s.id, null)]))
 const cfg = normalizeAc({ maxDiscountPct: 20 })
-const MERGE = ['specialtyId', 'problem', 'priority', 'preferredTime', 'locationText', 'qty', 'acq', 'contact']
+const MERGE = ['specialtyId', 'problem', 'priority', 'preferredTime', 'locationText', 'qty', 'acq', 'contact', 'appointmentAt', 'acMode']
 function quoteFor(d) {
   if (!d?.specialtyId || !rules[d.specialtyId]) return null
   let rule = rules[d.specialtyId], units = d.qty || 1

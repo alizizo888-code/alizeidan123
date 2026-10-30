@@ -124,6 +124,8 @@ export function kbMatch(t, toks) {
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
+import { offerFor, isReceiving, nextSlot, bucketLoad, hourText } from './lib/schedule.js'
+
 export function localTurn(ctx) {
   const { history = [], customer, orders = [], draft = {}, rules = {}, quote, nego, settings } = ctx
   const ac = ctx.ac || {}
@@ -137,16 +139,65 @@ export function localTurn(ctx) {
   const nm = first ? ` ${first}` : ''
   const pickv = (arr, seed) => arr[hash(seed + userMsgs.length) % arr.length]
   const fmt = (s, v = {}) => s.replace(/\{(\w+)\}/g, (_, k) => (k === 'n' ? nm : v[k] ?? ''))
-  const rep = (key, v) => fmt(pickv(((SALES[key] || R[key]) || R.unknown)[D], key + t), v)
+  const sched = ctx.sched && ctx.sched.cfg ? ctx.sched : null
+  const nowD = sched?.now ? new Date(sched.now) : new Date()
+  const loadMap = sched ? bucketLoad(sched.times || []) : {}
+  let pendingOffer = null
+  const offerText = (o, first) => {
+    if (!o) return null
+    const lead = first && !isReceiving(sched.cfg, nowD) ? 'الحين خارج وقت استقبال الطلبات، بس نسجّل طلبك لأقرب موعد. ' : ''
+    if (o.kind === 'window') return `${lead}نقدر نخليك مفتوح ${o.label}. يناسبك؟`
+    const peak = o.peak ? ' (وقت ذروة، المواعيد فيه محدودة)' : ''
+    return first
+      ? `${lead}أقرب موعد متاح: ${o.label}${peak}. يناسبك؟ وإذا تبغى أجّله قل «أجّل ساعة» أو «بعد 3 ساعات» أو «خلال اليوم».`
+      : `تمام، الموعد الجديد: ${o.label}${peak}. يناسبك؟ (تقدر تأجله أكثر أو تقول «خلال اليوم»)`
+  }
+  const baseRep = (key, v) => fmt(pickv(((SALES[key] || R[key]) || R.unknown)[D], key + t), v)
+  const rep = (key, v) => {
+    if (key === 'time_prompt' && sched && !draft.preferredTime) {
+      const o = offerFor(sched.cfg, loadMap, nowD, 0)
+      if (o) { pendingOffer = o; return offerText(o, true) }
+    }
+    return baseRep(key, v)
+  }
   const SG = {
     sa: { book: ['احجز الحين', 'فيه خصم؟', 'بكرة العصر'], time: ['اليوم عصر', 'بكرة صباح', 'أي وقت'], loc: ['تحديد موقعي'], ready: ['تأكيد الطلب'], start: ['غسيل مكيفات', 'تسريب مياه', 'كهرباء', 'وين طلبي؟'], neg: ['موافق', 'آخر سعر؟', 'أبغى موظف'], none: ['الأسعار', 'العروض', 'أبغى موظف'] },
     eg: { book: ['احجزلي دلوقتي', 'فيه خصم؟', 'بكره العصر'], time: ['النهارده العصر', 'بكره الصبح', 'أي وقت'], loc: ['تحديد موقعي'], ready: ['تأكيد الطلب'], start: ['غسيل مكيفات', 'تسريب مياه', 'كهربا', 'فين طلبي؟'], neg: ['موافق', 'آخر سعر؟', 'عايز موظف'], none: ['الأسعار', 'العروض', 'عايز موظف'] },
   }
   const out = (reply, extra = {}) => {
     const kind = extra.action === 'ready_to_order' ? 'ready' : extra.action === 'location' ? 'loc' : extra.action === 'negotiate' ? 'neg' : extra.action === 'collect' && !draft.preferredTime ? 'time' : extra.action === 'calculator' ? (draft.preferredTime || extra.intent?.preferredTime ? 'loc' : 'book') : extra.action === 'handoff' || extra.action === 'warranty' || extra.action === 'track' ? null : (!draft.specialtyId && !extra.intent?.specialtyId ? 'start' : 'none')
-    return { confidence: 0.85, sources: [], intent: {}, escalation: null, action: 'none', understood: true, reply, dialect: D, suggestions: kind ? SG[D][kind] : [], ...extra }
+    const res = { confidence: 0.85, sources: [], intent: {}, escalation: null, action: 'none', understood: true, reply, dialect: D, suggestions: kind ? SG[D][kind] : [], ...extra }
+    if (pendingOffer) { res.intent = { ...res.intent, slotOffer: pendingOffer }; res.action = res.action === 'none' ? 'collect' : res.action; res.suggestions = ['تمام يناسبني', 'أجّل ساعة', 'بعد 3 ساعات', 'خلال اليوم'] }
+    return res
   }
   if (!t) return out(rep('greet') + (draft.specialtyId ? '' : ' ' + rep('ask_need')), { confidence: 0.5 })
+  // ── guided AC flow: the customer is answering "what is the problem?" ──
+  if (draft.acAsk && draft.specialtyId === 'ac' && !draft.acMode && !draft.acq && t.length > 1) {
+    const wash = /غسيل|غسل|اغسل|نظف|تنظيف|وسخ/.test(t)
+    const inst = /ركب|تركيب|فك|نقل|تاسيس|مواسير|جديد/.test(t)
+    const mode = wash ? 'wash' : inst ? 'install' : 'maintenance'
+    return out(rep('ask_qty', {}), { intent: { specialtyId: 'ac', acMode: mode, acAsk: false, problem: raw.slice(0, 200) }, action: 'collect', sources: ['pricing'] })
+  }
+  // ── appointment negotiation: accept / postpone ladder / open window ──
+  if (sched && draft.slotOffer && !draft.preferredTime) {
+    const cur = draft.slotOffer
+    const yes = /^(تمام|ماشي|اوكي|اوك|ok|okay|ايوه|ايوا|اي|نعم|ابشر|أبشر|مناسب|يناسب|حلو|زين|طيب|يصلح|موافق|اكد|أكد)(\s|$)/.test(t) || /(يناسبني|مناسب لي|موافق|ثبت|احجز)/.test(t)
+    const wantOpen = /(خلال اليوم|اي وقت|أي وقت|مفتوح|وقت ما|اي ساعه|اي ساعة|اللي يناسبكم|اللي يناسبك)/.test(t)
+    const wantDelay = /(اجل|أجل|تاجيل|تأجيل|تاخير|تأخير|بعدين|ساعه كمان|ساعة كمان|بعد ساعه|بعد ساعة|ساعتين|ثلاث ساعات|3 ساعات|ثلاثه ساعات|مو مناسب|ما يناسب|لا مايناسب)/.test(t)
+    if (yes && !wantDelay && !wantOpen) {
+      const intent = { preferredTime: cur.label, appointmentAt: cur.at, slotOffer: false }
+      if (!draft.coords) return out(rep('location_prompt'), { intent, action: 'location' })
+      return out(rep('ready'), { intent, action: 'ready_to_order' })
+    }
+    if (wantOpen || wantDelay) {
+      let step = cur.step + 1
+      if (wantOpen) step = sched.cfg.delaySteps.length + 1
+      else if (/(3|ثلاث)/.test(t)) step = Math.max(step, 2)
+      const o = offerFor(sched.cfg, loadMap, nowD, step, cur.base)
+      if (o) { pendingOffer = o; return out(offerText(o, false), { action: 'collect', sources: ['pricing'] }) }
+      return out('ما لقيت موعد أبعد من كذا، أحوّلك لفريق العمليات يرتبون لك موعد.', { action: 'handoff', escalation: 'negotiation' })
+    }
+  }
   const perNote = (p) => (quote?.units > 1 ? ` (${Math.round(p / quote.units)} ر.س للوحدة)` : '')
   const areaInfo = checkMakkahArea(raw, settings?.extraDistricts || [])
 
@@ -285,7 +336,7 @@ export function localTurn(ctx) {
   const acFollow = !spec && draft.specialtyId === 'ac' && prevAcq && (warrantyWord || vatWord || /داخلي|خارجي/.test(t) || is('edit_qty'))
   const acCtx = ac.cfg && (spec === 'ac' || acFollow || (!spec && draft.specialtyId === 'ac' && (is('price_ask') || detectAcType(t) || qty)))
   if (acCtx && spec === 'ac' && !qty && !prevAcq && !draft.qty && !is('price_ask') && !is('offers_ask') && !timeHit && !urgentHit && detectAcMode(t) === 'wash' && !/\d/.test(t)) {
-    return out(`${urgentHit ? rep('urgent_ack') : ''}${rep('ask_qty', {})}`, { intent: { specialtyId: 'ac', priority: urgentHit ? 'urgent' : 'normal', problem: raw.slice(0, 200) }, action: 'collect', sources: ['pricing'] })
+    return out(`${urgentHit ? rep('urgent_ack') : ''}${rep('ask_qty', {})}`, { intent: { specialtyId: 'ac', acMode: 'wash', priority: urgentHit ? 'urgent' : 'normal', problem: raw.slice(0, 200) }, action: 'collect', sources: ['pricing'] })
   }
   if (acCtx) {
     // items: "3 سبليت و 2 شباك"
@@ -296,7 +347,16 @@ export function localTurn(ctx) {
     }
     const multi = items.length >= 2 && new Set(items.map((i) => i.type)).size >= 2
     const explicitMode = /ركب|تركيب|فك|نقل|تاسيس|مواسير/.test(t) ? 'install' : /صيانه|عطل|خربان|بيبرد|يبرد|فحص|تسريب فريون|صوت|يقطر|ثلج|تجمد|ريحه|يفصل|يطفي|يسرب/.test(t) ? 'maintenance' : /غسيل|غسل|اغسل|نظف|تنظيف/.test(t) ? 'wash' : null
-    const mode = multi ? 'wash' : explicitMode || prevAcq?.mode || 'wash'
+    const mode = multi ? 'wash' : explicitMode || prevAcq?.mode || draft.acMode || 'wash'
+    // Guided flow: problem first, then the count, and only then the price.
+    {
+      const modeKnown = multi || !!explicitMode || !!prevAcq?.mode || !!draft.acMode
+      const qtyKnown = multi || !!qty || !!prevAcq?.qty || !!draft.qty
+      if (!acFollow && !warrantyWord && !vatWord && (!modeKnown || !qtyKnown)) {
+        const gi = { ...(!modeKnown ? { acAsk: true } : {}), specialtyId: 'ac', priority: urgentHit ? 'urgent' : 'normal', problem: raw.slice(0, 200), ...(explicitMode ? { acMode: mode } : {}) }
+        return out(`${urgentHit ? rep('urgent_ack') : ''}${!modeKnown ? baseRep('ask_problem') : rep('ask_qty', {})}`, { intent: gi, action: 'collect', sources: ['pricing'] })
+      }
+    }
     const type = detectAcType(t) || prevAcq?.type || 'سبليت'
     const nums = [...t.matchAll(/(?:^|\s)(\d{1,2})(?=\s|$)/g)].map((m) => Number(m[1])).filter((n) => n >= 1 && n <= 50)
     const q = (/بدل|خل(ي|يها|يهم)|غير/.test(t) && nums.length ? nums[nums.length - 1] : qty) || prevAcq?.qty || draft.qty || 1

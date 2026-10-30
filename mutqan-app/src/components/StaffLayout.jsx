@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, MessageCircle, Bell, Radar, Wallet, ListChecks, Briefcase, Layers, X, Map as MapIcon, Menu, ChevronDown, Settings2, Bot, Tags, Snowflake, ShieldCheck, UserPlus, Smartphone, Home, ShoppingBag } from 'lucide-react'
+import { Clock, LayoutDashboard, MessageCircle, Bell, Radar, Wallet, ListChecks, Briefcase, Layers, X, Map as MapIcon, Menu, ChevronDown, Settings2, Bot, Tags, Snowflake, ShieldCheck, UserPlus, Smartphone, Home, ShoppingBag } from 'lucide-react'
 import { useTeamRole } from '../hooks/useTeamRole'
 import { useLiveShared } from '../lib/useLive'
 import { auth } from '../lib/auth'
@@ -67,6 +67,7 @@ const MANAGE = [
   ['/staff/pricing', 'التسعير والخصومات', Tags],
   ['/staff/ac', 'خدمات المكيفات', Snowflake],
   ['/staff/used-ac', 'متجر المستعمل', ShoppingBag],
+  ['/staff/schedule', 'نظام المواعيد', Clock],
   ['/staff/ai-command', 'مركز قيادة الذكاء', Bot],
   ['/staff/ai-settings', 'إعدادات البوت', Settings2],
   ['/staff/ai-owner', 'تحكم المالك بالبوت', Bot],
