@@ -16,6 +16,7 @@ import { SPECIALTIES } from '../constants'
 import { useWarrantyPolicy } from '../hooks/useWarranty'
 import { orderWarranty, warrantyText } from '../warranty'
 import { useAcConfig } from '../hooks/useAcConfig'
+import { OPERATIONS_CLIENT_MSG } from '../hooks/useOrderRouting'
 import { buildOrderMessage, waLink, sealOrder } from '../lib/waOrder'
 
 export default function ClientOrderDetail() {
@@ -121,6 +122,9 @@ export default function ClientOrderDetail() {
       </header>
 
       <div className="max-w-2xl mx-auto w-full px-4 pt-5 flex flex-col gap-5">
+        {order.routing === 'operations' && order.status === 'new' && !order.technicianId && (
+          <div className="rounded-2xl bg-gradient-to-l from-sky-600 to-blue-600 text-white font-display font-black text-sm text-center py-3 px-4" data-keep-colors>📋 {OPERATIONS_CLIENT_MSG}</div>
+        )}
         {order.welcomeDiscountPct > 0 && (
           <div className="rounded-2xl bg-gradient-to-l from-amber-400 to-orange-500 text-white font-display font-black text-sm text-center py-3" data-keep-colors>🎁 خصم ترحيبي {order.welcomeDiscountPct}%{order.welcomeDiscountMax ? ` حتى ${order.welcomeDiscountMax} ر.س` : ''}{order.acQuote?.welcomeOff ? ` — وفّرت ${order.acQuote.welcomeOff} ر.س` : ''}</div>
         )}

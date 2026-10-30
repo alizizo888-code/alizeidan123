@@ -13,6 +13,7 @@ import { useLiveShared } from '../../lib/useLive'
 import { useSession } from '../../hooks/useSession'
 import { detectDialect } from '../../botData'
 import { useSchedule } from '../../hooks/useSchedule'
+import { useOrderRouting, OPERATIONS_CLIENT_MSG } from '../../hooks/useOrderRouting'
 import { setAcContext, setSchedContext, runTurn, mergeDraft, summarizeForHandoff, DIALECTS, VOICES, SENSITIVE_ACTIONS } from '../../mutqanAi'
 import { specialtyLabel, STATUS_META, ACTIVE_STATUSES } from '../../constants'
 import { usePricing } from '../../hooks/usePricing'
@@ -58,6 +59,7 @@ export default function AiChat() {
   const platformUser = auth.getCurrentUser()
   const ac = useAcConfig()
   const sch = useSchedule()
+  const routing = useOrderRouting()
   useEffect(() => { setAcContext({ cfg: ac.cfg, offers: ac.offers }) }, [ac.cfg, ac.offers])
   useEffect(() => { setSchedContext({ cfg: sch.cfg, times: sch.times, now: undefined }) }, [sch.cfg, sch.times])
 
@@ -568,10 +570,10 @@ export default function AiChat() {
       const verifyUrl = await sealOrder({ draft: d, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
       const waText = buildOrderMessage({ verifyUrl, draft: d, who: { ...who, name: who.name || d.contact?.name, phone: who.phone || d.contact?.phone }, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
       const waNumber = ac.cfg.waNumber || '966549423050'
-      openWhatsApp(waNumber, waText)
+      if (routing.mode !== 'operations') openWhatsApp(waNumber, waText)
       setDraft(null)
       setPanel(null)
-      await addMessage({ role: 'assistant', kind: 'order_created', orderId: order.id, waText, waNumber, content: `تم إرسال طلبك #${String(order.id).slice(-5)} لغرفة العمليات ✅ سيتم إسناده لأقرب فني متاح، وتقدر تتابع حالته من هنا أو من «طلباتي».` })
+      await addMessage({ role: 'assistant', kind: 'order_created', orderId: order.id, waText, waNumber, content: routing.mode === 'operations' ? `تم استلام طلبك #${String(order.id).slice(-5)} ✅ ${OPERATIONS_CLIENT_MSG}` : `تم إرسال طلبك #${String(order.id).slice(-5)} لغرفة العمليات ✅ سيتم إسناده لأقرب فني متاح، وتقدر تتابع حالته من هنا أو من «طلباتي».` })
     } catch {
       setError('تعذر إرسال الطلب، حاول مرة أخرى')
     } finally {
