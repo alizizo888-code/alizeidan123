@@ -1,3 +1,4 @@
+import AppointmentPicker from './AppointmentPicker'
 import { useState } from 'react'
 import { ClipboardCheck, Loader2, MapPin, Zap, Clock, Check } from 'lucide-react'
 import { maps } from '../lib/maps'
@@ -101,10 +102,8 @@ export default function AiOrderCard({ draft, session, onChange, onConfirm, busy,
           >
             <Zap size={12} /> {draft.priority === 'urgent' ? 'عاجل' : 'عادي'}
           </button>
-          <div className="relative">
-            <input value={draft.preferredTime || ''} onChange={(e) => onChange({ preferredTime: e.target.value })} placeholder="الموعد المفضل" className={`${inputCls} pr-7`} />
-            <Clock size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          </div>
+          <div className="col-span-2"><AppointmentPicker onChange={(v) => onChange({ preferredTime: v.label || '', appointmentAt: v.at })} /></div>
+
         </div>
         <button onClick={locate} disabled={locating} className="flex items-center gap-2 bg-sky-50 border border-sky-100 rounded-xl px-3 py-2 text-[11px] font-bold text-sky-700 text-right">
           {locating ? <Loader2 size={13} className="animate-spin shrink-0" /> : <MapPin size={13} className="shrink-0" />}

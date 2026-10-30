@@ -518,6 +518,7 @@ export default function AiChat() {
         specialtyId: d.specialtyId,
         description: d.problem || '',
         preferredTime: d.preferredTime || null,
+        appointmentAt: d.appointmentAt || null,
         priority: d.priority === 'urgent' && aiSettings.orderConversion.allowUrgent ? 'urgent' : 'normal',
         ...(() => {
           const q = quoteFor(d)
