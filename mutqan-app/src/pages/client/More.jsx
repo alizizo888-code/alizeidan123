@@ -3,7 +3,7 @@ import { hardRefresh, lastError } from '../../lib/recover'
 import AppPromoBanner from '../../components/AppPromoBanner'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Wrench, Percent, ShoppingBag, Calculator as CalcIcon, Sparkles, Share2, Copy, ShieldCheck, UserCog, Gift, Snowflake, MessageCircle, Smartphone } from 'lucide-react'
+import { Newspaper, ChevronRight, Wrench, Percent, ShoppingBag, Calculator as CalcIcon, Sparkles, Share2, Copy, ShieldCheck, UserCog, Gift, Snowflake, MessageCircle, Smartphone } from 'lucide-react'
 import { share } from '../../lib/share'
 
 const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin
@@ -45,6 +45,7 @@ export default function More() {
       <div className="max-w-3xl mx-auto w-full px-4 pt-4 flex flex-col gap-2.5">
         <AppPromoBanner />
         <Row icon={<Wrench size={18} />} tint="bg-sky-100 text-sky-700" title="كل الخدمات" sub="18 تخصصًا معتمدًا بضمان MUTQAN" onClick={() => navigate('/services')} />
+        <Row icon={<Newspaper size={18} />} tint="bg-indigo-100 text-indigo-700" title="المقالات" sub="المنشورة والمحدَّثة والقديمة — أدلة ونصائح الصيانة" onClick={() => navigate('/articles')} />
         <Row icon={<Percent size={18} />} tint="bg-rose-100 text-rose-600" title="العروض الموسمية" sub="أسعار خاصة تشمل الضمان والتركيب" onClick={() => navigate('/offers')} />
         <Row icon={<ShoppingBag size={18} />} tint="bg-violet-100 text-violet-600" title="المتجر" sub="أجهزة ومعدات أصلية مع التوريد والتركيب" onClick={() => navigate('/store')} />
         <Row icon={<CalcIcon size={18} />} tint="bg-amber-100 text-amber-700" title="حاسب الأسعار" sub="تقدير فوري لتكلفة خدمتك" onClick={() => navigate('/calculator')} />
