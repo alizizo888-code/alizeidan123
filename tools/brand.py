@@ -18,8 +18,8 @@ KEEP = ['MUTQAN AI']          # internal prompt persona name, never shown to cus
 
 def rewrite(s):
     for i, k in enumerate(KEEP): s = s.replace(k, f'\0{i}\0')
-    s = s.replace('MUTQAN', 'OXYGEN')
-    s = re.sub(r'(?<!مُ)(?<![؀-ۿ])متقن', 'أكسجين', s)      # plain "متقن" (no damma); «مُتقن» stays as the second name
+    s = re.sub(r'(?<![A-Za-z0-9_])MUTQAN(?![A-Za-z0-9_])', 'OXYGEN', s)   # visible brand word only, never identifiers (__MUTQAN__, MUTQAN_CFG)
+    s = s.replace('متقن', 'أكسجين')      # plain متقن (a damma-marked «مُتقن» does not match and stays as the second name)
     s = s.replace('logo-mutqan', 'logo-oxygen')
     for i, k in enumerate(KEEP): s = s.replace(f'\0{i}\0', k)
     return s
