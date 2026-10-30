@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { useSchedule } from '../hooks/useSchedule'
+import { isOpenAt, isPeak } from '../lib/schedule'
 import { CalendarDays, Clock, Landmark, Zap } from 'lucide-react'
 
 // Appointment picker used by every service order: a day (with the real weekday + date), then either an exact hour or a prayer-based slot.
@@ -11,6 +13,7 @@ const WD = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعا�
 const hourLabel = (h, m) => `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'ص' : 'م'}`
 
 export default function AppointmentPicker({ onChange, className = '' }) {
+  const { cfg, load } = useSchedule()
   const days = useMemo(() => {
     const out = []
     for (let i = 0; i < 7; i++) {
@@ -29,10 +32,12 @@ export default function AppointmentPicker({ onChange, className = '' }) {
     const now = Date.now() + 30 * 60 * 1000
     for (let h = 8; h <= 23; h++) for (const m of [0, 30]) {
       const t = new Date(days[day].d); t.setHours(h, m, 0, 0)
-      if (t.getTime() > now) out.push({ key: `${h}:${m}`, h, m, label: hourLabel(h, m) })
+      if (t.getTime() <= now || !isOpenAt(cfg, t)) continue
+      const full = (load[`${t.getFullYear()}-${t.getMonth()}-${t.getDate()}-${t.getHours()}`] || 0) >= (isPeak(cfg, t) ? cfg.capPeak : cfg.capNormal)
+      if (!full) out.push({ key: `${h}:${m}`, h, m, label: hourLabel(h, m) + (isPeak(cfg, t) ? ' (ذروة)' : '') })
     }
     return out
-  }, [day, days])
+  }, [day, days, cfg, load])
   const prayers = useMemo(() => PRAYERS.filter((p) => { const t = new Date(days[day].d); t.setHours(p.h, p.m, 0, 0); return t.getTime() > Date.now() + 15 * 60 * 1000 }), [day, days])
 
   function emit(nd, nm, np) {
