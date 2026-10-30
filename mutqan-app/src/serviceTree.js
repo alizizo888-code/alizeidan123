@@ -1,4 +1,4 @@
-// MUTQAN service tree: specialty → branches (غسيل / صيانة / تركيب / بيع وشراء …)
+// OXYGEN service tree: specialty → branches (غسيل / صيانة / تركيب / بيع وشراء …)
 // → step-by-step choices (unit type, fault …) + suggested questions for MUTQAN AI.
 
 const AC_UNITS = ['سبليت', 'شباك', 'دكت', 'كونسيلد (مخفي)', 'دولابي', 'مركزي', 'تشيلر', 'كاسيت']

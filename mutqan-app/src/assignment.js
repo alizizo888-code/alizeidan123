@@ -52,7 +52,7 @@ function techRating(tech, orders) {
 
 // Smart matching: scores every technician on location/distance, specialty,
 // availability, workload, service type, priority and qualification. It only
-// RANKS — the final link still follows MUTQAN rules (capacity, acceptance, roles).
+// RANKS — the final link still follows OXYGEN rules (capacity, acceptance, roles).
 export function scoreTechnicians(order, techs, orders, { distanceFn } = {}) {
   const urgent = order?.priority === 'urgent'
   return techs

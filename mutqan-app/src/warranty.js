@@ -1,4 +1,4 @@
-// MUTQAN warranty engine — every warranty fact the app (and MUTQAN AI) shows is
+// OXYGEN warranty engine — every warranty fact the app (and MUTQAN AI) shows is
 // computed from real records: a completed order's completion date, or a warranty
 // registered by staff in the warranty registry. Nothing is assumed.
 import { SPECIALTIES, specialtyLabel } from './constants'

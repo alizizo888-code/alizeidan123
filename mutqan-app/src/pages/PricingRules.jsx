@@ -62,7 +62,7 @@ export default function PricingRules() {
             <ChevronRight size={18} className="text-slate-300" />
           </button>
           <div>
-            <p className="text-[11px] text-primary font-bold tracking-widest">MUTQAN PRICING ENGINE</p>
+            <p className="text-[11px] text-primary font-bold tracking-widest">OXYGEN PRICING ENGINE</p>
             <h1 className="font-display text-lg font-black text-white">قواعد التسعير</h1>
           </div>
         </div>

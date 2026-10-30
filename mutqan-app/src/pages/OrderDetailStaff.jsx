@@ -130,7 +130,7 @@ export default function OrderDetailStaff() {
     }
   }
 
-  // Move the order along the MUTQAN chain — only to parties this role may reach
+  // Move the order along the OXYGEN chain — only to parties this role may reach
   async function doTransfer() {
     if (!transferTo) return
     setBusy(true)

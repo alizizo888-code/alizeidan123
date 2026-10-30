@@ -361,11 +361,11 @@ export default function AiSettings() {
 }
 
 const FOLLOWUP_TRIGGERS = [
-  { when: { status: 'accepted' }, title: 'MUTQAN · تم قبول طلبك', body: 'تم قبول طلبك بواسطة الفني {{technicianName}}.' },
-  { when: { status: 'en_route' }, title: 'MUTQAN · الفني في الطريق', body: 'الفني في الطريق.' },
-  { when: { status: 'arrived' }, title: 'MUTQAN · وصل الفني', body: 'وصل الفني إلى موقعك.' },
-  { when: { status: 'completed' }, title: 'MUTQAN · اكتملت الخدمة', body: 'هل تمت الخدمة بالشكل المطلوب؟' },
-  { when: { paymentStatus: 'paid' }, title: 'MUTQAN · تم تسجيل الدفع', body: 'تم تسجيل الدفع.' },
+  { when: { status: 'accepted' }, title: 'OXYGEN · تم قبول طلبك', body: 'تم قبول طلبك بواسطة الفني {{technicianName}}.' },
+  { when: { status: 'en_route' }, title: 'OXYGEN · الفني في الطريق', body: 'الفني في الطريق.' },
+  { when: { status: 'arrived' }, title: 'OXYGEN · وصل الفني', body: 'وصل الفني إلى موقعك.' },
+  { when: { status: 'completed' }, title: 'OXYGEN · اكتملت الخدمة', body: 'هل تمت الخدمة بالشكل المطلوب؟' },
+  { when: { paymentStatus: 'paid' }, title: 'OXYGEN · تم تسجيل الدفع', body: 'تم تسجيل الدفع.' },
 ]
 
 // Server-side follow-up pushes (fire even when nobody has the app open). Owner-only.
@@ -377,7 +377,7 @@ function ServerFollowUp({ enabled, onChange }) {
   async function refresh() {
     try {
       const list = await triggers.list()
-      setMine((list || []).filter((t) => String(t.config?.title || '').startsWith('MUTQAN ·')))
+      setMine((list || []).filter((t) => String(t.config?.title || '').startsWith('OXYGEN ·')))
     } catch { setMine([]) }
   }
   useEffect(() => { if (isOwner) refresh() }, [isOwner])

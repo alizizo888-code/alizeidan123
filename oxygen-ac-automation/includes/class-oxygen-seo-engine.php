@@ -18,6 +18,58 @@ class Oxygen_SEO_Engine {
         if (!isset(self::$cache[$name])) { self::$cache[$name] = include __DIR__ . '/seo/data-' . $name . '.php'; }
         return self::$cache[$name];
     }
+
+    /* ---------- one code base, many sites: every site gets its own brand and its own rotation, so texts never duplicate ---------- */
+    public static function brand() {
+        $o = get_option('oxygen_seo_brand');
+        if (is_string($o) && $o !== '') { return $o; }
+        $h = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
+        return strpos($h, 'mutqan') !== false ? 'متقن' : 'أكسجين';
+    }
+    /** Offset added to angle / paragraph rotation and to the plan order: the same topic is written from a different angle on each site. */
+    public static function salt() { return self::brand() === 'متقن' ? 11 : 0; }
+
+    /* ---------- automatic indexing (IndexNow: free, Bing/Yandex/Seznam/Naver; Google follows the XML sitemap) ---------- */
+    public static function indexnow_key() {
+        $k = get_option('oxygen_indexnow_key');
+        if (!is_string($k) || !preg_match('/^[a-f0-9]{32}$/', $k)) { $k = bin2hex(random_bytes(16)); update_option('oxygen_indexnow_key', $k, false); }
+        return $k;
+    }
+    public static function indexnow($urls) {
+        $urls = array_values(array_unique(array_filter((array) $urls)));
+        if (!$urls || !function_exists('wp_remote_post')) { return; }
+        $key = self::indexnow_key();
+        $host = (string) wp_parse_url(home_url('/'), PHP_URL_HOST);
+        wp_remote_post('https://api.indexnow.org/indexnow', [
+            'timeout' => 5, 'blocking' => false, 'headers' => ['Content-Type' => 'application/json; charset=utf-8'],
+            'body' => wp_json_encode(['host' => $host, 'key' => $key, 'keyLocation' => home_url('/' . $key . '.txt'), 'urlList' => array_slice($urls, 0, 100)]),
+        ]);
+    }
+    public static function serve_key() {
+        $path = isset($_SERVER['REQUEST_URI']) ? (string) wp_parse_url(wp_unslash($_SERVER['REQUEST_URI']), PHP_URL_PATH) : '';
+        if (!preg_match('#/([a-f0-9]{32})\.txt$#', $path, $m) || $m[1] !== get_option('oxygen_indexnow_key')) { return; }
+        header('Content-Type: text/plain; charset=utf-8');
+        echo $m[1];
+        exit;
+    }
+    /** Real, clean URLs + visible to search engines (a fresh WordPress ships with ?p=123 links and sometimes "discourage search engines"). */
+    public static function ensure_real_pages() {
+        if (get_option('oxygen_seo_site_ready') === '1') { return; }
+        if (get_option('permalink_structure') === '') {
+            global $wp_rewrite;
+            if ($wp_rewrite) { $wp_rewrite->set_permalink_structure('/%postname%/'); flush_rewrite_rules(false); }
+        }
+        if (get_option('blog_public') === '0') { update_option('blog_public', '1'); }
+        update_option('oxygen_seo_site_ready', '1', false);
+    }
+    public static function ensure_hub() {
+        if (get_page_by_path('oxygen-seo-archive')) { return; }
+        wp_insert_post(['post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'مقالات ' . self::brand(), 'post_name' => 'oxygen-seo-archive', 'post_content' => '[oxygen_seo_archive]']);
+    }
+    public static function sitemap_entry($e, $post) {
+        if (!empty($post->post_modified_gmt) && $post->post_modified_gmt !== '0000-00-00 00:00:00') { $e['lastmod'] = gmdate('c', strtotime($post->post_modified_gmt . ' UTC')); }
+        return $e;
+    }
     private static function e($s) { return function_exists('esc_html') ? esc_html($s) : htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
     private static function sub($tpl, $r) { return str_replace(['{t}', '{kw}', '{d}', '{n}'], [$r['t'] ?? '', $r['kw'] ?? '', $r['d'] ?? '', $r['n'] ?? ''], $tpl); }
 
@@ -47,7 +99,9 @@ class Oxygen_SEO_Engine {
             if (isset($com[$i])) { $plan[] = $com[$i]; }
             if (isset($off[$i])) { $plan[] = $off[$i]; }
         }
-        foreach ($plan as $i => &$p) { $p['idx'] = $i; }
+        $k = count($plan) ? (self::salt() * 5) % count($plan) : 0;
+        if ($k) { $plan = array_merge(array_slice($plan, $k), array_slice($plan, 0, $k)); }
+        foreach ($plan as $i => &$p) { $p['idx'] = $i; $p['title'] .= ' | ' . self::brand(); }
         unset($p);
         return self::$cache['plan'] = $plan;
     }
@@ -57,7 +111,7 @@ class Oxygen_SEO_Engine {
         return $d[$map[$dom] ?? 'general'] ?? $d['general'];
     }
     public static function angle_count() { return count(self::data('angles')); }
-    public static function angle_index($idx, $rev) { return (($idx * 7) + $rev) % self::angle_count(); }
+    public static function angle_index($idx, $rev) { return (($idx * 7) + $rev + self::salt()) % self::angle_count(); }
     public static function angle_label($idx, $rev) { $a = self::data('angles'); return $a[self::angle_index($idx, $rev)][0]; }
 
     /* ---------- content builders (pure, testable) ---------- */
@@ -73,10 +127,10 @@ class Oxygen_SEO_Engine {
         $lines = array_slice($lines, 0, 3);
         $txt = '';
         foreach ($lines as $i => $l) { $txt .= '<text x="600" y="' . (250 + $i * 82) . '" text-anchor="middle" font-size="64" font-weight="700" fill="#fff">' . self::e($l) . '</text>'; }
-        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" direction="rtl" font-family="Tahoma,Arial,sans-serif"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' . $c[0] . '"/><stop offset="1" stop-color="' . $c[1] . '"/></linearGradient></defs><rect width="1200" height="630" fill="url(#g)"/><circle cx="1050" cy="120" r="220" fill="#fff" opacity=".07"/><circle cx="120" cy="560" r="260" fill="#fff" opacity=".06"/><text x="600" y="120" text-anchor="middle" font-size="34" fill="#fff" opacity=".85">' . self::e($label) . '</text>' . $txt . '<text x="600" y="580" text-anchor="middle" font-size="30" fill="#fff" opacity=".9">أكسجين · خدمات الصيانة في مكة وجدة</text></svg>';
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" direction="rtl" font-family="Tahoma,Arial,sans-serif"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' . $c[0] . '"/><stop offset="1" stop-color="' . $c[1] . '"/></linearGradient></defs><rect width="1200" height="630" fill="url(#g)"/><circle cx="1050" cy="120" r="220" fill="#fff" opacity=".07"/><circle cx="120" cy="560" r="260" fill="#fff" opacity=".06"/><text x="600" y="120" text-anchor="middle" font-size="34" fill="#fff" opacity=".85">' . self::e($label) . '</text>' . $txt . '<text x="600" y="580" text-anchor="middle" font-size="30" fill="#fff" opacity=".9">' . self::e(self::brand()) . ' · خدمات الصيانة في مكة وجدة</text></svg>';
     }
     private static function steps_html($app, $wa) {
-        $h = '<ol><li>افتح تطبيق أكسجين (متقن) أو صفحة الطلب.</li><li>اختر الخدمة المطلوبة وحدد موقعك بضغطة واحدة أو بلصق رابط الخريطة.</li><li>أرسل الطلب بدون تسجيل؛ يصلك التأكيد عبر واتساب.</li><li>يصل الفني في الموعد، ويُعرض عليك السعر قبل البدء.</li></ol>';
+        $h = '<ol><li>افتح تطبيق ' . self::brand() . ' أو صفحة الطلب.</li><li>اختر الخدمة المطلوبة وحدد موقعك بضغطة واحدة أو بلصق رابط الخريطة.</li><li>أرسل الطلب بدون تسجيل؛ يصلك التأكيد عبر واتساب.</li><li>يصل الفني في الموعد، ويُعرض عليك السعر قبل البدء.</li></ol>';
         $h .= '<p class="oxy-seo-cta"><a href="' . self::e($app) . '">اطلب الخدمة من التطبيق</a>';
         if ($wa) { $h .= ' · <a href="https://wa.me/' . self::e($wa) . '">تواصل عبر واتساب</a>'; }
         return $h . '</p>';
@@ -107,16 +161,16 @@ class Oxygen_SEO_Engine {
         if ($item['track'] === 'commercial') {
             $s = self::data('services')[$item['sid']];
             $r = ['t' => $item['title'], 'kw' => $item['kw'], 'd' => $s['n'], 'n' => $s['n']];
-            $html .= '<p>تبحث عن <strong>' . self::e($item['kw']) . '</strong>؟ تقدم أكسجين خدمة ' . self::e($s['svc']) . ' في ' . self::e($item['city']) . ' بفنيين مدربين، وحجز بدون تسجيل، وسعر واضح يُعرض عليك قبل بدء العمل. ' . self::e(self::sub($a[1], $r)) . '</p>';
+            $html .= '<p>تبحث عن <strong>' . self::e($item['kw']) . '</strong>؟ تقدم ' . self::brand() . ' خدمة ' . self::e($s['svc']) . ' في ' . self::e($item['city']) . ' بفنيين مدربين، وحجز بدون تسجيل، وسعر واضح يُعرض عليك قبل بدء العمل. ' . self::e(self::sub($a[1], $r)) . '</p>';
             $html .= '<h2>ماذا تشمل خدمة ' . self::e($s['n']) . '؟</h2><ul>';
             foreach ($s['items'] as $it) { $html .= '<li>' . self::e($it) . '</li>'; }
             $html .= '</ul><h2>' . self::e($a[2]) . '</h2>';
             foreach ($a[3] as $p) { $html .= '<p>' . self::e(self::sub($p, $r)) . '</p>'; }
-            $html .= '<h2>لماذا تختار أكسجين؟</h2><p>نعمل بنظام طلب بسيط بلا تسجيل، ونرسل لك التأكيد عبر واتساب، ونعرض السعر قبل بدء العمل حتى لا تفاجأ بالفاتورة. فنيونا يشرحون السبب ويقترحون الخيارات، ويوثقون العمل بما يسهل عليك المتابعة لاحقاً. تغطي فرقنا مكة المكرمة وجدة، ويمكنك طلب موعد عاجل أو مجدول بحسب ظروفك.</p>';
+            $html .= '<h2>لماذا تختار ' . self::brand() . '؟</h2><p>نعمل بنظام طلب بسيط بلا تسجيل، ونرسل لك التأكيد عبر واتساب، ونعرض السعر قبل بدء العمل حتى لا تفاجأ بالفاتورة. فنيونا يشرحون السبب ويقترحون الخيارات، ويوثقون العمل بما يسهل عليك المتابعة لاحقاً. تغطي فرقنا مكة المكرمة وجدة، ويمكنك طلب موعد عاجل أو مجدول بحسب ظروفك.</p>';
             $html .= '<h2>متى تحتاج إلى ' . self::e($s['n']) . '؟</h2><ul>';
             foreach ($s['signs'] as $it) { $html .= '<li>' . self::e($it) . '</li>'; }
-            $html .= '</ul><h2>ما الذي يميز التعامل مع أكسجين في ' . self::e($item['city']) . '؟</h2>';
-            foreach (self::rot($dm['paras'], $rev, 2) as $p) { $html .= '<p>' . self::e($p) . '</p>'; }
+            $html .= '</ul><h2>ما الذي يميز التعامل مع ' . self::brand() . ' في ' . self::e($item['city']) . '؟</h2>';
+            foreach (self::rot($dm['paras'], $rev + self::salt(), 2) as $p) { $html .= '<p>' . self::e($p) . '</p>'; }
             $html .= '<h2>خطوات الطلب</h2>' . self::steps_html($app, $wa);
             $faq = $s['faq'];
             $faq[] = ['هل تغطون ' . $item['city'] . ' بالكامل؟', 'نغطي معظم أحياء ' . $item['city'] . ' ويؤكد فريق الجدولة الموعد المناسب لموقعك بعد استلام الطلب.'];
@@ -128,7 +182,7 @@ class Oxygen_SEO_Engine {
             $html .= '</ol><h2>' . self::e($a[2]) . '</h2>';
             foreach ($a[3] as $p) { $html .= '<p>' . self::e(self::sub($p, $r)) . '</p>'; }
             $html .= '<h2>شرح أعمق: ' . self::e($dm['label']) . '</h2>';
-            $paras = self::rot($dm['paras'], $rev, count($dm['paras']));
+            $paras = self::rot($dm['paras'], $rev + self::salt(), count($dm['paras']));
             foreach ($paras as $p) { $html .= '<p>' . self::e($p) . '</p>'; }
             $html .= '<h2>لماذا يهمك هذا الموضوع؟</h2><p>' . self::e(self::sub('موضوع «{t}» ليس ترفاً معرفياً؛ فهو يحدد كم تدفع في الفواتير، وكم يعيش الجهاز أو النظام، ومتى تظهر الأعطال. من يفهم الأساسيات في {d} يتخذ قرارات أهدأ وأرخص، ويتعامل مع الفني بثقة أكبر ويعرف ما يُطلب منه فعلاً.', $r)) . '</p>';
             $html .= '<h2>خطوات الفحص الأولي</h2><ol><li>سجّل ما تلاحظه بالضبط: متى بدأت المشكلة وما الذي تغيّر قبلها.</li><li>افصل الكهرباء أو أغلق المحبس المعني إن كان في الأمر خطر، ولا تبدأ بأي فك قبل ذلك.</li><li>افحص الأمور البسيطة أولاً كالنظافة والفلاتر والتوصيلات الظاهرة والإعدادات.</li><li>صوّر الجزء المتأثر أو رسالة الخطأ لتشاركها مع الفني عند الحاجة.</li><li>قارن النتيجة بعد كل خطوة ولا تغيّر عدة أمور دفعة واحدة، حتى تعرف ما الذي أثّر فعلاً.</li></ol>';
@@ -177,6 +231,10 @@ class Oxygen_SEO_Engine {
     /* ---------- WP glue ---------- */
     public static function boot() {
         add_action('init', [__CLASS__, 'ensure_cron'], 3);
+        add_action('init', [__CLASS__, 'serve_key'], 1);
+        add_action('init', [__CLASS__, 'ensure_real_pages'], 30);
+        add_filter('wp_sitemaps_enabled', '__return_true');
+        add_filter('wp_sitemaps_posts_entry', [__CLASS__, 'sitemap_entry'], 10, 2);
         add_action(self::CRON, [__CLASS__, 'tick']);
         add_filter('the_content', [__CLASS__, 'filter_content'], 5);
         add_action('wp_head', [__CLASS__, 'head'], 4);
@@ -215,7 +273,7 @@ class Oxygen_SEO_Engine {
                 $dir = $u['basedir'] . '/oxygen-seo';
                 if (wp_mkdir_p($dir)) {
                     $rev = !empty($map[$item['key']]) ? (int) get_post_meta($map[$item['key']], '_oxy_seo_rev', true) : 0;
-                    $label = $item['track'] === 'commercial' ? 'خدمات أكسجين' : 'دليل أكسجين';
+                    $label = $item['track'] === 'commercial' ? 'خدمات ' . self::brand() . '' : 'دليل ' . self::brand() . '';
                     $fn = $item['key'] . '.svg';
                     if (@file_put_contents($dir . '/' . $fn, self::cover_svg($item['title'], $label, $item['key'] . $rev))) { $img = $u['baseurl'] . '/oxygen-seo/' . $fn . '?v=' . $rev; }
                 }
@@ -252,9 +310,10 @@ class Oxygen_SEO_Engine {
             update_post_meta($id, '_oxy_seo_desc', $b['desc']);
             update_post_meta($id, '_oxy_seo_faq', wp_json_encode($b['faq'], JSON_UNESCAPED_UNICODE));
             update_post_meta($id, '_oxy_seo_img', $ctx['img']);
-            $cat = self::term($item['track'] === 'commercial' ? 'خدمات أكسجين' : 'أدلة وإرشادات');
+            $cat = self::term($item['track'] === 'commercial' ? 'خدمات ' . self::brand() . '' : 'أدلة وإرشادات');
             if ($cat) { wp_set_post_categories($id, [$cat]); }
             self::log('new', $id, $item['title'], ['track' => $item['track'], 'st' => get_post_status($id), 'rev' => 0]);
+            if (get_post_status($id) === 'publish') { self::indexnow([get_permalink($id), home_url('/oxygen-seo-archive/')]); }
             return $id;
         }
         return false;
@@ -279,19 +338,21 @@ class Oxygen_SEO_Engine {
         $rev++;
         $ctx = self::ctx($item, $map);
         $b = self::build($item, $rev, $ctx);
-        wp_update_post(['ID' => $id, 'post_content' => $b['html'], 'post_excerpt' => $b['desc']]);
+        wp_update_post(['ID' => $id, 'post_title' => $item['title'], 'post_content' => $b['html'], 'post_excerpt' => $b['desc']]);
         update_post_meta($id, '_oxy_seo_rev', $rev);
         update_post_meta($id, '_oxy_seo_angle', self::angle_label($item['idx'], $rev));
         update_post_meta($id, '_oxy_seo_updated', current_time('mysql'));
         update_post_meta($id, '_oxy_seo_desc', $b['desc']);
         update_post_meta($id, '_oxy_seo_faq', wp_json_encode($b['faq'], JSON_UNESCAPED_UNICODE));
         update_post_meta($id, '_oxy_seo_img', $ctx['img']);
+        if (get_post_status($id) === 'publish') { self::indexnow([get_permalink($id)]); }
         self::log('refresh', $id, $item['title'], ['track' => $item['track'], 'st' => get_post_status($id), 'rev' => $rev, 'angle' => self::angle_label($item['idx'], $rev)]);
         return $id;
     }
     /** Hourly: at most one action, within the daily quotas. */
     public static function tick() {
         if (!self::active()) { return; }
+        self::ensure_hub();
         $s = self::settings();
         if (self::today_count('new') < (int) $s['new_per_day'] && self::create_next()) { return; }
         if (self::today_count('refresh') < (int) $s['refresh_per_day']) { self::refresh_next(); }
@@ -305,8 +366,8 @@ class Oxygen_SEO_Engine {
         if (!self::meta_for($id)) { return $c; }
         $main = esc_url(Oxygen_Domain_Guard::main_url());
         $mh = preg_replace('#^www\.#', '', (string) wp_parse_url($main, PHP_URL_HOST));
-        $top = '<p class="oxy-mainsite" style="background:#0ea5e9;color:#fff;border-radius:10px;padding:8px 12px;font-weight:700;text-align:center;margin:0 0 14px"><a href="' . $main . '" style="color:#fff;text-decoration:none">← الموقع الرئيسي لأكسجين · ' . esc_html($mh) . '</a></p>';
-        $bottom = '<div class="oxy-mainsite-cta" style="margin-top:22px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:12px;padding:12px 14px;text-align:center"><strong>خدمات الصيانة والتبريد</strong><br><a href="' . $main . '" style="font-weight:700">زيارة الموقع الرئيسي لأكسجين (' . esc_html($mh) . ') للخدمات والحجز</a></div>';
+        $top = '<p class="oxy-mainsite" style="background:#0ea5e9;color:#fff;border-radius:10px;padding:8px 12px;font-weight:700;text-align:center;margin:0 0 14px"><a href="' . $main . '" style="color:#fff;text-decoration:none">← الموقع الرئيسي ل' . self::brand() . ' · ' . esc_html($mh) . '</a></p>';
+        $bottom = '<div class="oxy-mainsite-cta" style="margin-top:22px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:12px;padding:12px 14px;text-align:center"><strong>خدمات الصيانة والتبريد</strong><br><a href="' . $main . '" style="font-weight:700">زيارة الموقع الرئيسي ل' . self::brand() . ' (' . esc_html($mh) . ') للخدمات والحجز</a></div>';
         $rev = (int) get_post_meta($id, '_oxy_seo_rev', true);
         $upd = '';
         if ($rev >= 1) {
@@ -331,7 +392,7 @@ class Oxygen_SEO_Engine {
         $graph = [[
             '@type' => 'Article', 'headline' => $title, 'description' => $desc, 'inLanguage' => 'ar', 'mainEntityOfPage' => $url,
             'datePublished' => get_post_time('c', true, $id), 'dateModified' => get_post_modified_time('c', true, $id),
-            'author' => ['@type' => 'Organization', 'name' => 'أكسجين'], 'publisher' => ['@type' => 'Organization', 'name' => 'أكسجين'],
+            'author' => ['@type' => 'Organization', 'name' => self::brand()], 'publisher' => ['@type' => 'Organization', 'name' => self::brand()],
         ] + ($img ? ['image' => $img] : []),
         ['@type' => 'BreadcrumbList', 'itemListElement' => [['@type' => 'ListItem', 'position' => 1, 'name' => 'الرئيسية', 'item' => home_url('/')], ['@type' => 'ListItem', 'position' => 2, 'name' => $title, 'item' => $url]]]];
         if ($faq) {
@@ -389,6 +450,7 @@ class Oxygen_SEO_Engine {
         self::guard('oxy_seo_pub');
         $ids = get_posts(['post_type' => 'post', 'post_status' => 'draft', 'meta_key' => '_oxy_seo_key', 'numberposts' => -1, 'fields' => 'ids']);
         foreach ($ids as $id) { wp_update_post(['ID' => $id, 'post_status' => 'publish']); self::log('publish', $id, get_the_title($id), ['st' => 'publish']); }
+        self::indexnow(array_map('get_permalink', $ids));
         self::back('تم نشر ' . count($ids) . ' مسودة.');
     }
     public static function h_archive_page() {

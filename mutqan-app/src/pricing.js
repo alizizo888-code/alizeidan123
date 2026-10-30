@@ -1,4 +1,4 @@
-// MUTQAN Pricing Engine + Negotiation Engine.
+// OXYGEN Pricing Engine + Negotiation Engine.
 // The price ALWAYS comes from here (rules set by operations/owner). The AI only
 // reads, explains and presents the offer this engine allows — it never invents one.
 import { SPECIALTIES, PRICE_BASE } from './constants'

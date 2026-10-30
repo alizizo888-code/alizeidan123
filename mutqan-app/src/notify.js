@@ -3,7 +3,7 @@ import { team } from './lib/team'
 import { push } from './lib/push'
 import { specialtyLabel } from './constants'
 
-// MUTQAN notification system — every notification is fired by a REAL change in
+// OXYGEN notification system — every notification is fired by a REAL change in
 // the order (status, live location, payment). Each event can be switched on/off
 // per recipient (customer · technician · operations) from the notifications settings page.
 export const NOTIFY_EVENTS = [
@@ -121,7 +121,7 @@ async function inbox(gid, { userId, audience, eventId, msg, order, url, keepDays
 }
 
 /**
- * Fire one MUTQAN notification for a real order event.
+ * Fire one OXYGEN notification for a real order event.
  * @param {string} eventId  one of NOTIFY_EVENTS
  * @param {object} order    the order row (uses its current data)
  * @param {object} opts     { settings, serverPush, extra: { meters, note, amount, method } }

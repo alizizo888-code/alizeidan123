@@ -59,7 +59,7 @@ export default function ServiceBanner({ onOpen }) {
       <div className="relative h-full flex flex-col justify-between p-5 text-white">
         {/* Fixed brand */}
         <div>
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-black tracking-wider bg-white/10 backdrop-blur border border-sky-300/30 rounded-full px-2.5 py-0.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />مُتقن · MUTQAN</span>
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-black tracking-wider bg-white/10 backdrop-blur border border-sky-300/30 rounded-full px-2.5 py-0.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />مُتقن · OXYGEN</span>
           <div className="flex items-center gap-2 mt-1.5">
             <Snowflake size={24} className="text-sky-200" />
             <h1 className="font-display font-black text-3xl md:text-4xl tracking-wide drop-shadow">OXYGEN</h1>

@@ -149,7 +149,7 @@ final class Mutqan_Rest {
     /** New order -> WhatsApp message to the owner (if Cloud API is configured in "الشات بوت والطلبات"). */
     private static function after_order_created($doc) {
         if (!class_exists('Oxygen_Orders_Chat') || !method_exists('Oxygen_Orders_Chat', 'whatsapp_owner')) { return; }
-        $lines = ['طلب جديد من تطبيق متقن #' . substr((string) $doc['id'], -6)];
+        $lines = ['طلب جديد من تطبيق أكسجين #' . substr((string) $doc['id'], -6)];
         if (!empty($doc['specialtyId'])) { $lines[] = 'الخدمة: ' . $doc['specialtyId']; }
         if (!empty($doc['description'])) { $lines[] = 'التفاصيل: ' . mb_substr((string) $doc['description'], 0, 300); }
         $price = $doc['agreedPrice'] ?? ($doc['priceQuote']['total'] ?? null);
@@ -384,7 +384,7 @@ final class Mutqan_Rest {
         header('Referrer-Policy: strict-origin-when-cross-origin');
         if (!is_readable($file)) {
             status_header(503);
-            echo '<!doctype html><meta charset="utf-8"><title>متقن</title><body dir="rtl" style="font-family:Tahoma;padding:2rem">التطبيق قيد الإعداد: لم يُرفع ملف الواجهة بعد.</body>';
+            echo '<!doctype html><meta charset="utf-8"><title>أكسجين</title><body dir="rtl" style="font-family:Tahoma;padding:2rem">التطبيق قيد الإعداد: لم يُرفع ملف الواجهة بعد.</body>';
             exit;
         }
         $html = (string) file_get_contents($file);

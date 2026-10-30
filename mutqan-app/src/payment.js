@@ -1,4 +1,4 @@
-// MUTQAN payments — online payment links on the owner's own connected payment
+// OXYGEN payments — online payment links on the owner's own connected payment
 // account. The ONLY proof of payment is the provider's server-verified record
 // (payments.hasPurchased); the redirect back and any client state are never proof.
 import { payments } from './lib/payments'
@@ -21,7 +21,7 @@ export function resolvePayUrl(tpl, order) {
 export const orderSku = (id) => `mutqan-order-${id}`
 export const orderAmount = (o) => Number(o?.price || o?.agreedPrice || o?.priceQuote?.total || 0)
 
-// Which payment methods MUTQAN offers right now — read from the admin-managed
+// Which payment methods OXYGEN offers right now — read from the admin-managed
 // payment_methods collection + the live provider connection, never assumed.
 // Online payment counts only when enabled by an admin AND the provider is connected.
 export async function paymentMethods() {

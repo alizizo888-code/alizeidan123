@@ -1,4 +1,4 @@
-// MUTQAN workflow rules shared by the AI, the customer chat and the staff screens:
+// OXYGEN workflow rules shared by the AI, the customer chat and the staff screens:
 // escalation reasons, the order-transfer chain + who may move an order where,
 // follow-up messages per status, and the tracking facts the AI may read.
 import { maps } from './lib/maps'
