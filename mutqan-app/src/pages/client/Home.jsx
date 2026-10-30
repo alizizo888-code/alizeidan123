@@ -232,8 +232,7 @@ export default function Home() {
 
         {/* Offers strip */}
         <section className="fade-up" style={{ animationDelay: '300ms' }}>
-          <div className="flex items-end justify-between mb-2.5">
-            <h2 className="font-display font-black text-slate-900 text-lg">عروض الموسم الشتوي والبرودة 🔥</h2>
+          <div className="flex items-end justify-end mb-2.5">
             <Link to="/offers" className="flex items-center gap-0.5 text-[11px] font-bold text-primary shrink-0">
               عرض الكل
               <ChevronLeft size={13} />
