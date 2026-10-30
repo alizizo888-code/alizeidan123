@@ -13,6 +13,7 @@ ROOT = os.path.abspath(sys.argv[1]); BRAND = sys.argv[2]
 if BRAND != 'oxygen': sys.exit('only the oxygen overlay is defined (mutqan is the source)')
 SCOPE_DIRS = ['mutqan-app/src', 'oxygen-ac-automation/includes/mutqan', 'tests/bot', 'tests/mutqan']
 SCOPE_FILES = ['mutqan-app/index.html', 'mutqan-app/public/manifest.webmanifest']
+SKIP = {'tests/mutqan/seo.php'}      # asserts BOTH brands, must stay as written
 EXT = ('.js', '.jsx', '.php', '.json', '.mjs', '.html', '.webmanifest')
 KEEP = ['MUTQAN AI']          # internal prompt persona name, never shown to customers
 
@@ -33,7 +34,7 @@ def walk():
 
 n = 0
 for p in walk():
-    if not os.path.isfile(p): continue
+    if not os.path.isfile(p) or os.path.relpath(p, ROOT) in SKIP: continue
     t = open(p, encoding='utf-8').read(); u = rewrite(t)
     if u != t: open(p, 'w', encoding='utf-8').write(u); n += 1
 ov = os.path.join(ROOT, 'brand', BRAND)
