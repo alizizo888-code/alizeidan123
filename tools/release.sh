@@ -15,9 +15,9 @@ git archive pub-oxygen oxygen-ac-automation/app | tar -x -C "$T"          # prev
 python3 tools/brand.py "$T" oxygen
 ln -s "$NM" "$T/mutqan-app/node_modules"
 (cd "$T" && bash tools/build-app.sh | tail -1)
-rm "$T/mutqan-app/node_modules"
 (cd "$T/tests/mutqan" && bash run.sh 2>&1 | grep -E "FAIL|passed")
 (cd "$T" && bash tests/bot/run.sh 2>&1 | grep -E "FAIL|passed")
+rm "$T/mutqan-app/node_modules"
 IDX=$(mktemp -u)
 tree_of() { GIT_INDEX_FILE=$IDX git --work-tree="$1" read-tree --empty; GIT_INDEX_FILE=$IDX git --work-tree="$1" add -A .; GIT_INDEX_FILE=$IDX git write-tree; }
 git fetch -q alizeidan 2>/dev/null || true
