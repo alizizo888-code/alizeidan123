@@ -24,6 +24,7 @@ import SpecialtyGallery from '../components/SpecialtyGallery'
 import FloatingContact from '../components/FloatingContact'
 import InstantService from '../components/InstantService'
 import AppointmentPicker from '../components/AppointmentPicker'
+import { useOrderRouting } from '../hooks/useOrderRouting'
 import AcCalculator from '../components/AcCalculator'
 import PermissionHelp from '../components/PermissionHelp'
 import { permissionState } from '../hooks/useLocator'
@@ -47,6 +48,7 @@ export default function NewOrder() {
   const [changing, setChanging] = useState(false)
   const [description, setDescription] = useState('')
   const [appt, setAppt] = useState({ label: '', at: null })
+  const routing = useOrderRouting()
   const [noteOpen, setNoteOpen] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
@@ -196,7 +198,7 @@ export default function NewOrder() {
       })
       // The server alerts owner + operations about every new order (see Mutqan_Rest::alert_new_order).
 
-      navigate(`/order/${order.id}?wa=1`, { replace: true })
+      navigate(`/order/${order.id}${routing.mode === 'operations' ? '' : '?wa=1'}`, { replace: true })
     } catch (e) {
       if (e?.code === 'price_below_floor' && !noDiscount && off > 0) { setNoDiscount(true); setError('انتهى خصمك الترحيبي على هذا الجهاز — اضغط إتمام الطلب لإرساله بالسعر الأصلي.'); setSubmitting(false); return }
       setError('تعذر إرسال الطلب، حاول مرة أخرى')

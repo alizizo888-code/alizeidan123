@@ -14,6 +14,8 @@ import { useAssignment } from '../hooks/useAssignment'
 import { remainingCapacity } from '../assignment'
 import OrderCard from '../components/OrderCard'
 import { useOpsMode } from '../hooks/useOpsMode'
+import { useOrderRouting } from '../hooks/useOrderRouting'
+import ManualOrderModal from '../components/ManualOrderModal'
 import { serviceScopeLabel, specialtyLabel } from '../constants'
 
 export default function OperationsRoom() {
@@ -27,6 +29,8 @@ export default function OperationsRoom() {
   const { data: coverageRows } = useLiveShared('coverage', { limit: 1 })
   const { data: pendingTechs } = useLiveShared('tech_applications', { filters: { status: 'pending' }, limit: 100 })
   const { inhouse: inhouseOn, setInhouse } = useOpsMode()
+  const routing = useOrderRouting()
+  const [manualOpen, setManualOpen] = useState(false)
   const inhouseList = useMemo(() => orders.filter((o) => o.inhouse && !['completed', 'closed', 'cancelled'].includes(o.status)), [orders])
   const [now, setNow] = useState(Date.now())
   const flaggedRef = useRef(new Set())
@@ -157,6 +161,19 @@ export default function OperationsRoom() {
             <p className="text-[11px] text-primary font-bold tracking-widest">غرفة العمليات</p>
             <h1 className="font-display text-lg font-black text-white truncate">مركز توزيع الطلبات</h1>
           </div>
+          {(isOwner || routing.opsCreate) && (
+            <button onClick={() => setManualOpen(true)} className="shrink-0 flex items-center gap-1.5 bg-emerald-500 text-black rounded-xl px-3 py-2 text-[11px] font-black">➕ <span>طلب من واتساب</span></button>
+          )}
+          {isOwner && (
+            <>
+              <button onClick={() => routing.setMode(routing.mode === 'operations' ? 'whatsapp' : 'operations').catch(() => {})} className={`shrink-0 rounded-xl px-3 py-2 text-[11px] font-black border ${routing.mode === 'operations' ? 'bg-amber-400 text-black border-amber-200' : 'bg-white/5 border-white/10 text-slate-200'}`}>
+                📋 توجيه الطلبات: {routing.mode === 'operations' ? 'لمشرف العمليات' : 'للواتساب'}
+              </button>
+              <button onClick={() => routing.setOpsCreate(!routing.opsCreate).catch(() => {})} className={`shrink-0 rounded-xl px-3 py-2 text-[11px] font-black border ${routing.opsCreate ? 'bg-emerald-400 text-black border-emerald-200' : 'bg-white/5 border-white/10 text-slate-200'}`}>
+                ➕ إنشاء طلبات يدوية: {routing.opsCreate ? 'مفعّل' : 'متوقف'}
+              </button>
+            </>
+          )}
           {isOwner && (
             <button onClick={() => setInhouse(!inhouseOn).catch(() => {})} className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-black border ${inhouseOn ? 'bg-sky-500 text-black border-sky-300' : 'bg-white/5 border-white/10 text-slate-200'}`}>
               🏗️ هندمة الأعمال: {inhouseOn ? 'مفعّلة' : 'متوقفة'}
@@ -366,6 +383,7 @@ export default function OperationsRoom() {
           )}
         </section>
       </div>
+      {manualOpen && <ManualOrderModal by={role} onClose={() => setManualOpen(false)} />}
     </div>
   )
 }

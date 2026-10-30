@@ -139,7 +139,8 @@ final class Mutqan_Rest {
     private static function alert_new_order($doc) {
         $urgent = (($doc['priority'] ?? '') === 'urgent');
         $bits = array_filter([(string) ($doc['clientName'] ?? ''), mb_substr((string) ($doc['address'] ?? ''), 0, 40), !empty($doc['inhouse']) ? 'تنفيذ داخلي' : '']);
-        self::admin_alert(($urgent ? '🚨 طلب عاجل جديد' : '🆕 طلب جديد') . (!empty($doc['specialtyId']) ? ' — ' . $doc['specialtyId'] : ''), implode(' · ', $bits) ?: 'طلب خدمة جديد بانتظار المعالجة', '#/staff/order/' . $doc['id'], 'new_order', 'high', $doc['id']);
+        $ops = (($doc['routing'] ?? '') === 'operations');
+        self::admin_alert(($urgent ? '🚨 طلب عاجل جديد' : ($ops ? '📋 طلب بانتظار التوزيع' : '🆕 طلب جديد')) . (!empty($doc['specialtyId']) ? ' — ' . $doc['specialtyId'] : ''), implode(' · ', $bits) ?: 'طلب خدمة جديد بانتظار المعالجة', '#/staff/order/' . $doc['id'], 'new_order', 'high', $doc['id']);
     }
 
     private static function alert_tech_application($doc) {
