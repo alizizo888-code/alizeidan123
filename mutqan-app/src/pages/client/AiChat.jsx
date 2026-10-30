@@ -12,11 +12,13 @@ import { audio } from '../../lib/audio'
 import { useLiveShared } from '../../lib/useLive'
 import { useSession } from '../../hooks/useSession'
 import { detectDialect } from '../../botData'
-import { setAcContext, runTurn, mergeDraft, summarizeForHandoff, DIALECTS, VOICES, SENSITIVE_ACTIONS } from '../../mutqanAi'
+import { useSchedule } from '../../hooks/useSchedule'
+import { setAcContext, setSchedContext, runTurn, mergeDraft, summarizeForHandoff, DIALECTS, VOICES, SENSITIVE_ACTIONS } from '../../mutqanAi'
 import { specialtyLabel, STATUS_META, ACTIVE_STATUSES } from '../../constants'
 import { usePricing } from '../../hooks/usePricing'
 import { acQuote, acQuoteFromAcq } from '../../acPricing'
 import { useAcConfig } from '../../hooks/useAcConfig'
+import InstantService from '../../components/InstantService'
 import { buildOrderMessage, openWhatsApp, waLink, sealOrder } from '../../lib/waOrder'
 import { useAiSettings, logAi } from '../../hooks/useAiSettings'
 import { computeQuote, nextNegotiationStep, PARTS_RULES } from '../../pricing'
@@ -56,7 +58,9 @@ export default function AiChat() {
   const { session, setSession } = useSession()
   const platformUser = auth.getCurrentUser()
   const ac = useAcConfig()
+  const sch = useSchedule()
   useEffect(() => { setAcContext({ cfg: ac.cfg, offers: ac.offers }) }, [ac.cfg, ac.offers])
+  useEffect(() => { setSchedContext({ cfg: sch.cfg, times: sch.times, now: undefined }) }, [sch.cfg, sch.times])
 
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState(params.get('q') || '')
@@ -948,6 +952,7 @@ export default function AiChat() {
       </div>
 
       {showSettings && <SettingsSheet prefs={prefs} setPrefs={setPrefs} onClose={() => setShowSettings(false)} />}
+      <InstantService bottomClass="bottom-[7.5rem]" />
     </div>
   )
 }

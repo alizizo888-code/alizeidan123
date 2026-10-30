@@ -31,7 +31,7 @@ for (const [txt, total] of [['ابغى اغسل 3 سبليت و 2 شباك', 300
 for (const m of ['من فاز بالمباراه امس', 'ايش سعر الذهب اليوم', 'اكتب لي قصيده', 'وش رايك في الانتخابات']) { const r = converse([m]).last; t(`offtopic polite redirect: ${m}`, /تخصص|الصيانة|الخدمات/.test(r.reply) && !r.intent.specialtyId, r.reply) }
 for (const m of ['زهقت منكم كل مره كذا', 'طفشت ولا احد يرد', 'مليت من التاخير', 'ارحموني تعبت']) { const r = converse([m]).last; t(`frustration -> human: ${m}`, r.action === 'handoff', r.action) }
 // Levant/Gulf phrasing understood
-for (const m of ['قديش بتغسلوا المكيف', 'شنو سعر غسيل المكيف', 'بدي اعرف سعر غسيل السبليت']) { const r = converse([m]).last; t(`levant/gulf price: ${m}`, /100|ر\.س/.test(r.reply), r.reply) }
+for (const m of ['قديش بتغسلوا المكيف', 'شنو سعر غسيل المكيف', 'بدي اعرف سعر غسيل السبليت']) { const r = converse([m]).last; t(`levant/gulf price: ${m}`, /كم|العدد|وحدة/.test(r.reply), r.reply) }
 // suggestions
 { const r = converse(['ابغى غسيل 3 سبليت']).last; t('suggestions after quote', Array.isArray(r.suggestions) && r.suggestions.length >= 2, JSON.stringify(r.suggestions)) }
 { const r = converse(['السلام عليكم']).last; t('suggestions at start', r.suggestions.length >= 3, JSON.stringify(r.suggestions)) }

@@ -25,6 +25,7 @@ const AiSettings = lazyRetry(() => import('./pages/AiSettings'))
 const PricingRules = lazyRetry(() => import('./pages/PricingRules'))
 const AcAdmin = lazyRetry(() => import('./pages/AcAdmin'))
 const UsedAcAdmin = lazyRetry(() => import('./pages/UsedAcAdmin'))
+const ScheduleAdmin = lazyRetry(() => import('./pages/ScheduleAdmin'))
 const AiCommandCenter = lazyRetry(() => import('./pages/AiCommandCenter'))
 const PaymentMethods = lazyRetry(() => import('./pages/PaymentMethods'))
 const AiOwnerControl = lazyRetry(() => import('./pages/AiOwnerControl'))
@@ -82,6 +83,7 @@ export default function App() {
         <Route path="/staff/pricing" element={<PricingRules />} />
         <Route path="/staff/ac" element={<AcAdmin />} />
         <Route path="/staff/used-ac" element={<UsedAcAdmin />} />
+        <Route path="/staff/schedule" element={<ScheduleAdmin />} />
         <Route path="/staff/ai-command" element={<AiCommandCenter />} />
         <Route path="/staff/payment-methods" element={<PaymentMethods />} />
         <Route path="/staff/ai-owner" element={<AiOwnerControl />} />

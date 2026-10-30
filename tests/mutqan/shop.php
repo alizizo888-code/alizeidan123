@@ -50,4 +50,8 @@ $t('reminder sent only for appointment within 15 min', Mutqan_REST::send_reminde
 $t('reminder not repeated', Mutqan_REST::send_reminders() === 0);
 $pu = Mutqan_Store::select('_push', [], ['limit' => 20], $sys);
 $t('customer push created', count(array_filter($pu, function ($m) { return ($m['event'] ?? '') === 'appointment_reminder' && ($m['target']['user'] ?? '') === 'cu1'; })) === 1);
+$ld = $S::handle(['op' => 'load'], ['kind' => 'guest']);
+$t('load returns booked times only', isset($ld['times']) && count($ld['times']) >= 1 && strpos(json_encode($ld), 'clientName') === false);
+Mutqan_Store::insert('schedule_cfg', ['openFrom' => '09:00'], 'main', [], $sys);
+$t('schedule_cfg is public-readable', count(Mutqan_Store::select('schedule_cfg', [], [], $guest)) === 1);
 exit($ok ? 0 : 1);

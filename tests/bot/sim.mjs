@@ -10,7 +10,7 @@ export const acOffers = [
   { acMode: 'wash', acType: 'سبليت', qty: 3, price: 200, title: 'غسيل 3 سبليت', badge: '🔥 الأكثر طلباً', active: true },
   { acMode: 'wash', acType: 'سبليت', qty: 6, price: 380, title: 'غسيل 6 سبليت', active: true },
 ]
-const MERGE = ['specialtyId', 'problem', 'priority', 'preferredTime', 'locationText', 'qty', 'acq', 'contact']
+const MERGE = ['specialtyId', 'problem', 'priority', 'preferredTime', 'locationText', 'qty', 'acq', 'contact', 'appointmentAt', 'acMode']
 
 export function quoteFor(d) {
   if (!d?.specialtyId || !rules[d.specialtyId]) return null
@@ -23,7 +23,7 @@ export function quoteFor(d) {
   return { ...q, maxAttempts: rule.maxAttempts, negotiable: rule.aiNegotiation !== false, agreed: d.agreedPrice }
 }
 
-export function converse(turns, { dialect = 'auto', customer = { verified: false }, orders = [], draft = {} } = {}) {
+export function converse(turns, { dialect = 'auto', customer = { verified: false }, orders = [], draft = {}, sched = null } = {}) {
   let d = { ...draft }
   const history = []
   const results = []
@@ -32,10 +32,12 @@ export function converse(turns, { dialect = 'auto', customer = { verified: false
     history.push({ role: 'user', content: turn })
     const quote = quoteFor(d)
     const nego = quote?.negotiable ? nextNegotiationStep(d.negotiation, quote, DEFAULT_NEGOTIATION, quote.maxAttempts) : null
-    const res = localTurn({ history, customer, orders, draft: d, dialect, rules, quote, nego, settings: { negotiation: { enabled: true } }, ac: { cfg: acCfg, offers: acOffers } })
+    const res = localTurn({ history, customer, orders, draft: d, dialect, rules, quote, nego, settings: { negotiation: { enabled: true } }, ac: { cfg: acCfg, offers: acOffers }, sched })
     history.push({ role: 'assistant', content: res.reply })
     let next = { ...d }
     for (const k of MERGE) { const v = res.intent?.[k]; if (v !== null && v !== undefined && v !== '' && v !== 'null') next[k] = v }
+    if (res.intent?.acAsk === true) next.acAsk = true; else if (res.intent?.acAsk === false) delete next.acAsk
+    if (res.intent?.slotOffer === false) delete next.slotOffer; else if (res.intent?.slotOffer) next.slotOffer = res.intent.slotOffer
     if (res.action === 'negotiate' && nego) next.negotiation = { i: nego.last ? nego.i : nego.i + 1, offer: nego.offer, stage: nego.stage }
     if (res.intent?.counterPrice && next.negotiation && quote && res.intent.counterPrice >= quote.floor && res.intent.counterPrice <= quote.total) next.negotiation = { ...next.negotiation, offer: res.intent.counterPrice }
     if (res.intent?.acceptedOffer && next.negotiation?.offer) next.agreedPrice = next.negotiation.offer
