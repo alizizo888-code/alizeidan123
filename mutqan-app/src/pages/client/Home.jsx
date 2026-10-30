@@ -1,3 +1,4 @@
+import DhikrBanner from '../../components/DhikrBanner'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Bell, MapPin, Search, SlidersHorizontal, ChevronRight, ChevronLeft, ShieldCheck, Phone, Headphones, MessageCircle, Loader2, ArrowLeft, Snowflake, Menu, User, CheckCircle2, Sparkles } from 'lucide-react'
@@ -124,10 +125,7 @@ export default function Home() {
           <button onClick={() => navigate('/account')} className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-400 to-blue-600 text-white flex items-center justify-center shadow-md shadow-sky-300/50 active:scale-95 transition-transform shrink-0">
             <User size={18} />
           </button>
-          <button onClick={locate} className="flex-1 min-w-0 flex items-center justify-center gap-1.5 bg-white/90 border border-sky-100 rounded-full px-3 py-2.5 text-[11px] font-bold text-slate-700 shadow-sm active:scale-[0.98] transition-transform">
-            {loc.loading ? <Loader2 size={13} className="animate-spin text-primary" /> : <MapPin size={13} className="text-primary" />}
-            <span className="truncate">{loc.label}</span>
-          </button>
+          <DhikrBanner />
           <ThemeToggle />
           <button onClick={() => navigate('/notifications')} aria-label="الإشعارات" className="relative w-10 h-10 rounded-full bg-white/90 border border-sky-100 shadow-sm flex items-center justify-center active:scale-95 transition-transform shrink-0">
             <Bell size={17} className="text-slate-600" />

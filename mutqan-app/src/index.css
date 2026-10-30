@@ -171,3 +171,15 @@ html.lite .float-soft, html.lite [class*="fxi-"], html.lite .mr-bob, html.lite .
 html.lite .fx-glow, html.lite [class*="blur-"] { filter: none !important }
 html.lite *, html.lite *::before, html.lite *::after { scroll-behavior: auto !important }
 html.bg-paused *, html.bg-paused *::before, html.bg-paused *::after { animation-play-state: paused !important }
+
+/* Dhikr ticker (home header): scrolling remembrance phrases; a tap makes the bar flash yellow → blue → light green. */
+@keyframes dhikrScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes dhikrFlash {
+  0%   { background-color: #fde047; border-color: #facc15; }
+  33%  { background-color: #60a5fa; border-color: #3b82f6; }
+  66%  { background-color: #86efac; border-color: #4ade80; }
+  100% { background-color: #fde047; border-color: #facc15; }
+}
+.dhikr-track { display: inline-flex; white-space: nowrap; animation: dhikrScroll 38s linear infinite; will-change: transform; }
+.dhikr-flash { animation: dhikrFlash 1.5s linear 3; }
+@media (prefers-reduced-motion: reduce) { .dhikr-track { animation-duration: 120s; } .dhikr-flash { animation-iteration-count: 1; } }
