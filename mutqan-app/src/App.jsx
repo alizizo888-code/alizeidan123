@@ -25,6 +25,7 @@ const AiSettings = lazyRetry(() => import('./pages/AiSettings'))
 const PricingRules = lazyRetry(() => import('./pages/PricingRules'))
 const AcAdmin = lazyRetry(() => import('./pages/AcAdmin'))
 const UsedAcAdmin = lazyRetry(() => import('./pages/UsedAcAdmin'))
+const Articles = lazyRetry(() => import('./pages/client/Articles'))
 const ScheduleAdmin = lazyRetry(() => import('./pages/ScheduleAdmin'))
 const AiCommandCenter = lazyRetry(() => import('./pages/AiCommandCenter'))
 const PaymentMethods = lazyRetry(() => import('./pages/PaymentMethods'))
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="account" element={<Account />} />
           <Route path="calculator" element={<Calculator />} />
           <Route path="more" element={<More />} />
+          <Route path="articles" element={<Articles />} />
         </Route>
 
         {/* تدفق الطلب وتفاصيله — شاشات مركّزة بدون شريط تبويب */}
