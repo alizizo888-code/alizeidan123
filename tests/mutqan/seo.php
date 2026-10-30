@@ -32,4 +32,18 @@ $sa = $words($a['html']); $sb = $words($hb);
 $jac = count(array_intersect($sa, $sb)) / max(1, count(array_unique(array_merge($sa, $sb))));
 $t('same topic on both sites is not a copy (jaccard ' . round($jac, 2) . ')', $jac < 0.85 && strpos($hb, 'متقن') !== false && strpos($hb, 'أكسجين') === false);
 $GLOBALS['__host'] = 'oxygen11.com'; $pc->setValue(null, []);
+// variants: seo (alt titles/keywords) and district (Makkah neighbourhoods)
+$kinds = array_count_values(array_map(function ($i) { return $i['kind']; }, $a['plan']));
+$t('plan has base + seo + district streams', ($kinds['base'] ?? 0) >= 100 && ($kinds['seo'] ?? 0) >= 100 && ($kinds['district'] ?? 0) >= 400);
+$keys = array_map(function ($i) { return $i['key']; }, $a['plan']);
+$t('all plan keys unique', count($keys) === count(array_unique($keys)));
+$dist = array_values(array_filter($a['plan'], function ($i) { return $i['kind'] === 'district'; }));
+$seo = array_values(array_filter($a['plan'], function ($i) { return $i['kind'] === 'seo'; }));
+$hd = $E::build($dist[0], 0, [])['html']; $hs = $E::build($seo[0], 0, [])['html'];
+$t('district article names the neighbourhood', strpos($hd, $dist[0]['district']) !== false && strpos($dist[0]['title'], 'حي') !== false);
+$t('seo variant has a different keyword/title from its base', $seo[0]['kw'] !== $a['plan'][0]['kw'] && $seo[0]['title'] !== $a['plan'][0]['title']);
+$jd = (function ($x, $y) use ($words) { $p = $words($x); $q = $words($y); return count(array_intersect($p, $q)) / max(1, count(array_unique(array_merge($p, $q)))); })($hd, $hs);
+$t('district vs seo variant are not copies (jaccard ' . round($jd, 2) . ')', $jd < 0.9);
+$bd = array_values(array_filter($b['plan'], function ($i) { return $i['kind'] === 'district'; }));
+$t('the two sites start with different neighbourhoods', $bd[0]['district'] !== $dist[0]['district']);
 exit($ok ? 0 : 1);
