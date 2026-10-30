@@ -23,6 +23,7 @@ import { isRegistered } from '../registration'
 import SpecialtyGallery from '../components/SpecialtyGallery'
 import FloatingContact from '../components/FloatingContact'
 import InstantService from '../components/InstantService'
+import AppointmentPicker from '../components/AppointmentPicker'
 import AcCalculator from '../components/AcCalculator'
 import PermissionHelp from '../components/PermissionHelp'
 import { permissionState } from '../hooks/useLocator'
@@ -45,6 +46,7 @@ export default function NewOrder() {
   const [specialtyId, setSpecialtyId] = useState(params.get('specialty') || '')
   const [changing, setChanging] = useState(false)
   const [description, setDescription] = useState('')
+  const [appt, setAppt] = useState({ label: '', at: null })
   const [noteOpen, setNoteOpen] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
@@ -173,6 +175,8 @@ export default function NewOrder() {
         qty: acSel?.qty || 1,
         acQuote: acSel ? { mode: acSel.mode, type: acSel.type, qty: acSel.qty, full: acSel.full, warranty: acSel.warranty, vat: acSel.vat, total: acSel.total - (noDiscount ? 0 : off), welcomeOff: noDiscount ? 0 : off, offerKey: acSel.offer ? (acSel.offer.key || acSel.offer.id) : null } : null,
         description: description.trim(),
+        preferredTime: appt.label || null,
+        appointmentAt: appt.at || null,
         priority,
         promoCode: null,
         deviceId: getDeviceId(),
@@ -268,6 +272,8 @@ export default function NewOrder() {
             <PencilLine size={14} /> {description ? 'تعديل الملاحظة' : 'إضافة ملاحظة (اختياري)'}
           </button>
         )}
+
+        {priority !== 'urgent' && <AppointmentPicker onChange={setAppt} />}
 
         <Field label="موقع الخدمة">
           {coords ? (
