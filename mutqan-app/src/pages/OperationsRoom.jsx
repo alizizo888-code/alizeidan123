@@ -383,8 +383,8 @@ export default function OperationsRoom() {
           )}
         </section>
       </div>
-    </div>
       {manualOpen && <ManualOrderModal by={role} onClose={() => setManualOpen(false)} />}
+    </div>
   )
 }
 
