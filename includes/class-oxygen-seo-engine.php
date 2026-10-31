@@ -268,8 +268,8 @@ class Oxygen_SEO_Engine {
             $html .= '<h2>خطوات الطلب</h2>' . self::steps_html($app, $wa);
             $faq = $s['faq'];
             $faq[] = ['هل تغطون ' . $item['city'] . ' بالكامل؟', 'نغطي معظم أحياء ' . $item['city'] . ' ويؤكد فريق الجدولة الموعد المناسب لموقعك بعد استلام الطلب.'];
-            $desc = $item['kw'] . ' — ' . $s['svc'] . ' في ' . $item['city'] . ' بحجز سريع بدون تسجيل وسعر واضح قبل التنفيذ وضمان على العمل.';
-            if (!empty($item['mega'])) {
+            $desc = self::desc_for($item);
+            if (false) {
                 $hook = [' — ' . self::brand() . ': الشركة الرائدة، مهندسون خبراء مختصون وخصومات على الخدمة. احجز الآن بلا تسجيل.', ' — نخبة من المهندسين المختصين وخبرة طويلة وخصومات لعملائنا. اطلب الخدمة الآن.', ' — أفضل خدمة بإشراف مهندسين خبراء، مع خصومات وحجز سريع بلا تسجيل.'];
                 $desc = $item['kw'] . $hook[(int) ($item['idx'] % 3)];
             }
@@ -295,13 +295,53 @@ class Oxygen_SEO_Engine {
             $html .= self::faq_html($faq);
             $html .= '<h2>ملخص سريع</h2><p>' . self::e(self::sub('إذا أردت تلخيص «{t}» في جملة واحدة: راقب الأعراض مبكراً، وابدأ بالفحوص البسيطة الآمنة، ولا تتردد في طلب مختص حين يتعلق الأمر بالسلامة أو يتكرر العطل. بهذا تحمي {d} في منزلك وتوفر المال والوقت، وتبقى {kw} مسألة تحت سيطرتك بدل أن تتحول إلى مفاجأة مكلفة في وقت غير مناسب.', $r)) . '</p>';
             $html .= '<h2>هل تحتاج مساعدة مباشرة؟</h2><p>إن رغبت بفني يعاين الحالة في مكة أو جدة فيمكنك الطلب بسهولة بدون تسجيل.</p>' . self::steps_html($app, $wa);
-            $desc = $item['title'] . ' — دليل عملي مختصر: الأسباب، الفحص الأولي، ومتى تستدعي فنياً.';
+            $desc = self::desc_for($item);
             $html .= self::links_html($ctx['links'] ?? []);
             return ['html' => $html, 'faq' => $faq, 'desc' => self::trim_desc($desc), 'text' => strip_tags($html)];
         }
         $html .= self::faq_html($faq);
         $html .= self::links_html($ctx['links'] ?? []);
         return ['html' => $html, 'faq' => $faq, 'desc' => self::trim_desc($desc), 'text' => strip_tags($html)];
+    }
+    /** Search-result description: what the service covers + the call to order + offers. No keyword stuffing, no English, no personal data. */
+    public static function desc_for($item) {
+        $svc = self::data('services');
+        if (($item['track'] ?? '') === 'commercial' && isset($svc[$item['sid']])) {
+            $s = $svc[$item['sid']];
+            $where = !empty($item['place']) ? 'محيط ' . $item['place'] : (!empty($item['brand']) ? $item['city'] . ' لأجهزة ' . $item['brand'] : $item['city']);
+            $lead = $s['n'] . ' في ' . $where . ': ' . (array_values($s['items'] ?? [])[0] ?? '');
+            $cta = ' اطلب فنياً الآن وتصفّح العروض.';
+        } else {
+            $pts = array_values($item['points'] ?? []);
+            $lead = preg_replace('/\s*\|.*$/u', '', (string) ($item['title'] ?? '')) . ($pts ? ': ' . $pts[0] : '');
+            $cta = ' اطلب فنياً أو تصفّح العروض.';
+        }
+        $room = 158 - mb_strlen($cta);
+        if (mb_strlen($lead) > $room) { $lead = mb_substr($lead, 0, $room - 1); $sp = mb_strrpos($lead, ' '); if ($sp > 40) { $lead = mb_substr($lead, 0, $sp); } $lead = rtrim($lead, " ،.:") . '…'; } else { $lead = rtrim($lead, '.') . '.'; }
+        return $lead . $cta;
+    }
+    private static function item_of_post($id) {
+        $k = (string) get_post_meta($id, '_oxy_seo_key', true); if ($k === '') { return null; }
+        if (Oxygen_SEO_Mega::is_key($k)) { return Oxygen_SEO_Mega::item_by_key($k); }
+        foreach (self::plan() as $it) { if ($it['key'] === $k) { return $it; } }
+        return null;
+    }
+    public static function seo_meta_desc($d) {
+        if (!is_singular('post')) { return $d; }
+        $it = self::item_of_post(get_queried_object_id());
+        return $it ? self::desc_for($it) : $d;
+    }
+    public static function brand_author($n) { return self::brand(); }
+    public static function hide_author_pages() { if (is_author()) { wp_safe_redirect(home_url('/'), 301); exit; } }
+    public static function og_title($t) { if (is_singular('post') && get_post_meta(get_queried_object_id(), '_oxy_seo_key', true)) { return html_entity_decode(get_the_title(get_queried_object_id()), ENT_QUOTES, 'UTF-8'); } return $t; }
+    public static function no_author_sitemap($providers) { return array_values(array_filter((array) $providers, function ($p) { return stripos(get_class($p), 'Author') === false; })); }
+    public static function clean_identity() {
+        if (get_option('oxygen_identity_v1') === '1') { return; }
+        $b = self::brand();
+        $bn = (string) get_option('blogname');
+        if ($bn === '' || preg_match('/^[a-z0-9 \-]+$/i', $bn)) { update_option('blogname', $b); }
+        foreach (get_users(['role' => 'administrator', 'fields' => 'ID']) as $uid) { wp_update_user(['ID' => (int) $uid, 'display_name' => $b, 'nickname' => $b]); }
+        update_option('oxygen_identity_v1', '1', false);
     }
     private static function trim_desc($d) { return mb_strlen($d) > 158 ? mb_substr($d, 0, 155) . '...' : $d; }
     public static function word_count($text) { return count(preg_split('/\s+/u', trim(strip_tags($text)), -1, PREG_SPLIT_NO_EMPTY)); }
@@ -341,6 +381,17 @@ class Oxygen_SEO_Engine {
         add_filter('wp_sitemaps_enabled', function ($on) { return defined('WPSEO_VERSION') ? $on : true; }, 20);
         add_filter('wpseo_title', [__CLASS__, 'yoast_title'], 20);
         add_action('init', [__CLASS__, 'trash_defaults'], 31);
+        add_filter('wpseo_metadesc', [__CLASS__, 'seo_meta_desc'], 30);
+        add_filter('wpseo_opengraph_desc', [__CLASS__, 'seo_meta_desc'], 30);
+        add_filter('wpseo_opengraph_site_name', [__CLASS__, 'brand_author'], 30);
+        add_filter('wpseo_opengraph_title', [__CLASS__, 'og_title'], 30);
+        add_filter('wpseo_twitter_title', [__CLASS__, 'og_title'], 30);
+        add_filter('wpseo_enhanced_slack_data', '__return_empty_array', 30);
+        add_filter('wpseo_sitemaps_providers', [__CLASS__, 'no_author_sitemap'], 30);
+        add_filter('the_author', [__CLASS__, 'brand_author'], 30);
+        add_filter('get_the_author_display_name', [__CLASS__, 'brand_author'], 30);
+        add_action('template_redirect', [__CLASS__, 'hide_author_pages'], 1);
+        add_action('init', [__CLASS__, 'clean_identity'], 32);
         add_filter('wp_sitemaps_posts_entry', [__CLASS__, 'sitemap_entry'], 10, 2);
         add_action(self::CRON, [__CLASS__, 'tick']);
         add_filter('the_content', [__CLASS__, 'filter_content'], 5);
