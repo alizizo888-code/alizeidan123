@@ -110,6 +110,7 @@ function verifySession() {
       } catch { return }                           // offline — keep session
       await new Promise((ok) => setTimeout(ok, 1200))
     }
+    if (typeof window !== 'undefined' && window.__DESK_REAUTH__ && await window.__DESK_REAUTH__()) return   // desk apps renew from the saved PIN instead of signing out
     setSession('', null)
   })().finally(() => { verifying = null })
   return verifying
