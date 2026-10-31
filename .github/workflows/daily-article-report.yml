@@ -46,7 +46,7 @@ jobs:
             done
             if [[ "$ok" -ne 1 ]]; then
               echo "::warning::No report from $site (HTTP $code). The plugin must be updated on that site."
-              [[ "$site" == "oxygen11.com" ]] && failed=1
+              [[ "$site" == "oxygen11.com" ]] && { echo "::error::No report from oxygen11.com (HTTP $code)"; failed=1; }
               continue
             fi
             d="$(jq -r .day "$f")"; n="$(jq -r .total "$f")"; avg="$(jq -r .avg "$f")"
@@ -56,7 +56,12 @@ jobs:
             title="📊 تقرير مقالات $site — $d ($n عملية، متوسط SEO $avg)"
             # keep the inbox tidy: close this site's reports older than 3 days
             gh issue list --state open --search "تقرير مقالات $site in:title" --json number,createdAt --jq '.[]|select((.createdAt|fromdateiso8601) < (now-259200))|.number' 2>/dev/null | while read -r num; do gh issue close "$num" --comment "أُغلق تلقائيًا (تقرير قديم)." >/dev/null 2>&1 || true; done
-            gh issue create --title "$title" --body-file "out/report-$site-$d.md" --assignee "$OWNER_LOGIN" || gh issue create --title "$title" --body-file "out/report-$site-$d.md" || failed=1
+            if ! out="$(gh issue create --title "$title" --body-file "out/report-$site-$d.md" --assignee "$OWNER_LOGIN" 2>&1)"; then
+              echo "::warning::Issue with assignee failed for $site: ${out:0:300}"
+              if ! out="$(gh issue create --title "$title" --body-file "out/report-$site-$d.md" 2>&1)"; then
+                echo "::error::Could not open the report issue for $site: ${out:0:400}"; failed=1
+              else echo "Issue opened: $out"; fi
+            else echo "Issue opened: $out"; fi
           done
           exit "$failed"
 
