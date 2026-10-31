@@ -10,18 +10,23 @@ if (!defined('ABSPATH')) { exit; }
  * - Everything reads/writes the same WordPress options, posts and Mutqan orders store, so changes show up in WordPress immediately.
  */
 class Oxygen_Desk {
-    const HASH_O = 'a5c96105189e909cb49f7e07d291a683fa4ca03501e152d7b6268aa6b972a8ff';
-    const HASH_C = 'fe6efae08e6093bb79c65b92a38d5f56243b10faaf4efde6852467ddba150301';
+    const HASH_O = '';
+    const HASH_C = '';
     const COOKIE = 'oxd_';
 
     public static function boot() {
-        add_action('init', [__CLASS__, 'route'], 1);
+        // The old /oxy-desk/<secret> pages are retired: every secret link is cancelled. The desk apps use ONE numeric PIN (set below).
         add_action('admin_menu', function () { add_submenu_page('oxygen-seo', 'المكتب السري', 'المكتب السري', 'manage_options', 'oxygen-desk', [__CLASS__, 'admin_page']); }, 23);
-        add_action('admin_post_oxygen_desk_rotate', [__CLASS__, 'rotate']);
+        add_action('admin_post_oxygen_desk_pin', [__CLASS__, 'save_pin']);
     }
 
-    /** Secret-link check used by the desk apps (desk.oxygen11.com): either desk secret opens the owner session. */
-    public static function valid_secret($tok) { $tok = (string) $tok; if ($tok === '' || strlen($tok) > 200) { return false; } $h = hash('sha256', $tok); return hash_equals(self::hash_for('o'), $h) || hash_equals(self::hash_for('c'), $h); }
+    /** The desk apps' single PIN (stored only as a salted hash in this site's database, never in code). Every old secret link is cancelled. */
+    public static function pin_is_set() { return (string) get_option('oxygen_desk_pin', '') !== ''; }
+    public static function valid_secret($tok) {
+        $tok = trim((string) $tok); $h = (string) get_option('oxygen_desk_pin', '');
+        if ($tok === '' || strlen($tok) > 64 || $h === '') { return false; }
+        return password_verify($tok, $h);
+    }
     private static function hash_for($k) { $o = get_option('oxygen_desk_hash_' . $k, ''); return preg_match('/^[a-f0-9]{64}$/', (string) $o) ? $o : ($k === 'o' ? self::HASH_O : self::HASH_C); }
     private static function cookie_val($k) { return hash_hmac('sha256', 'desk|' . $k . '|' . self::hash_for($k), defined('AUTH_KEY') && AUTH_KEY ? AUTH_KEY : (string) get_option('siteurl')); }
     private static function authed($k) { $c = $_COOKIE[self::COOKIE . $k] ?? ''; return is_string($c) && $c !== '' && hash_equals(self::cookie_val($k), $c); }
@@ -153,25 +158,20 @@ class Oxygen_Desk {
         return 'var B=[["company_name","اسم الشركة","i"],["phone","الجوال","i"],["whatsapp","واتساب (أرقام فقط)","i"],["email","البريد","i"],["city","المدينة","i"],["banner_text","نص البانر","t"],["banner_image","رابط صورة البانر","i"],["offers","العروض (سطر لكل عرض)","t"],["services","الخدمات (1|اسم)","t"],["price_rules","قواعد الأسعار","t"],["gallery_urls","روابط صور المعرض","t"]],S=[["tiktok","رابط تيك توك","i"],["facebook","رابط فيسبوك","i"],["tiktok_videos","فيديوهات تيك توك للمعرض","t"],["facebook_videos","فيديوهات فيسبوك للمعرض","t"]];function fld(p,a,v){return"<label>"+a[1]+"</label>"+(a[2]==="t"?"<textarea data-p="+p+" data-k="+a[0]+">"+esc(v||"")+"</textarea>":"<input data-p="+p+" data-k="+a[0]+" value=\""+esc(v||"")+"\">")}function tab(t){$("#app").innerHTML="<div class=r style=margin-bottom:12px><button class="+(t==="s"?"":"g")+" onclick=tab(\x27s\x27)>الإعدادات</button><button class="+(t==="p"?"":"g")+" onclick=tab(\x27p\x27)>المقالات</button><button class="+(t==="g"?"":"g")+" onclick=tab(\x27g\x27)>الصفحات</button></div><div id=v>…</div>";if(t==="s")sets();else list(t==="g"?"page":"post","")}function sets(){api("settings_get").then(function(j){var h="<div class=c><b>بيانات الموقع والعروض</b><br>"+B.map(function(a){return fld("biz",a,j.biz[a[0]])}).join("")+"</div><div class=c><b>تيك توك وفيسبوك</b><br>"+S.map(function(a){return fld("social",a,j.social[a[0]])}).join("")+"</div><button onclick=saveS()>حفظ (يظهر في ووردبريس فورًا)</button>";$("#v").innerHTML=h})}function saveS(){var d={biz:{},social:{}};document.querySelectorAll("[data-p]").forEach(function(e){d[e.dataset.p][e.dataset.k]=e.value});api("settings_save",d).then(function(){toast("تم الحفظ")}).catch(function(e){toast(e.message)})}function list(type,q){api("posts",{type:type,q:q}).then(function(j){var h="<input id=q placeholder=\"بحث…\" value=\""+esc(q)+"\" onchange=\"list(\x27"+type+"\x27,this.value)\">";j.posts.forEach(function(p){h+="<div class=c><b>"+esc(p.title||"(بدون عنوان)")+"</b> <span class=t>"+esc(p.status)+"</span><div class=r style=margin-top:6px><button onclick=\"edit("+p.id+")\">تعديل</button><a href=\""+esc(p.link)+"\" target=_blank rel=noopener><button class=g>عرض</button></a></div></div>"});$("#v").innerHTML=h})}function edit(id){api("post_get",{id:id}).then(function(p){$("#app").innerHTML="<button class=g onclick=tab(\x27p\x27)>← رجوع</button><div class=c><label>العنوان</label><input id=t value=\""+esc(p.title)+"\"><label>الوصف المختصر</label><textarea id=x>"+esc(p.excerpt)+"</textarea><label>المحتوى (HTML)</label><textarea id=b style=min-height:260px;direction:ltr>"+esc(p.content)+"</textarea><label>الحالة</label><select id=s><option value=publish"+(p.status==="publish"?" selected":"")+">منشور</option><option value=draft"+(p.status==="draft"?" selected":"")+">مسودة</option><option value=private"+(p.status==="private"?" selected":"")+">خاص</option></select><button onclick=\"savePost("+p.id+")\">حفظ</button></div>"})}function savePost(id){api("post_save",{id:id,title:$("#t").value,excerpt:$("#x").value,content:$("#b").value,status:$("#s").value}).then(function(){toast("تم الحفظ")}).catch(function(e){toast(e.message)})}tab("s");';
     }
 
-    /* ---------------- WP admin: rotate secrets ---------------- */
+    /* ---------------- WP admin: the desk PIN ---------------- */
     public static function admin_page() {
         if (!current_user_can('manage_options')) { return; }
-        echo '<div class="wrap" dir="rtl"><h1>المكتب السري</h1><p>واجهتان خاصتان بك بلا كلمات مرور: <b>طلبات العملاء</b> و<b>التحكم بالموقع</b>. تُفتحان برابط سري فقط، ولا تظهران في الموقع ولا محركات البحث ولا خريطة الموقع.</p>';
-        foreach (['o' => 'طلبات العملاء', 'c' => 'التحكم بالموقع'] as $k => $n) {
-            $new = get_transient('oxd_new_' . $k);
-            echo '<div class="card" style="padding:12px;max-width:760px;margin:10px 0"><h2>' . esc_html($n) . '</h2>';
-            if ($new) { echo '<p>الرابط الجديد (يظهر مرة واحدة، احفظه): <br><code dir="ltr" style="user-select:all">' . esc_html(home_url('/oxy-desk/' . $k . '/' . $new)) . '</code></p>'; delete_transient('oxd_new_' . $k); }
-            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="oxygen_desk_rotate"><input type="hidden" name="k" value="' . $k . '">' . wp_nonce_field('oxd_rot', '_wpnonce', true, false) . '<button class="button">إنشاء رابط جديد (يُبطل القديم وكل الأجهزة المفتوحة)</button></form></div>';
-        }
-        echo '</div>';
+        echo '<div class="wrap" dir="rtl"><h1>المكتب السري — رمز الدخول</h1><p>تطبيقا المكتب (غرفة العمليات / الإعدادات) يدخلان برمز سري واحد فقط، بلا روابط ولا كلمات مرور. الرمز يُحفظ مشفّرًا في قاعدة بيانات هذا الموقع فقط. الروابط السرية القديمة أُلغيت كلها.</p>';
+        if (isset($_GET['saved'])) { echo '<div class="notice notice-success"><p>تم حفظ الرمز. الأجهزة الجديدة تدخل بهذا الرمز.</p></div>'; }
+        echo '<p><b>الحالة:</b> ' . (self::pin_is_set() ? 'الرمز مضبوط' : '<span style="color:#b91c1c">الرمز غير مضبوط — لا يمكن لأحد الدخول الآن</span>') . '</p>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="oxygen_desk_pin">' . wp_nonce_field('oxd_pin', '_wpnonce', true, false) . '<p><label>الرمز الجديد (٦ إلى ٣٢ حرفًا أو رقمًا):<br><input type="password" name="pin" autocomplete="new-password" inputmode="numeric" style="min-width:260px" required></label></p><button class="button button-primary">حفظ الرمز</button></form></div>';
     }
-    public static function rotate() {
+    public static function save_pin() {
         if (!current_user_can('manage_options')) { wp_die('غير مصرح.'); }
-        check_admin_referer('oxd_rot');
-        $k = ($_POST['k'] ?? '') === 'c' ? 'c' : 'o';
-        $tok = rtrim(strtr(base64_encode(random_bytes(30)), '+/', '-_'), '=');
-        update_option('oxygen_desk_hash_' . $k, hash('sha256', $tok), false);
-        set_transient('oxd_new_' . $k, $tok, 120);
-        wp_safe_redirect(admin_url('admin.php?page=oxygen-desk')); exit;
+        check_admin_referer('oxd_pin');
+        $pin = trim((string) wp_unslash($_POST['pin'] ?? ''));
+        if (strlen($pin) < 6 || strlen($pin) > 32) { wp_die('الرمز من ٦ إلى ٣٢ خانة.'); }
+        update_option('oxygen_desk_pin', password_hash($pin, PASSWORD_DEFAULT), false);
+        wp_safe_redirect(admin_url('admin.php?page=oxygen-desk&saved=1')); exit;
     }
 }
