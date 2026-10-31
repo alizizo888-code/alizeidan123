@@ -5,6 +5,8 @@
  */
 if (!defined('ABSPATH')) { exit; }
 
+require_once __DIR__ . '/class-oxygen-seo-mega.php';
+
 class Oxygen_SEO_Engine {
     const OPT = 'oxygen_seo_settings';
     const LOG = 'oxygen_seo_log';
@@ -93,9 +95,9 @@ class Oxygen_SEO_Engine {
         $svc = self::data('services');
         $topics = self::data('topics');
         $variants = [
-            ['city' => 'مكة المكرمة', 'title' => '{n} في مكة المكرمة: دليل الخدمة وطريقة الحجز', 'kw' => '{n} في مكة', 'slug' => 'makkah'],
-            ['city' => 'جدة', 'title' => '{n} في جدة: ما تشمله الخدمة وكيف تطلبها', 'kw' => '{n} في جدة', 'slug' => 'jeddah'],
-            ['city' => 'مكة وجدة', 'title' => '{n} عاجل على مدار الساعة في مكة وجدة', 'kw' => '{n} عاجل مكة وجدة', 'slug' => 'urgent'],
+            ['city' => 'مكة المكرمة', 'title' => 'أفضل شركة {n} في مكة المكرمة | خبراء مهندسون مختصون', 'kw' => '{n} في مكة', 'slug' => 'makkah'],
+            ['city' => 'جدة', 'title' => 'الشركة الرائدة في {n} بجدة — مهندسون وخصومات', 'kw' => '{n} في جدة', 'slug' => 'jeddah'],
+            ['city' => 'مكة وجدة', 'title' => '{n} عاجل في مكة وجدة: خبراء مهندسون على مدار الساعة', 'kw' => '{n} عاجل مكة وجدة', 'slug' => 'urgent'],
         ];
         $com = [];
         foreach ($variants as $v) {
@@ -120,11 +122,11 @@ class Oxygen_SEO_Engine {
         $idx = count($plan);
         // Same service, same site, different SEO: another title / focus keyword / meta and a different angle (never a copy).
         $alts = [
-            ['t' => '{n} في {c}: الأسعار والضمان وطريقة الطلب', 'k' => 'سعر {n} في {c}', 'slug' => 's1'],
-            ['t' => 'كيف تحجز {n} في {c} بسرعة؟ دليل الخطوات', 'k' => 'حجز {n} {c} اليوم', 'slug' => 's2'],
-            ['t' => 'أفضل شركة {n} في {c}: كيف تختار الأنسب؟', 'k' => 'أفضل شركة {n} في {c}', 'slug' => 's3'],
-            ['t' => '{n} في {c} للمنازل والشركات: ما الفرق وماذا تتوقع؟', 'k' => '{n} {c} للمنازل والشركات', 'slug' => 's4'],
-            ['t' => 'أسئلة شائعة عن {n} في {c} قبل أن تطلب الخدمة', 'k' => 'أسئلة عن {n} في {c}', 'slug' => 's5'],
+            ['t' => 'خصومات {n} في {c}: نخبة الخبراء والمهندسين المختصين', 'k' => 'سعر {n} في {c}', 'slug' => 's1'],
+            ['t' => 'احجز أفضل مهندس {n} في {c} الآن بخصم مميز', 'k' => 'حجز {n} {c} اليوم', 'slug' => 's2'],
+            ['t' => 'أفضل شركة {n} في {c}: ريادة وإتقان لا يضاهى', 'k' => 'أفضل شركة {n} في {c}', 'slug' => 's3'],
+            ['t' => 'رواد {n} في {c} للمنازل والشركات: خبرة ومهندسون', 'k' => '{n} {c} للمنازل والشركات', 'slug' => 's4'],
+            ['t' => 'لماذا نحن الأفضل في {c}؟ {n} بخبراء مهندسين مختصين', 'k' => 'أسئلة عن {n} في {c}', 'slug' => 's5'],
         ];
         foreach ($alts as $ai => $alt) {
             foreach ($svc as $sid => $sv) {
@@ -239,10 +241,38 @@ class Oxygen_SEO_Engine {
                 $html .= '<h2>' . self::e($s['n']) . ' في حي ' . self::e($dn) . '</h2>';
                 foreach (self::rot($tpl, $item['idx'] + $rev + self::salt(), 3) as $p) { $html .= '<p>' . self::e($p) . '</p>'; }
             }
+            if (!empty($item['place'])) {
+                $pn = $item['place'];
+                $tplp = [
+                    'إذا كنت في محيط ' . $pn . ' وتحتاج ' . $s['n'] . ' فاكتب في الطلب أقرب علامة مميزة وسيصلك الفني المناسب مع تأكيد الموعد على واتساب.',
+                    'يطلب عملاؤنا القريبون من ' . $pn . ' خدمة ' . $s['n'] . ' بحسب نوع المبنى، ونجهّز الفني بما يناسب الحالة قبل التحرك.',
+                    'نذكر ' . $pn . ' هنا كمعلم يساعدك على تحديد موقعك فقط، ويُحدَّد الموعد النهائي بعد استلام الطلب وتأكيد العنوان.',
+                    'سواء كنت بجوار ' . $pn . ' أو في الشوارع المحيطة، فبإمكانك طلب ' . $s['n'] . ' بخطوات بسيطة بلا تسجيل.',
+                    'تتفاوت الأعطال في ' . $s['n'] . ' من مبنى لآخر حول ' . $pn . '، ولذلك نبدأ بفحص الحالة ثم نشرح الإجراء قبل التنفيذ.',
+                ];
+                $html .= '<h2>' . self::e($s['n']) . ' في محيط ' . self::e($pn) . '</h2>';
+                foreach (self::rot($tplp, $item['idx'] + $rev + self::salt(), 3) as $p) { $html .= '<p>' . self::e($p) . '</p>'; }
+            }
+            if (!empty($item['brand'])) {
+                $bn = $item['brand'];
+                $tplb = [
+                    'يستفسر كثير من العملاء عن ' . $s['n'] . ' لأجهزة ' . $bn . '، ونتعامل مع الأعطال الشائعة بفحص دقيق يحدد السبب قبل أي إجراء.',
+                    'لكل جهاز من ' . $bn . ' طبيعته في التشغيل والصيانة، لذلك نرجو ذكر الموديل وسنة الشراء عند الطلب لنجهّز الفني المناسب.',
+                    'نقدّم خدمة ' . $s['n'] . ' لأجهزة ' . $bn . ' بفريق من المهندسين والفنيين المختصين، ونوضح لك ما يلزم قبل البدء.',
+                    'اسم ' . $bn . ' هنا لتحديد نوع الجهاز فقط؛ نحن شركة صيانة مستقلة ولسنا الوكيل الرسمي للعلامة.',
+                    'قبل طلب الفني افحص دليل جهاز ' . $bn . ' وسجّل رمز العطل إن ظهر على الشاشة، فهذا يسرّع التشخيص.',
+                ];
+                $html .= '<h2>' . self::e($s['n']) . ' لأجهزة ' . self::e($bn) . '</h2>';
+                foreach (self::rot($tplb, $item['idx'] + $rev + self::salt(), 3) as $p) { $html .= '<p>' . self::e($p) . '</p>'; }
+            }
             $html .= '<h2>خطوات الطلب</h2>' . self::steps_html($app, $wa);
             $faq = $s['faq'];
             $faq[] = ['هل تغطون ' . $item['city'] . ' بالكامل؟', 'نغطي معظم أحياء ' . $item['city'] . ' ويؤكد فريق الجدولة الموعد المناسب لموقعك بعد استلام الطلب.'];
             $desc = $item['kw'] . ' — ' . $s['svc'] . ' في ' . $item['city'] . ' بحجز سريع بدون تسجيل وسعر واضح قبل التنفيذ وضمان على العمل.';
+            if (!empty($item['mega'])) {
+                $hook = [' — ' . self::brand() . ': الشركة الرائدة، مهندسون خبراء مختصون وخصومات على الخدمة. احجز الآن بلا تسجيل.', ' — نخبة من المهندسين المختصين وخبرة طويلة وخصومات لعملائنا. اطلب الخدمة الآن.', ' — أفضل خدمة بإشراف مهندسين خبراء، مع خصومات وحجز سريع بلا تسجيل.'];
+                $desc = $item['kw'] . $hook[(int) ($item['idx'] % 3)];
+            }
         } else {
             $r = ['t' => $item['title'], 'kw' => $item['kw'], 'd' => $dm['label'], 'n' => $dm['label']];
             $html .= '<p>يبحث كثيرون عن <strong>' . self::e($item['kw']) . '</strong>، وهذا الدليل يجمع لك الخلاصة العملية في صفحة واحدة. ' . self::e(self::sub($a[1], $r)) . '</p><h2>أهم النقاط</h2><ol>';
@@ -331,10 +361,11 @@ class Oxygen_SEO_Engine {
 
     private static function app_url() { return plugins_url('app/index.html', dirname(__DIR__) . '/' . self::MAIN) . '#/'; }
     private static function map() {
+        if (isset(self::$cache['map'])) { return self::$cache['map']; }
         $ids = get_posts(['post_type' => 'post', 'post_status' => 'any', 'meta_key' => '_oxy_seo_key', 'numberposts' => -1, 'fields' => 'ids', 'no_found_rows' => true]);
         $m = [];
         foreach ($ids as $id) { $k = get_post_meta($id, '_oxy_seo_key', true); if ($k) { $m[$k] = (int) $id; } }
-        return $m;
+        return self::$cache['map'] = $m;
     }
     private static function ctx($item, $map, $key_img = true) {
         $s = self::settings();
@@ -376,42 +407,57 @@ class Oxygen_SEO_Engine {
     }
     public static function create_next($force_status = null, $kind = 'base') {
         $map = self::map();
-        $s = self::settings();
+        if ($kind === 'district') {
+            // Local articles come from the keyword universe: every neighbourhood / named place / brand, Makkah first (never one district repeated for every service).
+            $item = Oxygen_SEO_Mega::next($map, function ($it) { return self::owns($it); });
+            return $item ? self::publish_item($item, 'district', $force_status, $map) : false;
+        }
         foreach (self::plan() as $item) {
             if (($item['kind'] ?? 'base') !== $kind || isset($map[$item['key']]) || !self::owns($item)) { continue; }
-            $ctx = self::ctx($item, $map);
-            $b = self::build($item, 0, $ctx);
-            $author = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID']);
-            $id = wp_insert_post([
-                'post_type' => 'post', 'post_status' => $force_status ?: $s['status'], 'post_title' => $item['title'], 'post_name' => $item['key'],
-                'post_content' => $b['html'], 'post_excerpt' => $b['desc'], 'post_author' => $author ? (int) $author[0] : 1,
-            ], true);
-            if (is_wp_error($id) || !$id) { return false; }
-            update_post_meta($id, '_oxy_seo_key', $item['key']);
-            update_post_meta($id, '_oxy_seo_track', $item['track']);
-            update_post_meta($id, '_oxy_seo_kind', $kind);
-            update_post_meta($id, '_oxy_seo_kw', $item['kw']);
-            update_post_meta($id, '_oxy_seo_rev', 0);
-            update_post_meta($id, '_oxy_seo_angle', self::angle_label($item['idx'], 0));
-            update_post_meta($id, '_oxy_seo_updated', current_time('mysql'));
-            update_post_meta($id, '_oxy_seo_desc', $b['desc']);
-            update_post_meta($id, '_oxy_seo_faq', wp_json_encode($b['faq'], JSON_UNESCAPED_UNICODE));
-            update_post_meta($id, '_oxy_seo_img', $ctx['img']);
-            // Real WordPress post data: tags from the keyword system + compatibility with Yoast / Rank Math so editors see the same focus keyword.
-            self::tag_post($id, $item, $b);
-            $cat = self::term($item['track'] === 'commercial' ? 'خدمات ' . self::brand() . '' : 'أدلة وإرشادات');
-            if ($cat) { wp_set_post_categories($id, [$cat]); }
-            self::log($kind === 'seo' ? 'new_seo' : ($kind === 'district' ? 'new_dist' : 'new'), $id, $item['title'], ['track' => $item['track'], 'st' => get_post_status($id), 'rev' => 0, 'kind' => $kind]);
-            if (get_post_status($id) === 'publish') { self::indexnow([get_permalink($id), home_url('/oxygen-seo-archive/')]); }
-            return $id;
+            return self::publish_item($item, $kind, $force_status, $map);
         }
         return false;
+    }
+    private static function publish_item($item, $kind, $force_status, $map) {
+        $s = self::settings();
+        $ctx = self::ctx($item, $map);
+        $b = self::build($item, 0, $ctx);
+        $author = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID']);
+        $id = wp_insert_post([
+            'post_type' => 'post', 'post_status' => $force_status ?: $s['status'], 'post_title' => $item['title'], 'post_name' => $item['key'],
+            'post_content' => $b['html'], 'post_excerpt' => $b['desc'], 'post_author' => $author ? (int) $author[0] : 1,
+        ], true);
+        if (is_wp_error($id) || !$id) { return false; }
+        self::$cache['map'][$item['key']] = (int) $id;
+        update_post_meta($id, '_oxy_seo_key', $item['key']);
+        update_post_meta($id, '_oxy_seo_track', $item['track']);
+        update_post_meta($id, '_oxy_seo_kind', $kind);
+        update_post_meta($id, '_oxy_seo_kw', $item['kw']);
+        update_post_meta($id, '_oxy_seo_rev', 0);
+        update_post_meta($id, '_oxy_seo_angle', self::angle_label($item['idx'], 0));
+        update_post_meta($id, '_oxy_seo_updated', current_time('mysql'));
+        update_post_meta($id, '_oxy_seo_desc', $b['desc']);
+        update_post_meta($id, '_oxy_seo_faq', wp_json_encode($b['faq'], JSON_UNESCAPED_UNICODE));
+        update_post_meta($id, '_oxy_seo_img', $ctx['img']);
+        // Real WordPress post data: tags from the keyword system + compatibility with Yoast / Rank Math so editors see the same focus keyword.
+        self::tag_post($id, $item, $b);
+        $cat = self::term($item['track'] === 'commercial' ? 'خدمات ' . self::brand() . '' : 'أدلة وإرشادات');
+        if ($cat) { wp_set_post_categories($id, [$cat]); }
+        self::log($kind === 'seo' ? 'new_seo' : ($kind === 'district' ? 'new_dist' : 'new'), $id, $item['title'], ['track' => $item['track'], 'st' => get_post_status($id), 'rev' => 0, 'kind' => $kind]);
+        if (get_post_status($id) === 'publish') { self::indexnow([get_permalink($id), home_url('/oxygen-seo-archive/')]); }
+        return $id;
+    }
+    /** Plan items + the keyword-universe items that already have a post (so they can be refreshed). */
+    private static function by_key($map) {
+        $by = [];
+        foreach (self::plan() as $it) { $by[$it['key']] = $it; }
+        foreach ($map as $k => $id) { if (!isset($by[$k]) && Oxygen_SEO_Mega::is_key($k)) { $m = Oxygen_SEO_Mega::item_by_key($k); if ($m) { $by[$k] = $m; } } }
+        return $by;
     }
     public static function refresh_next($ignore_age = false) {
         $map = self::map();
         $s = self::settings();
-        $by_key = [];
-        foreach (self::plan() as $it) { $by_key[$it['key']] = $it; }
+        $by_key = self::by_key($map);
         $cand = [];
         $min = time() - max(0, (int) $s['min_age_days']) * DAY_IN_SECONDS;
         foreach ($map as $key => $id) {
@@ -427,8 +473,7 @@ class Oxygen_SEO_Engine {
     /** Random refresh of an already published article (older than ~20 hours), so old pages keep getting fresh angles. */
     public static function refresh_random() {
         $map = self::map();
-        $by_key = [];
-        foreach (self::plan() as $it) { $by_key[$it['key']] = $it; }
+        $by_key = self::by_key($map);
         $pool = [];
         foreach ($map as $key => $id) {
             if (!isset($by_key[$key]) || get_post_status($id) !== 'publish') { continue; }
@@ -476,6 +521,14 @@ class Oxygen_SEO_Engine {
     }
     private static function tag_post($id, $item, $b) {
         $svcs = self::data('services');
+        if (!empty($item['mega'])) {
+            $tags = [Oxygen_SEO_Mega::short($item['sid']), $item['district'] ?? ($item['place'] ?? ($item['brand'] ?? '')), $item['city'], self::brand()];
+            wp_set_post_tags($id, array_values(array_unique(array_filter($tags))), false);
+            self::categorize($id, isset($svcs[$item['sid'] ?? '']) ? $svcs[$item['sid']]['n'] : '', $item['track'] ?? '');
+            update_post_meta($id, '_yoast_wpseo_focuskw', $item['kw']); update_post_meta($id, '_yoast_wpseo_metadesc', $b['desc']);
+            update_post_meta($id, 'rank_math_focus_keyword', $item['kw']); update_post_meta($id, 'rank_math_description', $b['desc']);
+            return;
+        }
         $tags = [$item['kw'], self::brand(), $item['track'] === 'commercial' ? ($item['city'] ?? '') : 'دليل إرشادي', isset($svcs[$item['sid'] ?? '']) ? $svcs[$item['sid']]['n'] : ''];
         wp_set_post_tags($id, array_values(array_unique(array_filter($tags))), false);
         self::categorize($id, isset($svcs[$item['sid'] ?? '']) ? $svcs[$item['sid']]['n'] : '', $item['track'] ?? '');
@@ -664,6 +717,8 @@ class Oxygen_SEO_Engine {
         echo '<div class="wrap" dir="rtl"><h1>مقالات وأرشفة SEO — أكسجين</h1>';
         if (!empty($_GET['oxy_msg'])) { echo '<div class="notice notice-success"><p>' . esc_html(wp_unslash($_GET['oxy_msg'])) . '</p></div>'; }
         echo '<p><strong>المنشور:</strong> ' . (int) $pub . ' / ' . count($plan) . ' &nbsp; <strong>مسودات:</strong> ' . (int) $dr . ' &nbsp; <strong>إجمالي التحديثات:</strong> ' . (int) $revs . ' &nbsp; <strong>أقل عدد تحديثات لمقال:</strong> ' . ($minrev === 9999 ? 0 : (int) $minrev) . '</p>';
+        $mc = Oxygen_SEO_Mega::counts();
+        echo '<p><strong>بنك الكلمات المحلية:</strong> ' . number_format_i18n($mc['items']) . ' عنواناً فريداً = ' . (int) $mc['districts'] . ' حيّاً + ' . (int) $mc['places'] . ' موقعاً معروفاً + ' . (int) $mc['brands'] . ' علامة/مدينة، بأولوية لمكة؛ يُنشر منها حسب حصة «حي مختلف» اليومية، والمؤشر الحالي: ' . (int) get_option('oxygen_seo_mega_cur', 0) . '.</p>';
         echo '<p>الخطة: 60 مقالاً تجارياً + 60 مقالاً معلوماتياً (500+ كلمة)، ثم دورة تحديث لا تنتهي بـ24 سيناريو لكل مقال، وتظهر على المقال عبارة «تم التحديث».</p>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="oxy_seo_save">';
         wp_nonce_field('oxy_seo_save');
