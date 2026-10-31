@@ -1,8 +1,8 @@
 name: Publish branch-specific SEO articles
 
 on:
-  schedule:
-    - cron: "41 2 * * *"
+  # The daily schedule was removed: articles are now published by the WordPress plugin engine (60/day per stream, see the daily report).
+  # This legacy workflow targets the old static-site branches `google` / `متقن`, which only exist in the old repositories.
   workflow_dispatch:
     inputs:
       count:
@@ -39,24 +39,36 @@ jobs:
       matrix:
         branch: [google, متقن]
     steps:
+      - name: Skip when the target branch does not exist in this repository
+        id: br
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/branches/${{ matrix.branch }}" >/dev/null 2>&1; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::notice::Branch ${{ matrix.branch }} not found in this repository - skipped (articles are published by the WordPress plugin)."; fi
+
       - name: Checkout the target branch
+        if: steps.br.outputs.ok == 'true'
         uses: actions/checkout@v7.0.1
         with:
           ref: ${{ matrix.branch }}
           fetch-depth: 0
 
       - name: Set up Python
+        if: steps.br.outputs.ok == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Check site-specific publisher syntax
+        if: steps.br.outputs.ok == 'true'
         run: python -m py_compile scripts/publish_static_articles.py
 
       - name: Validate existing site pages and sitemap
+        if: steps.br.outputs.ok == 'true'
         run: python scripts/publish_static_articles.py --validate-only
 
       - name: Publish reviewed draft or generate a unique article
+        if: steps.br.outputs.ok == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
@@ -65,6 +77,7 @@ jobs:
         run: python scripts/publish_static_articles.py --publish-queued "$ARTICLE_COUNT" --count "$ARTICLE_COUNT"
 
       - name: Commit articles only to their own branch
+        if: steps.br.outputs.ok == 'true'
         shell: bash
         env:
           TARGET_BRANCH: ${{ matrix.branch }}
