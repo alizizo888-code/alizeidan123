@@ -62,6 +62,20 @@ class Oxygen_SEO_Engine {
         if (get_option('blog_public') === '0') { update_option('blog_public', '1'); }
         update_option('oxygen_seo_site_ready', '1', false);
     }
+    /** Engine titles already end with «| brand»: stop Yoast appending the site name («- oxygen») a second time. */
+    public static function yoast_title($t) {
+        if (is_singular('post')) { $id = get_queried_object_id(); if ($id && get_post_meta($id, '_oxy_seo_key', true)) { return html_entity_decode(get_the_title($id), ENT_QUOTES, 'UTF-8'); } }
+        return $t;
+    }
+    /** WordPress ships a public «Hello world!» post and a «Sample Page»: thin, duplicate-looking pages that get indexed. Move the untouched originals to the trash (recoverable). */
+    public static function trash_defaults() {
+        if (get_option('oxygen_defaults_trashed') === '1') { return; }
+        foreach (['hello-world' => 'post', 'sample-page' => 'page'] as $slug => $type) {
+            $p = get_page_by_path($slug, OBJECT, $type);
+            if ($p && $p->post_status === 'publish' && (int) $p->post_author <= 1 && $p->post_date === $p->post_modified) { wp_trash_post($p->ID); }
+        }
+        update_option('oxygen_defaults_trashed', '1', false);
+    }
     public static function ensure_hub() {
         if (get_page_by_path('oxygen-seo-archive')) { return; }
         wp_insert_post(['post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'مقالات ' . self::brand(), 'post_name' => 'oxygen-seo-archive', 'post_content' => '[oxygen_seo_archive]']);
@@ -294,7 +308,9 @@ class Oxygen_SEO_Engine {
         add_action('init', [__CLASS__, 'ensure_cron'], 3);
         add_action('init', [__CLASS__, 'serve_key'], 1);
         add_action('init', [__CLASS__, 'ensure_real_pages'], 30);
-        add_filter('wp_sitemaps_enabled', '__return_true');
+        add_filter('wp_sitemaps_enabled', function ($on) { return defined('WPSEO_VERSION') ? $on : true; }, 20);
+        add_filter('wpseo_title', [__CLASS__, 'yoast_title'], 20);
+        add_action('init', [__CLASS__, 'trash_defaults'], 31);
         add_filter('wp_sitemaps_posts_entry', [__CLASS__, 'sitemap_entry'], 10, 2);
         add_action(self::CRON, [__CLASS__, 'tick']);
         add_filter('the_content', [__CLASS__, 'filter_content'], 5);
