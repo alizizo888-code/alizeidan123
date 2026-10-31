@@ -9,7 +9,7 @@ import { useContact } from '../hooks/useContact'
 
 // "طلب خدمة فورية": a prominent button on every customer / order page. It opens a pop-up with two direct routes —
 // WhatsApp (number picked from the owner's WhatsApp center) or a phone call — so an urgent customer never has to hunt.
-export default function InstantService({ bottomClass = 'bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] md:bottom-6' }) {
+export default function InstantService({ bottomClass = 'bottom-[calc(8rem+env(safe-area-inset-bottom,0px))] md:bottom-24' }) {
   const { session } = useSession()
   const { numbers } = useWaNumbers()
   const [open, setOpen] = useState(false)
@@ -38,8 +38,8 @@ export default function InstantService({ bottomClass = 'bottom-[calc(5.75rem+env
   const node = (
     <>
       <button onClick={() => setOpen(true)} aria-label="طلب خدمة فورية"
-        className={`fixed right-3 md:right-6 ${bottomClass} z-[60] flex items-center gap-2 bg-gradient-to-l from-red-600 to-orange-500 text-white font-display font-black text-sm rounded-full pl-4 pr-3 py-3 shadow-xl shadow-red-400/50 ring-2 ring-white active:scale-95 transition-transform`} dir="rtl">
-        <span className="relative flex w-7 h-7 items-center justify-center rounded-full bg-white/25"><span className="absolute inset-0 rounded-full bg-white/40 animate-ping" style={{ animationDuration: '1.8s' }} /><Zap size={16} className="relative" /></span>
+        className={`fixed right-3 md:right-6 ${bottomClass} z-[60] flex items-center gap-2 bg-gradient-to-l from-red-600 to-orange-500 text-white font-display font-black text-[11px] leading-none rounded-full pl-3 pr-2 py-1.5 shadow-lg shadow-red-400/40 ring-1 ring-white active:scale-95 transition-transform`} dir="rtl">
+        <span className="relative flex w-5 h-5 items-center justify-center rounded-full bg-white/25"><span className="absolute inset-0 rounded-full bg-white/40 animate-ping" style={{ animationDuration: '1.8s' }} /><Zap size={12} className="relative" /></span>
         طلب خدمة فورية
       </button>
       {open && (

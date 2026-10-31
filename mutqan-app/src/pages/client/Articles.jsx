@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Search, Newspaper, RefreshCw, ExternalLink, Loader2 } from 'lucide-react'
 import { API_BASE } from '../../lib/_api'
+import InstantService from '../../components/InstantService'
 
 // Published articles of this site (real WordPress posts): newest, recently updated, oldest.
 const WP = API_BASE.replace(/\/mutqan\/v1$/, '')
@@ -66,6 +67,7 @@ export default function Articles() {
           </a>
         ))}
       </div>
+      <InstantService />
     </div>
   )
 }

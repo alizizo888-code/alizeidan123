@@ -116,7 +116,8 @@ final class Oxygen_Article_Boost {
             . '.oxb-menu{display:flex;flex-direction:column;gap:10px}.oxb-wa{width:60px!important;height:60px!important}'
             . '.oxb-lbl{position:absolute;left:62px;background:#0f172a;color:#fff;font-size:12px;border-radius:8px;padding:3px 9px;white-space:nowrap;opacity:1;pointer-events:none;transition:opacity .15s}'
             . '.oxb-menu>div{position:relative}.oxb-menu>div:hover .oxb-lbl{opacity:1}'
-            . '.oxb-home{position:fixed;z-index:99989;left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));display:flex;align-items:center;gap:8px;background:#0f172a;color:#fff!important;text-decoration:none!important;font-weight:800;font-size:15px;border-radius:99px;padding:12px 26px;box-shadow:0 8px 22px rgba(0,0,0,.35);direction:rtl}'
+            . '.oxb-home{position:fixed;z-index:99989;left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#fff!important;text-decoration:none!important;border-radius:50%;box-shadow:0 6px 18px rgba(0,0,0,.35);border:2px solid #fff}.oxb-home:active{transform:translateX(-50%) scale(.92)}'
+            . '.oxb-now{position:fixed;z-index:99988;right:10px;bottom:calc(86px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:6px;background:linear-gradient(270deg,#dc2626,#f97316);color:#fff!important;text-decoration:none!important;font-weight:800;font-size:11px;line-height:1;border-radius:99px;padding:7px 11px 7px 9px;box-shadow:0 4px 12px rgba(220,38,38,.4);direction:rtl;border:1px solid #fff}.oxb-now svg{flex:none}'
             . '@media(max-width:520px){.oxb-t{font-size:16px}.oxb-fab{left:8px}}'
             . '</style>';
     }
@@ -188,12 +189,18 @@ final class Oxygen_Article_Boost {
             'app' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg>',
         ];
         $menu = '<div><a class="oxb-app" href="' . $app . '" rel="nofollow" aria-label="تقديم طلب">' . $ic['app'] . '</a><span class="oxb-lbl">تقديم طلب</span></div>';
-        if ($wa) { $menu .= '<div><a class="oxb-wa" href="' . esc_url($wa) . '" target="_blank" rel="noopener nofollow" aria-label="واتساب">' . $ic['wa'] . '</a><span class="oxb-lbl">واتساب</span></div>'; }
-        if ($c['phone']) { $menu .= '<div><a class="oxb-call" href="tel:' . esc_attr($c['phone']) . '" aria-label="اتصال هاتفي">' . $ic['call'] . '</a><span class="oxb-lbl">اتصال هاتفي</span></div>'; }
+        $contact_page = esc_url(self::app_url() . 'contact');
+        $menu .= $wa
+            ? '<div><a class="oxb-wa" href="' . esc_url($wa) . '" target="_blank" rel="noopener nofollow" aria-label="واتساب">' . $ic['wa'] . '</a><span class="oxb-lbl">واتساب</span></div>'
+            : '<div><a class="oxb-wa" href="' . $contact_page . '" rel="nofollow" aria-label="واتساب">' . $ic['wa'] . '</a><span class="oxb-lbl">واتساب</span></div>';
+        $menu .= '<div><a class="oxb-call" href="' . ($c['phone'] ? 'tel:' . esc_attr($c['phone']) : $contact_page) . '" aria-label="اتصال هاتفي">' . $ic['call'] . '</a><span class="oxb-lbl">اتصال هاتفي</span></div>';
         $home = class_exists('Oxygen_Domain_Guard') ? esc_url(Oxygen_Domain_Guard::main_url()) : esc_url(home_url('/'));
         echo self::css();
         echo '<div class="oxb-fab open" id="oxb-fab"><div class="oxb-menu">' . $menu . '</div></div>';
-        echo '<a class="oxb-home" href="' . $home . '">🏠 الرئيسية</a>';
+        $now_href = $c['wa'] ? 'https://wa.me/' . $c['wa'] . '?text=' . rawurlencode('🚨 أحتاج خدمة فورية الآن' . ($title ? ' (من مقال: ' . $title . ')' : '')) : $app;
+        $bolt = '<svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>';
+        echo '<a class="oxb-now" href="' . esc_url($now_href) . '"' . ($c['wa'] ? ' target="_blank" rel="noopener nofollow"' : ' rel="nofollow"') . ' aria-label="طلب خدمة فورية">' . $bolt . 'طلب خدمة فورية</a>';
+        echo '<a class="oxb-home" href="' . $home . '" aria-label="الرئيسية" title="الرئيسية"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg></a>';
         echo self::js();
     }
 }
