@@ -1,0 +1,70 @@
+name: Daily article report
+
+# Every day: fetch the previous day's article report from each WordPress site (new / SEO-variant / district articles,
+# random and scheduled refreshes) and open a GitHub issue assigned to the owner. GitHub e-mails it and pushes it to the
+# GitHub mobile app, so the report arrives with no extra setup. The CSV with all links and scores is attached to the run.
+on:
+  schedule:
+    - cron: "40 5 * * *"
+  workflow_dispatch:
+    inputs:
+      day:
+        description: "اليوم: last أو today أو YYYY-MM-DD"
+        required: false
+        default: "last"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: daily-article-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    # Runs only in the repository wired to the live sites; mirrors can still run it manually.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.repository == 'alizizo888-code/alizeidan123' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DAY: ${{ github.event.inputs.day || 'last' }}
+      OWNER_LOGIN: ${{ github.repository_owner }}
+    steps:
+      - name: Fetch the report from each site and open an issue
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p out; failed=0
+          for site in oxygen11.com mutqan.oxygen11.com; do
+            f="out/$site.json"; ok=0
+            for attempt in 1 2 3 4; do
+              code="$(curl -sS -L --max-time 90 -o "$f" -w '%{http_code}' "https://$site/wp-json/oxygen/v1/daily-report?day=$DAY&t=$(date +%s)" || true)"
+              if [[ "$code" == 200 ]] && jq -e '.markdown and .day' "$f" >/dev/null 2>&1; then ok=1; break; fi
+              sleep 15
+            done
+            if [[ "$ok" -ne 1 ]]; then
+              echo "::warning::No report from $site (HTTP $code). The plugin must be updated on that site."
+              [[ "$site" == "oxygen11.com" ]] && failed=1
+              continue
+            fi
+            d="$(jq -r .day "$f")"; n="$(jq -r .total "$f")"; avg="$(jq -r .avg "$f")"
+            jq -r .csv "$f" > "out/report-$site-$d.csv"
+            jq -r .markdown "$f" | head -c 60000 > "out/report-$site-$d.md"
+            { echo "# $site — $d"; echo; cat "out/report-$site-$d.md"; } >> "$GITHUB_STEP_SUMMARY"
+            title="📊 تقرير مقالات $site — $d ($n عملية، متوسط SEO $avg)"
+            # keep the inbox tidy: close this site's reports older than 3 days
+            gh issue list --state open --search "تقرير مقالات $site in:title" --json number,createdAt --jq '.[]|select((.createdAt|fromdateiso8601) < (now-259200))|.number' 2>/dev/null | while read -r num; do gh issue close "$num" --comment "أُغلق تلقائيًا (تقرير قديم)." >/dev/null 2>&1 || true; done
+            gh issue create --title "$title" --body-file "out/report-$site-$d.md" --assignee "$OWNER_LOGIN" || gh issue create --title "$title" --body-file "out/report-$site-$d.md" || failed=1
+          done
+          exit "$failed"
+
+      - name: Attach the full CSV (links + SEO scores)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: article-report-${{ github.run_id }}
+          path: out/*.csv
+          if-no-files-found: ignore
+          retention-days: 30

@@ -19,7 +19,9 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-seo-engine.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-article-boost.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-fail-safe.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-home-page.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-daily-report.php';
 Oxygen_SEO_Engine::boot();
+Oxygen_Daily_Report::boot();
 foreach (['store', 'policy', 'auth', 'passkey', 'promo', 'wa', 'ai', 'shop', 'rest', 'admin'] as $mutqan_part) { require_once plugin_dir_path(__FILE__) . 'includes/mutqan/class-mutqan-' . $mutqan_part . '.php'; }
 Mutqan_Rest::boot(); Mutqan_Admin::boot();
 final class Oxygen_AC_Automation {
