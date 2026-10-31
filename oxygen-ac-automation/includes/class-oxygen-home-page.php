@@ -103,7 +103,7 @@ class Oxygen_Home_Page {
         $posts = get_posts(['numberposts' => 12, 'post_status' => 'publish', 'orderby' => 'date', 'order' => 'DESC']);
 
         $ld = [
-            ['@context' => 'https://schema.org', '@type' => 'LocalBusiness', '@id' => $url . '#org', 'name' => $brand, 'url' => $url, 'description' => $desc, 'areaServed' => ['مكة المكرمة', 'جدة'], 'priceRange' => '$$', 'sameAs' => [],
+            ['@context' => 'https://schema.org', '@type' => 'LocalBusiness', '@id' => $url . '#org', 'name' => $brand, 'url' => $url, 'description' => $desc, 'areaServed' => ['مكة المكرمة', 'جدة'], 'priceRange' => '$$', 'sameAs' => class_exists('Oxygen_Social') ? Oxygen_Social::urls() : [],
                 'hasOfferCatalog' => ['@type' => 'OfferCatalog', 'name' => 'خدمات ' . $brand, 'itemListElement' => array_map(function ($s) { return ['@type' => 'Offer', 'itemOffered' => ['@type' => 'Service', 'name' => $s[0], 'description' => $s[1]]]; }, $sv)]],
             ['@context' => 'https://schema.org', '@type' => 'WebSite', 'url' => $url, 'name' => $brand, 'inLanguage' => 'ar'],
             ['@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => array_map(function ($f) { return ['@type' => 'Question', 'name' => $f[0], 'acceptedAnswer' => ['@type' => 'Answer', 'text' => $f[1]]]; }, $faq)],
