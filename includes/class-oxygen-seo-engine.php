@@ -529,15 +529,20 @@ class Oxygen_SEO_Engine {
     }
     /** Google Search Console ownership (HTML tag method). The token is a public verification id, not a secret; more can be added in the
      *  option oxygen_gsc_tokens (array or comma separated). Printed on the home page, which is where Google looks. */
-    public static function gsc_meta() {
-        if (!is_front_page() && !is_home()) { return; }
+    public static function gsc_meta_html() {
         $t = ['YHUq91C4uLadSWxWGw0Y4mVJ5Tw2c9IriStGTt1GVcE'];
         $o = get_option('oxygen_gsc_tokens', []);
         if (is_string($o)) { $o = explode(',', $o); }
+        $h = '';
         foreach (array_merge($t, (array) $o) as $x) {
             $x = trim((string) $x);
-            if ($x !== '' && preg_match('/^[A-Za-z0-9_-]{20,80}$/', $x)) { echo '<meta name="google-site-verification" content="' . esc_attr($x) . '" />' . "\n"; }
+            if ($x !== '' && preg_match('/^[A-Za-z0-9_-]{20,80}$/', $x)) { $h .= '<meta name="google-site-verification" content="' . esc_attr($x) . '" />' . "\n"; }
         }
+        return $h;
+    }
+    public static function gsc_meta() {
+        if (!is_front_page() && !is_home()) { return; }
+        echo self::gsc_meta_html();
     }
     public static function head() {
         if (!is_singular('post') || defined('WPSEO_VERSION') || defined('RANK_MATH_VERSION')) { return; }
