@@ -119,12 +119,13 @@ export default function NewOrder() {
     }
   }
 
-  // Automatic location: detect once as soon as the page opens (silent if the browser asks/denies).
+  // Automatic location: detect once on open ONLY when the permission is already granted.
   const autoRef = useRef(false)
   useEffect(() => {
     if (autoRef.current) return
     autoRef.current = true
-    useMyLocation(true)
+    // never pop the permission prompt on open: auto-detect only if already allowed; otherwise the «حدد موقعي تلقائيًا» button asks on tap
+    permissionState('geolocation').then((st) => { if (st === 'granted') useMyLocation(true) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
