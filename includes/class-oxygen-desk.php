@@ -20,6 +20,8 @@ class Oxygen_Desk {
         add_action('admin_post_oxygen_desk_rotate', [__CLASS__, 'rotate']);
     }
 
+    /** Secret-link check used by the desk apps (desk.oxygen11.com): either desk secret opens the owner session. */
+    public static function valid_secret($tok) { $tok = (string) $tok; if ($tok === '' || strlen($tok) > 200) { return false; } $h = hash('sha256', $tok); return hash_equals(self::hash_for('o'), $h) || hash_equals(self::hash_for('c'), $h); }
     private static function hash_for($k) { $o = get_option('oxygen_desk_hash_' . $k, ''); return preg_match('/^[a-f0-9]{64}$/', (string) $o) ? $o : ($k === 'o' ? self::HASH_O : self::HASH_C); }
     private static function cookie_val($k) { return hash_hmac('sha256', 'desk|' . $k . '|' . self::hash_for($k), defined('AUTH_KEY') && AUTH_KEY ? AUTH_KEY : (string) get_option('siteurl')); }
     private static function authed($k) { $c = $_COOKIE[self::COOKIE . $k] ?? ''; return is_string($c) && $c !== '' && hash_equals(self::cookie_val($k), $c); }
