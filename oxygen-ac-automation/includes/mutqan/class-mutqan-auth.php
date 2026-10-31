@@ -184,6 +184,13 @@ final class Mutqan_Auth {
         return ['token' => self::issue_session($u['id']), 'user' => self::public_user($u)];
     }
 
+    /** Owner session for the password-less desk apps (the secret link was already verified). The owner account is created on first use with a random, never-shown password. */
+    public static function desk_session() {
+        $u = self::owner_row();
+        if (!$u) { $u = self::create_user('owner', 'المالك', '', bin2hex(random_bytes(24)), 'owner', 'active'); }
+        return self::session_result($u);
+    }
+
     /** Session for an already-verified user (used by passkey sign-in). */
     public static function login_as($u) { return self::session_result($u); }
 
