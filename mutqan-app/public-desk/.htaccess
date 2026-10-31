@@ -8,4 +8,14 @@ Header set Referrer-Policy "no-referrer"
 Header set Cache-Control "no-cache"
 </FilesMatch>
 </IfModule>
+AddType application/vnd.android.package-archive .apk
+<IfModule mod_headers.c>
+<FilesMatch "\.apk$">
+Header set Content-Disposition "attachment"
+Header set Cache-Control "no-cache"
+</FilesMatch>
+</IfModule>
+<IfModule mod_deflate.c>
+SetEnvIfNoCase Request_URI \.apk$ no-gzip
+</IfModule>
 DirectoryIndex desk.html

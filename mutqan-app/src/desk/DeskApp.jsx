@@ -98,8 +98,46 @@ function BrandBar() {
   )
 }
 
+// #/diag — shows exactly what the server says about this device (role, status) so a permission problem is never a guess.
+function Diag() {
+  const [out, setOut] = useState('جارِ الفحص…')
+  useEffect(() => {
+    (async () => {
+      const t = getToken(); const lines = [`التطبيق: ${KIND === 'ops' ? 'غرفة العمليات' : 'التحكم'}`, `الموقع: ${BRANDS[brand].name} (${BRANDS[brand].host})`, `جلسة محفوظة: ${t ? 'نعم' : 'لا'}`]
+      if (t) {
+        try {
+          const r = await fetch(`${BRANDS[brand].host}/wp-json/mutqan/v1/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Mutqan-Token': t }, body: JSON.stringify({ op: 'me' }) })
+          const j = await r.json().catch(() => ({})); const u = j.data && j.data.user
+          lines.push(`رد الخادم: ${r.status}`, u ? `الدور: ${u.role || 'بلا دور'} — الحالة: ${u.status}` : `لا يوجد مستخدم: ${(j.error && j.error.message) || (j.message) || ''}`)
+          lines.push(u && u.role === 'owner' ? '✅ الجهاز مسجّل كمالك.' : '❌ ليس مالكًا — اضغط «إعادة تسجيل الجهاز» والصق الرابط السري من جديد.')
+        } catch (e) { lines.push('تعذر الاتصال بالموقع: ' + e.message) }
+      }
+      setOut(lines.join('\n'))
+    })()
+  }, [])
+  return (
+    <div dir="rtl" className="min-h-screen p-5 bg-[#0b1220] text-white">
+      <pre className="whitespace-pre-wrap text-sm leading-loose">{out}</pre>
+      <button className="mt-4 rounded-xl bg-white/10 px-4 py-3 text-sm font-black" onClick={() => { try { localStorage.removeItem('desk_sess_' + brand); localStorage.removeItem('mutqan_token'); localStorage.removeItem('mutqan_user') } catch { /* ignore */ } location.hash = '#/'; location.reload() }}>إعادة تسجيل الجهاز</button>
+    </div>
+  )
+}
+
 export default function DeskApp() {
   const signed = !!getToken()
+  // A stored session that the server no longer treats as the owner (or no longer knows) is dropped so the Gate asks for the secret link again, instead of showing owner-only errors.
+  useEffect(() => {
+    const t = getToken(); if (!t) return
+    fetch(`${BRANDS[brand].host}/wp-json/mutqan/v1/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Mutqan-Token': t }, body: JSON.stringify({ op: 'me' }) })
+      .then((r) => r.json().then((j) => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        const u = j && j.data && j.data.user
+        if ((ok && j && j.data && (!u || u.role !== 'owner')) && !location.hash.startsWith('#/diag')) {
+          try { localStorage.removeItem('desk_sess_' + brand); localStorage.removeItem('mutqan_token'); localStorage.removeItem('mutqan_user') } catch { /* ignore */ }
+          location.hash = '#/'; location.reload()
+        }
+      }).catch(() => { /* offline: keep the session */ })
+  }, [])
   return (
     <HashRouter>
       <PushToaster />
@@ -107,6 +145,7 @@ export default function DeskApp() {
       <Suspense fallback={<Center>جارِ التحميل…</Center>}>
         <Routes>
           <Route path="/enter/:brand/:secret" element={<Enter />} />
+          <Route path="/diag" element={<Diag />} />
           {!signed ? <Route path="*" element={<Gate />} /> : (
             <Route element={<><BrandBar /><StaffLayout /></>}>
               <Route path="/" element={<Navigate to={HOME} replace />} />
