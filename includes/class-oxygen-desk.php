@@ -33,20 +33,36 @@ class Oxygen_Desk {
         if (!preg_match('#^' . preg_quote(rtrim($base, '/'), '#') . '/oxy-desk/(.*)$#', $path, $m)) { return; }
         $rest = trim($m[1], '/'); $p = explode('/', $rest);
         if (($p[0] ?? '') === 'api') { self::api($p[1] ?? ''); }
+        if (preg_match('/^manifest-([oc])\.json$/', (string) ($p[0] ?? ''), $mm)) { self::manifest($mm[1]); }
+        if (($p[0] ?? '') === 'sw.js') { header('Content-Type: application/javascript'); header('Service-Worker-Allowed: /oxy-desk/'); header('Cache-Control: no-cache'); echo "self.addEventListener('install',function(){self.skipWaiting()});self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim())});self.addEventListener('fetch',function(){});"; exit; }
         $k = $p[0] ?? '';
         if (!in_array($k, ['o', 'c'], true)) { self::shut(); }
-        if (isset($p[1]) && $p[1] !== '') { // secret exchange
+        $tok = '';
+        if (isset($p[1]) && $p[1] !== '') { // secret link: validates, remembers this device, and shows the desk right here (no redirect, no cookie dependence)
             $fk = 'oxd_f_' . self::ip(); $fails = (int) get_transient($fk);
             if ($fails >= 8) { self::shut(429); }
             if (!hash_equals(self::hash_for($k), hash('sha256', (string) $p[1]))) { set_transient($fk, $fails + 1, HOUR_IN_SECONDS); self::shut(); }
-            setcookie(self::COOKIE . $k, self::cookie_val($k), ['expires' => time() + 180 * DAY_IN_SECONDS, 'path' => '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Strict']);
-            header('X-Robots-Tag: noindex, nofollow'); header('Cache-Control: no-store'); header('Referrer-Policy: no-referrer');
-            wp_safe_redirect(home_url('/oxy-desk/' . $k), 302); exit;
+            setcookie(self::COOKIE . $k, self::cookie_val($k), ['expires' => time() + 180 * DAY_IN_SECONDS, 'path' => '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax']);
+            $tok = (string) $p[1];
+        } elseif (!self::authed($k)) {
+            self::headers();
+            echo self::shell($k); exit; // no secret in the request: tiny shell that re-opens with the token saved on this device (if any)
         }
-        if (!self::authed($k)) { self::shut(); }
         self::headers();
-        echo self::page($k);
+        echo self::page($k, $tok);
         exit;
+    }
+
+    private static function manifest($k) {
+        header('Content-Type: application/manifest+json; charset=utf-8'); header('Cache-Control: no-cache'); header('X-Robots-Tag: noindex');
+        $n = $k === 'o' ? 'طلبات العملاء' : 'التحكم بالموقع';
+        $ic = home_url('/app/');
+        echo wp_json_encode(['name' => $n, 'short_name' => $n, 'start_url' => '/oxy-desk/' . $k, 'scope' => '/oxy-desk/', 'display' => 'standalone', 'background_color' => '#0b1220', 'theme_color' => '#0b1220', 'lang' => 'ar', 'dir' => 'rtl',
+            'icons' => [['src' => $ic . 'icon-192.png', 'sizes' => '192x192', 'type' => 'image/png'], ['src' => $ic . 'icon-512.png', 'sizes' => '512x512', 'type' => 'image/png']]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+    private static function shell($k) {
+        return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>مكتب سري</title></head><body style="margin:0;background:#0b1220;color:#fff;font:16px system-ui;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center;padding:24px"><p id=m>جارِ الفتح…</p><script>try{var t=localStorage.getItem("oxd_' . $k . '");if(t){location.replace("/oxy-desk/' . $k . '/"+encodeURIComponent(t))}else{document.getElementById("m").textContent="افتح الرابط السري الخاص بك مرة واحدة على هذا الجهاز."}}catch(e){document.getElementById("m").textContent="افتح الرابط السري الخاص بك."}</script></body></html>';
     }
 
     /* ---------------- API ---------------- */
@@ -54,7 +70,9 @@ class Oxygen_Desk {
         if (!defined('DONOTCACHEPAGE')) { define('DONOTCACHEPAGE', true); } do_action('litespeed_control_set_nocache', 'oxy-desk');
         header('Content-Type: application/json; charset=utf-8'); header('X-Robots-Tag: noindex'); header('Cache-Control: no-store');
         if (($_SERVER['HTTP_X_OXD'] ?? '') !== '1') { self::shut(); }
-        $o = self::authed('o'); $c = self::authed('c');
+        $t = (string) ($_SERVER['HTTP_X_OXD_T'] ?? '');
+        $o = self::authed('o') || ($t !== '' && hash_equals(self::hash_for('o'), hash('sha256', $t)));
+        $c = self::authed('c') || ($t !== '' && hash_equals(self::hash_for('c'), hash('sha256', $t)));
         if (!$o && !$c) { self::shut(); }
         $in = json_decode((string) file_get_contents('php://input'), true); $in = is_array($in) ? $in : [];
         $need = in_array($action, ['orders', 'order_status'], true) ? $o : $c;
@@ -117,14 +135,14 @@ class Oxygen_Desk {
     private static function biz_keys() { return ['company_name', 'phone', 'whatsapp', 'email', 'city', 'banner_text', 'banner_image', 'banner_video', 'offers', 'services', 'price_rules', 'gallery_urls']; }
 
     /* ---------------- pages ---------------- */
-    private static function page($k) {
+    private static function page($k, $tok = '') {
         $title = $k === 'o' ? 'طلبات العملاء' : 'التحكم بالموقع';
         $css = ':root{--bg:#f4f7fb;--card:#fff;--tx:#0f172a;--mu:#64748b;--ac:#0369a1;--bd:#dbe4ef}@media(prefers-color-scheme:dark){:root{--bg:#0b1220;--card:#111a2e;--tx:#e8eefb;--mu:#93a4c0;--ac:#38bdf8;--bd:#1f2c47}}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.8 system-ui,Tahoma,sans-serif}header{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--bd);padding:12px 16px;font-weight:800;z-index:5;display:flex;gap:10px;align-items:center}main{max-width:820px;margin:0 auto;padding:14px 16px 60px}.c{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;margin:0 0 12px}.m{color:var(--mu);font-size:13px}button,select,input,textarea{font:inherit;color:var(--tx)}button{border:0;border-radius:12px;padding:9px 14px;font-weight:700;background:var(--ac);color:#fff;cursor:pointer}button.g{background:transparent;color:var(--ac);border:1px solid var(--bd)}input,textarea,select{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:9px 11px;margin:3px 0 10px}textarea{min-height:90px}label{font-size:13px;color:var(--mu);font-weight:700}.r{display:flex;gap:8px;flex-wrap:wrap}.t{display:inline-block;border-radius:999px;padding:1px 10px;font-size:12px;font-weight:800;background:var(--bd)}a{color:var(--ac)}.ok{color:#059669;font-weight:800}';
         $js = $k === 'o' ? self::js_orders() : self::js_control();
-        return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>' . $title . '</title><style>' . $css . '</style></head><body><header>🔒 ' . $title . '<span class="m" style="margin-right:auto">سري</span></header><main id="app">جارِ التحميل…</main><script>' . self::js_common() . $js . '</script></body></html>';
+        return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><meta name="theme-color" content="#0b1220"><link rel="manifest" href="/oxy-desk/manifest-' . $k . '.json"><link rel="apple-touch-icon" href="' . esc_url(home_url('/app/apple-touch-icon.png')) . '"><meta name="apple-mobile-web-app-capable" content="yes"><title>' . $title . '</title><style>' . $css . '</style></head><body><header>🔒 ' . $title . '<button id=ins class=g style="margin-right:auto;display:none">تثبيت التطبيق</button></header><main id="app">جارِ التحميل…</main><script>' . ($tok !== '' ? 'try{localStorage.setItem("oxd_' . $k . '",' . wp_json_encode($tok) . ')}catch(e){}' : '') . self::js_common($k) . $js . '</script></body></html>';
     }
-    private static function js_common() {
-        return 'var $=function(s,r){return(r||document).querySelector(s)};function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]})}function api(a,d){return fetch("/oxy-desk/api/"+a,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-Oxd":"1"},body:JSON.stringify(d||{})}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||"فشل");return j})})}function toast(m){var t=document.createElement("div");t.textContent=m;t.style.cssText="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 18px;border-radius:999px;z-index:9;font-weight:700";document.body.appendChild(t);setTimeout(function(){t.remove()},2200)}';
+    private static function js_common($k = 'o') {
+        return 'var $=function(s,r){return(r||document).querySelector(s)};function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]})}function api(a,d){return fetch("/oxy-desk/api/"+a,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-Oxd":"1","X-Oxd-T":(function(){try{return localStorage.getItem("oxd_' . $k . '")||""}catch(e){return""}})()},body:JSON.stringify(d||{})}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||"فشل");return j})})}function toast(m){var t=document.createElement("div");t.textContent=m;t.style.cssText="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 18px;border-radius:999px;z-index:9;font-weight:700";document.body.appendChild(t);setTimeout(function(){t.remove()},2200)};var dp=null,ib=$("#ins");try{if("serviceWorker"in navigator)navigator.serviceWorker.register("/oxy-desk/sw.js",{scope:"/oxy-desk/"}).catch(function(){})}catch(e){}window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();dp=e;ib.style.display=""});if(/iphone|ipad|ipod/i.test(navigator.userAgent)&&!window.navigator.standalone){ib.style.display="";ib.onclick=function(){toast("اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»")}}ib.onclick=ib.onclick||function(){if(dp){dp.prompt();dp=null;ib.style.display="none"}};window.addEventListener("appinstalled",function(){ib.style.display="none"});';
     }
     private static function js_orders() {
         return 'var ST={new:"جديد",accepted:"مقبول",completed:"مكتمل",cancelled:"ملغي"},cur="";function load(){api("orders",{status:cur}).then(function(j){var h="<div class=r style=margin-bottom:10px><select id=f onchange=\"cur=this.value;load()\"><option value=\"\">كل الحالات</option>"+Object.keys(ST).map(function(k){return"<option value="+k+(cur===k?" selected":"")+">"+ST[k]+"</option>"}).join("")+"</select><button class=g onclick=load()>تحديث</button></div>";if(!j.orders.length)h+="<p class=m>لا توجد طلبات.</p>";j.orders.forEach(function(o){var ph=(o.clientPhone||"").replace(/\D/g,"");h+="<div class=c><div class=r><b>#"+esc(String(o.id).slice(-6))+"</b><span class=t>"+esc(ST[o.status]||o.status)+"</span><span class=m>"+esc((o.createdAt||"").replace("T"," ").slice(0,16))+"</span></div><div>"+esc(o.serviceName||o.specialtyId||"")+(o.agreedPrice?" — "+esc(o.agreedPrice):"")+"</div>"+(o.clientName?"<div>"+esc(o.clientName)+"</div>":"")+(o.description?"<div class=m>"+esc(o.description)+"</div>":"")+(o.address?"<div class=m>📍 "+esc(o.address)+"</div>":"")+(o.appointmentAt?"<div class=m>🕒 "+esc(o.appointmentAt)+"</div>":"")+"<div class=r style=margin-top:8px>"+(ph?"<a href=\"tel:"+ph+"\"><button class=g>اتصال</button></a><a href=\"https://wa.me/"+ph+"\" target=_blank rel=noopener><button class=g>واتساب</button></a>":"")+(o.lat&&o.lng?"<a href=\"https://maps.google.com/?q="+o.lat+","+o.lng+"\" target=_blank rel=noopener><button class=g>الموقع</button></a>":"")+Object.keys(ST).filter(function(k){return k!==o.status}).map(function(k){return"<button onclick=\"setS(\x27"+o.id+"\x27,\x27"+k+"\x27)\">"+ST[k]+"</button>"}).join("")+"</div></div>"});$("#app").innerHTML=h}).catch(function(e){$("#app").innerHTML="<p>"+esc(e.message)+"</p>"})}function setS(id,s){api("order_status",{id:id,status:s}).then(function(){toast("تم التحديث");load()}).catch(function(e){toast(e.message)})}load();setInterval(function(){if(!document.hidden)load()},60000);';
