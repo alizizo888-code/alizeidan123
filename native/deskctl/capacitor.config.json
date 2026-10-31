@@ -1,0 +1,25 @@
+{
+  "appId": "com.oxygen11.deskctl",
+  "appName": "التحكم والإعدادات",
+  "webDir": "www",
+  "backgroundColor": "#0b1220",
+  "server": {
+    "url": "https://desk.oxygen11.com/desk.html",
+    "androidScheme": "https",
+    "errorPath": "offline.html",
+    "allowNavigation": [
+      "oxygen11.com",
+      "*.oxygen11.com"
+    ]
+  },
+  "android": {
+    "backgroundColor": "#0b1220",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_icon_config_sample",
+      "iconColor": "#0ea5e9"
+    }
+  }
+}
