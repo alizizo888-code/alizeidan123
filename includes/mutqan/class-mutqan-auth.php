@@ -187,7 +187,12 @@ final class Mutqan_Auth {
     /** Owner session for the password-less desk apps (the secret link was already verified). The owner account is created on first use with a random, never-shown password. */
     public static function desk_session() {
         $u = self::owner_row();
-        if (!$u) { $u = self::create_user('owner', 'المالك', '', bin2hex(random_bytes(24)), 'owner', 'active'); }
+        if (!$u) {
+            $ex = self::find_by_handle('owner'); // a leftover non-owner account with this handle: promote it instead of failing
+            $u = $ex ?: self::create_user('owner', 'المالك', '', bin2hex(random_bytes(24)), 'owner', 'active');
+            if ($ex) { $GLOBALS['wpdb']->update(Mutqan_Store::table('users'), ['role' => 'owner', 'status' => 'active', 'disabled_role' => null], ['id' => $ex['id']]); $u = self::find_by_id($ex['id']); }
+        }
+        if (($u['status'] ?? 'active') !== 'active' || ($u['role'] ?? '') !== 'owner') { $GLOBALS['wpdb']->update(Mutqan_Store::table('users'), ['role' => 'owner', 'status' => 'active'], ['id' => $u['id']]); $u = self::find_by_id($u['id']); }
         return self::session_result($u);
     }
 
