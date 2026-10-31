@@ -23,11 +23,13 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-daily-report.php
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-visuals.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-partner-articles.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-social.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-owner-link.php';
 Oxygen_SEO_Engine::boot();
 Oxygen_Daily_Report::boot();
 Oxygen_Visuals::boot();
 Oxygen_Partner_Articles::boot();
 Oxygen_Social::boot();
+Oxygen_Owner_Link::boot();
 foreach (['store', 'policy', 'auth', 'passkey', 'promo', 'wa', 'ai', 'shop', 'rest', 'admin'] as $mutqan_part) { require_once plugin_dir_path(__FILE__) . 'includes/mutqan/class-mutqan-' . $mutqan_part . '.php'; }
 Mutqan_Rest::boot(); Mutqan_Admin::boot();
 final class Oxygen_AC_Automation {
