@@ -20,6 +20,9 @@ export default function InstallApp() {
         </div>
       </header>
       <div className="max-w-xl mx-auto w-full px-4 pt-5 flex flex-col gap-4">
+        {!isNativeShell() && /FBAN|FBAV|Instagram|TikTok|musical_ly|Snapchat|WhatsApp|Line\//i.test(navigator.userAgent) && (
+          <p className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3 leading-relaxed">أنت داخل متصفح تطبيق (فيسبوك/تيك توك/واتساب…) وقد يمنع التحميل. اضغط ⋮ أو «فتح في المتصفح» ثم افتح هذه الصفحة من <b>Chrome</b> (أندرويد) أو <b>Safari</b> (آيفون).</p>
+        )}
         {!isNativeShell() && (
           <a href={APK_APP} className="rounded-2xl bg-slate-900 text-white p-4 flex items-center gap-3 shadow-md" data-keep-colors>
             <span className="text-2xl">🤖</span>

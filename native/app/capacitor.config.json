@@ -4,7 +4,9 @@
   "webDir": "www",
   "backgroundColor": "#0b1220",
   "server": {
+    "url": "https://oxygen11.com/app/",
     "androidScheme": "https",
+    "errorPath": "offline.html",
     "allowNavigation": [
       "oxygen11.com",
       "*.oxygen11.com"
