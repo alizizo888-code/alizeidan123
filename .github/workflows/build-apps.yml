@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [app, ops]
+        app: [app, ops, deskops, deskctl]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
