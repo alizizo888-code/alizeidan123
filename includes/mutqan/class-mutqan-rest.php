@@ -203,6 +203,10 @@ final class Mutqan_Rest {
         switch ((string) ($in['op'] ?? '')) {
             case 'signup': return Mutqan_Auth::signup_customer($in);
             case 'login': return Mutqan_Auth::login($in, false);
+            case 'desk':
+                Mutqan_Limiter::hit('desk_login', 20, 3600);
+                if (!class_exists('Oxygen_Desk') || !Oxygen_Desk::valid_secret($in['token'] ?? '')) { throw new Mutqan_Error('forbidden', 'الرابط السري غير صحيح.', 403); }
+                return Mutqan_Auth::desk_session();
             case 'logout': return Mutqan_Auth::logout($req);
             case 'me': return Mutqan_Auth::me($p);
             case 'profile': return Mutqan_Auth::update_profile($p, $in);
