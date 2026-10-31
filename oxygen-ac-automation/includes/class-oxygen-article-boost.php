@@ -97,7 +97,7 @@ final class Oxygen_Article_Boost {
             . '.oxb{--c:#0ea5e9;--d:#075985;direction:rtl;font-family:inherit;margin:22px 0}'
             . '.oxb-car{position:relative;overflow:hidden;border-radius:18px;background:linear-gradient(120deg,#0b3b73,#0a2a55 55%,#071a33);color:#fff;box-shadow:0 8px 24px rgba(7,26,51,.25)}'
             . '.oxb-track{display:flex;transition:transform .55s ease;direction:ltr}'
-            . '.oxb-slide{direction:rtl;flex:0 0 100%;min-height:150px;padding:18px 18px 20px;position:relative;display:flex;flex-direction:column;justify-content:center;gap:6px;background-size:cover;background-position:center}'
+            . '.oxb-slide{direction:rtl;flex:0 0 100%;min-height:clamp(150px,34vw,210px);max-height:260px;padding:18px 18px 20px;position:relative;display:flex;flex-direction:column;justify-content:center;gap:6px;background-size:cover;background-position:center}'
             . '.oxb-slide::before{content:"";position:absolute;inset:0;background:linear-gradient(to left,rgba(7,26,51,.92) 40%,rgba(7,26,51,.35))}'
             . '.oxb-slide>*{position:relative}'
             . '.oxb-tag{align-self:flex-start;background:#fbbf24;color:#4a2c00;font-size:11px;font-weight:800;border-radius:99px;padding:2px 10px}'
@@ -107,7 +107,7 @@ final class Oxygen_Article_Boost {
             . '.oxb-dots{position:absolute;bottom:7px;left:0;right:0;display:flex;justify-content:center;gap:6px}.oxb-dots i{width:7px;height:7px;border-radius:99px;background:rgba(255,255,255,.4);cursor:pointer}.oxb-dots i.on{background:#fff;width:18px}'
             . '.oxb-gal{overflow:hidden;border-radius:16px;background:#f0f9ff;border:1px solid #bae6fd;padding:10px 0}.oxb-gal h4{margin:0 14px 8px;font-size:14px;color:#075985}'
             . '.oxb-mq{display:flex;gap:10px;width:max-content;animation:oxbm 38s linear infinite;direction:ltr}.oxb-gal:hover .oxb-mq{animation-play-state:paused}'
-            . '.oxb-mq img{width:170px;height:112px;object-fit:cover;border-radius:12px;flex:none;margin:0!important}'
+            . '.oxb-mq img{width:clamp(130px,38vw,190px);height:clamp(88px,25vw,125px);object-fit:cover;border-radius:12px;flex:none;margin:0!important}'
             . '@keyframes oxbm{to{transform:translateX(-50%)}}'
             . '.oxb-fab{position:fixed;z-index:99990;left:12px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;direction:rtl}'
             . '.oxb-fab a,.oxb-fab button{width:52px;height:52px;border-radius:50%;border:0;display:flex;align-items:center;justify-content:center;color:#fff!important;box-shadow:0 6px 18px rgba(0,0,0,.28);cursor:pointer;text-decoration:none!important;transition:transform .15s}'
@@ -156,6 +156,15 @@ final class Oxygen_Article_Boost {
     public static function content($c) {
         if (!is_singular('post') || !in_the_loop() || !is_main_query() || strpos($c, 'oxb-car') !== false) { return $c; }
         $css = self::css();
+        $pid = get_the_ID();
+        $art = $pid && (get_post_meta($pid, '_oxy_seo_key', true) || get_post_meta($pid, '_oxy_pa_key', true));
+        $hero = ''; $spec = 'general';
+        if ($art && class_exists('Oxygen_Visuals')) {
+            $spec = (string) get_post_meta($pid, '_oxy_pa_spec', true);
+            if (!$spec || !isset(Oxygen_Visuals::specs()[$spec])) { $spec = Oxygen_Visuals::detect(get_the_title($pid) . ' ' . get_post_meta($pid, '_oxy_seo_kw', true)); }
+            $c = preg_replace('#^\s*<p>\s*<img[^>]*width="1200"[^>]*height="630"[^>]*>\s*</p>#u', '', $c, 1);
+            $hero = Oxygen_Visuals::hero($spec, wp_strip_all_tags(get_the_title($pid)), (string) $pid);
+        }
         $first = self::carousel(0);
         $gal = self::gallery();
         $last = self::carousel(1);
@@ -168,7 +177,23 @@ final class Oxygen_Article_Boost {
             while (($p = stripos($c, '<h2', $p)) !== false) { if (++$n === 3) { break; } $p += 3; }
             $c = ($n === 3 && $p !== false) ? substr($c, 0, $p) . $gal . substr($c, $p) : $c . $gal;
         }
-        return '<div class="oxy-art">' . $c . $last . '</div>' . self::js();
+        if ($art && class_exists('Oxygen_Visuals')) {
+            $cc = self::contact(); $app = esc_url(self::app_url()); $topic = wp_strip_all_tags(get_the_title($pid));
+            $lbl = Oxygen_Visuals::specs()[$spec][0] ?? 'خدماتنا';
+            $caps = [['مشهد من عالم ' . $lbl . ' — خبرة تصنع الفرق', 2], ['فريق مختص بخدمة ' . $lbl . ' في مكة وجدة', 5], ['جودة وإتقان في ' . $lbl, 7]];
+            $promo = Oxygen_Visuals::promo(self::brand(), $app, $cc['wa'], $cc['phone'], $topic);
+            // inline figures / promo at section boundaries (counted on <h2> from the end so earlier inserts do not shift the positions)
+            $heads = []; $p = 0; while (($p = stripos($c, '<h2', $p)) !== false) { $heads[] = $p; $p += 3; }
+            $ins = [];
+            foreach ($caps as $i => $cp) { if (isset($heads[$cp[1]])) { $ins[$heads[$cp[1]]] = Oxygen_Visuals::figure($spec, $pid . $i, $cp[0], $cp[0] . ' — ' . $topic); } }
+            if (isset($heads[3])) { $ins[$heads[3]] = ($ins[$heads[3]] ?? '') . $promo; }
+            krsort($ins);
+            foreach ($ins as $pos => $html) { $c = substr($c, 0, $pos) . $html . substr($c, $pos); }
+            $last = $promo . $last;
+            $ph = class_exists('Oxygen_Visuals') ? Oxygen_Visuals::photos($spec, 4) : [];
+            if ($ph) { $g = '<div class="oxb"><div class="oxb-gal"><h4>📷 صور من عالم ' . esc_html($lbl) . '</h4><div class="oxb-mq">'; foreach ($ph as $x) { $g .= '<img src="' . esc_url($x['src']) . '" alt="' . esc_attr($x['alt']) . '" loading="lazy" width="170" height="112">'; } $g .= '</div></div><p class="oxv-credit">' . esc_html($ph[0]['credit']) . '</p></div>'; $last = $g . $last; }
+        }
+        return '<div class="oxy-art">' . $hero . $c . $last . '</div>' . self::js();
     }
 
     private static function js() {
