@@ -12,7 +12,9 @@ let cache = { uid: null, gid: null, role: null }
 const OWN_KEY = 'mq_owner_uid'
 const ownerSeen = (uid) => { try { return !!uid && localStorage.getItem(OWN_KEY) === String(uid) } catch { return false } }
 const markOwner = (uid) => { try { if (uid) localStorage.setItem(OWN_KEY, String(uid)) } catch { /* ignore */ } }
-const isOwnerNow = (u) => auth.isAppOwner() || ownerSeen(u?.id)
+// Private desk apps only ever hold a session issued by the owner's secret link, so a stored session there IS the owner.
+const deskOwner = () => typeof window !== 'undefined' && !!window.__DESK_KIND__ && !!getToken()
+const isOwnerNow = (u) => auth.isAppOwner() || ownerSeen(u?.id) || deskOwner()
 
 function initial() {
   const u = currentUser()
