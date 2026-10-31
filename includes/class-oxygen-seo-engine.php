@@ -350,11 +350,18 @@ class Oxygen_SEO_Engine {
         return is_array($t) ? (int) $t['term_id'] : 0;
     }
 
+    /** Two sites, two different article sets: every plan item belongs to exactly one site (stable hash of its key), so the two
+     *  domains never publish the same article / compete for the same keyword. Already published items are never touched.
+     *  Turn off with the option oxygen_seo_partition = '0'. */
+    public static function owns($item) {
+        if (get_option('oxygen_seo_partition', '1') === '0') { return true; }
+        return (crc32((string) $item['key']) & 1) === (self::salt() ? 1 : 0);
+    }
     public static function create_next($force_status = null, $kind = 'base') {
         $map = self::map();
         $s = self::settings();
         foreach (self::plan() as $item) {
-            if (($item['kind'] ?? 'base') !== $kind || isset($map[$item['key']])) { continue; }
+            if (($item['kind'] ?? 'base') !== $kind || isset($map[$item['key']]) || !self::owns($item)) { continue; }
             $ctx = self::ctx($item, $map);
             $b = self::build($item, 0, $ctx);
             $author = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID']);
