@@ -45,6 +45,7 @@ async function enter(b, secret) {
   const j = await r.json().catch(() => ({}))
   const d = j.data || j
   if (!r.ok || !d.token) throw new Error((j.error && (j.error.message || j.error)) || j.message || 'الرابط السري غير صحيح')
+  if (!d.user || d.user.role !== 'owner') throw new Error('الخادم لم يُرجع حساب مالك (الدور: ' + (d.user && d.user.role || 'غير معروف') + ') — حدّث الإضافة على ' + BRANDS[b].name)
   localStorage.setItem('desk_sess_' + b, JSON.stringify({ token: d.token, user: d.user || null }))
   localStorage.setItem('desk_brand', b)
 }
