@@ -1,11 +1,11 @@
 import { Suspense, useState, useEffect } from 'react'
-import { HashRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { lazyRetry } from '../lib/lazy'
 import StaffLayout from '../components/StaffLayout'
 import PushToaster from '../components/PushToaster'
 import { ThemeBoot } from '../lib/appTheme'
 import Notifications from '../pages/Notifications'
-import { getToken } from '../lib/_api'
+import { getToken, setSession } from '../lib/_api'
 
 const StaffGate = lazyRetry(() => import('../pages/StaffGate'))
 const OrderDetailStaff = lazyRetry(() => import('../pages/OrderDetailStaff'))
@@ -39,49 +39,52 @@ const KIND = window.__DESK_KIND__ || 'control'
 const brand = window.__DESK_BRAND__ || 'oxygen'
 const HOME = KIND === 'ops' ? '/staff/operations' : '/staff'
 
-// Remembers this device for the brand: the secret link is exchanged ONCE for a long owner session (180 days), stored on this device only.
-async function enter(b, secret) {
-  const r = await fetch(`${BRANDS[b].host}/wp-json/mutqan/v1/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'desk', token: secret }) })
+// ONE numeric PIN opens both sites. The PIN is exchanged for an owner session per site; it is kept on this device only, so a session the server forgets is renewed silently (no more "enters then exits").
+const PIN_KEY = 'desk_pin'
+async function enter(b, pin) {
+  const r = await fetch(`${BRANDS[b].host}/wp-json/mutqan/v1/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'desk', token: pin }) })
   const j = await r.json().catch(() => ({}))
   const d = j.data || j
-  if (!r.ok || !d.token) throw new Error((j.error && (j.error.message || j.error)) || j.message || 'الرابط السري غير صحيح')
+  if (!r.ok || !d.token) throw new Error((j.error && (j.error.message || j.error)) || j.message || 'الرمز غير صحيح')
   if (!d.user || d.user.role !== 'owner') throw new Error('الخادم لم يُرجع حساب مالك (الدور: ' + (d.user && d.user.role || 'غير معروف') + ') — حدّث الإضافة على ' + BRANDS[b].name)
   localStorage.setItem('desk_sess_' + b, JSON.stringify({ token: d.token, user: d.user || null }))
-  localStorage.setItem('desk_brand', b)
+  return d
 }
-const parseSecret = (t) => { const s = String(t || '').trim(); const m = s.match(/oxy-desk\/[oc]\/([A-Za-z0-9_-]{20,})/); return m ? m[1] : s.replace(/[^A-Za-z0-9_-]/g, '') }
-
-function Enter() {
-  const { brand: b, secret } = useParams()
-  const [msg, setMsg] = useState('جارِ تسجيل هذا الجهاز…')
-  useEffect(() => {
-    if (!BRANDS[b]) { setMsg('رابط غير صحيح'); return }
-    enter(b, secret).then(() => { location.replace(location.pathname + location.search + '#' + HOME); location.reload() }).catch((e) => setMsg(e.message))
-  }, [b, secret])
-  return <Center>{msg}</Center>
+const savedPin = () => { try { return localStorage.getItem(PIN_KEY) || '' } catch { return '' } }
+// Re-issues the session of the current site from the saved PIN. Resolves true when a fresh owner session is in place.
+async function reauth() {
+  const pin = savedPin(); if (!pin) return false
+  try { const d = await enter(brand, pin); setSession(d.token, d.user); return true } catch { return false }
 }
+if (typeof window !== 'undefined') window.__DESK_REAUTH__ = reauth
+const parseSecret = (t) => String(t || '').trim()
 
 function Center({ children }) { return <div dir="rtl" className="h-full min-h-screen flex items-center justify-center p-6 text-center text-white bg-[#0b1220] text-sm leading-loose">{children}</div> }
 
-// No session on this device yet: paste the secret link once (or open it directly).
+// No session on this device yet: type the PIN once (it opens both sites).
 function Gate() {
   const [v, setV] = useState('')
-  const [b, setB] = useState(brand)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   async function go() {
     setBusy(true); setErr('')
-    try { await enter(b, parseSecret(v)); location.hash = '#' + HOME; location.reload() } catch (e) { setErr(e.message); setBusy(false) }
+    const pin = parseSecret(v)
+    const done = []; let firstErr = ''
+    for (const k of Object.keys(BRANDS)) {
+      try { await enter(k, pin); done.push(k) } catch (e) { if (!firstErr) firstErr = BRANDS[k].name + ': ' + e.message }
+    }
+    if (!done.length) { setErr(firstErr || 'الرمز غير صحيح'); setBusy(false); return }
+    try { localStorage.setItem(PIN_KEY, pin); localStorage.setItem('desk_brand', done.includes(brand) ? brand : done[0]) } catch { /* ignore */ }
+    location.hash = '#' + HOME; location.reload()
   }
   return (
     <div dir="rtl" className="min-h-screen flex items-center justify-center p-5 bg-[#0b1220] text-white">
       <div className="w-full max-w-sm">
         <p className="text-xl font-black text-center mb-1">🔒 {KIND === 'ops' ? 'غرفة العمليات' : 'التحكم والإعدادات'}</p>
-        <p className="text-xs text-white/60 text-center mb-5">ألصق الرابط السري أو الرمز مرة واحدة على هذا الجهاز — بدون كلمة مرور.</p>
-        <div className="flex gap-2 mb-3">{Object.entries(BRANDS).map(([k, x]) => <button key={k} onClick={() => setB(k)} className={`flex-1 rounded-xl py-2 text-sm font-black border ${b === k ? 'bg-sky-400 text-black border-sky-400' : 'border-white/20 text-white/80'}`}>{x.name}</button>)}</div>
-        <textarea value={v} onChange={(e) => setV(e.target.value)} dir="ltr" rows={3} placeholder="https://…/oxy-desk/c/…" className="w-full rounded-xl bg-white/10 border border-white/15 p-3 text-sm text-white outline-none" />
-        {err && <p className="text-rose-300 text-xs mt-2">{err}</p>}
-        <button disabled={busy || !v.trim()} onClick={go} className="w-full mt-3 rounded-xl bg-sky-400 text-black font-black py-3 disabled:opacity-50">{busy ? 'جارِ التحقق…' : 'تسجيل هذا الجهاز'}</button>
+        <p className="text-xs text-white/60 text-center mb-5">اكتب الرمز السري مرة واحدة — يفتح أكسجين وأكسجين معًا.</p>
+        <input type="password" inputMode="numeric" autoComplete="off" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && v.trim() && go()} dir="ltr" placeholder="الرمز السري" className="w-full rounded-xl bg-white/10 border border-white/15 p-4 text-center text-lg tracking-widest text-white outline-none" />
+        {err && <p className="text-rose-300 text-xs mt-2 leading-relaxed">{err}</p>}
+        <button disabled={busy || !v.trim()} onClick={go} className="w-full mt-3 rounded-xl bg-sky-400 text-black font-black py-3 disabled:opacity-50">{busy ? 'جارِ التحقق…' : 'دخول'}</button>
       </div>
     </div>
   )
@@ -98,15 +101,60 @@ function BrandBar() {
   )
 }
 
+// #/diag — shows exactly what the server says about this device (role, status) so a permission problem is never a guess.
+function Diag() {
+  const [out, setOut] = useState('جارِ الفحص…')
+  useEffect(() => {
+    (async () => {
+      const t = getToken(); const lines = [`التطبيق: ${KIND === 'ops' ? 'غرفة العمليات' : 'التحكم'}`, `الموقع: ${BRANDS[brand].name} (${BRANDS[brand].host})`, `جلسة محفوظة: ${t ? 'نعم' : 'لا'}`]
+      if (t) {
+        try {
+          const r = await fetch(`${BRANDS[brand].host}/wp-json/mutqan/v1/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Mutqan-Token': t }, body: JSON.stringify({ op: 'me' }) })
+          const j = await r.json().catch(() => ({})); const u = j.data && j.data.user
+          lines.push(`رد الخادم: ${r.status}`, u ? `الدور: ${u.role || 'بلا دور'} — الحالة: ${u.status}` : `لا يوجد مستخدم: ${(j.error && j.error.message) || (j.message) || ''}`)
+          lines.push(u && u.role === 'owner' ? '✅ الجهاز مسجّل كمالك.' : '❌ ليس مالكًا — اضغط «إعادة تسجيل الجهاز» واكتب الرمز من جديد.')
+        } catch (e) { lines.push('تعذر الاتصال بالموقع: ' + e.message) }
+      }
+      setOut(lines.join('\n'))
+    })()
+  }, [])
+  return (
+    <div dir="rtl" className="min-h-screen p-5 bg-[#0b1220] text-white">
+      <pre className="whitespace-pre-wrap text-sm leading-loose">{out}</pre>
+      <button className="mt-4 rounded-xl bg-white/10 px-4 py-3 text-sm font-black" onClick={() => { try { localStorage.removeItem('desk_sess_' + brand); localStorage.removeItem('mutqan_token'); localStorage.removeItem('mutqan_user') } catch { /* ignore */ } location.hash = '#/'; location.reload() }}>إعادة تسجيل الجهاز</button>
+    </div>
+  )
+}
+
 export default function DeskApp() {
   const signed = !!getToken()
+  // No session for this site yet but a PIN is saved on this device (e.g. after switching site): sign in silently.
+  useEffect(() => { if (!signed && savedPin()) reauth().then((ok) => { if (ok) location.reload() }) }, [])
+  // Keep the owner session alive: if the server no longer knows it (or it is not the owner), renew it from the PIN saved on this device; only when that fails ask for the PIN again.
+  useEffect(() => {
+    const check = async () => {
+      const t = getToken(); if (!t || location.hash.startsWith('#/diag')) return
+      try {
+        const r = await fetch(`${BRANDS[brand].host}/wp-json/mutqan/v1/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Mutqan-Token': t }, body: JSON.stringify({ op: 'me' }) })
+        const j = await r.json(); const u = j && j.data && j.data.user
+        if (!(r.ok && j && j.data) || (u && u.role === 'owner')) return
+      } catch { return }                                       // offline: keep the session
+      if (await reauth()) return
+      try { localStorage.removeItem('desk_sess_' + brand); localStorage.removeItem('mutqan_token'); localStorage.removeItem('mutqan_user'); localStorage.removeItem(PIN_KEY) } catch { /* ignore */ }
+      location.hash = '#/'; location.reload()
+    }
+    check()
+    const onVis = () => { if (document.visibilityState === 'visible') check() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
   return (
     <HashRouter>
       <PushToaster />
       <ThemeBoot />
       <Suspense fallback={<Center>جارِ التحميل…</Center>}>
         <Routes>
-          <Route path="/enter/:brand/:secret" element={<Enter />} />
+          <Route path="/diag" element={<Diag />} />
           {!signed ? <Route path="*" element={<Gate />} /> : (
             <Route element={<><BrandBar /><StaffLayout /></>}>
               <Route path="/" element={<Navigate to={HOME} replace />} />

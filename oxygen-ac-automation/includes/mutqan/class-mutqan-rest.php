@@ -205,7 +205,9 @@ final class Mutqan_Rest {
             case 'login': return Mutqan_Auth::login($in, false);
             case 'desk':
                 Mutqan_Limiter::hit('desk_login', 20, 3600);
-                if (!class_exists('Oxygen_Desk') || !Oxygen_Desk::valid_secret($in['token'] ?? '')) { throw new Mutqan_Error('forbidden', 'الرابط السري غير صحيح.', 403); }
+                if (!class_exists('Oxygen_Desk')) { throw new Mutqan_Error('forbidden', 'غير متاح.', 403); }
+                if (!Oxygen_Desk::pin_is_set()) { throw new Mutqan_Error('forbidden', 'لم يُضبط رمز الدخول على هذا الموقع بعد — اضبطه من ووردبريس ← أكسجين ← المكتب السري.', 403); }
+                if (!Oxygen_Desk::valid_secret($in['token'] ?? '')) { throw new Mutqan_Error('forbidden', 'الرمز غير صحيح.', 403); }
                 return Mutqan_Auth::desk_session();
             case 'logout': return Mutqan_Auth::logout($req);
             case 'me': return Mutqan_Auth::me($p);
