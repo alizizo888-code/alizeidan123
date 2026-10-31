@@ -55,10 +55,10 @@ jobs:
             { echo "# $site — $d"; echo; cat "out/report-$site-$d.md"; } >> "$GITHUB_STEP_SUMMARY"
             title="📊 تقرير مقالات $site — $d ($n عملية، متوسط SEO $avg)"
             # keep the inbox tidy: close this site's reports older than 3 days
-            gh issue list --state open --search "تقرير مقالات $site in:title" --json number,createdAt --jq '.[]|select((.createdAt|fromdateiso8601) < (now-259200))|.number' 2>/dev/null | while read -r num; do gh issue close "$num" --comment "أُغلق تلقائيًا (تقرير قديم)." >/dev/null 2>&1 || true; done || true
-            if ! out="$(gh issue create --title "$title" --body-file "out/report-$site-$d.md" --assignee "$OWNER_LOGIN" 2>&1)"; then
+            gh issue list -R "$GITHUB_REPOSITORY" --state open --search "تقرير مقالات $site in:title" --json number,createdAt --jq '.[]|select((.createdAt|fromdateiso8601) < (now-259200))|.number' 2>/dev/null | while read -r num; do gh issue close -R "$GITHUB_REPOSITORY" "$num" --comment "أُغلق تلقائيًا (تقرير قديم)." >/dev/null 2>&1 || true; done || true
+            if ! out="$(gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body-file "out/report-$site-$d.md" --assignee "$OWNER_LOGIN" 2>&1)"; then
               echo "::warning::Issue with assignee failed for $site: ${out:0:300}"
-              if ! out="$(gh issue create --title "$title" --body-file "out/report-$site-$d.md" 2>&1)"; then
+              if ! out="$(gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body-file "out/report-$site-$d.md" 2>&1)"; then
                 echo "::error::Could not open the report issue for $site: ${out:0:400}"; failed=1
               else echo "Issue opened: $out"; fi
             else echo "Issue opened: $out"; fi
