@@ -147,10 +147,10 @@ final class Oxygen_Article_Boost {
     }
 
     private static function gallery() {
-        $d = self::data(); if (count($d['imgs']) < 3) { return ''; }
+        $d = self::data(); if (count($d['imgs']) < 3) { return apply_filters('oxygen_gallery_extra', ''); }
         $imgs = $d['imgs']; shuffle($imgs); $imgs = array_slice($imgs, 0, 12);
         $row = ''; foreach ($imgs as $u) { $row .= '<img src="' . esc_url($u) . '" alt="من أعمال ' . esc_attr(self::brand()) . '" loading="lazy" width="170" height="112">'; }
-        return '<div class="oxb"><div class="oxb-gal"><h4>📸 من أعمالنا</h4><div class="oxb-mq">' . $row . $row . '</div></div></div>';
+        return '<div class="oxb"><div class="oxb-gal"><h4>📸 من أعمالنا</h4><div class="oxb-mq">' . $row . $row . '</div></div></div>' . apply_filters('oxygen_gallery_extra', '');
     }
 
     public static function content($c) {
