@@ -911,7 +911,7 @@ export default function AiChat() {
         initial={{ name: customer.name, phone: customer.phone }}
       />
 
-      <div className="shrink-0 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.6rem)] bg-gradient-to-t from-[#eef4fb] to-[#eef4fb]/70">
+      <div className="shrink-0 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)] bg-gradient-to-t from-[#eef4fb] to-[#eef4fb]/70">
         <div className="max-w-3xl mx-auto w-full">
           {error && <p className="text-rose-600 text-[11px] font-bold text-center mb-1.5">{error}</p>}
           {recording ? (

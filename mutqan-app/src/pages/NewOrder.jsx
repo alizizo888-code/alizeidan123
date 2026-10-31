@@ -356,7 +356,7 @@ export default function NewOrder() {
         initial={{ name: session?.name || platformUser?.displayName || '', phone: session?.phone || '' }}
       />
       <FloatingContact bottomClass="bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))]" />
-      <InstantService bottomClass="bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))]" />
+      <InstantService bottomClass="bottom-[calc(5rem+env(safe-area-inset-bottom,0px))]" />
     </div>
   )
 }

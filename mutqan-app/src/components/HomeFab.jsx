@@ -26,9 +26,9 @@ export default function HomeFab() {
   const R = Math.hypot(Math.max(fx?.x || 0, innerWidth - (fx?.x || 0)), Math.max(fx?.y || 0, innerHeight - (fx?.y || 0))) + 20
   return (
     <>
-      <button ref={btn} onClick={go} aria-label="الرئيسية" data-keep-colors
-        className="fixed z-[60] left-1/2 -translate-x-1/2 bottom-[max(1rem,env(safe-area-inset-bottom))] flex items-center gap-2 rounded-full bg-primary text-white font-black text-sm px-6 py-3 shadow-xl shadow-primary/30 active:scale-95 transition-transform">
-        <Home size={18} /> الرئيسية
+      <button ref={btn} onClick={go} aria-label="الرئيسية" title="الرئيسية" data-keep-colors
+        className="fixed z-[60] left-1/2 -translate-x-1/2 bottom-[max(0.75rem,env(safe-area-inset-bottom))] w-12 h-12 flex items-center justify-center rounded-full bg-primary text-white shadow-xl shadow-primary/30 ring-2 ring-white active:scale-95 transition-transform">
+        <Home size={22} />
       </button>
       {fx && (
         <div aria-hidden className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center text-white"
