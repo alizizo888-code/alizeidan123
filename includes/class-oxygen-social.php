@@ -21,7 +21,7 @@ class Oxygen_Social {
 
     public static function settings() {
         $s = get_option(self::OPT, []); $s = is_array($s) ? array_filter($s, function ($v) { return $v !== ''; }) : [];
-        return array_merge(['tiktok' => 'https://www.tiktok.com/@oxygen11.com', 'facebook' => 'https://www.facebook.com/share/1BBTJyAdMq/', 'tiktok_videos' => '', 'facebook_videos' => ''], is_array($s) ? $s : []);
+        return array_merge(['tiktok' => 'https://www.tiktok.com/@oxygen11.com', 'facebook' => 'https://www.facebook.com/share/1BBTJyAdMq/', 'tiktok_videos' => "https://www.tiktok.com/@oxygen11.com/video/7541750652855192850\nhttps://www.tiktok.com/@oxygen11.com/video/7549389293341461778\nhttps://www.tiktok.com/@oxygen11.com/video/7555004710273502482\nhttps://www.tiktok.com/@oxygen11.com/video/7613984267923754247\nhttps://www.tiktok.com/@oxygen11.com/video/7613946257823845639\nhttps://www.tiktok.com/@oxygen11.com/video/7615755046503976199\nhttps://www.tiktok.com/@oxygen11.com/video/7615797714013392146\nhttps://www.tiktok.com/@oxygen11.com/video/7616487632868084999\nhttps://www.tiktok.com/@oxygen11.com/video/7616189275247267090\nhttps://www.tiktok.com/@oxygen11.com/video/7617590265649433874\nhttps://www.tiktok.com/@oxygen11.com/video/7617552387019934984\nhttps://www.tiktok.com/@oxygen11.com/video/7617832358850514183\nhttps://www.tiktok.com/@oxygen11.com/video/7617669937837985031\nhttps://www.tiktok.com/@oxygen11.com/video/7617667878476696839\nhttps://www.tiktok.com/@oxygen11.com/video/7624003889292971271\nhttps://www.tiktok.com/@oxygen11.com/video/7623968233191656711", 'facebook_videos' => ''], is_array($s) ? $s : []);
     }
     public static function urls() {
         $s = self::settings(); $o = [];
