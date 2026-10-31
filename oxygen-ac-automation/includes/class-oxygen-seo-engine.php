@@ -299,6 +299,7 @@ class Oxygen_SEO_Engine {
         add_action(self::CRON, [__CLASS__, 'tick']);
         add_filter('the_content', [__CLASS__, 'filter_content'], 5);
         add_action('wp_head', [__CLASS__, 'head'], 4);
+        add_action('wp_head', [__CLASS__, 'gsc_meta'], 1);
         add_filter('get_site_icon_url', [__CLASS__, 'site_icon_url'], 20, 2);   // Google / browser tab icon = the brand's own mark (sizes are multiples of 48 px, as Google requires)
         add_shortcode('oxygen_seo_archive', [__CLASS__, 'archive_shortcode']);
         add_action('admin_menu', [__CLASS__, 'menu']);
@@ -525,6 +526,18 @@ class Oxygen_SEO_Engine {
         $size = (int) $size; $pick = 512;
         foreach ([48, 96, 192, 512] as $n) { if ($n >= $size) { $pick = $n; break; } }
         return plugins_url('assets/site-icon-' . $pick . '.png', dirname(__FILE__));
+    }
+    /** Google Search Console ownership (HTML tag method). The token is a public verification id, not a secret; more can be added in the
+     *  option oxygen_gsc_tokens (array or comma separated). Printed on the home page, which is where Google looks. */
+    public static function gsc_meta() {
+        if (!is_front_page() && !is_home()) { return; }
+        $t = ['YHUq91C4uLadSWxWGw0Y4mVJ5Tw2c9IriStGTt1GVcE'];
+        $o = get_option('oxygen_gsc_tokens', []);
+        if (is_string($o)) { $o = explode(',', $o); }
+        foreach (array_merge($t, (array) $o) as $x) {
+            $x = trim((string) $x);
+            if ($x !== '' && preg_match('/^[A-Za-z0-9_-]{20,80}$/', $x)) { echo '<meta name="google-site-verification" content="' . esc_attr($x) . '" />' . "\n"; }
+        }
     }
     public static function head() {
         if (!is_singular('post') || defined('WPSEO_VERSION') || defined('RANK_MATH_VERSION')) { return; }
