@@ -20,8 +20,8 @@ class Oxygen_Social {
     }
 
     public static function settings() {
-        $s = get_option(self::OPT, []);
-        return array_merge(['tiktok' => '', 'facebook' => '', 'tiktok_videos' => '', 'facebook_videos' => ''], is_array($s) ? $s : []);
+        $s = get_option(self::OPT, []); $s = is_array($s) ? array_filter($s, function ($v) { return $v !== ''; }) : [];
+        return array_merge(['tiktok' => 'https://www.tiktok.com/@oxygen11.com', 'facebook' => 'https://www.facebook.com/share/1BBTJyAdMq/', 'tiktok_videos' => '', 'facebook_videos' => ''], is_array($s) ? $s : []);
     }
     public static function urls() {
         $s = self::settings(); $o = [];
