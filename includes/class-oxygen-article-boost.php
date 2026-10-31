@@ -162,7 +162,7 @@ final class Oxygen_Article_Boost {
         if ($art && class_exists('Oxygen_Visuals')) {
             $spec = (string) get_post_meta($pid, '_oxy_pa_spec', true);
             if (!$spec || !isset(Oxygen_Visuals::specs()[$spec])) { $spec = Oxygen_Visuals::detect(get_the_title($pid) . ' ' . get_post_meta($pid, '_oxy_seo_kw', true)); }
-            $c = preg_replace('#^\s*<p>\s*<img[^>]*width="1200"[^>]*height="630"[^>]*>\s*</p>#u', '', $c, 1);
+            $c = preg_replace('#<p>\s*<img[^>]*width="1200"[^>]*height="630"[^>]*>\s*</p>#u', '', $c, 1);
             $hero = Oxygen_Visuals::hero($spec, wp_strip_all_tags(get_the_title($pid)), (string) $pid);
         }
         $first = self::carousel(0);
