@@ -1,0 +1,11 @@
+# Private desk apps: never indexed, never cached by shared caches. (A child .htaccess replaces the WordPress rewrite rules of the parent folder.)
+RewriteEngine On
+RewriteRule ^$ desk.html [L]
+<IfModule mod_headers.c>
+Header set X-Robots-Tag "noindex, nofollow, noarchive"
+Header set Referrer-Policy "no-referrer"
+<FilesMatch "\.(html|webmanifest)$">
+Header set Cache-Control "no-cache"
+</FilesMatch>
+</IfModule>
+DirectoryIndex desk.html

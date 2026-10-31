@@ -34,6 +34,9 @@ const TABS = [
   ['alerts', '🔔 محادثات وتنبيهات', (k, u, a, h) => a.length + h.length],
 ]
 
+// Desk (private ops app): KPIs, then the field map and live customers FIRST; dispatch/owner settings sink below.
+const DESK_OPS = typeof window !== 'undefined' && window.__DESK_KIND__ === 'ops'
+
 export default function OperationsRoom() {
   const navigate = useNavigate()
   const { role, isOwner, loading: roleLoading } = useTeamRole()
@@ -257,7 +260,7 @@ export default function OperationsRoom() {
         </section>
 
         {/* Dispatch mode: manual / automatic */}
-        <section className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
+        <section className={`bg-white/[0.04] border border-white/10 rounded-2xl p-4 ${DESK_OPS ? 'order-last' : ''}`}>
           <div className="flex items-center gap-2 mb-4">
             <SlidersHorizontal size={16} className="text-primary" />
             <h2 className="text-white font-bold text-sm">أسلوب التوزيع</h2>
@@ -326,7 +329,7 @@ export default function OperationsRoom() {
 
 
         {isOwner && (
-          <section className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
+          <section className={`bg-white/[0.04] border border-white/10 rounded-2xl p-4 ${DESK_OPS ? 'order-last' : ''}`}>
             <div className="flex items-center gap-2 mb-3"><Radar size={16} className="text-primary" /><h2 className="text-white font-bold text-sm">استقبال الطلبات (المالك)</h2></div>
             <div className="flex gap-2 flex-wrap">
 
