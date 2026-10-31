@@ -423,6 +423,7 @@ final class Mutqan_Rest {
         $cfg = wp_json_encode(['api' => esc_url_raw(rest_url(self::NS)), 'app' => home_url('/app/')], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES);
         $inject = '<script>window.__MUTQAN__=' . $cfg . ';</script>';
         if ($is_root) { $inject .= '<link rel="canonical" href="' . esc_url(home_url('/')) . '">'; }
+        if ($is_root && class_exists('Oxygen_SEO_Engine')) { $inject .= Oxygen_SEO_Engine::gsc_meta_html(); }
         $app_path = (string) wp_parse_url(home_url('/app/'), PHP_URL_PATH);
         $html = str_replace(['href="./manifest.webmanifest"', 'href="./icon.svg"'], ['href="' . esc_attr($app_path) . 'manifest.webmanifest"', 'href="' . esc_attr($app_path) . 'apple-touch-icon.png"'], $html);
         if ($is_root && class_exists('Oxygen_Home_Page')) {
