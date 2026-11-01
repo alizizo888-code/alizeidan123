@@ -129,7 +129,8 @@ final class Oxygen_Network_SEO {
     /** Publishing rhythm: the first BURST_DAYS days run at the core sites' pace, then every site settles at STEADY per day. */
     public static function settings() {
         $o = get_option(self::OPT, []); if (!is_array($o)) { $o = []; }
-        $s = array_merge(['burst' => 180, 'burst_days' => 6, 'steady' => 10, 'since' => 0], $o);
+        $reg = Oxygen_Network::registry(); $cur = Oxygen_Network::current_id();
+        $s = array_merge(['burst' => 180, 'burst_days' => isset($reg[$cur]['twin']) ? 5 : 6, 'steady' => 10, 'since' => 0], $o);   // first company: 6 days at the core pace; its twin: 5 days
         if (empty($s['since'])) { $s['since'] = time(); update_option(self::OPT, $s, false); }
         return $s;
     }
