@@ -18,14 +18,29 @@ class Oxygen_Desk {
         // The old /oxy-desk/<secret> pages are retired: every secret link is cancelled. The desk apps use ONE numeric PIN (set below).
         add_action('admin_menu', function () { add_submenu_page('oxygen-seo', 'المكتب السري', 'المكتب السري', 'manage_options', 'oxygen-desk', [__CLASS__, 'admin_page']); }, 23);
         add_action('admin_post_oxygen_desk_pin', [__CLASS__, 'save_pin']);
+        add_action('admin_post_oxygen_desk_pin_test', [__CLASS__, 'test_pin']);
     }
 
     /** The desk apps' single PIN (stored only as a salted hash in this site's database, never in code). Every old secret link is cancelled. */
     public static function pin_is_set() { return (string) get_option('oxygen_desk_pin', '') !== ''; }
+    /** The PIN as the server compares it: digits of any script folded to 0-9, no spaces or invisible direction marks (an Arabic keyboard types ٧٨٩ where a Western one types 789). */
+    public static function norm_pin($s) {
+        $s = strtr((string) $s, ['٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9', '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9']);
+        $r = preg_replace('/[\s\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}\x{FEFF}\x{00A0}]+/u', '', $s);
+        return is_string($r) ? $r : '';
+    }
+    /** Every spelling a typed PIN may have been saved under (older hashes were made from the raw text, possibly in Arabic-Indic digits). */
+    private static function pin_variants($tok) {
+        $raw = trim((string) $tok); $n = self::norm_pin($raw);
+        $ar = strtr($n, ['0' => '٠', '1' => '١', '2' => '٢', '3' => '٣', '4' => '٤', '5' => '٥', '6' => '٦', '7' => '٧', '8' => '٨', '9' => '٩']);
+        $fa = strtr($n, ['0' => '۰', '1' => '۱', '2' => '۲', '3' => '۳', '4' => '۴', '5' => '۵', '6' => '۶', '7' => '۷', '8' => '۸', '9' => '۹']);
+        return array_values(array_unique(array_filter([$n, $raw, $ar, $fa], function ($v) { return $v !== ''; })));
+    }
     public static function valid_secret($tok) {
-        $tok = trim((string) $tok); $h = (string) get_option('oxygen_desk_pin', '');
-        if ($tok === '' || strlen($tok) > 64 || $h === '') { return false; }
-        return password_verify($tok, $h);
+        $h = (string) get_option('oxygen_desk_pin', '');
+        if ($h === '' || mb_strlen((string) $tok) > 64) { return false; }
+        foreach (self::pin_variants($tok) as $v) { if (password_verify($v, $h)) { return true; } }
+        return false;
     }
     private static function hash_for($k) { $o = get_option('oxygen_desk_hash_' . $k, ''); return preg_match('/^[a-f0-9]{64}$/', (string) $o) ? $o : ($k === 'o' ? self::HASH_O : self::HASH_C); }
     private static function cookie_val($k) { return hash_hmac('sha256', 'desk|' . $k . '|' . self::hash_for($k), defined('AUTH_KEY') && AUTH_KEY ? AUTH_KEY : (string) get_option('siteurl')); }
@@ -161,17 +176,29 @@ class Oxygen_Desk {
     /* ---------------- WP admin: the desk PIN ---------------- */
     public static function admin_page() {
         if (!current_user_can('manage_options')) { return; }
+        $host = (string) parse_url(home_url(), PHP_URL_HOST);
+        $at = (int) get_option('oxygen_desk_pin_at', 0);
         echo '<div class="wrap" dir="rtl"><h1>المكتب السري — رمز الدخول</h1><p>تطبيقا المكتب (غرفة العمليات / الإعدادات) يدخلان برمز سري واحد فقط، بلا روابط ولا كلمات مرور. الرمز يُحفظ مشفّرًا في قاعدة بيانات هذا الموقع فقط. الروابط السرية القديمة أُلغيت كلها.</p>';
-        if (isset($_GET['saved'])) { echo '<div class="notice notice-success"><p>تم حفظ الرمز. الأجهزة الجديدة تدخل بهذا الرمز.</p></div>'; }
-        echo '<p><b>الحالة:</b> ' . (self::pin_is_set() ? 'الرمز مضبوط' : '<span style="color:#b91c1c">الرمز غير مضبوط — لا يمكن لأحد الدخول الآن</span>') . '</p>';
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="oxygen_desk_pin">' . wp_nonce_field('oxd_pin', '_wpnonce', true, false) . '<p><label>الرمز الجديد (٦ إلى ٣٢ حرفًا أو رقمًا):<br><input type="password" name="pin" autocomplete="new-password" inputmode="numeric" style="min-width:260px" required></label></p><button class="button button-primary">حفظ الرمز</button></form></div>';
+        echo '<p><b>هذا الموقع:</b> <code>' . esc_html($host) . '</code> — <b>اضبط نفس الرمز على موقع أكسجين وموقع متقن كلٍّ على حدة.</b></p>';
+        if (isset($_GET['saved'])) { echo '<div class="notice notice-success"><p>تم حفظ الرمز على هذا الموقع. الأجهزة تدخل بهذا الرمز (الأرقام العربية والإنجليزية سواء).</p></div>'; }
+        if (isset($_GET['test'])) { echo $_GET['test'] === 'ok' ? '<div class="notice notice-success"><p>✅ الرمز الذي كتبته <b>صحيح</b> على هذا الموقع (' . esc_html($host) . ').</p></div>' : '<div class="notice notice-error"><p>❌ الرمز الذي كتبته <b>لا يطابق</b> المحفوظ على هذا الموقع (' . esc_html($host) . ') — اضبطه من جديد بالنموذج الأول.</p></div>'; }
+        echo '<p><b>الحالة:</b> ' . (self::pin_is_set() ? 'الرمز مضبوط' . ($at ? ' — آخر ضبط: ' . esc_html(date_i18n('Y-m-d H:i', $at)) : '') : '<span style="color:#b91c1c">الرمز غير مضبوط — لا يمكن لأحد الدخول الآن</span>') . '</p>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="oxygen_desk_pin">' . wp_nonce_field('oxd_pin', '_wpnonce', true, false) . '<p><label>الرمز الجديد (٦ إلى ٣٢ حرفًا أو رقمًا):<br><input type="password" name="pin" autocomplete="new-password" inputmode="numeric" style="min-width:260px" required></label></p><button class="button button-primary">حفظ الرمز</button></form>';
+        echo '<hr><h2>اختبار الرمز على هذا الموقع</h2><p>اكتب الرمز لتعرف هل هو مطابق للمحفوظ هنا (لا يغيّر شيئًا).</p><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="oxygen_desk_pin_test">' . wp_nonce_field('oxd_pin_test', '_wpnonce', true, false) . '<p><input type="password" name="pin" autocomplete="off" inputmode="numeric" style="min-width:260px" required></p><button class="button">اختبار</button></form></div>';
     }
     public static function save_pin() {
         if (!current_user_can('manage_options')) { wp_die('غير مصرح.'); }
         check_admin_referer('oxd_pin');
-        $pin = trim((string) wp_unslash($_POST['pin'] ?? ''));
+        $pin = self::norm_pin(wp_unslash($_POST['pin'] ?? ''));
         if (strlen($pin) < 6 || strlen($pin) > 32) { wp_die('الرمز من ٦ إلى ٣٢ خانة.'); }
         update_option('oxygen_desk_pin', password_hash($pin, PASSWORD_DEFAULT), false);
+        update_option('oxygen_desk_pin_at', time(), false);
         wp_safe_redirect(admin_url('admin.php?page=oxygen-desk&saved=1')); exit;
+    }
+    public static function test_pin() {
+        if (!current_user_can('manage_options')) { wp_die('غير مصرح.'); }
+        check_admin_referer('oxd_pin_test');
+        $ok = self::valid_secret(wp_unslash($_POST['pin'] ?? ''));
+        wp_safe_redirect(admin_url('admin.php?page=oxygen-desk&test=' . ($ok ? 'ok' : 'bad'))); exit;
     }
 }
