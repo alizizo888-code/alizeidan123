@@ -10,6 +10,7 @@ export const NET = {
   color: /^#[0-9a-f]{6}$/i.test(B.color || '') ? B.color : '',
   phone: String(B.phone || '').replace(/\D/g, ''),
   wa: String(B.wa || '').replace(/\D/g, ''),
+  wa2: String(B.wa2 || '').replace(/\D/g, ''),
 }
 // «متقن» in the stock build (→ «أكسجين» in the Oxygen build); a satellite shows its own name.
 export const BN = NET.core ? 'متقن' : NET.name
@@ -53,6 +54,16 @@ export const NETWORK = [
   { id: 'ibtikar', name: 'ابتكار راحة', color: '#c2410c' },
   { id: 'mutamad', name: 'المعتمد', color: '#334155' },
   { id: 'misriya', name: 'المصرية', color: '#a21caf' },
+  { id: 'nukhba', name: 'النخبة', color: '#0e7490' },
+  { id: 'riyada', name: 'الريادة', color: '#7c3aed' },
+  { id: 'baraa', name: 'البراعة', color: '#ca8a04' },
+  { id: 'safwa', name: 'الصفوة', color: '#db2777' },
+  { id: 'tamayuz', name: 'التميز', color: '#0d9488' },
+  { id: 'nasmat', name: 'نسمة الحجاز', color: '#2563eb' },
+  { id: 'wahat', name: 'واحة الراحة', color: '#65a30d' },
+  { id: 'amaan', name: 'الأمان', color: '#dc2626' },
+  { id: 'kafaa', name: 'الكفاءة', color: '#0891b2' },
+  { id: 'jawda', name: 'الجودة', color: '#9a3412' },
 ]
 export const brandMeta = (id) => NETWORK.find((b) => b.id === id) || null
 // The brand an order came from, for staff screens and dispatch texts (no tag = the site's own face).

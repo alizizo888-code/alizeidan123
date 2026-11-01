@@ -33,6 +33,17 @@ final class Oxygen_Network {
             'ibtikar'     => ['name' => 'ابتكار راحة',   'label' => 'ibtikar',     'color' => '#c2410c'],
             'mutamad'     => ['name' => 'المعتمد',       'label' => 'mutamad',     'color' => '#334155'],
             'misriya'     => ['name' => 'المصرية',       'label' => 'misriya',     'color' => '#a21caf'],
+            // the second company of each site's pair: its own name, domain, app, logo, articles and admin identity (twin => the site it is paired with)
+            'nukhba'      => ['name' => 'النخبة',        'label' => 'nukhba',      'color' => '#0e7490', 'twin' => 'motakhases'],
+            'riyada'      => ['name' => 'الريادة',       'label' => 'riyada',      'color' => '#7c3aed', 'twin' => 'muhandis'],
+            'baraa'       => ['name' => 'البراعة',       'label' => 'baraa',       'color' => '#ca8a04', 'twin' => 'aqsa'],
+            'safwa'       => ['name' => 'الصفوة',        'label' => 'safwa',       'color' => '#db2777', 'twin' => 'raad'],
+            'tamayuz'     => ['name' => 'التميز',        'label' => 'tamayuz',     'color' => '#0d9488', 'twin' => 'mutamakkin'],
+            'nasmat'      => ['name' => 'نسمة الحجاز',   'label' => 'nasmat',      'color' => '#2563eb', 'twin' => 'khabeer'],
+            'wahat'       => ['name' => 'واحة الراحة',   'label' => 'wahat',       'color' => '#65a30d', 'twin' => 'homeservice'],
+            'amaan'       => ['name' => 'الأمان',        'label' => 'amaan',       'color' => '#dc2626', 'twin' => 'ibtikar'],
+            'kafaa'       => ['name' => 'الكفاءة',       'label' => 'kafaa',       'color' => '#0891b2', 'twin' => 'mutamad'],
+            'jawda'       => ['name' => 'الجودة',        'label' => 'jawda',       'color' => '#9a3412', 'twin' => 'misriya'],
         ];
         return $r;
     }
@@ -64,17 +75,26 @@ final class Oxygen_Network {
         return self::id_for_host($h);
     }
 
+    /** Until each brand has its own numbers, every satellite uses the company's two lines (set per brand with set_contacts()). */
+    const DEFAULT_PHONE = '966549423050';
+    const DEFAULT_PHONE2 = '966536554731';
+
     public static function contacts($id) {
         $o = function_exists('get_option') ? get_option(self::OPT_CONTACTS, []) : [];
         $c = is_array($o) && isset($o[$id]) && is_array($o[$id]) ? $o[$id] : [];
         $digits = function ($v) { return substr(preg_replace('/\D+/', '', (string) $v), 0, 15); };
-        return ['phone' => $digits($c['phone'] ?? ''), 'wa' => $digits($c['wa'] ?? ($c['phone'] ?? ''))];
+        $sat = isset(self::registry()[$id]) && empty(self::registry()[$id]['core']);
+        $own = $digits($c['phone'] ?? '') !== '';
+        $phone = $own ? $digits($c['phone']) : ($sat ? self::DEFAULT_PHONE : '');
+        $wa = $digits($c['wa'] ?? '') !== '' ? $digits($c['wa']) : ($own ? $phone : ($sat ? self::DEFAULT_PHONE : ''));
+        $wa2 = $digits($c['wa2'] ?? '') !== '' ? $digits($c['wa2']) : ($own ? '' : ($sat ? self::DEFAULT_PHONE2 : ''));
+        return ['phone' => $phone, 'wa' => $wa, 'wa2' => $wa2];
     }
 
-    public static function set_contacts($id, $phone, $wa = '') {
+    public static function set_contacts($id, $phone, $wa = '', $wa2 = '') {
         if (!self::valid($id)) { return false; }
         $o = get_option(self::OPT_CONTACTS, []); if (!is_array($o)) { $o = []; }
-        $o[$id] = ['phone' => substr(preg_replace('/\D+/', '', (string) $phone), 0, 15), 'wa' => substr(preg_replace('/\D+/', '', (string) ($wa !== '' ? $wa : $phone)), 0, 15)];
+        $o[$id] = ['phone' => substr(preg_replace('/\D+/', '', (string) $phone), 0, 15), 'wa' => substr(preg_replace('/\D+/', '', (string) ($wa !== '' ? $wa : $phone)), 0, 15), 'wa2' => substr(preg_replace('/\D+/', '', (string) $wa2), 0, 15)];
         update_option(self::OPT_CONTACTS, $o, false);
         return true;
     }
@@ -93,6 +113,7 @@ final class Oxygen_Network {
             'core' => !empty($b['core']),
             'phone' => $c['phone'],
             'wa' => $c['wa'],
+            'wa2' => $c['wa2'],
         ];
     }
 

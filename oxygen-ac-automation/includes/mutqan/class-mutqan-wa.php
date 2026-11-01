@@ -232,7 +232,7 @@ final class Mutqan_WA {
         } catch (Throwable $e) { error_log('[mutqan] wa miss: ' . $e->getMessage()); }
     }
 
-    private static function notify_admins($title, $body, $key, $every = 600) {
+    public static function notify_admins($title, $body, $key, $every = 600) {
         $hi = (strpos((string) $key, 'wa-n-') === 0) || $title === 'تنبيه واتساب' || $title === 'واتساب — يحتاج متابعة';
         if (get_transient('mq_wan_' . md5($key))) { return; }
         set_transient('mq_wan_' . md5($key), 1, $every);
