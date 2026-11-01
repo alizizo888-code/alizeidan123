@@ -36,10 +36,10 @@ final class Mutqan_WA {
         return self::config_get();
     }
 
-    private static function gw($method, $path, $body = null) {
+    private static function gw($method, $path, $body = null, $timeout = 25) {
         $c = self::cfg();
         if ($c['url'] === '' || $c['token'] === '') { throw new Mutqan_Error('gw_not_set', 'اربط الوسيط أولًا (رابط + مفتاح).', 400); }
-        $args = ['method' => $method, 'timeout' => 25, 'headers' => ['Authorization' => 'Bearer ' . $c['token'], 'Content-Type' => 'application/json']];
+        $args = ['method' => $method, 'timeout' => $timeout, 'headers' => ['Authorization' => 'Bearer ' . $c['token'], 'Content-Type' => 'application/json']];
         if ($body !== null) { $args['body'] = wp_json_encode($body); }
         $res = wp_remote_request($c['url'] . $path, $args);
         if (is_wp_error($res)) { throw new Mutqan_Error('gw_down', 'تعذر الوصول للوسيط: ' . $res->get_error_message(), 502); }
@@ -89,6 +89,39 @@ final class Mutqan_WA {
         $bot['pausedUntil'] = time() + 12 * 3600;
         self::put_thread($tid, ['bot' => $bot, 'unread' => 0]);
         return $r;
+    }
+
+
+    /** Id of a connected (status «open») business number, or '' when the gateway is not set up / down. Cached for a minute so an order never waits on it twice. */
+    public static function open_account() {
+        $c = self::cfg();
+        if ($c['url'] === '' || $c['token'] === '') { return ''; }
+        $hit = get_transient('mq_wa_open');
+        if ($hit !== false) { return (string) $hit; }
+        $id = '';
+        try {
+            $r = self::gw('GET', '/sessions', null, 6);
+            foreach ((array) ($r['sessions'] ?? []) as $s) { if (($s['status'] ?? '') === 'open' && !empty($s['id'])) { $id = (string) $s['id']; break; } }
+        } catch (Throwable $e) { $id = ''; }
+        set_transient('mq_wa_open', $id, $id === '' ? 30 : 60);
+        return $id;
+    }
+    /** 05xxxxxxxx / 5xxxxxxxx / +9665… → 9665xxxxxxxx (Saudi default). */
+    public static function intl($phone) {
+        $d = preg_replace('/\D/', '', (string) $phone);
+        if (strpos($d, '00') === 0) { $d = substr($d, 2); }
+        if (preg_match('/^05\d{8}$/', $d)) { return '966' . substr($d, 1); }
+        if (preg_match('/^5\d{8}$/', $d)) { return '966' . $d; }
+        return strlen($d) >= 10 ? $d : '';
+    }
+    /** The order message, sent by the business number itself — no tap needed from anyone. Returns true when it left. */
+    public static function auto_send($phone, $text, $by = 'order') {
+        $to = self::intl($phone);
+        if ($to === '') { return false; }
+        $acct = self::open_account();
+        if ($acct === '') { return false; }
+        try { self::send($acct, $to, $text, 'auto', $by); return true; }
+        catch (Throwable $e) { error_log('[mutqan] wa auto_send: ' . $e->getMessage()); delete_transient('mq_wa_open'); return false; }
     }
 
     /** Send through the gateway and record the outgoing message. */

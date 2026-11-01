@@ -206,7 +206,7 @@ export default function NewOrder() {
       })
       // The server alerts owner + operations about every new order (see Mutqan_Rest::alert_new_order).
 
-      navigate(`/order/${order.id}${routing.mode === 'operations' ? '' : '?wa=1'}`, { replace: true })
+      navigate(`/order/${order.id}${routing.mode === 'operations' || order.waSent ? '' : '?wa=1'}`, { replace: true })
     } catch (e) {
       if (e?.code === 'price_below_floor' && !noDiscount && off > 0) { setNoDiscount(true); setError('انتهى خصمك الترحيبي على هذا الجهاز — اضغط إتمام الطلب لإرساله بالسعر الأصلي.'); setSubmitting(false); return }
       setError('تعذر إرسال الطلب، حاول مرة أخرى')
@@ -290,7 +290,7 @@ export default function NewOrder() {
             <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-3 flex items-start gap-2.5">
               <CheckCircle2 size={20} className="text-emerald-600 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-black text-emerald-800">تم تحديد موقعك تلقائيًا — وسيُرسل مع طلبك على واتساب</p>
+                <p className="text-sm font-black text-emerald-800">تم تحديد موقعك تلقائيًا — وسيُرسل مع طلبك</p>
                 <p className="text-xs text-emerald-700/80 mt-0.5 leading-relaxed">{address || `${coords.lat.toFixed(5)}، ${coords.lng.toFixed(5)}`}</p>
               </div>
               <button onClick={() => setMapOpen((v) => !v)} className="text-[11px] font-bold text-emerald-700 bg-white rounded-full px-3 py-1.5 border border-emerald-200 shrink-0">إرسال موقع آخر</button>
@@ -345,7 +345,7 @@ export default function NewOrder() {
           disabled={submitting}
           className="w-full bg-gradient-to-l from-emerald-600 to-teal-600 text-white font-display font-black text-base rounded-2xl py-4 disabled:opacity-50 active:scale-[0.98] transition-transform shadow-xl shadow-emerald-300 ring-2 ring-emerald-200"
         >
-          {submitting ? 'جارِ الإرسال…' : locating ? 'جارِ تحديد موقعك…' : coords ? 'تأكيد الطلب وإرسال الموقع عبر واتساب' : 'تحديد الموقع وتأكيد الطلب'}
+          {submitting ? 'جارِ الإرسال…' : locating ? 'جارِ تحديد موقعك…' : coords ? 'تأكيد الطلب وإرسال الموقع' : 'تحديد الموقع وتأكيد الطلب'}
         </button>
         <p className="text-xs font-bold text-slate-600 text-center -mt-2 pb-4">
           {registered || knownGuest ? `يُرسل الطلب باسم ${(session?.name || '').trim() || 'حسابك'}` : 'بدون تسجيل — بعد الإرسال نتواصل معك على واتساب لتأكيد الموعد'}
