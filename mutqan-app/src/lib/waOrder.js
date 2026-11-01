@@ -2,6 +2,7 @@
 import { specialtyLabel } from '../constants'
 import { post } from './_api'
 import { orderFacts } from './orderFacts'
+import { BN, orderBrandName } from './netBrand'
 
 // Registers the order's key facts on the server and returns a short verification link (null if offline).
 export async function sealOrder({ draft = {}, price, orderId }) {
@@ -16,7 +17,7 @@ export function buildOrderMessage({ draft = {}, who = {}, price, orderId, detail
   const c = draft.coords || {}
   const f = orderFacts({ ...draft, description: detail || draft.problem || draft.description, bookedAt: bookedAt || new Date().toISOString() })
   const lines = [
-    '🔔 *طلب جديد — أكسجين*',
+    `🔔 *طلب جديد — ${BN}*`,
     orderId ? `رقم الطلب: #${String(orderId).slice(-5)}` : null,
     who.name ? `👤 الاسم: ${who.name}` : null,
     who.phone ? `📱 الجوال: ${who.phone}` : null,
@@ -48,7 +49,7 @@ export function buildDispatchMessage(order = {}, { appUrl } = {}) {
   const o = order
   const f = orderFacts(o)
   const lines = [
-    '📋 *طلب للتنفيذ — أكسجين*',
+    `📋 *طلب للتنفيذ — ${orderBrandName(o)}*`,
     `رقم الطلب: #${String(o.id || '').slice(-5)}`,
     `🛠️ الخدمة: ${f.service || '-'}`,
     f.kind ? `🧰 نوع الطلب: ${f.kind}` : null,

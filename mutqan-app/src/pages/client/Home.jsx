@@ -17,6 +17,7 @@ import ThemeToggle from '../../components/ThemeToggle'
 import { useWelcome, WELCOME_LABEL } from '../../lib/welcome'
 import { permissionState } from '../../hooks/useLocator'
 import { auth } from '../../lib/auth'
+import { BL } from '../../lib/netBrand'
 
 const TILES = [
   { id: 'ac', label: 'صيانة وتكييف' },
@@ -83,7 +84,7 @@ export default function Home() {
 
   function contactWhatsapp() {
     // All WhatsApp numbers are managed from the WhatsApp center — route to the public contact page
-    if (contact.wa) share.whatsapp(contact.wa, 'السلام عليكم، أرغب بخدمة صيانة من OXYGEN.')
+    if (contact.wa) share.whatsapp(contact.wa, 'السلام عليكم، أرغب بخدمة صيانة من ' + BL + '.')
     else navigate('/contact')
   }
 
@@ -278,7 +279,7 @@ export default function Home() {
           </div>
         </section>
 
-        <p className="text-center text-[10px] text-slate-400 pb-2">OXYGEN — الصيانة والمقاولات العامة • راحة بيتك مسؤوليتنا</p>
+        <p className="text-center text-[10px] text-slate-400 pb-2">{BL} — الصيانة والمقاولات العامة • راحة بيتك مسؤوليتنا</p>
       </div>
 
       {/* Guarantee sheet */}

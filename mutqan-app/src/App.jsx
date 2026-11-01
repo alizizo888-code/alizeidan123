@@ -45,6 +45,7 @@ import { ThemeBoot } from './lib/appTheme'
 import { AdEntry } from './components/AdLanding'
 import HomeFab from './components/HomeFab'
 import TitleBoot from './components/TitleBoot'
+import NetRebrand from './components/NetRebrand'
 import GlobalContact from './components/GlobalContact'
 const Inventory = lazyRetry(() => import('./pages/Inventory'))
 const Accounts = lazyRetry(() => import('./pages/Accounts'))
@@ -62,6 +63,7 @@ export default function App() {
       <ThemeBoot />
       <HomeFab />
       <TitleBoot />
+      <NetRebrand />
       <GlobalContact />
       <Suspense fallback={<div className="h-full flex items-center justify-center text-slate-400 text-sm" dir="rtl">جارِ التحميل…</div>}>
       <Routes>

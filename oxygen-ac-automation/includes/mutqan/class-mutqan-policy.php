@@ -204,11 +204,20 @@ final class Mutqan_Policy {
         return $data;
     }
 
+    public static function order_brand($claimed, $priv) {
+        if (!class_exists('Oxygen_Network')) { return 'oxygen'; }
+        if ($priv && Oxygen_Network::valid($claimed)) { return $claimed; }
+        $o = isset($_SERVER['HTTP_ORIGIN']) ? strtolower((string) wp_parse_url((string) $_SERVER['HTTP_ORIGIN'], PHP_URL_HOST)) : '';
+        return $o !== '' ? Oxygen_Network::id_for_host($o) : Oxygen_Network::current_id();
+    }
+
     public static function sanitize_insert($coll, $data, $p) {
         if (!is_array($data)) { return $data; }
         $data = self::clean_pay_fields($coll, $data);
         $priv = self::has_power($p, 'write');
         if ($coll === 'orders') {
+            // Which of the 12 network faces took this order: the page's own origin wins (a client cannot claim another face), staff may set it.
+            $data['brand'] = self::order_brand($data['brand'] ?? null, $priv);
             unset($data['routing']);
             $manual = (($data['source'] ?? '') === 'whatsapp_manual');
             if ($manual && !$priv) { unset($data['source']); }
@@ -278,7 +287,7 @@ final class Mutqan_Policy {
             }
         }
         if ($coll === 'orders' && !self::has_power($p, 'write')) {
-            $deny = ['price', 'agreedPrice', 'priceQuote', 'estimatedPrice', 'negotiated', 'welcomeDiscountPct', 'welcomeDiscountMax', 'deviceId', 'payLink', 'inhouse', 'inhouseAt', 'clientId', 'clientName', 'clientPhone', 'handler', 'escalation', 'transferLog', 'source', 'aiConversation', 'invoiceItems', 'photosBefore', 'photosAfter', 'technicianLocation', 'technicianDistanceM'];
+            $deny = ['brand', 'price', 'agreedPrice', 'priceQuote', 'estimatedPrice', 'negotiated', 'welcomeDiscountPct', 'welcomeDiscountMax', 'deviceId', 'payLink', 'inhouse', 'inhouseAt', 'clientId', 'clientName', 'clientPhone', 'handler', 'escalation', 'transferLog', 'source', 'aiConversation', 'invoiceItems', 'photosBefore', 'photosAfter', 'technicianLocation', 'technicianDistanceM'];
             $creator = $row['owner_id'] === $me;
             if ($creator && ($p['role'] ?? null) !== 'technician') {
                 $deny = array_merge($deny, ['technicianId', 'technicianName', 'paymentStatus', 'paidAt', 'paymentMethod', 'paidRecordedBy']);

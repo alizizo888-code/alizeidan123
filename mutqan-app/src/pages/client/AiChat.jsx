@@ -34,6 +34,7 @@ import AiLogo from '../../components/AiLogo'
 import MagicRobot from '../../components/MagicRobot'
 import PermissionHelp from '../../components/PermissionHelp'
 import { permissionState } from '../../hooks/useLocator'
+import { BN } from '../../lib/netBrand'
 
 const VOICE_CONSENT_KEY = 'mutqan_voice_consent'
 
@@ -661,7 +662,7 @@ export default function AiChat() {
           <button
             onClick={() => {
               const lines = messages.filter((m) => m.role && m.content && m.kind !== 'system').slice(-8).map((m) => `${m.role === 'user' ? 'أنا' : 'المساعد'}: ${m.content}`).join('\n')
-              const txt = `السلام عليكم، أبغى أكمل طلبي مع أكسجين.${customer?.name ? `\nالاسم: ${customer.name}` : ''}${draft?.description ? `\nالطلب: ${draft.description}` : ''}${finalPrice ? `\nالسعر المتفق: ${finalPrice} ر.س` : ''}${lines ? `\n\nآخر المحادثة:\n${lines}` : ''}`
+              const txt = `السلام عليكم، أبغى أكمل طلبي مع ${BN}.${customer?.name ? `\nالاسم: ${customer.name}` : ''}${draft?.description ? `\nالطلب: ${draft.description}` : ''}${finalPrice ? `\nالسعر المتفق: ${finalPrice} ر.س` : ''}${lines ? `\n\nآخر المحادثة:\n${lines}` : ''}`
               window.open(`https://wa.me/${ac.cfg.waNumber || BUSINESS_WHATSAPP}?text=${encodeURIComponent(txt)}`, '_blank', 'noopener')
             }}
             aria-label="إرسال عبر واتساب"

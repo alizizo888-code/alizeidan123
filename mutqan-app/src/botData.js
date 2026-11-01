@@ -1,5 +1,6 @@
 // Knowledge base of the local assistant: phrase banks (Saudi / Gulf / Egyptian / MSA), dialect markers and reply banks.
 // No model, no network: every reply is composed from these banks plus the owner's price tables.
+import { rebrand } from './lib/netBrand'
 
 export const norm = (s) => String(s || '').toLowerCase()
   .replace(/[ً-ٟـٰ]/g, '')
@@ -94,7 +95,7 @@ export const SPEC_WORDS = [
 ]
 
 // ── reply banks: { sa:[...], eg:[...] } ─────────────────────────────────────
-export const R = {
+const R_RAW = {
   offtopic: { sa: ['هههه ما أقدر أفيدك في هالموضوع 😅 تخصصي الصيانة والتكييف والخدمات المنزلية. تحتاج شي منها؟', 'هذا خارج تخصصي، أنا مساعد أكسجين للصيانة والخدمات المنزلية. أخدمك في شي؟'], eg: ['هههه ده برة تخصصي 😅 أنا متخصص في الصيانة والتكييف والخدمات المنزلية. محتاج حاجة منهم؟', 'ده خارج تخصصي، أنا مساعد أكسجين للصيانة والخدمات المنزلية. أخدمك في حاجة؟'] },
   frustrated: { sa: ['حقك علينا{n} 🙏 فاهم إنك متضايق، وراح أحولك الحين لمسؤول يحل الموضوع معك مباشرة.', 'نعتذر منك{n}، ما نرضى لك هالشي. أحولك لمسؤول الحين.'], eg: ['حقك علينا{n} 🙏 فاهم إنك متضايق، وهحولك دلوقتي لمسؤول يحل الموضوع معاك على طول.', 'بنعتذر منك{n}، مش هنرضى ليك كده. هحولك لمسؤول حالاً.'] },
   upsell: { sa: [' 💡 لو ضفت مكيف واحد يصير {q2} بـ {p2} ر.س بس (+{diff} للمكيف الإضافي).'], eg: [' 💡 لو ضفت مكيف كمان يبقوا {q2} بـ {p2} ر.س بس (+{diff} للمكيف الزيادة).'] },
@@ -151,3 +152,4 @@ export const R = {
   quote_generic: { sa: ['{label}: يبدأ من {p} ر.س{visit}. السعر النهائي بعد وصف المشكلة والموقع. تبغى نكمل؟'], eg: ['{label}: بيبدأ من {p} ر.س{visit}. السعر النهائي بعد وصف المشكلة والموقع. نكمل؟'] },
   ask_time_service: { sa: ['تمام، خدمة {label}. '], eg: ['تمام، خدمة {label}. '] },
 }
+export const R = rebrand(R_RAW)

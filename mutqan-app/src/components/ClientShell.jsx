@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { Home, ClipboardList, Calculator, LayoutGrid, User, Wrench, Percent, ShoppingBag, Snowflake, Sparkles } from 'lucide-react'
 import FloatingContact from './FloatingContact'
 import { AdForward } from './AdLanding'
+import { BL } from '../lib/netBrand'
 
 // ترتيب التبويبات كما في الواجهة المعتمدة (من اليمين لليسار): طلباتي، حاسب الأسعار، الرئيسية، المزيد، حسابي
 const TABS = [
@@ -35,7 +36,7 @@ export default function ClientShell() {
             <Snowflake size={20} className="text-white" />
           </div>
           <div>
-            <p className="font-display font-black text-slate-900 text-lg leading-none">OXYGEN</p>
+            <p className="font-display font-black text-slate-900 text-lg leading-none">{BL}</p>
             <p className="text-[10px] text-sky-600 font-bold mt-1">الصيانة والمقاولات العامة</p>
           </div>
         </div>

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { SPECIALTIES } from '../constants'
+import { NET } from '../lib/netBrand'
 
 // Browser-tab title that always carries the specialty the visitor is browsing: «page · specialty — brand».
 // The specialty comes from /s/:id, ?specialty=, or the last one visited in this tab; the home page clears it.
-const BRAND = 'أكسجين OXYGEN'
+const BRAND = NET.core ? 'أكسجين OXYGEN' : NET.name
 const KEY = 'mq_spec'
 const PAGES = {
   '/': 'الرئيسية', '/services': 'الخدمات', '/offers': 'العروض', '/store': 'المتجر', '/orders': 'طلباتي', '/account': 'حسابي',

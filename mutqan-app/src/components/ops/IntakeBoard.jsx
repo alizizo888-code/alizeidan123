@@ -2,6 +2,7 @@ import { MapPin, Phone, Zap, UserCheck, Eye } from 'lucide-react'
 import { specialtyLabel } from '../../constants'
 import { isUnassigned, isForwarded, ageText, minsAgo, sourceLabel } from './helpers'
 import DispatchBadge from './DispatchBadge'
+import BrandChip from './BrandChip'
 import { orderFacts } from '../../lib/orderFacts'
 
 // Order reception board: everything that has come in and is still waiting for a technician, oldest urgent first.
@@ -33,6 +34,7 @@ export default function IntakeBoard({ orders, mode, onAssign, onAuto, onOpen, on
                 <div className="text-left shrink-0">
                   <p className={`text-[11px] font-black ${late ? 'text-rose-300' : 'text-slate-300'}`}>منذ {ageText(o.createdAt)}</p>
                   <p className="text-[10px] text-slate-500">{sourceLabel(o)}</p>
+                  <BrandChip order={o} />
                 </div>
               </div>
               {(o.preferredTime || o.appointmentAt || o.agreedPrice || o.price || o.priceQuote?.total) && <p className="text-[11px] text-slate-300">{(o.preferredTime || o.appointmentAt) ? `📅 ${orderFacts(o).when}` : ''}{(o.preferredTime || o.appointmentAt) && (o.agreedPrice || o.price || o.priceQuote?.total) ? ' · ' : ''}{o.agreedPrice || o.price || o.priceQuote?.total ? `💰 ${o.agreedPrice || o.price || o.priceQuote?.total} ر.س` : ''}</p>}

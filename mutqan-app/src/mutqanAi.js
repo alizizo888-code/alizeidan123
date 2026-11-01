@@ -6,6 +6,7 @@ import { localTurn } from './localBot'
 import { pricesForPrompt, NEGOTIATION_STYLES } from './pricing'
 import { ESCALATION_REASONS, trackingText } from './workflow'
 import { policyForPrompt, orderWarranty, warrantyText } from './warranty'
+import { BN, rebrand } from './lib/netBrand'
 
 export const DIALECTS = [
   { id: 'auto', label: 'تلقائي', hint: 'بلهجة العميل نفسها' },
@@ -148,7 +149,7 @@ function acBlock() {
 ${offers.length ? 'العروض الحالية:\n' + offers.map((o) => `- ${o.title}: ${o.price} ر.س${o.badge ? ` (${o.badge})` : ''}${o.warranty ? ` — ضمان ${o.warranty}` : ''}`).join('\n') : ''}`
 }
 
-export function buildPrompt({ history, customer, orders, draft, dialect, rules, quote, nego, settings, pastHandoffs, area, payInfo, warrantyPolicy }) {
+function buildPromptRaw({ history, customer, orders, draft, dialect, rules, quote, nego, settings, pastHandoffs, area, payInfo, warrantyPolicy }) {
   const d = DIALECTS.find((x) => x.id === dialect) || DIALECTS[0]
   const tone = TONES[settings?.tone] || TONES.friendly
   const convo = history
@@ -157,7 +158,7 @@ export function buildPrompt({ history, customer, orders, draft, dialect, rules, 
     .join('\n')
 
   return `## 1) الدور والأسلوب
-أنت "MUTQAN AI"، موظف خدمة العملاء الذكي لمنصة مُتقن للصيانة والمقاولات. تتكلم ${d.hint}، ${tone} (جملتان إلى ثلاث)، وتطرح سؤالًا واحدًا فقط في كل رد.
+أنت "MUTQAN AI"، موظف خدمة العملاء الذكي لمنصة ${BN} للصيانة والمقاولات. تتكلم ${d.hint}، ${tone} (جملتان إلى ثلاث)، وتطرح سؤالًا واحدًا فقط في كل رد.
 هدفك: تفهم حاجة العميل بسرعة، تعطيه السعر الرسمي، تتفق معه على الموعد والموقع، ثم تجهّز الطلب كاملًا ليُرسل على واتساب الإدارة بضغطة. كن دافئًا ومباشرًا وبدون حشو، ولا تكرر ما قاله العميل.
 
 ## 2) المعرفة المعتمدة (مصدرك الوحيد للأرقام والسياسات)
@@ -215,6 +216,8 @@ ${convo}
 }
 قواعد action: collect = ما زلت تجمع بيانات. ready_to_order = عرفت الخدمة والمشكلة وجاهز لعرض بطاقة تأكيد الطلب. register = الزائر يطلب التسجيل صراحةً فقط (لطلب خدمة استخدم ready_to_order؛ لا يوجد تسجيل إجباري). track = يسأل عن حالة طلب. handoff = يطلب موظفًا بشريًا أو المشكلة خارج قدرتك. calculator = يريد حسابًا تفصيليًا للأسعار. negotiate = يطلب خصمًا أو يساوم على السعر. location = تحتاج موقع العميل وهو غير محدد. pay = يسأل كيف يدفع أو يريد الدفع. warranty = مشكلة في خدمة سابقة أو سؤال عن الضمان (يفتح ملف ضمان؛ استخدم escalation فقط إذا طلب استردادًا أو كان غاضبًا جدًا). join_tech = شخص يريد العمل أو التسجيل كفني في مُتقن (أخبره أن التسجيل بضغطة ثم الاسم والجوال والتخصصات والموقع، ويُفعّل حسابه بعد موافقة الإدارة — لا تعده بالقبول). none = سؤال عام.`
 }
+
+export const buildPrompt = (o) => rebrand(buildPromptRaw(o))
 
 export async function runTurn(ctx) {
   // Local engine: owner-selected (zero cost) or automatic fallback when no AI key/provider is available
