@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) { exit; }
  */
 final class Oxygen_Network_SEO {
     const OPT = 'oxygen_net_seo';
-    const TOTAL = 1500;        // plan length per site (grows later by raising this)
+    const TOTAL = 3000;        // plan length per site (6 burst days + months of steady publishing)
 
     const FOCUS = ['ac-maint', 'ac-wash', 'cold-room', 'ac-install', 'freezer-room', 'ac-central', 'ac-wash', 'ac-maint', 'fridge', 'cold-room'];
     const OTHER = ['plumbing', 'electric', 'appliances', 'pest', 'tanks', 'locks', 'cameras', 'solar', 'paint', 'tiling', 'cleaning', 'moving', 'corporate', 'general', 'contracting'];
@@ -21,6 +21,9 @@ final class Oxygen_Network_SEO {
         'motakhases' => 'تخصص دقيق وخبرة ميدانية', 'muhandis' => 'إشراف هندسي على كل زيارة', 'aqsa' => 'خدمة بلا حدود وسرعة وصول',
         'raad' => 'سرعة تنفيذ تسبق الحاجة', 'mutamakkin' => 'تمكّن وإتقان في التنفيذ', 'khabeer' => 'رأي الخبير قبل أي إصلاح',
         'homeservice' => 'خدمة منزلية بسعر واضح', 'ibtikar' => 'حلول مبتكرة تمنحك الراحة', 'mutamad' => 'فنيون معتمدون وضمان مكتوب', 'misriya' => 'خبرة مصرية وجودة موثوقة',
+        'nukhba' => 'نخبة الفنيين في كل زيارة', 'riyada' => 'ريادة وسرعة استجابة', 'baraa' => 'براعة فنية وتشطيب نظيف',
+        'safwa' => 'صفوة الفنيين وأفضل المواد', 'tamayuz' => 'تميز في الخدمة وضمان أطول', 'nasmat' => 'نسمة تبريد تدوم',
+        'wahat' => 'واحة راحة لبيتك ومنشأتك', 'amaan' => 'أمان وثقة في كل عمل', 'kafaa' => 'كفاءة عالية وتكلفة أقل', 'jawda' => 'جودة مضمونة بالمعاينة',
     ];
     /** title / keyword wording — every site walks this list from a different start */
     const TPL = [
@@ -37,6 +40,24 @@ final class Oxygen_Network_SEO {
         ['لماذا تختار متخصصي {n} في {c}؟', 'أفضل شركة {n} في {c}'],
         ['{n} في {c} — فحص مجاني للمعاينة مع {h}', '{n} {c} معاينة'],
     ];
+
+    /** facet wording: a symptom, an audience or an appliance brand makes the topic itself different, not only the headline */
+    const FTPL = [
+        'sign' => [['{n}: حل مشكلة «{f}» في {c} | {h}', 'حل {f} {c}'], ['«{f}» في {c}؟ {n} على يد فنيين معتمدين', '{f} {n} {c}'], ['{n} عند «{f}» في {c}', 'إصلاح {f} {c}']],
+        'who' => [['{n} {f} في {c} — {h}', '{n} {f} {c}'], ['خدمة {n} {f} في {c} بضمان معتمد', '{n} {f} في {c}'], ['{n} {f} في {c}: زيارة سريعة وسعر واضح', 'سعر {n} {f} {c}']],
+        'brand' => [['{n} {f} في {c} — {h}', '{n} {f} في {c}'], ['صيانة وإصلاح {f}: {n} في {c}', 'صيانة {f} {c}'], ['أعطال {f} الشائعة و{n} في {c}', 'أعطال {f} {c}']],
+    ];
+    const WHO = ['للفلل', 'للشقق', 'للمطاعم', 'للمحلات التجارية', 'للشركات والمكاتب', 'للمستشفيات والعيادات', 'للمدارس', 'للفنادق والشقق المفروشة', 'للمستودعات', 'للمنازل القديمة', 'للمجمعات السكنية', 'الطارئة ليلاً'];
+
+    private static function facets($sid, $svc) {
+        static $c = [];
+        if (isset($c[$sid])) { return $c[$sid]; }
+        $f = [];
+        foreach ((array) ($svc[$sid]['signs'] ?? []) as $x) { $f[] = ['sign', $x]; }
+        foreach (self::WHO as $x) { $f[] = ['who', $x]; }
+        foreach (self::data('brands') as $b => $ids) { if (in_array($sid, (array) $ids, true)) { $f[] = ['brand', $b]; } }
+        return $c[$sid] = $f;
+    }
 
     private static function data($name) { static $c = []; if (!isset($c[$name])) { $c[$name] = include __DIR__ . '/seo/data-' . $name . '.php'; } return $c[$name]; }
     private static function rot($a, $k) { $n = count($a); if (!$n) { return $a; } $k = $k % $n; return array_merge(array_slice($a, $k), array_slice($a, 0, $k)); }
@@ -72,42 +93,53 @@ final class Oxygen_Network_SEO {
             $sid = $focus ? $F[$fi++ % count($F)] : $O[$oi++ % count($O)];
             if (!isset($svc[$sid])) { continue; }
             $pl = $makkah ? $A[$ai++ % count($A)] : $B[$bi++ % count($B)];
-            // the same service + place comes back later with another wording (never a repeated key; the 70/30 rhythm is never broken by skipping)
-            $ti0 = ($p + $slot * 5) % count(self::TPL); $key = '';
-            for ($b = 0; $b < count(self::TPL); $b++) {
-                $ti = ($ti0 + $b) % count(self::TPL);
-                $k = 'oxy-net-' . $id . '-' . $sid . '-' . substr(md5($pl[0]), 0, 6) . '-t' . $ti;
-                if (!isset($seen[$k])) { $key = $k; break; }
+            // five of every six articles carry a facet (a symptom, an audience or an appliance brand) so the TOPIC differs between sites; the rest use plain wording.
+            $FC = self::facets($sid, $svc); $facet = null; $key = '';
+            $useF = $FC && (($p * 5 + $slot) % 6) !== 0;
+            if ($useF) {
+                $f0 = (int) (($p * 7 + $slot * 11 + intdiv($p, count($FC))) % count($FC));
+                for ($b = 0; $b < count($FC); $b++) {
+                    $cand = $FC[($f0 + $b) % count($FC)];
+                    $ft = self::FTPL[$cand[0]]; $tix = ($p + $slot) % count($ft);
+                    $k = 'oxy-net-' . $id . '-' . $sid . '-' . substr(md5($pl[0]), 0, 6) . '-f' . substr(md5($cand[1]), 0, 5);
+                    if (!isset($seen[$k])) { $key = $k; $facet = $cand; $tt = $ft[$tix][0]; $kk = $ft[$tix][1]; break; }
+                }
+            }
+            if ($key === '') {
+                $ti0 = ($p + $slot * 7) % count(self::TPL);
+                for ($b = 0; $b < count(self::TPL); $b++) {
+                    $ti = ($ti0 + $b) % count(self::TPL);
+                    $k = 'oxy-net-' . $id . '-' . $sid . '-' . substr(md5($pl[0]), 0, 6) . '-t' . $ti;
+                    if (!isset($seen[$k])) { $key = $k; list($tt, $kk) = self::TPL[$ti]; break; }
+                }
             }
             if ($key === '') { continue; }
             $seen[$key] = 1;
-            $n = $svc[$sid]['n']; list($tt, $kk) = self::TPL[$ti];
-            $rep = ['{n}' => $n, '{c}' => $pl[0], '{h}' => $hook];
+            $n = $svc[$sid]['n'];
+            $rep = ['{n}' => $n, '{c}' => $pl[0], '{h}' => $hook, '{f}' => $facet ? $facet[1] : ''];
             $it = ['key' => $key, 'track' => 'commercial', 'kind' => 'seo', 'sid' => $sid, 'city' => $pl[0], 'alt' => ($p % 5) + 1,
                 'title' => strtr($tt, $rep) . ' | ' . $name, 'kw' => strtr($kk, $rep), 'dom' => $svc[$sid]['spec'] ?? 'general', 'idx' => $p,
-                'focus' => $focus, 'local' => $makkah];
+                'focus' => $focus, 'local' => $makkah, 'facet' => $facet ? $facet[1] : ''];
             if ($pl[1] !== '') { $it['district'] = $pl[1]; }
             $plan[] = $it;
         }
         return $cache[$id] = $plan;
     }
 
-    /** gradual volume: start, +step every `every` days, never above cap */
+    /** Publishing rhythm: the first BURST_DAYS days run at the core sites' pace, then every site settles at STEADY per day. */
     public static function settings() {
         $o = get_option(self::OPT, []); if (!is_array($o)) { $o = []; }
-        $s = array_merge(['start' => 6, 'step' => 4, 'every' => 3, 'cap' => 40, 'since' => 0], $o);
+        $s = array_merge(['burst' => 180, 'burst_days' => 6, 'steady' => 10, 'since' => 0], $o);
         if (empty($s['since'])) { $s['since'] = time(); update_option(self::OPT, $s, false); }
         return $s;
     }
-    public static function quota($now = null) {
-        $s = self::settings(); $now = $now ?: time();
-        $days = max(0, (int) floor(($now - (int) $s['since']) / 86400));
-        return max(0, min((int) $s['cap'], (int) $s['start'] + (int) $s['step'] * (int) floor($days / max(1, (int) $s['every']))));
-    }
+    public static function day_no($now = null) { $s = self::settings(); return max(0, (int) floor((($now ?: time()) - (int) $s['since']) / 86400)); }
+    public static function phase($now = null) { return self::day_no($now) < (int) self::settings()['burst_days'] ? 'burst' : 'steady'; }
+    public static function quota($now = null) { $s = self::settings(); return max(0, (int) ($s[self::phase($now) === 'burst' ? 'burst' : 'steady'])); }
     public static function tick() {
         if (!Oxygen_Network::is_satellite()) { return; }
         $quota = self::quota();
         $allowed = min($quota, (int) ceil($quota * ((int) wp_date('G') + 1) / 24));
-        for ($i = 0; $i < 4 && Oxygen_SEO_Engine::today_count('new_seo') < $allowed; $i++) { if (!Oxygen_SEO_Engine::create_next(null, 'seo')) { break; } }
+        for ($i = 0; $i < 8 && Oxygen_SEO_Engine::today_count('new_seo') < $allowed; $i++) { if (!Oxygen_SEO_Engine::create_next(null, 'seo')) { break; } }
     }
 }
