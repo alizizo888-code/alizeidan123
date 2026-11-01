@@ -1,3 +1,4 @@
+import ClientActions from '../components/ClientActions'
 import { isInhouseActive, INHOUSE_CLIENT_MSG } from '../hooks/useOpsMode'
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -106,7 +107,7 @@ export default function ClientOrderDetail() {
   if (!order) return <Centered>لم يتم العثور على الطلب</Centered>
 
   const spec = SPECIALTIES.find((s) => s.id === order.specialtyId) || { icon: '🔧', label: order.specialtyId }
-  const canCancel = ['new', 'assigned', 'accepted'].includes(order.status)
+  const canCancel = ['new', 'forced', 'assigned', 'accepted'].includes(order.status)
   const showTechMap = ['en_route', 'nearby'].includes(order.status) && order.technicianLocation
 
   async function cancelOrder() {
@@ -169,6 +170,7 @@ export default function ClientOrderDetail() {
             {waBlocked && !order.waSent && <a href={waLink(acCfg?.waNumber, waText)} target="_blank" rel="noopener" className="block mt-1 text-[12px] text-emerald-700 underline">فتح نسخة الطلب في واتساب</a>}
           </div>
         )}
+        {!isInhouseActive(order) && <ClientActions order={order} />}
         {order.description && (
           <Card>
             <p className="text-sm text-slate-700 leading-relaxed">{order.description}</p>

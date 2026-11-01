@@ -24,7 +24,7 @@ final class Mutqan_Policy {
                 'used_ac' => $pub, 'schedule_cfg' => $pub,
                 'used_ac_private' => ['read', 'write', 'write', 'write'], 'used_offers' => ['read', 'write', 'write', 'write'], 'order_seals' => ['read', 'write', 'write', 'write'], 'pay_links' => ['read', 'write', 'write', 'write'],
                 'assignment_settings' => ['staff', 'write', 'write', 'write'], 'tech_pay' => ['staff', 'write', 'write', 'write'],
-                'pricing_internal' => ['read', 'write', 'write', 'write'], 'settlements' => ['read', 'write', 'write', 'write'], 'stock_items' => ['read', 'write', 'write', 'write'], 'stock_moves' => ['read', 'write', 'write', 'write'],
+                'pricing_internal' => ['read', 'write', 'write', 'write'], 'settlements' => ['read', 'write', 'write', 'write'], 'order_msgs' => ['chat', 'anon_ok', 'write', 'write'], 'stock_items' => ['read', 'write', 'write', 'write'], 'stock_moves' => ['read', 'write', 'write', 'write'],
                 'tech_profiles' => ['staff', 'authed', 'creator_or_write', 'write'],
                 'tech_applications' => ['creator_or_read', 'authed', 'write', 'write'],
                 'orders' => ['orders', 'anon_ok', 'orders', 'write'],
@@ -84,6 +84,11 @@ final class Mutqan_Policy {
             case 'creator_or_read':
                 if (self::has_power($p, 'read')) { return ['', []]; }
                 return $isUser ? ['(owner_id=%s OR visible_to=%s)', [$me, 'user:' . $me]] : ['0', []];
+            case 'chat':
+                // An order's conversation: its customer sees everything; its technician sees the technician channel; staff with read power see all.
+                if (self::has_power($p, 'read')) { return ['', []]; }
+                if (!$isUser) { return ['0', []]; }
+                return ['(owner_id=%s OR ' . self::jx('clientId') . '=%s OR (' . self::jx('techId') . '=%s AND ' . self::jx('channel') . "='tech'))", [$me, $me, $me]];
             case 'orders':
                 if (self::has_power($p, 'read')) { return ['', []]; }
                 if (!$isUser) { return ['0', []]; }
@@ -114,6 +119,12 @@ final class Mutqan_Policy {
             case 'creator_or_read': return $creator || self::has_power($p, 'read');
             case 'creator_or_write': return $creator || self::has_power($p, 'write');
             case 'staff_or_creator': return $creator || self::is_staff($p);
+            case 'chat': {
+                if (self::has_power($p, 'read') || $creator) { return true; }
+                if (!$row) { return false; }
+                $d = json_decode($row['data'], true) ?: [];
+                return ($d['clientId'] ?? null) === $me || (($d['techId'] ?? null) === $me && ($d['channel'] ?? '') === 'tech');
+            }
             case 'target_or_write':
                 if (self::has_power($p, 'write')) { return true; }
                 if (!$row) { return false; }
@@ -220,6 +231,29 @@ final class Mutqan_Policy {
             if ($pct > 0) { $data['welcomeDiscountPct'] = $pct; $data['welcomeDiscountMax'] = Mutqan_Promo::MAX_OFF; }
             self::price_guard($data, $pct);
         }
+        if ($coll === 'order_msgs') {
+            $oid = (string) ($data['orderId'] ?? '');
+            $ord = $oid !== '' ? Mutqan_Store::get_raw('orders', $oid) : null;
+            if (!$ord) { throw new Mutqan_Error('bad_order', 'الطلب غير موجود.', 404); }
+            $owner = Mutqan_Store::owner_of('orders', $oid);
+            $me = $p['id'];
+            $isClient = ($owner !== '' && $owner === $me) || (($ord['clientId'] ?? null) === $me);
+            $isMyTech = ($p['role'] ?? null) === 'technician' && ($ord['technicianId'] ?? null) === $me;
+            if (!$isClient && !$isMyTech && !$priv) { throw new Mutqan_Error('forbidden', 'غير مسموح لك بهذه المحادثة.', 403); }
+            if (!self::is_staff($p)) { Mutqan_Limiter::hit('order_msg', 40, 600); }
+            $from = $isClient && !self::is_staff($p) ? 'client' : (($p['role'] ?? '') === 'technician' ? 'tech' : 'ops');
+            $kinds = $from === 'client' ? ['text', 'nudge', 'postpone_req'] : ['text', 'eta', 'arrived', 'postponed', 'system'];
+            $kind = in_array($data['kind'] ?? 'text', $kinds, true) ? $data['kind'] : 'text';
+            $chan = ($data['channel'] ?? 'tech') === 'ops' ? 'ops' : 'tech';
+            if ($from === 'tech') { $chan = 'tech'; }
+            $data = [
+                'orderId' => $oid, 'channel' => $chan, 'kind' => $kind, 'from' => $from, 'fromName' => mb_substr((string) ($p['name'] ?? ''), 0, 60),
+                'text' => mb_substr(trim((string) ($data['text'] ?? '')), 0, 600), 'at' => gmdate('c'),
+                'clientId' => $owner !== '' ? $owner : ($ord['clientId'] ?? null), 'techId' => $ord['technicianId'] ?? null,
+                'reason' => isset($data['reason']) ? mb_substr((string) $data['reason'], 0, 80) : null, 'newTime' => isset($data['newTime']) ? mb_substr((string) $data['newTime'], 0, 80) : null,
+            ];
+            if ($data['text'] === '' && !in_array($kind, ['nudge', 'eta', 'arrived'], true)) { throw new Mutqan_Error('empty', 'اكتب رسالة.', 400); }
+        }
         if ($coll === 'tech_applications' && !$priv) {
             $data['status'] = 'pending';
             $data['userId'] = $p['id'];
@@ -251,7 +285,7 @@ final class Mutqan_Policy {
             }
             foreach ($deny as $k) { unset($patch[$k]); }
             if (($p['role'] ?? null) === 'technician' && !$creator) {
-                if (array_key_exists('technicianId', $patch) && $patch['technicianId'] !== null && $patch['technicianId'] !== $me) { unset($patch['technicianId'], $patch['technicianName']); }
+                if (array_key_exists('technicianId', $patch) && $patch['technicianId'] !== null && $patch['technicianId'] !== $me && ($old['technicianId'] ?? null) !== $me) { unset($patch['technicianId'], $patch['technicianName']); }   // a technician may hand HIS OWN order to a colleague
                 if (array_key_exists('technicianId', $patch) && $patch['technicianId'] === null && ($old['technicianId'] ?? null) !== $me) { unset($patch['technicianId'], $patch['technicianName']); }
             }
             if ($creator && !self::is_staff($p)) {
