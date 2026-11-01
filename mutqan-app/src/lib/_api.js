@@ -4,6 +4,7 @@ const CFG = (typeof window !== 'undefined' && window.__MUTQAN__) || {}
 export const API_BASE = (CFG.api || (import.meta.env && import.meta.env.VITE_API) || '/wp-json/mutqan/v1').replace(/\/$/, '')
 export const APP_URL = CFG.app || (typeof location !== 'undefined' ? location.origin + '/app/' : '')
 
+const DESK = typeof window !== 'undefined' && !!window.__DESK_KIND__   // private desk apps keep one session PER SITE (desk_sess_*): no shared mirror that could mix tokens of two sites
 const TOKEN_KEY = 'mutqan_token'
 const ANON_KEY = 'mutqan_anon'
 const USER_KEY = 'mutqan_user'
@@ -52,12 +53,13 @@ function idb(mode, fn) {
 }
 // Second mirror: a long-lived cookie (survives when the browser clears localStorage/IndexedDB but keeps cookies).
 const CK = 'mq_sess'
-const ckSet = (token) => { try { document.cookie = token ? `${CK}=${token}; Max-Age=${90 * 86400}; Path=/; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}` : `${CK}=; Max-Age=0; Path=/` } catch { /* ignore */ } }
+const ckSet = (token) => { if (DESK) return; try { document.cookie = token ? `${CK}=${token}; Max-Age=${90 * 86400}; Path=/; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}` : `${CK}=; Max-Age=0; Path=/` } catch { /* ignore */ } }
 const ckGet = () => { try { const m = document.cookie.match(new RegExp('(?:^|; )' + CK + '=([a-f0-9]{64})')); return m ? m[1] : '' } catch { return '' } }
 // Ask the browser not to evict this site's storage (installed PWAs are otherwise cleared under pressure).
 try { navigator.storage?.persist?.() } catch { /* ignore */ }
-const mirrorSet = (token, u) => idb('readwrite', (st) => (token && u ? st.put({ token, user: u }, 'cur') : st.delete('cur')))
+const mirrorSet = (token, u) => DESK ? null : idb('readwrite', (st) => (token && u ? st.put({ token, user: u }, 'cur') : st.delete('cur')))
 export async function restoreSession() {
+  if (DESK) return false
   if (lsGet(TOKEN_KEY) && user) return false
   const saved = await idb('readonly', (st) => st.get('cur'))
   if (saved && saved.token && saved.user && !lsGet(TOKEN_KEY)) { setSession(saved.token, saved.user); return true }
@@ -116,7 +118,7 @@ function verifySession() {
   return verifying
 }
 
-async function send(path, init, timeoutMs = 25000) {
+async function send(path, init, timeoutMs = 25000, retried = false) {
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), timeoutMs)
   let res
@@ -129,9 +131,12 @@ async function send(path, init, timeoutMs = 25000) {
     const e = json && json.error
     // Never drop the session on a single 401 (cache hiccup, cold server): confirm it with /auth me first.
     if ((res.status === 401 || res.status === 403) && getToken() && (!e || e.code === 'unauthorized' || e.code === 'forbidden') && !path.startsWith('/auth')) {
+      const before = getToken()
       await verifySession()
       // The server no longer knows this session (expired / wiped): say so instead of a vague "forbidden".
       if (!getToken()) throw new ApiError('انتهت جلستك على الخادم — سجّل الدخول من جديد بحساب المالك ثم أعد المحاولة.', 'SESSION_EXPIRED', 401)
+      // The desk apps renewed the session silently: send the same request again with the new token.
+      if (!retried && getToken() !== before) return send(path, { ...init, headers: { ...(init.headers || {}), 'X-Mutqan-Token': getToken() } }, timeoutMs, true)
     }
     throw new ApiError((e && e.message) || 'حدث خطأ غير متوقع.', (e && e.code) || 'HTTP_' + res.status, res.status)
   }

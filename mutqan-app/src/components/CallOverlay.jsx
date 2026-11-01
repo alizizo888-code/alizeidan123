@@ -4,7 +4,7 @@ import { Mic, MicOff, PhoneOff, Loader2 } from 'lucide-react'
 const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
 // Full-screen call card used by both sides. `stream` = remote audio, `phase` = connecting | ringing | live | ended | failed.
-export default function CallOverlay({ title, subtitle, phase, stream, onHangup, onMute, note }) {
+export default function CallOverlay({ title, subtitle, phase, stream, onHangup, onMute, note, extra }) {
   const audio = useRef(null)
   const [sec, setSec] = useState(0)
   const [muted, setMuted] = useState(false)
@@ -27,6 +27,7 @@ export default function CallOverlay({ title, subtitle, phase, stream, onHangup, 
         {subtitle && <p className="text-sm text-slate-300 mt-1">{subtitle}</p>}
         <p className={`mt-3 text-sm font-bold ${phase === 'failed' ? 'text-rose-300' : 'text-emerald-300'} flex items-center gap-2 justify-center`}>{phase === 'connecting' && <Loader2 size={14} className="animate-spin" />}{label}</p>
         {note && <p className="mt-2 text-xs text-amber-300 max-w-xs">{note}</p>}
+        {extra && <div className="mt-4 w-[min(92vw,380px)] mx-auto text-right">{extra}</div>}
       </div>
       <div className="flex items-center gap-5">
         {phase === 'live' && (

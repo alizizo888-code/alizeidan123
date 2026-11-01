@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronRight, Zap, SlidersHorizontal, LocateFixed, Radio, RefreshCw, Users, Headset, Bot, Tag, Sparkles, AlertTriangle, Radar, Wallet, MessageCircle, ShieldCheck, HardHat } from 'lucide-react'
 import { db } from '../lib/db'
 import { push } from '../lib/push'
@@ -22,6 +22,8 @@ import IntakeBoard from '../components/ops/IntakeBoard'
 import DispatchBoard from '../components/ops/DispatchBoard'
 import TechTable from '../components/ops/TechTable'
 import OrdersTable from '../components/ops/OrdersTable'
+import CallsTab from '../components/CallsTab'
+import { needsFollowUp } from '../lib/callbook'
 import { DONE, RUNNING, isToday, isUnassigned } from '../components/ops/helpers'
 import { serviceScopeLabel, specialtyLabel } from '../constants'
 
@@ -31,6 +33,7 @@ const TABS = [
   ['board', '📋 لوحة التوجيه', () => 0],
   ['table', '📑 جدول الطلبات', () => 0],
   ['techs', '🧰 الفنيون', () => 0],
+  ['calls', '📞 المكالمات', (k, u, a, h, m) => m],
   ['alerts', '🔔 محادثات وتنبيهات', (k, u, a, h) => a.length + h.length],
 ]
 
@@ -44,7 +47,14 @@ export default function OperationsRoom() {
   const { data: orders, loading: ordersLoading } = useLiveShared('orders', { order: '-createdAt', limit: 300 })
   const { autoAssignOrder, linkTech, assignToSite, siteTech } = useAssignment({ profiles, settings, orders })
   const { data: crmRows } = useLiveShared('customer_profiles', { limit: 800 })
-  const [tab, setTab] = useState('map')
+  const [sp] = useSearchParams()
+  const [tab, setTab] = useState(() => (TABS.some((x) => x[0] === sp.get('tab')) ? sp.get('tab') : 'map'))
+  useEffect(() => { const t = sp.get('tab'); if (t && TABS.some((x) => x[0] === t)) setTab(t) }, [sp])
+  // a tab opened from a link (e.g. ?tab=calls) may sit off-screen in the scrolling tab bar
+  useEffect(() => { try { document.querySelector(`[data-tab="${tab}"]`)?.scrollIntoView({ block: 'nearest', inline: 'center' }) } catch { /* ignore */ } }, [tab])
+  const { data: callLog } = useLiveShared('call_log', { order: '-createdAt', limit: 300 })
+  const { data: callContacts } = useLiveShared('call_contacts', { limit: 1000 })
+  const missedCalls = useMemo(() => callLog.filter((l) => needsFollowUp(l)).length, [callLog])
   const [assignOrder, setAssignOrder] = useState(null)
   const [busyId, setBusyId] = useState('')
   const { data: payRows } = useLiveShared('tech_pay', { limit: 5 })
@@ -351,8 +361,8 @@ export default function OperationsRoom() {
         {/* Tabs */}
         <div className="flex gap-1.5 overflow-x-auto sticky top-[68px] z-10 bg-[#090c14]/95 backdrop-blur py-1.5">
           {TABS.map(([id, label, n]) => (
-            <button key={id} onClick={() => setTab(id)} className={`shrink-0 rounded-xl px-4 py-2 text-xs font-black border ${tab === id ? 'bg-primary text-black border-primary' : 'bg-white/5 border-white/10 text-slate-300'}`}>
-              {label}{n(kpi, unassigned, alerts, handoffs) ? <span className="mr-1.5 inline-block min-w-[18px] rounded-full bg-rose-500 text-white text-[10px] px-1">{n(kpi, unassigned, alerts, handoffs)}</span> : null}
+            <button key={id} data-tab={id} onClick={() => setTab(id)} className={`shrink-0 rounded-xl px-4 py-2 text-xs font-black border ${tab === id ? 'bg-primary text-black border-primary' : 'bg-white/5 border-white/10 text-slate-300'}`}>
+              {label}{n(kpi, unassigned, alerts, handoffs, missedCalls) ? <span className="mr-1.5 inline-block min-w-[18px] rounded-full bg-rose-500 text-white text-[10px] px-1">{n(kpi, unassigned, alerts, handoffs, missedCalls)}</span> : null}
             </button>
           ))}
         </div>
@@ -361,6 +371,7 @@ export default function OperationsRoom() {
         {tab === 'intake' && <IntakeBoard orders={orders} mode={mode} busyId={busyId} onAssign={setAssignOrder} onAuto={autoOne} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onLocate={() => setTab('map')} />}
         {tab === 'board' && <DispatchBoard orders={orders} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onReassign={setAssignOrder} />}
         {tab === 'table' && <OrdersTable orders={orders} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onAssign={setAssignOrder} />}
+        {tab === 'calls' && <CallsTab log={callLog} contacts={callContacts} />}
         {tab === 'techs' && (
           <>
             <TechTable profiles={profiles} orders={orders} sharePct={sharePctVal} />

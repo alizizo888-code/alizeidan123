@@ -1,4 +1,4 @@
-import { errText } from '../lib/_api'
+import { errText, APP_URL } from '../lib/_api'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Loader2 } from 'lucide-react'
@@ -43,7 +43,8 @@ export default function BusinessSettings({ focus }) {
   const [copied, setCopied] = useState('')
   const [am, setAm] = useState('')
   const setAd = async (on) => { setAm(''); try { const gid = await team.groupId(); await db.upsertShared('pricing', { serviceId: 'ad_landing', enabled: !!on, updatedAt: new Date().toISOString() }, 'ad_landing', { groupId: gid, writableBy: 'admins' }) } catch (e) { setAm(errText(e, 'تعذر الحفظ')) } }
-  const base = typeof location !== 'undefined' ? location.origin + location.pathname : ''
+  // Customer-facing ad links must point to the site's customer app, never to the private desk host.
+  const base = typeof window !== 'undefined' && window.__DESK_KIND__ ? APP_URL : (typeof location !== 'undefined' ? location.origin + location.pathname : '')
   const copy = (u) => { try { navigator.clipboard.writeText(u) } catch { /* ignore */ } setCopied(u); setTimeout(() => setCopied(''), 1800) }
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')

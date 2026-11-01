@@ -6,6 +6,7 @@ import { useHotlineConfig } from '../hooks/useHotline'
 import { useSession } from '../hooks/useSession'
 import { push } from '../lib/push'
 import { team } from '../lib/team'
+import { getDeviceId } from '../lib/device'
 
 const RING_TIMEOUT = 45000
 
@@ -22,7 +23,7 @@ export function useCustomerCall() {
     if (!hotlineSupported()) return setCall({ phase: 'failed', note: 'المتصفح لا يدعم المكالمات الصوتية — استخدم الاتصال الهاتفي أو واتساب.' }) || setTimeout(() => setCall(null), 4000)
     setCall({ phase: 'connecting' })
     try {
-      const id = await createCall({ name: session?.name, phone: session?.phone, userId: session?.id })
+      const id = await createCall({ name: session?.name, phone: session?.phone, userId: session?.id, deviceId: getDeviceId() })
       ref.current.id = id
       const s = new CallSession({
         id, role: 'caller', turn: cfg.turn,

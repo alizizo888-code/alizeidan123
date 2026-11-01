@@ -85,11 +85,17 @@ export class CallSession {
 
 export const hotlineSupported = () => typeof RTCPeerConnection !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 
-export async function createCall({ name, phone, userId }) {
+export async function createCall({ name, phone, userId, deviceId }) {
   const gid = await team.groupId()
   const row = await db.insertShared('calls', {
-    status: 'ringing', name: name || 'عميل', phone: phone || '', userId: userId || '', createdAt: new Date().toISOString(),
+    status: 'ringing', name: name || 'عميل', phone: phone || '', userId: userId || '', deviceId: deviceId || '', createdAt: new Date().toISOString(),
   }, undefined, { groupId: gid, visibleTo: 'creator-and-admin', writableBy: 'creator-and-admin', expiresAt: new Date(Date.now() + 86400000).toISOString() })
   return row?.id
 }
-export const setCallStatus = (id, status, extra = {}) => db.updateShared('calls', id, { status, ...extra, ...(status === 'ended' || status === 'missed' || status === 'declined' ? { endedAt: new Date().toISOString() } : {}) })
+// answeredAt / endedAt feed the call register (duration, answered vs missed). Once a call is over its signalling data (SDP + network addresses) is useless: wipe it.
+const OVER = ['ended', 'missed', 'declined']
+export const setCallStatus = (id, status, extra = {}) => db.updateShared('calls', id, {
+  status, ...extra,
+  ...(status === 'active' && !extra.answeredAt ? { answeredAt: new Date().toISOString() } : {}),
+  ...(OVER.includes(status) ? { endedAt: new Date().toISOString(), cSig: null, sSig: null } : {}),
+})
