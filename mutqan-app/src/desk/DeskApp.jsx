@@ -18,6 +18,7 @@ const PricingRules = lazyRetry(() => import('../pages/PricingRules'))
 const AcAdmin = lazyRetry(() => import('../pages/AcAdmin'))
 const UsedAcAdmin = lazyRetry(() => import('../pages/UsedAcAdmin'))
 const ScheduleAdmin = lazyRetry(() => import('../pages/ScheduleAdmin'))
+const Accounts = lazyRetry(() => import('../pages/Accounts'))
 const BusinessSettings = lazyRetry(() => import('../pages/BusinessSettings'))
 const SecuritySettings = lazyRetry(() => import('../pages/SecuritySettings'))
 const ThemeSettings = lazyRetry(() => import('../pages/ThemeSettings'))
@@ -249,7 +250,8 @@ export default function DeskApp() {
               <Route path="/staff/theme" element={<ThemeSettings staff />} />
               <Route path="/staff/pay-links" element={<PayLinks />} />
               <Route path="/staff/ai-command" element={<AiCommandCenter />} />
-              <Route path="/staff/payment-methods" element={<PaymentMethods />} />
+              <Route path="/staff/accounts" element={<Accounts />} />
+        <Route path="/staff/payment-methods" element={<PaymentMethods />} />
               <Route path="/staff/ai-owner" element={<AiOwnerControl />} />
               <Route path="/staff/whatsapp" element={<WhatsappCenter />} />
               <Route path="/staff/wa-inbox" element={<WaInbox />} />

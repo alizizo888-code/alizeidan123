@@ -49,6 +49,7 @@ const WORKSPACES = [
   ['/staff/wa-inbox', 'محادثات الواتساب'],
   ['/staff/wp', 'روابط ووردبريس (تعديل الموقع)'],
   ['/staff/link', 'ربط الخط الساخن وتيليجرام'],
+  ['/staff/accounts', 'الحسابات والعمولات والعهد'],
   ['/staff/payment-methods', 'طرق الدفع'],
   ['/', 'تطبيق العميل'],
 ]
@@ -88,6 +89,7 @@ const MANAGE = [
   ['/staff/notify-settings', 'الإشعارات والرنين', Bell],
   ['/staff/warranties', 'الضمانات', ShieldCheck],
   ['/staff/tech-requests', 'طلبات الفنيين', UserPlus],
+  ['/staff/accounts', 'الحسابات والعمولات والعهد', Wallet],
   ['/staff/payment-methods', 'طرق الدفع', Wallet],
   ['/staff/contact', 'أرقام الموقع: الهاتف والواتساب', Phone],
   ['/staff/business', 'إعدادات المنشأة والفاتورة', ShieldCheck],
