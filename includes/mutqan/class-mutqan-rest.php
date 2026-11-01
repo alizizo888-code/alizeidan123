@@ -618,6 +618,7 @@ final class Mutqan_Rest {
         $html = preg_replace('#(<meta property="og:title" content=")[^"]*(")#u', '${1}' . $full . '${2}', $html, 1);
         $html = preg_replace('#(<meta name="(?:apple-mobile-web-app-title|application-name)" content=")[^"]*(")#u', '${1}' . esc_attr($nb['name']) . '${2}', $html);
         $html = preg_replace('#<script type="application/ld\+json">.*?</script>#su', '', $html, 1);
+        $html = preg_replace('#(<div class="mark">).*?</svg>(</div>)#su', '${1}<img src="' . esc_attr((string) wp_parse_url(home_url('/app/'), PHP_URL_PATH)) . 'icon-192.png" alt="" width="64" height="64" style="border-radius:16px;display:block">${2}', $html, 1);
         $html = str_replace(['متقن MUTQAN', 'MUTQAN', 'متقن', 'مُتقن'], $nb['name'], $html);
         $html = preg_replace('#(<meta name="theme-color" content=")[^"]*(")#u', '${1}' . esc_attr($nb['color']) . '${2}', $html);
         return $html;
