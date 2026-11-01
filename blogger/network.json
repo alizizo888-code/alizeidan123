@@ -1,0 +1,206 @@
+[
+ {
+  "id": "oxygen",
+  "name": "أكسجين",
+  "title": "أكسجين | دليل تبريد البيوت في مكة وجدة",
+  "slug": "oxygen11-ac",
+  "host": "blog.oxygen11.com",
+  "color": "#38bdf8",
+  "angle": "ac",
+  "angle_label": "صيانة وغسيل وتركيب المكيفات",
+  "pages": [
+   "من نحن",
+   "خدمات التكييف",
+   "أسعار تقريبية",
+   "تواصل معنا",
+   "سياسة الخصوصية"
+  ]
+ },
+ {
+  "id": "mutqan",
+  "name": "متقن",
+  "title": "متقن للتبريد التجاري وغرف التجميد",
+  "slug": "mutqan-cold-rooms",
+  "host": "blog-mutqan.oxygen11.com",
+  "color": "#12a39a",
+  "angle": "coldrooms",
+  "angle_label": "غرف التبريد والتجميد والثلاجات التجارية",
+  "pages": [
+   "قصتنا",
+   "حلول التبريد التجاري",
+   "مشاريعنا",
+   "اطلب معاينة",
+   "الخصوصية والشروط"
+  ]
+ },
+ {
+  "id": "motakhases",
+  "name": "المتخصص",
+  "title": "عيادة الثلاجات من المتخصص",
+  "slug": "almotakhases-fridges",
+  "host": "blog-motakhases.oxygen11.com",
+  "color": "#1d4ed8",
+  "angle": "fridge",
+  "angle_label": "الثلاجات والفريزرات المنزلية",
+  "pages": [
+   "تعرّف علينا",
+   "أعطال الثلاجات الشائعة",
+   "ضمان الإصلاح",
+   "احجز فني",
+   "الخصوصية"
+  ]
+ },
+ {
+  "id": "muhandis",
+  "name": "المهندس",
+  "title": "دفتر المهندس للكهرباء المنزلية",
+  "slug": "almuhandis-electric",
+  "host": "blog-muhandis.oxygen11.com",
+  "color": "#0f766e",
+  "angle": "electric",
+  "angle_label": "الكهرباء والإنارة المنزلية",
+  "pages": [
+   "عن الفريق",
+   "خدمات الكهرباء",
+   "السلامة أولاً",
+   "اتصل بالمهندس",
+   "سياسة الخصوصية"
+  ]
+ },
+ {
+  "id": "aqsa",
+  "name": "الأقصى",
+  "title": "الأقصى: سباكة بلا تسريبات",
+  "slug": "alaqsa-plumbing",
+  "host": "blog-aqsa.oxygen11.com",
+  "color": "#b45309",
+  "angle": "plumbing",
+  "angle_label": "السباكة وكشف التسربات",
+  "pages": [
+   "من نحن",
+   "كشف التسربات",
+   "خدمات السباكة",
+   "اطلب سباك",
+   "الخصوصية"
+  ]
+ },
+ {
+  "id": "raad",
+  "name": "رعد السماء",
+  "title": "رعد السماء — بيت نظيف بلا حشرات",
+  "slug": "raad-alsamaa-pest",
+  "host": "blog-raad.oxygen11.com",
+  "color": "#6d28d9",
+  "angle": "pest",
+  "angle_label": "مكافحة الحشرات والقوارض",
+  "pages": [
+   "من نحن",
+   "برامج المكافحة",
+   "أمان الأسرة",
+   "احجز رشّة",
+   "الخصوصية"
+  ]
+ },
+ {
+  "id": "mutamakkin",
+  "name": "المتمكن",
+  "title": "المتمكن | ماء نقي وخزانات آمنة",
+  "slug": "almutamakkin-tanks",
+  "host": "blog-mutamakkin.oxygen11.com",
+  "color": "#be123c",
+  "angle": "tanks",
+  "angle_label": "تنظيف وتعقيم وعزل خزانات المياه",
+  "pages": [
+   "من نحن",
+   "تنظيف الخزانات",
+   "العزل والتعقيم",
+   "احجز موعد",
+   "الخصوصية"
+  ]
+ },
+ {
+  "id": "khabeer",
+  "name": "الخبير",
+  "title": "اسأل الخبير عن أجهزة بيتك",
+  "slug": "alkhabeer-appliances",
+  "host": "blog-khabeer.oxygen11.com",
+  "color": "#0369a1",
+  "angle": "appliances",
+  "angle_label": "الغسالات والأفران والأجهزة المنزلية",
+  "pages": [
+   "تعرّف على الخبير",
+   "الأجهزة التي نصلحها",
+   "أسئلة شائعة",
+   "اطلب زيارة",
+   "الخصوصية"
+  ]
+ },
+ {
+  "id": "homeservice",
+  "name": "هوم سيرفيس",
+  "title": "هوم سيرفيس — تقويم صيانة البيت",
+  "slug": "homeservice-maintenance",
+  "host": "blog-homeservice.oxygen11.com",
+  "color": "#15803d",
+  "angle": "routine",
+  "angle_label": "جداول الصيانة الدورية للمنزل",
+  "pages": [
+   "من نحن",
+   "جدول الصيانة السنوي",
+   "باقات الصيانة",
+   "اشترك الآن",
+   "الخصوصية"
+  ]
+ },
+ {
+  "id": "ibtikar",
+  "name": "ابتكار راحة",
+  "title": "ابتكار راحة: تكييف مركزي أوفر",
+  "slug": "ibtikar-raha-hvac",
+  "host": "blog-ibtikar.oxygen11.com",
+  "color": "#c2410c",
+  "angle": "central",
+  "angle_label": "التكييف المركزي والكونسيلد وتوفير الكهرباء",
+  "pages": [
+   "من نحن",
+   "التكييف المركزي والكونسيلد",
+   "حاسبة التوفير",
+   "اطلب مهندس",
+   "الخصوصية"
+  ]
+ },
+ {
+  "id": "mutamad",
+  "name": "المعتمد",
+  "title": "المعتمد — صيانة أحياء جدة",
+  "slug": "almutamad-jeddah",
+  "host": "blog-mutamad.oxygen11.com",
+  "color": "#334155",
+  "angle": "jeddah",
+  "angle_label": "خدمات الصيانة حسب أحياء جدة",
+  "pages": [
+   "من نحن",
+   "أحياء جدة التي نغطيها",
+   "فروعنا",
+   "تواصل",
+   "الخصوصية"
+  ]
+ },
+ {
+  "id": "misriya",
+  "name": "المصرية",
+  "title": "المصرية — خدمات الصيانة في أحياء مكة",
+  "slug": "almasriya-makkah",
+  "host": "blog-misriya.oxygen11.com",
+  "color": "#a21caf",
+  "angle": "makkah",
+  "angle_label": "خدمات الصيانة حسب أحياء مكة المكرمة",
+  "pages": [
+   "من نحن",
+   "أحياء مكة التي نغطيها",
+   "مواعيد العمل",
+   "تواصل",
+   "الخصوصية"
+  ]
+ }
+]

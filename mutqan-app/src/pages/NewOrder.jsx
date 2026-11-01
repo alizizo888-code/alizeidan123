@@ -1,3 +1,4 @@
+import { viaBrand } from '../lib/netBrand'
 import { rememberSpecialty } from '../components/TitleBoot'
 import AppPromoBanner from '../components/AppPromoBanner'
 import { useWelcome, welcomeOff, WELCOME_LABEL } from '../lib/welcome'
@@ -198,6 +199,7 @@ export default function NewOrder() {
         status: 'new',
         statusHistory: [{ status: 'new', at: new Date().toISOString(), by: 'client' }],
         isWarranty: !!warrantyOf,
+        brand: viaBrand(),
         warrantyOf: warrantyOf || null,
       }
       const order = await db.insertShared('orders', payload, undefined, {
