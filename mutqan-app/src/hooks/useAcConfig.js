@@ -4,6 +4,7 @@ import { db } from '../lib/db'
 import { team } from '../lib/team'
 import { normalizeAc } from '../acPricing'
 import { BUSINESS_WHATSAPP } from '../constants'
+import { NET } from '../lib/netBrand'
 
 // AC price table lives in the public `pricing` collection as the row "ac_calc".
 export function useAcConfig() {
@@ -14,7 +15,7 @@ export function useAcConfig() {
   const cfg = useMemo(() => {
     const base = normalizeAc((data || []).find((r) => (r.serviceId || r.id) === 'ac_calc'))
     const c = (data || []).find((r) => (r.serviceId || r.id) === 'contact_numbers') || {}
-    const wa = String(c.whatsapp || '').replace(/\D/g, '')
+    const wa = NET.wa || String(c.whatsapp || '').replace(/\D/g, '')
     return wa ? { ...base, waNumber: wa } : { ...base, waNumber: base.waNumber || BUSINESS_WHATSAPP }
   }, [data])
   const offers = useMemo(

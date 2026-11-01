@@ -4,6 +4,7 @@ import { ChevronRight, Download, Share, SquarePlus, Smartphone, ShieldCheck, Che
 import { useState } from 'react'
 import { useInstall } from '../lib/install'
 import IosInstallSheet from '../components/IosInstallSheet'
+import { BN } from '../lib/netBrand'
 
 const APP_URL = 'https://mutqan.oxygen11.com/app/'
 
@@ -16,7 +17,7 @@ export default function InstallApp() {
       <header className="sticky top-0 z-20 bg-[#f5f7f5]/90 backdrop-blur border-b border-black/5 pt-[var(--page-sat,env(safe-area-inset-top,0px))]">
         <div className="max-w-xl mx-auto w-full px-4 py-4 flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-white border border-black/5 shadow-sm flex items-center justify-center"><ChevronRight size={18} className="text-slate-600" /></button>
-          <h1 className="font-display text-lg font-black text-slate-900">تحميل تطبيق متقن</h1>
+          <h1 className="font-display text-lg font-black text-slate-900">تحميل تطبيق {BN}</h1>
         </div>
       </header>
       <div className="max-w-xl mx-auto w-full px-4 pt-5 flex flex-col gap-4">
@@ -44,7 +45,7 @@ export default function InstallApp() {
             <ol className="text-sm text-slate-700 leading-loose list-decimal pr-5">
               <li>افتح الرابط في متصفح <b>Chrome</b>: <span dir="ltr" className="font-mono text-xs break-all">{APP_URL}</span></li>
               <li>اضغط ⋮ (القائمة) ثم <b>«تثبيت التطبيق»</b> أو «إضافة إلى الشاشة الرئيسية».</li>
-              <li>سيظهر «متقن» بين تطبيقاتك ويفتح بملء الشاشة.</li>
+              <li>سيظهر «{BN}» بين تطبيقاتك ويفتح بملء الشاشة.</li>
             </ol>
           )}
         </Card>

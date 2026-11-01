@@ -1,5 +1,6 @@
 // Fixed reference content for the Metqan maintenance ops app.
 
+import { NET } from './lib/netBrand'
 export const SPECIALTIES = [
   { id: 'ac', label: 'صيانة وتكييف', icon: '❄️', desc: 'غسيل، فك وتركيب، فريون' },
   { id: 'electric', label: 'كهرباء', icon: '⚡', desc: 'تمديدات، أعطال، لوحات' },
@@ -90,5 +91,5 @@ export const priceRange = (specialtyId, urgent) => {
 
 // أرقام تواصل المنشأة بصيغة دولية بدون + — يضبطها المالك، وعند تركها فارغة تعتمد بدائل مناسبة
 // This site's own numbers (the owner can change them any time from «أرقام الموقع»; the branding step swaps the pair for the Oxygen site).
-export const BUSINESS_PHONE = '966536554731'
-export const BUSINESS_WHATSAPP = '966536554731'
+export const BUSINESS_PHONE = NET.phone || '966536554731'
+export const BUSINESS_WHATSAPP = NET.wa || '966536554731'

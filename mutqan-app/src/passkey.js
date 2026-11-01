@@ -2,6 +2,7 @@
 // The fingerprint / face check happens entirely on the device (OS). MUTQAN never
 // sees or stores any biometric data — only the credential id the device returns,
 // kept on THIS device next to the verified customer's session.
+import { NET } from './lib/netBrand'
 const KEY = 'metqan_passkey'
 
 const b64url = (buf) =>
@@ -34,7 +35,7 @@ export async function enrollPasskey(session) {
   const cred = await navigator.credentials.create({
     publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
-      rp: { name: 'مُتقن MUTQAN' },
+      rp: { name: NET.core ? 'مُتقن MUTQAN' : NET.name },
       user: {
         id: crypto.getRandomValues(new Uint8Array(16)),
         name: profile.phone || profile.name || 'mutqan-customer',

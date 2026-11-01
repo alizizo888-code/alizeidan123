@@ -9,6 +9,7 @@ import { push } from './lib/push'
 import { specialtyLabel } from './constants'
 import { loadMethods } from './hooks/usePaymentMethods'
 import { notify } from './notify'
+import { NET } from './lib/netBrand'
 
 // Owner-defined payment links (https only). Placeholders are URL-encoded; the link is only a way to PAY — proof of payment is always confirmed by the team.
 export function resolvePayUrl(tpl, order) {
@@ -68,7 +69,7 @@ export async function startOrderPayment(order) {
   const back = `/#/order/${order.id}`
   await payments.checkout({
     sku: orderSku(order.id),
-    name: `مُتقن — ${specialtyLabel(order.specialtyId)} #${String(order.id).slice(-5)}`,
+    name: `${NET.core ? 'مُتقن' : NET.name} — ${specialtyLabel(order.specialtyId)} #${String(order.id).slice(-5)}`,
     amount,
     currency: 'SAR',
     metadata: { orderId: String(order.id) },

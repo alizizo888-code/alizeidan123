@@ -6,6 +6,7 @@ import { artFor } from '../lib/specialtyArt'
 import { useLiveShared } from '../lib/useLive'
 import SpecialtyFx from './SpecialtyFx'
 import FxIcon from './FxIcon'
+import { NET, BL } from '../lib/netBrand'
 
 // Home hero: the brand block stays fixed; the specialty photo, its icon and the
 // service lines underneath rotate through every specialty.
@@ -59,10 +60,10 @@ export default function ServiceBanner({ onOpen }) {
       <div className="relative h-full flex flex-col justify-between p-5 text-white">
         {/* Fixed brand */}
         <div>
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-black tracking-wider bg-white/10 backdrop-blur border border-sky-300/30 rounded-full px-2.5 py-0.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />مُتقن · MUTQAN</span>
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-black tracking-wider bg-white/10 backdrop-blur border border-sky-300/30 rounded-full px-2.5 py-0.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />{NET.core ? 'مُتقن · MUTQAN' : NET.name}</span>
           <div className="flex items-center gap-2 mt-1.5">
             <Snowflake size={24} className="text-sky-200" />
-            <h1 className="font-display font-black text-3xl md:text-4xl tracking-wide drop-shadow">MUTQAN</h1>
+            <h1 className="font-display font-black text-3xl md:text-4xl tracking-wide drop-shadow">{BL}</h1>
           </div>
           <p className="font-display font-black text-sm md:text-base text-sky-200 w-fit mt-0.5">الصيانة والمقاولات العامة</p>
         </div>

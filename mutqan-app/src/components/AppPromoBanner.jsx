@@ -4,6 +4,7 @@ import { useWelcome, WELCOME_LABEL, shareText } from '../lib/welcome'
 import { useState } from 'react'
 import { useInstall } from '../lib/install'
 import IosInstallSheet from './IosInstallSheet'
+import { BN } from '../lib/netBrand'
 
 // Rotating-free, honest ad: welcome offer (30% up to 20 SAR) + install the app + share. Hides itself when nothing is left to promote.
 // variant: 'wide' (banners/galleries) | 'compact' (settings/account)
@@ -29,7 +30,7 @@ export default function AppPromoBanner({ variant = 'wide', className = '' }) {
       <div className="relative flex items-center gap-3">
         <div className="shrink-0 w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center"><Gift size={22} /></div>
         <div className="min-w-0 flex-1">
-          <p className="font-display font-black text-sm leading-snug">{offer ? `خصم ${WELCOME_LABEL} على أول طلب` : 'حمّل تطبيق متقن'}</p>
+          <p className="font-display font-black text-sm leading-snug">{offer ? `خصم ${WELCOME_LABEL} على أول طلب` : `حمّل تطبيق ${BN}`}</p>
           <p className="text-[11px] text-white/80 leading-relaxed mt-0.5">{offer ? 'حمّل التطبيق وشاركه مع أصدقائك — لكل جهاز جديد مرة واحدة.' : 'طلباتك وإشعاراتك ومحادثاتك في تطبيق واحد على جوالك.'}</p>
         </div>
       </div>

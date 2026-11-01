@@ -27,6 +27,7 @@ import CallsTab from '../components/CallsTab'
 import { needsFollowUp } from '../lib/callbook'
 import { DONE, RUNNING, isToday, isUnassigned, isForwarded } from '../components/ops/helpers'
 import { serviceScopeLabel, specialtyLabel } from '../constants'
+import { brandMeta } from '../lib/netBrand'
 
 const TABS = [
   ['map', '🗺️ الخريطة الميدانية', () => 0],
@@ -51,6 +52,10 @@ export default function OperationsRoom() {
   const { profiles, settings, updateSettings } = useTechProfiles()
   const { data: orders, loading: ordersLoading } = useLiveShared('orders', { order: '-createdAt', limit: 300 })
   const { autoAssignOrder, linkTech, assignToSite, siteTech, markForwarded } = useAssignment({ profiles, settings, orders })
+  // Network faces: one desk for all 12 sites — the filter row appears as soon as orders from more than one face exist.
+  const [brandF, setBrandF] = useState('all')
+  const brandsSeen = useMemo(() => { const m = {}; for (const o of orders) if (o.brand) m[o.brand] = (m[o.brand] || 0) + 1; return m }, [orders])
+  const viewOrders = useMemo(() => (brandF === 'all' ? orders : orders.filter((o) => o.brand === brandF)), [orders, brandF])
   const { data: crmRows } = useLiveShared('customer_profiles', { limit: 800 })
   const [sp] = useSearchParams()
   const [tab, setTab] = useState(() => (TABS.some((x) => x[0] === sp.get('tab')) ? sp.get('tab') : 'map'))
@@ -383,10 +388,17 @@ export default function OperationsRoom() {
           ))}
         </div>
 
-        {tab === 'map' && <OpsMap orders={orders} profiles={profiles} crm={crmRows} onAssign={setAssignOrder} onAuto={autoOne} onOpenOrder={(o) => navigate(`/staff/order/${o.id}`)} />}
-        {tab === 'intake' && <IntakeBoard orders={orders} mode={mode} busyId={busyId} onAssign={setAssignOrder} onAuto={autoOne} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onLocate={() => setTab('map')} />}
-        {tab === 'board' && <DispatchBoard orders={orders} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onReassign={setAssignOrder} />}
-        {tab === 'table' && <OrdersTable orders={orders} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onAssign={setAssignOrder} />}
+        {Object.keys(brandsSeen).length > 1 || Object.keys(brandsSeen).some((k) => !brandMeta(k)?.core) ? (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 -mt-1" data-brand-filter>
+            <button onClick={() => setBrandF('all')} className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold border ${brandF === 'all' ? 'bg-primary text-black border-primary' : 'bg-white/5 border-white/10 text-slate-300'}`}>كل المواقع ({orders.length})</button>
+            {Object.entries(brandsSeen).sort((x, y) => y[1] - x[1]).map(([id, n]) => <button key={id} onClick={() => setBrandF(id)} className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold border ${brandF === id ? 'border-white/60 bg-white/15 text-white' : 'bg-white/5 border-white/10 text-slate-300'}`}><i className="inline-block w-1.5 h-1.5 rounded-full ml-1" style={{ background: brandMeta(id)?.color || '#64748b' }} />{brandMeta(id)?.name || id} ({n})</button>)}
+          </div>
+        ) : null}
+
+        {tab === 'map' && <OpsMap orders={viewOrders} profiles={profiles} crm={crmRows} onAssign={setAssignOrder} onAuto={autoOne} onOpenOrder={(o) => navigate(`/staff/order/${o.id}`)} />}
+        {tab === 'intake' && <IntakeBoard orders={viewOrders} mode={mode} busyId={busyId} onAssign={setAssignOrder} onAuto={autoOne} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onLocate={() => setTab('map')} />}
+        {tab === 'board' && <DispatchBoard orders={viewOrders} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onReassign={setAssignOrder} />}
+        {tab === 'table' && <OrdersTable orders={viewOrders} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onAssign={setAssignOrder} />}
         {tab === 'calls' && <CallsTab log={callLog} contacts={callContacts} />}
         {tab === 'techs' && (
           <>

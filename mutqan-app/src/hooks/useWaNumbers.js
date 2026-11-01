@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useLiveShared } from '../lib/useLive'
 import { db } from '../lib/db'
 import { team } from '../lib/team'
+import { NET } from '../lib/netBrand'
 
 // Unlimited WhatsApp numbers (business or regular) — one public-read collection
 // that only admins (owner / operations) can edit. Customers see enabled numbers on
@@ -22,10 +23,14 @@ export const deptMeta = (id) => WA_DEPARTMENTS.find((d) => d.id === id) || WA_DE
 
 export function useWaNumbers() {
   const { data, loading } = useLiveShared('wa_numbers', { limit: 500 })
-  const numbers = useMemo(
-    () => (data || []).filter((n) => !n.deleted).sort((a, b) => (Number(a.sort) || 99) - (Number(b.sort) || 99)),
-    [data]
-  )
+  const numbers = useMemo(() => {
+    const all = (data || []).filter((n) => !n.deleted).sort((a, b) => (Number(a.sort) || 99) - (Number(b.sort) || 99))
+    if (NET.core) return all
+    // A satellite shows only the numbers tagged with its own brand; with none tagged, its own number (from the network registry) serves every department.
+    const mine = all.filter((n) => n.brand === NET.id)
+    if (mine.length || !NET.wa) return mine
+    return WA_DEPARTMENTS.slice(0, 4).map((d, i) => ({ id: `brand-${d.id}`, phone: NET.wa, label: NET.name, department: d.id, enabled: true, type: 'business', sort: i }))
+  }, [data])
   return { numbers, loading }
 }
 

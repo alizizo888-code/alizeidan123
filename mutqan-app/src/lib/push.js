@@ -1,5 +1,6 @@
 import { nativeNotify, nativeAskPermission } from './nativeNotify'
 import { post, currentUser, onUser } from './_api'
+import { BN } from './netBrand'
 
 // In-app notifications without a push server: every signed-in device polls /push inbox every few
 // seconds while the app is open, then shows a system notification (if allowed) and fires an event.
@@ -20,10 +21,10 @@ async function showSystem(m) {
   const opts = { body: m.body || '', tag: m.id, icon: iconUrl(), badge: iconUrl(), dir: 'rtl', lang: 'ar', vibrate: m.silent || soundCfg?.vibrate === false ? [] : hi ? [220, 90, 220, 90, 320] : [120], silent: !!m.silent, requireInteraction: hi, renotify: true, data: { url: m.url || '' } }
   try {
     const reg = await navigator.serviceWorker?.getRegistration?.()
-    if (reg?.showNotification) { await reg.showNotification(m.title || 'متقن', opts); return }
+    if (reg?.showNotification) { await reg.showNotification(m.title || BN, opts); return }
   } catch { /* fall back */ }
   try {
-    const n = new Notification(m.title || 'متقن', opts)
+    const n = new Notification(m.title || BN, opts)
     n.onclick = () => { window.focus(); if (m.url) location.hash = String(m.url).replace(/^#/, '') }
   } catch { /* unsupported */ }
 }
@@ -96,7 +97,7 @@ export const push = {
     const t = setTimeout(() => {
       timers.delete(id)
       window.dispatchEvent(new CustomEvent('mutqan:push', { detail: { id, ...message } }))
-      if (supported() && Notification.permission === 'granted') { try { new Notification(message.title || 'متقن', { body: message.body || '' }) } catch { /* ignore */ } }
+      if (supported() && Notification.permission === 'granted') { try { new Notification(message.title || BN, { body: message.body || '' }) } catch { /* ignore */ } }
     }, Math.max(1000, ms))
     timers.set(id, t)
     return { id }

@@ -24,6 +24,7 @@ import MapView from '../components/MapView'
 import StatusBadge from '../components/StatusBadge'
 import StatusTimeline from '../components/StatusTimeline'
 import { SPECIALTIES } from '../constants'
+import { brandMeta } from '../lib/netBrand'
 
 export default function OrderDetailStaff() {
   const { methods: managedMethods } = usePaymentMethods()
@@ -297,7 +298,7 @@ export default function OrderDetailStaff() {
 
         {(() => {
           const f = orderFacts(order)
-          const rows = [['🧰', 'نوع الطلب', f.kind], ['❄️', f.unitsLabel, f.units], ['📝', 'التفاصيل', f.note], ['📅', 'الموعد', f.when], ['🕐', 'وقت إرسال الطلب', f.sentAt], ['🧾', 'فاتورة ضريبية', order.taxInvoice ? `مطلوبة${order.invoiceVat ? ` — ${order.invoiceVat}` : ''}` : '']].filter((r) => r[2])
+          const rows = [['🏷️', 'الموقع الذي طُلب منه', order.brand && brandMeta(order.brand) && !brandMeta(order.brand).core ? brandMeta(order.brand).name : ''], ['🧰', 'نوع الطلب', f.kind], ['❄️', f.unitsLabel, f.units], ['📝', 'التفاصيل', f.note], ['📅', 'الموعد', f.when], ['🕐', 'وقت إرسال الطلب', f.sentAt], ['🧾', 'فاتورة ضريبية', order.taxInvoice ? `مطلوبة${order.invoiceVat ? ` — ${order.invoiceVat}` : ''}` : '']].filter((r) => r[2])
           return rows.length ? (
             <Card>
               <p className="text-xs font-bold text-slate-500 mb-2">تفاصيل الطلب</p>

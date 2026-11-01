@@ -3,6 +3,7 @@ import { PALETTES } from './palettes'
 import { useLiveShared } from './useLive'
 import { db } from './db'
 import { team } from './team'
+import { brandTheme } from './netBrand'
 
 // Colour themes. The id "winter" re-uses the brand's own colours and adds the snowy backdrop (reference design);
 // "default" = the brand look. Anything else overrides the sky/blue scales through CSS variables.
@@ -21,7 +22,7 @@ for (const g of ['sky', 'blue']) for (const s of [50, 100, 200, 300, 400, 500, 6
 
 export function applyPalette(id) {
   const el = document.documentElement
-  const t = THEMES[id] || THEMES.default
+  const t = (id && id !== 'default' && THEMES[id]) || brandTheme() || THEMES.default
   for (const v of VARNAMES) el.style.removeProperty(v)
   el.style.removeProperty('--color-primary'); el.style.removeProperty('--color-secondary')
   if (t.sky && t.blue) {

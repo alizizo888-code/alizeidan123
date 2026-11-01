@@ -10,6 +10,7 @@ import { notificationState } from '../hooks/useLocator'
 import PermissionHelp from '../components/PermissionHelp'
 import ThemeToggle from '../components/ThemeToggle'
 import { useWelcome, shareText, WELCOME_LABEL } from '../lib/welcome'
+import { BN } from '../lib/netBrand'
 
 // In-app notification center — the same notifications that arrive as phone
 // notifications, kept here as a history (customer · technician · operations).
@@ -151,7 +152,7 @@ function Offers() {
     } finally { setBusy(false) }
   }
   async function doShare() {
-    try { if (navigator.share) { await navigator.share({ title: 'متقن', text }); return } } catch { /* cancelled */ }
+    try { if (navigator.share) { await navigator.share({ title: BN, text }); return } } catch { /* cancelled */ }
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800) } catch { /* ignore */ }
   }
   const stateText = {
