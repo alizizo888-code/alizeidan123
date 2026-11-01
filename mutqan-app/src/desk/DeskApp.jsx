@@ -1,4 +1,4 @@
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useState, useEffect, useRef } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { lazyRetry } from '../lib/lazy'
 import StaffLayout from '../components/StaffLayout'
@@ -38,101 +38,217 @@ const BRANDS = {
 const KIND = window.__DESK_KIND__ || 'control'
 const brand = window.__DESK_BRAND__ || 'oxygen'
 const HOME = KIND === 'ops' ? '/staff/operations' : '/staff'
+const BUILD = '2026-11-01 · 2'   // shown on the entry / diagnostics screens so a screenshot tells which version is running
 
-// ONE numeric PIN opens both sites. The PIN is exchanged for an owner session per site; it is kept on this device only, so a session the server forgets is renewed silently (no more "enters then exits").
+// ONE numeric PIN opens both sites. The PIN is exchanged for an owner session per site; it is kept on this device only (per site, so two sites with different PINs still both work), and a session the server forgets is renewed silently.
 const PIN_KEY = 'desk_pin'
+const ls = { get: (k) => { try { return localStorage.getItem(k) } catch { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch { /* ignore */ } }, del: (k) => { try { localStorage.removeItem(k) } catch { /* ignore */ } } }
+// Same rule as the server: digits of any script → 0-9, no spaces / invisible direction marks (an Arabic keyboard types ٧٨٩ where a Western one types 789).
+const foldPin = (s) => String(s || '').replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660)).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)).replace(/[\s​-‏‪-‮⁦-⁩﻿ ]+/g, '')
+const savedPin = (b) => ls.get(PIN_KEY + '_' + (b || brand)) || ls.get(PIN_KEY) || ''
+const storedSession = (b) => { try { const s = JSON.parse(ls.get('desk_sess_' + b) || 'null'); return s && s.token ? s : null } catch { return null } }
+
+class DeskErr extends Error { constructor(kind, message) { super(message); this.kind = kind } }
+// A reason a person can act on (what the server said, in plain words, and where to fix it).
+function explain(b, kind, raw) {
+  const n = BRANDS[b].name
+  if (kind === 'net') return `تعذّر الوصول إلى موقع ${n} — تأكد من الإنترنت ثم أعد المحاولة.`
+  if (kind === 'pin') return `موقع ${n} رفض الرمز: الرمز المضبوط على ${n} يختلف عمّا كتبته. افتح ووردبريس ${n} ← أكسجين ← المكتب السري، اضبط نفس الرمز ثم جرّبه بزر «اختبار».`
+  if (kind === 'unset') return `لم يُضبط رمز دخول على موقع ${n} بعد — اضبطه من ووردبريس ${n} ← أكسجين ← المكتب السري.`
+  if (kind === 'limit') return `موقع ${n} أوقف المحاولات مؤقتًا لكثرة المحاولات الخاطئة — انتظر ١٥ دقيقة ثم أعد المحاولة.`
+  if (kind === 'role') return `موقع ${n} لم يُرجع حساب المالك (الدور: ${raw}) — حدّث الإضافة على ${n}.`
+  return `موقع ${n}: ${raw || 'تعذّر الدخول'}`
+}
+// Exchanges the PIN for an owner session of site b (stored as desk_sess_<b>). Throws DeskErr.
 async function enter(b, pin) {
-  const r = await fetch(`${BRANDS[b].host}/wp-json/mutqan/v1/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'desk', token: pin }) })
-  const j = await r.json().catch(() => ({}))
-  const d = j.data || j
-  if (!r.ok || !d.token) throw new Error((j.error && (j.error.message || j.error)) || j.message || 'الرمز غير صحيح')
-  if (!d.user || d.user.role !== 'owner') throw new Error('الخادم لم يُرجع حساب مالك (الدور: ' + (d.user && d.user.role || 'غير معروف') + ') — حدّث الإضافة على ' + BRANDS[b].name)
-  localStorage.setItem('desk_sess_' + b, JSON.stringify({ token: d.token, user: d.user || null }))
+  let r, j
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 20000)
+  try {
+    r = await fetch(`${BRANDS[b].host}/wp-json/mutqan/v1/auth`, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'desk', token: pin }) })
+    j = await r.json().catch(() => ({}))
+  } catch { throw new DeskErr('net', explain(b, 'net')) } finally { clearTimeout(timer) }
+  const d = (j && j.data) || j || {}
+  if (!r.ok || !d.token) {
+    const msg = String((j && j.error && (j.error.message || j.error)) || (j && j.message) || '')
+    const code = j && j.error && j.error.code
+    const kind = r.status === 429 || code === 'rate_limited' ? 'limit' : /لم يُضبط/.test(msg) ? 'unset' : /الرمز غير صحيح/.test(msg) ? 'pin' : 'other'
+    throw new DeskErr(kind, explain(b, kind, kind === 'other' ? (msg || 'HTTP ' + r.status) : msg))
+  }
+  if (!d.user || d.user.role !== 'owner') throw new DeskErr('role', explain(b, 'role', d.user && d.user.role || 'غير معروف'))
+  ls.set('desk_sess_' + b, JSON.stringify({ token: d.token, user: d.user || null }))
   return d
 }
-const savedPin = () => { try { return localStorage.getItem(PIN_KEY) || '' } catch { return '' } }
-// Re-issues the session of the current site from the saved PIN. Resolves { ok, err }.
+// Re-issues the session of the current site from the saved PIN. Never asks the server again within a minute for a PIN it already refused. Resolves { ok, err }.
+const lastFail = {}
 async function reauth() {
   const pin = savedPin(); if (!pin) return { ok: false, err: '' }
-  try { const d = await enter(brand, pin); setSession(d.token, d.user); return { ok: true, err: '' } } catch (e) { return { ok: false, err: BRANDS[brand].name + ': ' + (e && e.message || 'تعذر الدخول') } }
+  const f = lastFail[brand]
+  if (f && f.kind !== 'net' && Date.now() - f.at < 60000) return { ok: false, err: f.err }
+  try { const d = await enter(brand, pin); delete lastFail[brand]; setSession(d.token, d.user); return { ok: true, err: '' } }
+  catch (e) { lastFail[brand] = { at: Date.now(), kind: e.kind, err: e.message }; return { ok: false, err: e.message } }
 }
 // The shared API layer (send/verifySession) calls this when the server stops recognising the session; it must resolve to a boolean.
 if (typeof window !== 'undefined') window.__DESK_REAUTH__ = async () => (await reauth()).ok
-// Asks the server what this session is: 'ok' (owner), 'bad' (unknown / not the owner) or 'offline' (cannot tell → keep working).
-async function verify(t) {
+// Asks site b what a token is: 'ok' (owner), 'bad' (unknown / not the owner) or 'offline' (cannot tell → keep working).
+async function verifyAt(b, t) {
   const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 9000)
   try {
-    const r = await fetch(`${BRANDS[brand].host}/wp-json/mutqan/v1/auth`, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', 'X-Mutqan-Token': t }, body: JSON.stringify({ op: 'me' }) })
+    const r = await fetch(`${BRANDS[b].host}/wp-json/mutqan/v1/auth`, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', 'X-Mutqan-Token': t }, body: JSON.stringify({ op: 'me' }) })
     const j = await r.json(); if (!(r.ok && j && j.data)) return 'offline'
     const u = j.data.user; return u && u.role === 'owner' ? 'ok' : 'bad'
   } catch { return 'offline' } finally { clearTimeout(timer) }
 }
-const wipe = () => { try { localStorage.removeItem('desk_sess_' + brand); localStorage.removeItem('mutqan_token'); localStorage.removeItem('mutqan_user') } catch { /* ignore */ } }
-const parseSecret = (t) => String(t || '').trim()
+const verify = (t) => verifyAt(brand, t)
+// Makes sure there is a session site b accepts (used by the brand switch). Resolves { ok } or { ok:false, err, needPin }.
+async function openBrand(b, typed) {
+  const pin = foldPin(typed)
+  if (!pin) {
+    const s = storedSession(b)
+    if (s) { const v = await verifyAt(b, s.token); if (v !== 'bad') return { ok: true } }   // 'offline' = cannot tell: the app re-checks on load
+  }
+  const use = pin || savedPin(b)
+  if (!use) return { ok: false, err: `اكتب الرمز السري لموقع ${BRANDS[b].name} (لا يوجد رمز محفوظ على هذا الجهاز).`, needPin: true }
+  try { await enter(b, use); ls.set(PIN_KEY + '_' + b, use); if (!ls.get(PIN_KEY)) ls.set(PIN_KEY, use); return { ok: true } }
+  catch (e) { return { ok: false, err: e.message, needPin: e.kind === 'pin' || e.kind === 'unset' || !use } }
+}
+const wipe = () => { ls.del('desk_sess_' + brand); ls.del('mutqan_token'); ls.del('mutqan_user') }
 
 function Center({ children }) { return <div dir="rtl" className="h-full min-h-screen flex items-center justify-center p-6 text-center text-white bg-[#0b1220] text-sm leading-loose">{children}</div> }
 
-// No session on this device yet: type the PIN once (it opens both sites).
+// Per-site result list (used after typing the PIN, and by the brand switch): never hides why a site refused.
+function Results({ res }) {
+  return (
+    <div className="mt-3 space-y-2 text-xs leading-relaxed">
+      {Object.keys(BRANDS).filter((k) => res[k]).map((k) => (
+        <div key={k} className={'rounded-xl border p-3 ' + (res[k].ok ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-100' : 'border-rose-400/40 bg-rose-400/10 text-rose-100')}>
+          <b>{res[k].ok ? '✅' : '❌'} {BRANDS[k].name}</b>{res[k].ok ? ' — تم الدخول.' : <span className="block mt-1 whitespace-pre-line">{res[k].msg}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// No session on this device yet: type the PIN once (it opens both sites). Both sites are tried together and each one's answer is shown.
 function Gate({ initialErr = '' }) {
   const [v, setV] = useState('')
   const [err, setErr] = useState(initialErr)
   const [busy, setBusy] = useState(false)
+  const [res, setRes] = useState(null)
+  const [openAny, setOpenAny] = useState(false)
+  const other = brand === 'oxygen' ? 'mutqan' : 'oxygen'
+  const go0 = () => { location.hash = '#' + HOME; location.reload() }
   async function go() {
-    setBusy(true); setErr('')
-    const pin = parseSecret(v)
-    const done = []; let firstErr = ''
-    for (const k of Object.keys(BRANDS)) {
-      try { await enter(k, pin); done.push(k) } catch (e) { if (!firstErr) firstErr = BRANDS[k].name + ': ' + e.message }
-    }
-    if (!done.length) { setErr(firstErr || 'الرمز غير صحيح'); setBusy(false); return }
-    try { localStorage.setItem(PIN_KEY, pin); localStorage.setItem('desk_brand', done.includes(brand) ? brand : done[0]) } catch { /* ignore */ }
-    location.hash = '#' + HOME; location.reload()
+    setBusy(true); setErr(''); setRes(null)
+    const pin = foldPin(v)
+    const keys = Object.keys(BRANDS)
+    const out = await Promise.all(keys.map(async (k) => { try { await enter(k, pin); return [k, { ok: true }] } catch (e) { return [k, { ok: false, msg: e.message }] } }))
+    const r = Object.fromEntries(out)
+    const okKeys = keys.filter((k) => r[k].ok)
+    setBusy(false)
+    if (!okKeys.length) { setRes(r); return }
+    ls.set(PIN_KEY, pin); okKeys.forEach((k) => ls.set(PIN_KEY + '_' + k, pin))
+    ls.set('desk_brand', okKeys.includes(brand) ? brand : okKeys[0])
+    if (okKeys.length === keys.length) { go0(); return }
+    setRes(r); setOpenAny(true)   // one site refused: show why before moving on
   }
+  const otherOpen = !!storedSession(other) && !openAny
   return (
     <div dir="rtl" className="min-h-screen flex items-center justify-center p-5 bg-[#0b1220] text-white">
       <div className="w-full max-w-sm">
         <p className="text-xl font-black text-center mb-1">🔒 {KIND === 'ops' ? 'غرفة العمليات' : 'التحكم والإعدادات'}</p>
         <p className="text-xs text-white/60 text-center mb-5">اكتب الرمز السري مرة واحدة — يفتح أكسجين وأكسجين معًا.</p>
-        <input type="password" inputMode="numeric" autoComplete="off" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && v.trim() && go()} dir="ltr" placeholder="الرمز السري" className="w-full rounded-xl bg-white/10 border border-white/15 p-4 text-center text-lg tracking-widest text-white outline-none" />
-        {err && <p className="text-rose-300 text-xs mt-2 leading-relaxed">{err}</p>}
-        <button disabled={busy || !v.trim()} onClick={go} className="w-full mt-3 rounded-xl bg-sky-400 text-black font-black py-3 disabled:opacity-50">{busy ? 'جارِ التحقق…' : 'دخول'}</button>
+        <input type="password" inputMode="numeric" autoComplete="off" value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && v.trim() && !busy && go()} dir="ltr" placeholder="الرمز السري" className="w-full rounded-xl bg-white/10 border border-white/15 p-4 text-center text-lg tracking-widest text-white outline-none" />
+        {err && <p className="text-rose-300 text-xs mt-2 leading-relaxed whitespace-pre-line">{err}</p>}
+        {res && <Results res={res} />}
+        {openAny
+          ? <button onClick={go0} className="w-full mt-3 rounded-xl bg-emerald-400 text-black font-black py-3">متابعة إلى {BRANDS[ls.get('desk_brand')] ? BRANDS[ls.get('desk_brand')].name : ''}</button>
+          : <button disabled={busy || !v.trim()} onClick={go} className="w-full mt-3 rounded-xl bg-sky-400 text-black font-black py-3 disabled:opacity-50">{busy ? 'جارِ التحقق من الموقعين…' : 'دخول'}</button>}
+        {otherOpen && <button onClick={() => { ls.set('desk_brand', other); go0() }} className="w-full mt-2 rounded-xl bg-white/10 text-white font-bold py-3 text-sm">فتح {BRANDS[other].name} (جلستك فيه مفتوحة)</button>}
+        <p className="text-[10px] text-white/30 text-center mt-5">إصدار {BUILD} · للتشخيص: ‎#/diag</p>
       </div>
     </div>
   )
 }
 
-// Brand switcher (top corner): keeps one session per brand on this device.
+// Brand switcher (top corner, big enough to hit): checks that the other site accepts this device BEFORE moving, and says why when it does not.
 function BrandBar() {
   const other = brand === 'oxygen' ? 'mutqan' : 'oxygen'
+  const [st, setSt] = useState({ phase: 'idle', msg: '', needPin: false })
+  const [pin, setPin] = useState('')
+  const go = async (typed) => {
+    setSt({ phase: 'busy', msg: '', needPin: false })
+    const r = await openBrand(other, typed)
+    if (r.ok) { ls.set('desk_brand', other); location.hash = '#' + HOME; location.reload(); return }
+    setSt({ phase: 'fail', msg: r.err, needPin: !!r.needPin })
+  }
+  const goRef = useRef(go); goRef.current = go
+  useEffect(() => { const h = () => goRef.current(); window.addEventListener('desk-switch', h); return () => window.removeEventListener('desk-switch', h) }, [])
   return (
-    <button dir="rtl" onClick={() => { localStorage.setItem('desk_brand', other); location.hash = '#' + HOME; location.reload() }}
-      className="fixed z-[60] top-[2px] left-1/2 -translate-x-1/2 rounded-full bg-sky-400 text-black text-[11px] font-black px-3 py-[2px] shadow">
-      {BRANDS[brand].name} ⇄ {BRANDS[other].name}
-    </button>
+    <>
+      <div className="fixed z-[60] top-[calc(env(safe-area-inset-top,0px)+2px)] left-1/2 -translate-x-1/2 p-2">
+        <button dir="rtl" onClick={() => st.phase !== 'busy' && go()} className="rounded-full bg-sky-400 text-black text-[12px] font-black px-4 py-[6px] shadow-lg">
+          {st.phase === 'busy' ? `جارِ الانتقال إلى ${BRANDS[other].name}…` : `${BRANDS[brand].name} ⇄ ${BRANDS[other].name}`}
+        </button>
+      </div>
+      {st.phase === 'fail' && (
+        <div className="fixed inset-0 z-[300] bg-black/70 flex items-end sm:items-center justify-center p-3" onClick={() => setSt({ phase: 'idle', msg: '', needPin: false })}>
+          <div dir="rtl" onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl bg-[#0d1220] border border-white/10 p-5 text-white pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <p className="font-black mb-2">تعذّر الانتقال إلى {BRANDS[other].name}</p>
+            <p className="text-sm leading-loose text-rose-200 whitespace-pre-line">{st.msg}</p>
+            {st.needPin && (
+              <>
+                <input type="password" inputMode="numeric" autoComplete="off" dir="ltr" value={pin} onChange={(e) => setPin(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && pin.trim() && go(pin)} placeholder={`رمز موقع ${BRANDS[other].name}`} className="w-full mt-3 rounded-xl bg-white/10 border border-white/15 p-3 text-center text-lg tracking-widest text-white outline-none" />
+                <button disabled={!pin.trim()} onClick={() => go(pin)} className="w-full mt-2 rounded-xl bg-sky-400 text-black font-black py-3 disabled:opacity-50">جرّب بهذا الرمز</button>
+              </>
+            )}
+            <button onClick={() => setSt({ phase: 'idle', msg: '', needPin: false })} className="w-full mt-2 rounded-xl bg-white/10 py-3 text-sm font-bold">إغلاق</button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
-// #/diag — shows exactly what the server says about this device (role, status) so a permission problem is never a guess.
+// #/diag — shows exactly what each site says about this device (role, status) and whether the saved PIN is accepted, so a permission problem is never a guess.
 function Diag() {
-  const [out, setOut] = useState('جارِ الفحص…')
+  const [lines, setLines] = useState(['جارِ الفحص…'])
+  const [pinRes, setPinRes] = useState(null)
   useEffect(() => {
     (async () => {
-      const t = getToken(); const lines = [`التطبيق: ${KIND === 'ops' ? 'غرفة العمليات' : 'التحكم'}`, `الموقع: ${BRANDS[brand].name} (${BRANDS[brand].host})`, `جلسة محفوظة: ${t ? 'نعم' : 'لا'}`]
-      if (t) {
-        try {
-          const r = await fetch(`${BRANDS[brand].host}/wp-json/mutqan/v1/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Mutqan-Token': t }, body: JSON.stringify({ op: 'me' }) })
-          const j = await r.json().catch(() => ({})); const u = j.data && j.data.user
-          lines.push(`رد الخادم: ${r.status}`, u ? `الدور: ${u.role || 'بلا دور'} — الحالة: ${u.status}` : `لا يوجد مستخدم: ${(j.error && j.error.message) || (j.message) || ''}`)
-          lines.push(u && u.role === 'owner' ? '✅ الجهاز مسجّل كمالك.' : '❌ ليس مالكًا — اضغط «إعادة تسجيل الجهاز» واكتب الرمز من جديد.')
-        } catch (e) { lines.push('تعذر الاتصال بالموقع: ' + e.message) }
+      const out = [`التطبيق: ${KIND === 'ops' ? 'غرفة العمليات' : 'التحكم'} — الإصدار ${BUILD}`, `الموقع المفتوح الآن: ${BRANDS[brand].name}`]
+      for (const k of Object.keys(BRANDS)) {
+        const s = storedSession(k); const p = savedPin(k)
+        out.push('', `— ${BRANDS[k].name} (${BRANDS[k].host})`, `جلسة محفوظة: ${s ? 'نعم' : 'لا'} — رمز محفوظ: ${p ? 'نعم' : 'لا'}`)
+        if (s) {
+          try {
+            const r = await fetch(`${BRANDS[k].host}/wp-json/mutqan/v1/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Mutqan-Token': s.token }, body: JSON.stringify({ op: 'me' }) })
+            const j = await r.json().catch(() => ({})); const u = j.data && j.data.user
+            out.push(`رد الخادم: ${r.status}`, u ? `الدور: ${u.role || 'بلا دور'} — الحالة: ${u.status}` : 'الخادم لا يعرف هذه الجلسة', u && u.role === 'owner' ? '✅ مسجّل كمالك.' : '❌ ليس مالكًا — اضغط «اختبار الرمز المحفوظ» أو «إعادة تسجيل الجهاز».')
+          } catch (e) { out.push('❌ تعذر الاتصال بالموقع: ' + e.message) }
+        }
       }
-      setOut(lines.join('\n'))
+      setLines(out)
     })()
   }, [])
+  const testPins = async () => {
+    setPinRes({}); const r = {}
+    await Promise.all(Object.keys(BRANDS).map(async (k) => {
+      const p = savedPin(k)
+      if (!p) { r[k] = { ok: false, msg: `لا يوجد رمز محفوظ لموقع ${BRANDS[k].name} على هذا الجهاز.` }; return }
+      try { await enter(k, p); r[k] = { ok: true } } catch (e) { r[k] = { ok: false, msg: e.message } }
+    }))
+    setPinRes(r)
+  }
+  const reset = () => { Object.keys(BRANDS).forEach((k) => { ls.del('desk_sess_' + k); ls.del(PIN_KEY + '_' + k) }); [PIN_KEY, 'desk_brand', 'mutqan_token', 'mutqan_user'].forEach(ls.del); location.hash = '#/'; location.reload() }
   return (
     <div dir="rtl" className="min-h-screen p-5 bg-[#0b1220] text-white">
-      <pre className="whitespace-pre-wrap text-sm leading-loose">{out}</pre>
-      <button className="mt-4 rounded-xl bg-white/10 px-4 py-3 text-sm font-black" onClick={() => { try { localStorage.removeItem('desk_sess_' + brand); localStorage.removeItem('mutqan_token'); localStorage.removeItem('mutqan_user') } catch { /* ignore */ } location.hash = '#/'; location.reload() }}>إعادة تسجيل الجهاز</button>
+      <pre className="whitespace-pre-wrap text-sm leading-loose">{lines.join('\n')}</pre>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button className="rounded-xl bg-sky-400 text-black px-4 py-3 text-sm font-black" onClick={testPins}>اختبار الرمز المحفوظ على الموقعين</button>
+        <button className="rounded-xl bg-white/10 px-4 py-3 text-sm font-black" onClick={reset}>إعادة تسجيل الجهاز</button>
+        <button className="rounded-xl bg-white/10 px-4 py-3 text-sm font-black" onClick={() => { location.hash = '#/'; location.reload() }}>رجوع للتطبيق</button>
+      </div>
+      {pinRes && <Results res={pinRes} />}
     </div>
   )
 }
