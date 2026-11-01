@@ -89,7 +89,11 @@ export default function OperationsRoom() {
   const [notice, setNotice] = useState('')
   const processingRef = useRef(new Set())
 
-  const mode = settings?.mode || 'manual'
+  const [modeLocal, setModeLocal] = useState(null)   // shows the tap at once, before the server confirms
+  const [modeErr, setModeErr] = useState('')
+  const mode = modeLocal || settings?.mode || 'manual'
+  useEffect(() => { if (modeLocal && settings?.mode === modeLocal) setModeLocal(null) }, [settings?.mode, modeLocal])
+  const pickMode = (m) => { setModeErr(''); setModeLocal(m); updateSettings({ mode: m }).catch((e) => { setModeLocal(null); setModeErr((e && e.message) || 'تعذر حفظ أسلوب التوزيع') }) }
   const strategy = settings?.strategy || 'smart'
   const unassigned = useMemo(() => orders.filter((o) => o.status === 'new' && !o.technicianId && !o.inhouse && !isForwarded(o)), [orders])
 
@@ -290,20 +294,18 @@ export default function OperationsRoom() {
             <h2 className="text-white font-bold text-sm">أسلوب التوزيع</h2>
           </div>
 
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => updateSettings({ mode: 'manual' })}
-              className={`flex-1 rounded-xl py-3 text-sm font-bold border ${mode === 'manual' ? 'bg-primary text-black border-primary' : 'bg-white/5 border-white/10 text-slate-300'}`}
-            >
-              يدوي
+          <div role="radiogroup" aria-label="أسلوب التوزيع" className="flex gap-2 mb-2">
+            <button type="button" role="radio" aria-checked={mode === 'manual'} onClick={() => pickMode('manual')}
+              className={`flex-1 rounded-xl py-3 text-sm font-black border-2 transition active:scale-95 ${mode === 'manual' ? 'bg-primary text-black border-white/70 shadow-lg' : 'bg-white/5 border-white/10 text-slate-300'}`}>
+              {mode === 'manual' ? '✓ ' : ''}يدوي{mode === 'manual' ? ' — مفعّل' : ''}
             </button>
-            <button
-              onClick={() => updateSettings({ mode: 'auto' })}
-              className={`flex-1 rounded-xl py-3 text-sm font-bold border ${mode === 'auto' ? 'bg-emerald-500 text-black border-emerald-500' : 'bg-white/5 border-white/10 text-slate-300'}`}
-            >
-              آلي
+            <button type="button" role="radio" aria-checked={mode === 'auto'} onClick={() => pickMode('auto')}
+              className={`flex-1 rounded-xl py-3 text-sm font-black border-2 transition active:scale-95 ${mode === 'auto' ? 'bg-emerald-500 text-black border-white/70 shadow-lg' : 'bg-white/5 border-white/10 text-slate-300'}`}>
+              {mode === 'auto' ? '✓ ' : ''}آلي{mode === 'auto' ? ' — مفعّل' : ''}
             </button>
           </div>
+          <p className="text-[11px] mb-4 text-slate-400">{mode === 'auto' ? 'التوزيع الآلي يعمل: كل طلب جديد يُسند فورًا لأنسب فني.' : 'التوزيع اليدوي: أنت تختار الفني لكل طلب من «إسناد يدوي».'}</p>
+          {modeErr && <p className="text-xs font-bold text-rose-400 mb-3">{modeErr}</p>}
 
           {mode === 'auto' && (
             <div className="flex gap-2">

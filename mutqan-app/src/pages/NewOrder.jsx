@@ -49,6 +49,8 @@ export default function NewOrder() {
   const [specialtyId, setSpecialtyId] = useState(params.get('specialty') || '')
   const [changing, setChanging] = useState(false)
   const [description, setDescription] = useState('')
+  const [taxInvoice, setTaxInvoice] = useState(false)
+  const [invoiceVat, setInvoiceVat] = useState('')
   const [appt, setAppt] = useState({ label: '', at: null })
   const routing = useOrderRouting()
   const [noteOpen, setNoteOpen] = useState(false)
@@ -182,6 +184,8 @@ export default function NewOrder() {
         acQuote: acSel ? { mode: acSel.mode, type: acSel.type, qty: acSel.qty, full: acSel.full, warranty: acSel.warranty, vat: acSel.vat, total: acSel.total - (noDiscount ? 0 : off), welcomeOff: noDiscount ? 0 : off, offerKey: acSel.offer ? (acSel.offer.key || acSel.offer.id) : null } : null,
         description: description.trim(),
         preferredTime: appt.label || null,
+        taxInvoice: !!taxInvoice,
+        invoiceVat: taxInvoice ? invoiceVat.replace(/\D/g, '').slice(0, 15) : '',
         appointmentAt: appt.at || null,
         priority,
         promoCode: null,
@@ -332,6 +336,8 @@ export default function NewOrder() {
           )}
         </Field>
 
+        <label className="flex items-center gap-2 rounded-2xl bg-white/70 border border-sky-100 px-3 py-2.5 text-sm font-bold text-slate-700"><input type="checkbox" checked={taxInvoice} onChange={(e) => setTaxInvoice(e.target.checked)} /> 🧾 أحتاج فاتورة ضريبية</label>
+        {taxInvoice && <input value={invoiceVat} onChange={(e) => setInvoiceVat(e.target.value)} inputMode="numeric" dir="ltr" placeholder="الرقم الضريبي للعميل (اختياري)" className="rounded-2xl border border-sky-100 px-3 py-2.5 text-sm" />}
         {error && <p className="text-rose-600 text-sm font-bold text-center">{error}</p>}
 
         <button

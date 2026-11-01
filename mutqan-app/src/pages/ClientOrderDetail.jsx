@@ -137,10 +137,11 @@ export default function ClientOrderDetail() {
           <a
             href={waLink(acCfg?.waNumber, buildOrderMessage({
               verifyUrl,
-              draft: { specialtyId: order.specialtyId, qty: order.qty, problem: order.serviceDetails || order.description, preferredTime: order.preferredTime, priority: order.priority, welcomeDiscountPct: order.welcomeDiscountPct, welcomeOff: order.acQuote?.welcomeOff, coords: order.lat ? { lat: order.lat, lng: order.lng, address: order.address } : null },
+              draft: { specialtyId: order.specialtyId, qty: order.qty, serviceDetails: order.serviceDetails, appointmentAt: order.appointmentAt, taxInvoice: order.taxInvoice, invoiceVat: order.invoiceVat, problem: order.serviceDetails || order.description, preferredTime: order.preferredTime, priority: order.priority, welcomeDiscountPct: order.welcomeDiscountPct, welcomeOff: order.acQuote?.welcomeOff, coords: order.lat ? { lat: order.lat, lng: order.lng, address: order.address } : null },
               who: { name: order.clientName, phone: order.clientPhone },
               price: order.acQuote?.total || order.agreedPrice,
               orderId: order.id,
+              bookedAt: order.createdAt,
             }))}
             target="_blank"
             rel="noopener"
