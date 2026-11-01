@@ -17,6 +17,7 @@ php inhouse.php
 php wa.php
 php order_msgs.php
 php network.php
+php network_seo.php
 MQ_DATA="$(mktemp -d)" php shop.php
 MQ_DATA="$(mktemp -d)" php seo.php
 php notif.php

@@ -17,7 +17,11 @@ class Oxygen_SEO_Engine {
     /* ---------- data ---------- */
     private static $cache = [];
     private static function data($name) {
-        if (!isset(self::$cache[$name])) { self::$cache[$name] = include __DIR__ . '/seo/data-' . $name . '.php'; }
+        if (!isset(self::$cache[$name])) {
+            self::$cache[$name] = include __DIR__ . '/seo/data-' . $name . '.php';
+            // Satellite sites also write about cold / freezer rooms (their A/C-and-cold focus); the core sites' plan is untouched.
+            if ($name === 'services' && class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) { self::$cache[$name] = array_merge(self::$cache[$name], include __DIR__ . '/seo/data-net-services.php'); }
+        }
         return self::$cache[$name];
     }
 
@@ -25,11 +29,15 @@ class Oxygen_SEO_Engine {
     public static function brand() {
         $o = get_option('oxygen_seo_brand');
         if (is_string($o) && $o !== '') { return $o; }
+        if (class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) { return Oxygen_Network::brand_config()['name']; }
         $h = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
         return strpos($h, 'mutqan') !== false ? 'متقن' : 'أكسجين';
     }
     /** Offset added to angle / paragraph rotation and to the plan order: the same topic is written from a different angle on each site. */
-    public static function salt() { return self::brand() === 'متقن' ? 11 : 0; }
+    public static function salt() {
+        if (class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) { return 13 + 7 * Oxygen_Network::slot(); }   // a different rotation for each of the 10 satellites
+        return self::brand() === 'متقن' ? 11 : 0;
+    }
 
     /* ---------- automatic indexing (IndexNow: free, Bing/Yandex/Seznam/Naver; Google follows the XML sitemap) ---------- */
     public static function indexnow_key() {
@@ -92,6 +100,7 @@ class Oxygen_SEO_Engine {
     /** The full plan: alternating commercial / informational items. */
     public static function plan() {
         if (isset(self::$cache['plan'])) { return self::$cache['plan']; }
+        if (class_exists('Oxygen_Network') && class_exists('Oxygen_Network_SEO') && Oxygen_Network::is_satellite()) { return self::$cache['plan'] = Oxygen_Network_SEO::plan(); }
         $svc = self::data('services');
         $topics = self::data('topics');
         $variants = [
@@ -365,7 +374,7 @@ class Oxygen_SEO_Engine {
         array_unshift($log, array_merge(['ts' => time(), 'a' => $action, 'id' => (int) $post_id, 't' => $title, 'l' => $post_id ? get_permalink($post_id) : ''], $extra));
         update_option(self::LOG, array_slice($log, 0, self::LOG_MAX), false);
     }
-    private static function today_count($action) {
+    public static function today_count($action) {
         $log = get_option(self::LOG, []);
         $start = strtotime(wp_date('Y-m-d 00:00:00'));
         $n = 0;
@@ -454,6 +463,7 @@ class Oxygen_SEO_Engine {
      *  Turn off with the option oxygen_seo_partition = '0'. */
     public static function owns($item) {
         if (get_option('oxygen_seo_partition', '1') === '0') { return true; }
+        if (class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) { return strpos((string) $item['key'], 'oxy-net-') === 0; }   // a satellite only ever publishes its own namespaced plan
         return (crc32((string) $item['key']) & 1) === (self::salt() ? 1 : 0);
     }
     public static function create_next($force_status = null, $kind = 'base') {
@@ -469,7 +479,7 @@ class Oxygen_SEO_Engine {
         }
         return false;
     }
-    private static function publish_item($item, $kind, $force_status, $map) {
+    public static function publish_item($item, $kind, $force_status, $map) {
         $s = self::settings();
         $ctx = self::ctx($item, $map);
         $b = self::build($item, 0, $ctx);
@@ -607,6 +617,7 @@ class Oxygen_SEO_Engine {
         if (!self::active()) { return; }
         try { self::classify_batch(); } catch (Throwable $e) { /* optional */ }
         self::ensure_hub();
+        if (class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) { if (class_exists('Oxygen_Network_SEO')) { Oxygen_Network_SEO::tick(); } return; }
         $s = self::settings();
         $hour = (int) wp_date('G');
         $streams = [
