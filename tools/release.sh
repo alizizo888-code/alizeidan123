@@ -15,8 +15,9 @@ git archive pub-oxygen oxygen-ac-automation/app | tar -x -C "$T"          # prev
 python3 tools/brand.py "$T" oxygen
 ln -s "$NM" "$T/mutqan-app/node_modules"
 (cd "$T" && bash tools/build-app.sh | tail -1)
-(cd "$T/tests/mutqan" && bash run.sh 2>&1 | grep -E "FAIL|passed")
-(cd "$T" && bash tests/bot/run.sh 2>&1 | grep -E "FAIL|passed")
+TL=$(cd "$T/tests/mutqan" && bash run.sh 2>&1 | grep -E "FAIL|passed" || true); echo "$TL"
+BL=$(cd "$T" && bash tests/bot/run.sh 2>&1 | grep -E "FAIL|passed" || true); echo "$BL"
+if printf '%s\n%s\n' "$TL" "$BL" | grep -q "FAIL"; then echo "TESTS FAILED in the derived tree — nothing was committed or pushed"; exit 1; fi
 rm "$T/mutqan-app/node_modules"
 IDX=$(mktemp -u)
 tree_of() { GIT_INDEX_FILE=$IDX git --work-tree="$1" read-tree --empty; GIT_INDEX_FILE=$IDX git --work-tree="$1" add -A .; GIT_INDEX_FILE=$IDX git write-tree; }
