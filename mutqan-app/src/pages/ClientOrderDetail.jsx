@@ -28,13 +28,43 @@ export default function ClientOrderDetail() {
   const [busy, setBusy] = useState(false)
   const [qs] = useSearchParams()
   const [verifyUrl, setVerifyUrl] = useState(null)
+  // Automatic hand-off: the moment the order exists, its message opens in WhatsApp by itself (no second confirmation).
+  // Only when the server could not send it from the business number (order.waSent is false). Runs once per order.
+  const waText = useMemo(() => !order ? '' : buildOrderMessage({
+    verifyUrl,
+    draft: { specialtyId: order.specialtyId, qty: order.qty, serviceDetails: order.serviceDetails, acQuote: order.acQuote, description: order.description, appointmentAt: order.appointmentAt, taxInvoice: order.taxInvoice, invoiceVat: order.invoiceVat, preferredTime: order.preferredTime, priority: order.priority, welcomeDiscountPct: order.welcomeDiscountPct, welcomeOff: order.acQuote?.welcomeOff, coords: order.lat ? { lat: order.lat, lng: order.lng, address: order.address } : null },
+    who: { name: order.clientName, phone: order.clientPhone },
+    price: order.acQuote?.total || order.agreedPrice,
+    orderId: order.id,
+    bookedAt: order.createdAt,
+  }), [order, verifyUrl])
+  const [waBlocked, setWaBlocked] = useState(false)
   useEffect(() => {
-    if (!order || qs.get('wa') !== '1' || verifyUrl) return
+    if (!order || qs.get('wa') !== '1' || order.waSent) return
     let live = true
-    sealOrder({ draft: { specialtyId: order.specialtyId, preferredTime: order.preferredTime, priority: order.priority, locationText: order.address, coords: order.lat ? { address: order.address } : null }, price: order.acQuote?.total || order.agreedPrice, orderId: order.id }).then((u) => { if (live && u) setVerifyUrl(u) })
+    const key = 'mq-wa-auto-' + order.id
+    let done = false
+    try { done = sessionStorage.getItem(key) === '1' } catch { /* ignore */ }
+    if (done) return
+    ;(async () => {
+      const u = await sealOrder({ draft: { specialtyId: order.specialtyId, preferredTime: order.preferredTime, priority: order.priority, locationText: order.address, coords: order.lat ? { address: order.address } : null }, price: order.acQuote?.total || order.agreedPrice, orderId: order.id })
+      if (!live) return
+      if (u) setVerifyUrl(u)
+      try { sessionStorage.setItem(key, '1') } catch { /* ignore */ }
+      const text = buildOrderMessage({
+        verifyUrl: u,
+        draft: { specialtyId: order.specialtyId, qty: order.qty, serviceDetails: order.serviceDetails, acQuote: order.acQuote, description: order.description, appointmentAt: order.appointmentAt, taxInvoice: order.taxInvoice, invoiceVat: order.invoiceVat, preferredTime: order.preferredTime, priority: order.priority, welcomeDiscountPct: order.welcomeDiscountPct, welcomeOff: order.acQuote?.welcomeOff, coords: order.lat ? { lat: order.lat, lng: order.lng, address: order.address } : null },
+        who: { name: order.clientName, phone: order.clientPhone },
+        price: order.acQuote?.total || order.agreedPrice,
+        orderId: order.id,
+        bookedAt: order.createdAt,
+      })
+      const w = (() => { try { return window.open(waLink(acCfg?.waNumber, text), '_blank', 'noopener') } catch { return null } })()
+      if (!w) setWaBlocked(true)
+    })()
     return () => { live = false }
     // eslint-disable-next-line
-  }, [order?.id])
+  }, [order?.id, order?.waSent])
   const [ratingVal, setRatingVal] = useState(5)
   const [rdet, setRdet] = useState({})
   const [rtags, setRtags] = useState([])
@@ -133,22 +163,11 @@ export default function ClientOrderDetail() {
         {order.welcomeDiscountPct > 0 && (
           <div className="rounded-2xl bg-gradient-to-l from-amber-400 to-orange-500 text-white font-display font-black text-sm text-center py-3" data-keep-colors>🎁 خصم ترحيبي {order.welcomeDiscountPct}%{order.welcomeDiscountMax ? ` حتى ${order.welcomeDiscountMax} ر.س` : ''}{order.acQuote?.welcomeOff ? ` — وفّرت ${order.acQuote.welcomeOff} ر.س` : ''}</div>
         )}
-        {qs.get('wa') === '1' && ['new', 'forced'].includes(order.status) && (
-          <a
-            href={waLink(acCfg?.waNumber, buildOrderMessage({
-              verifyUrl,
-              draft: { specialtyId: order.specialtyId, qty: order.qty, serviceDetails: order.serviceDetails, acQuote: order.acQuote, description: order.description, appointmentAt: order.appointmentAt, taxInvoice: order.taxInvoice, invoiceVat: order.invoiceVat, preferredTime: order.preferredTime, priority: order.priority, welcomeDiscountPct: order.welcomeDiscountPct, welcomeOff: order.acQuote?.welcomeOff, coords: order.lat ? { lat: order.lat, lng: order.lng, address: order.address } : null },
-              who: { name: order.clientName, phone: order.clientPhone },
-              price: order.acQuote?.total || order.agreedPrice,
-              orderId: order.id,
-              bookedAt: order.createdAt,
-            }))}
-            target="_blank"
-            rel="noopener"
-            className="flex items-center justify-center gap-2 bg-gradient-to-l from-emerald-500 to-green-600 text-white font-display font-black rounded-2xl py-4 shadow-lg shadow-emerald-200 active:scale-[0.98] transition-transform"
-          >
-            تأكيد الطلب وإرسال الموقع على واتساب
-          </a>
+        {(order.waSent || qs.get('wa') === '1') && ['new', 'forced', 'assigned', 'accepted'].includes(order.status) && (
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-bold text-center py-3 px-4">
+            ✅ تم إرسال طلبك إلى فريق العمليات{order.waSent ? ' ووصلتك نسخته على واتساب' : ''}
+            {waBlocked && !order.waSent && <a href={waLink(acCfg?.waNumber, waText)} target="_blank" rel="noopener" className="block mt-1 text-[12px] text-emerald-700 underline">فتح نسخة الطلب في واتساب</a>}
+          </div>
         )}
         {order.description && (
           <Card>

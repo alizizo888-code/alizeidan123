@@ -564,10 +564,10 @@ export default function AiChat() {
       const verifyUrl = await sealOrder({ draft: d, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
       const waText = buildOrderMessage({ verifyUrl, draft: { ...d, acQuote: d.acq, description: d.problem }, who: { ...who, name: who.name || d.contact?.name, phone: who.phone || d.contact?.phone }, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
       const waNumber = ac.cfg.waNumber || BUSINESS_WHATSAPP
-      if (routing.mode !== 'operations') openWhatsApp(waNumber, waText)
+      if (routing.mode !== 'operations' && !order.waSent) openWhatsApp(waNumber, waText)
       setDraft(null)
       setPanel(null)
-      await addMessage({ role: 'assistant', kind: 'order_created', orderId: order.id, waText, waNumber, content: routing.mode === 'operations' ? `تم استلام طلبك #${String(order.id).slice(-5)} ✅ ${OPERATIONS_CLIENT_MSG}` : `تم إرسال طلبك #${String(order.id).slice(-5)} لغرفة العمليات ✅ سيتم إسناده لأقرب فني متاح، وتقدر تتابع حالته من هنا أو من «طلباتي».` })
+      await addMessage({ role: 'assistant', kind: 'order_created', orderId: order.id, waText: order.waSent ? '' : waText, waSent: !!order.waSent, waNumber, content: routing.mode === 'operations' ? `تم استلام طلبك #${String(order.id).slice(-5)} ✅ ${OPERATIONS_CLIENT_MSG}` : `تم إرسال طلبك #${String(order.id).slice(-5)} لغرفة العمليات ✅ سيتم إسناده لأقرب فني متاح، وتقدر تتابع حالته من هنا أو من «طلباتي».` })
     } catch {
       setError('تعذر إرسال الطلب، حاول مرة أخرى')
     } finally {
@@ -986,7 +986,7 @@ function Bubble({ m, speaking, onSpeak, onOpenOrder, onFeedback }) {
         {m.content}
         {m.kind === 'order_created' && m.waText && (
           <a href={waLink(m.waNumber, m.waText)} target="_blank" rel="noopener noreferrer" className="mt-2 w-full flex items-center justify-center gap-1 bg-[#25D366] text-white rounded-xl py-2 text-[12px] font-black">
-            إرسال الطلب على واتساب ✅
+            فتح نسخة الطلب في واتساب
           </a>
         )}
         {m.kind === 'order_created' && m.orderId && (

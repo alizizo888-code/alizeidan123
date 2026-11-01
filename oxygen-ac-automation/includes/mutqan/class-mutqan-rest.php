@@ -123,7 +123,7 @@ final class Mutqan_Rest {
             }
             case 'insert': case 'insertShared': {
                 $doc = Mutqan_Store::insert($coll, $in['data'] ?? [], $in['id'] ?? null, $opts, $p, $private);
-                if ($coll === 'orders' && !$private) { self::after_order_created($doc); self::alert_new_order($doc); }
+                if ($coll === 'orders' && !$private) { self::after_order_created($doc); if (self::alert_new_order($doc)) { $doc['waSent'] = true; } }
                 if ($coll === 'tech_applications' && !$private) { self::alert_tech_application($doc); }
                 if (in_array($coll, ['handoffs', 'warranty_claims', 'calls'], true) && !$private) { self::alert_customer_action($coll, $doc); }
                 return $doc;
@@ -188,6 +188,29 @@ final class Mutqan_Rest {
         return !empty($d['preferredTime']) ? (string) $d['preferredTime'] : 'أقرب وقت';
     }
 
+
+    /** The order as the customer receives it on WhatsApp (same layout as the app's message). */
+    private static function order_wa_text($d, $price, $seal) {
+        $units = self::units_text($d);
+        $lines = array_filter([
+            '🔔 *تم استلام طلبك — ' . 'متقن' . '*',
+            'رقم الطلب: #' . substr((string) $d['id'], -5),
+            !empty($d['clientName']) ? '👤 الاسم: ' . $d['clientName'] : '',
+            !empty($d['clientPhone']) ? '📱 الجوال: ' . $d['clientPhone'] : '',
+            self::kind_label($d) ? '🧰 نوع الطلب: ' . self::kind_label($d) : '',
+            $units ? ((($d['specialtyId'] ?? '') === 'ac' ? '❄️ المكيفات: ' : '🔢 العدد: ') . $units) : '',
+            self::note_text($d) ? '📝 التفاصيل: ' . self::note_text($d) : '',
+            '📅 الموعد: ' . self::when_text($d),
+            '🕐 وقت إرسال الطلب: ' . self::full_when(gmdate('c')),
+            $price ? '💰 السعر المتفق: ' . $price . ' ر.س' : '',
+            !empty($d['address']) ? '🏠 العنوان: ' . mb_substr((string) $d['address'], 0, 160) : '',
+            (isset($d['lat'], $d['lng']) && is_numeric($d['lat']) && is_numeric($d['lng'])) ? '📍 الموقع: https://maps.google.com/?q=' . $d['lat'] . ',' . $d['lng'] : '',
+            !empty($d['taxInvoice']) ? '🧾 مطلوب فاتورة ضريبية' . (!empty($d['invoiceVat']) ? ' — الرقم الضريبي: ' . preg_replace('/\D/', '', (string) $d['invoiceVat']) : '') : '',
+            $seal ? '✅ للتحقق من صحة الطلب (توثيق): ' . $seal : '',
+        ]);
+        return implode("\n", $lines) . "\n\nسيصلك إشعار فور إسناد طلبك لفني، وتتابعه من التطبيق.";
+    }
+
     /** Top priority: every new order alerts the whole admin team immediately, server-side (cannot be skipped by the client). */
     private static function alert_new_order($doc) {
         $urgent = (($doc['priority'] ?? '') === 'urgent');
@@ -214,11 +237,21 @@ final class Mutqan_Rest {
             !empty($doc['outsideServiceArea']) ? 'خارج نطاق الخدمة' : '',
             $high ? 'عميل عالي القيمة' : '',
         ]);
+        $seal = '';
         try {
             $seal = Mutqan_Shop::seal_for_order($doc, $price);
             if ($seal) { $lines[] = 'توثيق: ' . $seal; }
         } catch (Throwable $e) { error_log('[mutqan] seal_for_order: ' . $e->getMessage()); }
         self::admin_alert(($high ? '⭐ ' : '') . ($urgent ? '🚨 طلب عاجل جديد' : ($ops ? '📋 طلب بانتظار التوزيع' : '🆕 طلب جديد')) . (!empty($doc['specialtyId']) ? ' — ' . $doc['specialtyId'] : ''), implode("\n", $lines) ?: 'طلب خدمة جديد بانتظار المعالجة', '#/staff/order/' . $doc['id'], 'new_order', 'high', $doc['id']);
+        // The same order, sent AUTOMATICALLY on WhatsApp by the business number to the customer (his copy + the conversation opens in the WhatsApp inbox). No confirmation step for anyone.
+        $sent = false;
+        if (!$ops && !empty($doc['clientPhone'])) {
+            try {
+                $sent = Mutqan_WA::auto_send($doc['clientPhone'], self::order_wa_text($doc, $price, $seal), 'order');
+                if ($sent) { Mutqan_Store::update('orders', $doc['id'], ['waSent' => true, 'waSentAt' => gmdate('c')], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user']); }
+            } catch (Throwable $e) { error_log('[mutqan] order wa: ' . $e->getMessage()); }
+        }
+        return $sent;
     }
 
     /** Customer actions that need a person: «talk to an employee», a warranty claim, a hotline call. Raised by the server, so they arrive even if the customer's phone dies right after sending. */
