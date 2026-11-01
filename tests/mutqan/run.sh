@@ -18,5 +18,7 @@ php wa.php
 MQ_DATA="$(mktemp -d)" php shop.php
 MQ_DATA="$(mktemp -d)" php seo.php
 php notif.php
+php desk.php
+php calls.php
 MQ_DATA="$(mktemp -d)" php passkey.php
 node itest.mjs

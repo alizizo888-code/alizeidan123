@@ -5,7 +5,7 @@ import StaffLayout from '../components/StaffLayout'
 import PushToaster from '../components/PushToaster'
 import { ThemeBoot } from '../lib/appTheme'
 import Notifications from '../pages/Notifications'
-import { getToken, setSession } from '../lib/_api'
+import { getToken, setSession, onUser } from '../lib/_api'
 
 const StaffGate = lazyRetry(() => import('../pages/StaffGate'))
 const OrderDetailStaff = lazyRetry(() => import('../pages/OrderDetailStaff'))
@@ -51,20 +51,31 @@ async function enter(b, pin) {
   return d
 }
 const savedPin = () => { try { return localStorage.getItem(PIN_KEY) || '' } catch { return '' } }
-// Re-issues the session of the current site from the saved PIN. Resolves true when a fresh owner session is in place.
+// Re-issues the session of the current site from the saved PIN. Resolves { ok, err }.
 async function reauth() {
-  const pin = savedPin(); if (!pin) return false
-  try { const d = await enter(brand, pin); setSession(d.token, d.user); return true } catch { return false }
+  const pin = savedPin(); if (!pin) return { ok: false, err: '' }
+  try { const d = await enter(brand, pin); setSession(d.token, d.user); return { ok: true, err: '' } } catch (e) { return { ok: false, err: BRANDS[brand].name + ': ' + (e && e.message || 'تعذر الدخول') } }
 }
-if (typeof window !== 'undefined') window.__DESK_REAUTH__ = reauth
+// The shared API layer (send/verifySession) calls this when the server stops recognising the session; it must resolve to a boolean.
+if (typeof window !== 'undefined') window.__DESK_REAUTH__ = async () => (await reauth()).ok
+// Asks the server what this session is: 'ok' (owner), 'bad' (unknown / not the owner) or 'offline' (cannot tell → keep working).
+async function verify(t) {
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 9000)
+  try {
+    const r = await fetch(`${BRANDS[brand].host}/wp-json/mutqan/v1/auth`, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', 'X-Mutqan-Token': t }, body: JSON.stringify({ op: 'me' }) })
+    const j = await r.json(); if (!(r.ok && j && j.data)) return 'offline'
+    const u = j.data.user; return u && u.role === 'owner' ? 'ok' : 'bad'
+  } catch { return 'offline' } finally { clearTimeout(timer) }
+}
+const wipe = () => { try { localStorage.removeItem('desk_sess_' + brand); localStorage.removeItem('mutqan_token'); localStorage.removeItem('mutqan_user') } catch { /* ignore */ } }
 const parseSecret = (t) => String(t || '').trim()
 
 function Center({ children }) { return <div dir="rtl" className="h-full min-h-screen flex items-center justify-center p-6 text-center text-white bg-[#0b1220] text-sm leading-loose">{children}</div> }
 
 // No session on this device yet: type the PIN once (it opens both sites).
-function Gate() {
+function Gate({ initialErr = '' }) {
   const [v, setV] = useState('')
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState(initialErr)
   const [busy, setBusy] = useState(false)
   async function go() {
     setBusy(true); setErr('')
@@ -127,27 +138,29 @@ function Diag() {
 }
 
 export default function DeskApp() {
-  const signed = !!getToken()
-  // No session for this site yet but a PIN is saved on this device (e.g. after switching site): sign in silently.
-  useEffect(() => { if (!signed && savedPin()) reauth().then((ok) => { if (ok) location.reload() }) }, [])
-  // Keep the owner session alive: if the server no longer knows it (or it is not the owner), renew it from the PIN saved on this device; only when that fails ask for the PIN again.
+  // checking → ok | gate. Owner screens are only ever rendered for a session the SERVER confirmed (a stale token used to show owner pages whose saves were then refused).
+  const [phase, setPhase] = useState(() => (getToken() || savedPin() ? 'checking' : 'gate'))
+  const [gateErr, setGateErr] = useState('')
   useEffect(() => {
-    const check = async () => {
-      const t = getToken(); if (!t || location.hash.startsWith('#/diag')) return
-      try {
-        const r = await fetch(`${BRANDS[brand].host}/wp-json/mutqan/v1/auth`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Mutqan-Token': t }, body: JSON.stringify({ op: 'me' }) })
-        const j = await r.json(); const u = j && j.data && j.data.user
-        if (!(r.ok && j && j.data) || (u && u.role === 'owner')) return
-      } catch { return }                                       // offline: keep the session
-      if (await reauth()) return
-      try { localStorage.removeItem('desk_sess_' + brand); localStorage.removeItem('mutqan_token'); localStorage.removeItem('mutqan_user'); localStorage.removeItem(PIN_KEY) } catch { /* ignore */ }
-      location.hash = '#/'; location.reload()
+    let alive = true
+    const run = async (first) => {
+      if (location.hash.startsWith('#/diag')) { if (alive && first) setPhase('ok'); return }
+      const t = getToken()
+      if (t) { const v = await verify(t); if (v !== 'bad') { if (alive) setPhase('ok'); return } }
+      const r = await reauth()
+      if (!alive) return
+      if (r.ok) { setPhase('ok'); return }
+      wipe(); setGateErr(r.err); setPhase('gate')
     }
-    check()
-    const onVis = () => { if (document.visibilityState === 'visible') check() }
+    run(true)
+    const onVis = () => { if (document.visibilityState === 'visible' && getToken()) run(false) }
     document.addEventListener('visibilitychange', onVis)
-    return () => document.removeEventListener('visibilitychange', onVis)
+    // The shared auth layer signed the session out (server answered "no user"): renew from the PIN or go back to the Gate.
+    const off = onUser((u) => { if (!u && !getToken()) run(false) })
+    return () => { alive = false; document.removeEventListener('visibilitychange', onVis); off() }
   }, [])
+  const signed = phase === 'ok'
+  if (phase === 'checking') return <Center>جارِ التحقق من الجلسة…</Center>
   return (
     <HashRouter>
       <PushToaster />
@@ -155,7 +168,7 @@ export default function DeskApp() {
       <Suspense fallback={<Center>جارِ التحميل…</Center>}>
         <Routes>
           <Route path="/diag" element={<Diag />} />
-          {!signed ? <Route path="*" element={<Gate />} /> : (
+          {!signed ? <Route path="*" element={<Gate initialErr={gateErr} />} /> : (
             <Route element={<><BrandBar /><StaffLayout /></>}>
               <Route path="/" element={<Navigate to={HOME} replace />} />
               <Route path="/notifications" element={<Notifications />} />

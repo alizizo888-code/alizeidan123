@@ -8,7 +8,8 @@ import { useTeamRole } from '../hooks/useTeamRole'
 import { useWaNumbers, saveWaNumber, removeWaNumber, WA_DEPARTMENTS, WA_TYPES, deptMeta } from '../hooks/useWaNumbers'
 import { fmtDate } from '../warranty'
 
-const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin
+// In the private desk apps the customer site is the brand host, not the desk host.
+const APP_URL = (typeof window !== 'undefined' && window.__DESK_KIND__ && window.__MUTQAN__?.app ? window.__MUTQAN__.app.replace(/\/app\/?$/, '') : '') || import.meta.env.VITE_APP_URL || window.location.origin
 
 export default function WhatsappCenter() {
   const navigate = useNavigate()

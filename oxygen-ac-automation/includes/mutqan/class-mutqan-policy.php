@@ -31,6 +31,8 @@ final class Mutqan_Policy {
                 'customers' => ['creator_or_read', 'authed', 'creator_or_write', 'write'],
                 'handoffs' => ['creator_or_read', 'anon_ok', 'staff_or_creator', 'write'],
                 'calls' => ['creator_or_read', 'anon_ok', 'staff_or_creator', 'write'],
+                // Hotline register (written by operations): who called, the code given to the caller, and what he was linked to.
+                'call_log' => ['read', 'write', 'write', 'write'], 'call_contacts' => ['read', 'write', 'write', 'write'],
                 'notifications' => ['creator_or_read', 'authed', 'target_or_write', 'write'],
                 'warranties' => ['read', 'write', 'write', 'write'],
                 'warranty_claims' => ['creator_or_read', 'authed', 'write', 'write'],
