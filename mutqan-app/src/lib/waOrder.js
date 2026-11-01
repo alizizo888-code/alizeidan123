@@ -11,7 +11,7 @@ export async function sealOrder({ draft = {}, price, orderId }) {
   } catch { return null }
 }
 
-export function buildOrderMessage({ draft = {}, who = {}, price, orderId, detail, verifyUrl }) {
+export function buildOrderMessage({ draft = {}, who = {}, price, orderId, detail, verifyUrl, bookedAt }) {
   const c = draft.coords || {}
   const lines = [
     '🔔 *طلب جديد — أكسجين*',
@@ -20,13 +20,17 @@ export function buildOrderMessage({ draft = {}, who = {}, price, orderId, detail
     who.phone ? `📱 الجوال: ${who.phone}` : null,
     `🛠️ الخدمة: ${specialtyLabel(draft.specialtyId) || '-'}`,
     detail || draft.problem ? `📝 التفاصيل: ${detail || draft.problem}` : null,
-    draft.qty > 1 ? `🔢 العدد: ${draft.qty}` : null,
-    `⏰ الموعد: ${draft.preferredTime || (draft.priority === 'urgent' ? 'عاجل — الآن' : 'أقرب وقت')}`,
+    draft.serviceDetails ? `🧰 نوع الطلب: ${draft.serviceDetails}` : null,
+    draft.qty >= 1 && draft.specialtyId === 'ac' ? `❄️ عدد المكيفات: ${draft.qty}` : draft.qty > 1 ? `🔢 العدد: ${draft.qty}` : null,
+    `⏰ الموعد المطلوب: ${draft.preferredTime || (draft.priority === 'urgent' ? 'عاجل — الآن' : 'أقرب وقت')}`,
+    draft.appointmentAt ? `📅 الموعد المحدد: ${new Date(draft.appointmentAt).toLocaleString('ar-SA', { dateStyle: 'full', timeStyle: 'short' })}` : null,
+    bookedAt ? `🕐 وقت إرسال الطلب: ${new Date(bookedAt).toLocaleString('ar-SA', { dateStyle: 'medium', timeStyle: 'short' })}` : null,
     draft.welcomeDiscountPct ? `🎁 خصم ترحيبي ${draft.welcomeDiscountPct}%${draft.welcomeOff ? ` (−${draft.welcomeOff} ر.س)` : ' حتى 20 ر.س'} على أول طلب` : null,
     price ? `💰 السعر المتفق: ${price} ر.س` : null,
     c.address || draft.locationText ? `🏠 العنوان: ${c.address || draft.locationText}` : null,
     c.lat ? `📍 الموقع: https://maps.google.com/?q=${c.lat},${c.lng}` : null,
-    verifyUrl ? `✅ للتحقق من صحة الطلب: ${verifyUrl}` : null,
+    draft.taxInvoice ? `🧾 مطلوب فاتورة ضريبية${draft.invoiceVat ? ` — الرقم الضريبي للعميل: ${draft.invoiceVat}` : ''}` : null,
+    verifyUrl ? `✅ للتحقق من صحة الطلب (توثيق): ${verifyUrl}` : null,
   ]
   return lines.filter(Boolean).join('\n')
 }
@@ -46,7 +50,9 @@ export function buildDispatchMessage(order = {}, { appUrl } = {}) {
     `رقم الطلب: #${String(o.id || '').slice(-5)}`,
     `🛠️ الخدمة: ${specialtyLabel(o.specialtyId) || '-'}`,
     o.serviceDetails || o.description ? `📝 التفاصيل: ${o.serviceDetails || o.description}` : null,
-    o.qty > 1 ? `🔢 العدد: ${o.qty}` : null,
+    o.qty >= 1 && o.specialtyId === 'ac' ? `❄️ عدد المكيفات: ${o.qty}` : o.qty > 1 ? `🔢 العدد: ${o.qty}` : null,
+    o.appointmentAt ? `📅 الموعد المحدد: ${new Date(o.appointmentAt).toLocaleString('ar-SA', { dateStyle: 'full', timeStyle: 'short' })}` : null,
+    o.taxInvoice ? `🧾 مطلوب فاتورة ضريبية${o.invoiceVat ? ` — الرقم الضريبي للعميل: ${o.invoiceVat}` : ''}` : null,
     `⏰ الموعد: ${o.preferredTime || (o.priority === 'urgent' ? 'عاجل — الآن' : 'أقرب وقت')}`,
     o.clientName ? `👤 العميل: ${o.clientName}` : null,
     o.clientPhone ? `📱 الجوال: ${o.clientPhone}` : null,
