@@ -10,6 +10,7 @@
  */
 if (!defined('ABSPATH')) { exit; }
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-https.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-network.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-business-control.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-media-library.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-article-index-admin.php';
