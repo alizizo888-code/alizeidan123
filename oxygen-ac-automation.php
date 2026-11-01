@@ -32,8 +32,8 @@ Oxygen_Partner_Articles::boot();
 Oxygen_Social::boot();
 Oxygen_Desk::boot();
 Oxygen_Owner_Link::boot();
-foreach (['store', 'policy', 'auth', 'passkey', 'promo', 'wa', 'ai', 'shop', 'rest', 'admin'] as $mutqan_part) { require_once plugin_dir_path(__FILE__) . 'includes/mutqan/class-mutqan-' . $mutqan_part . '.php'; }
-Mutqan_Rest::boot(); Mutqan_Admin::boot();
+foreach (['store', 'policy', 'auth', 'passkey', 'promo', 'wa', 'ai', 'shop', 'defaults', 'link', 'telegram', 'rest', 'admin'] as $mutqan_part) { require_once plugin_dir_path(__FILE__) . 'includes/mutqan/class-mutqan-' . $mutqan_part . '.php'; }
+Mutqan_Rest::boot(); Mutqan_Admin::boot(); Mutqan_Defaults::boot();
 final class Oxygen_AC_Automation {
  const OPT='oxygen_ac_automation_settings'; const CRON='oxygen_ac_daily_job'; private static $instance=null;
  public static function instance(){if(self::$instance===null)self::$instance=new self();return self::$instance;}
