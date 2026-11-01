@@ -56,6 +56,10 @@ function OwnerSwitcher() {
           <div dir="rtl" onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-[#0d1220] border border-white/10 rounded-t-3xl sm:rounded-3xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center mb-3"><p className="flex-1 text-sm font-black text-white">دخول كل الواجهات (المالك)</p><button onClick={() => setOpen(false)} className="text-slate-400"><X size={18} /></button></div>
             <div className="grid gap-2">
+              {/* Private desk apps only: the same switch as the pill at the top (a second, easy-to-hit way to move between أكسجين and متقن). */}
+              {typeof window !== 'undefined' && window.__DESK_KIND__ && (
+                <button onClick={() => { setOpen(false); window.dispatchEvent(new Event('desk-switch')) }} className="text-right rounded-xl bg-sky-400/15 border border-sky-400/40 px-3 py-3 text-sm font-black text-sky-100">⇄ تبديل الموقع: الانتقال إلى {window.__DESK_BRAND__ === 'mutqan' ? 'أكسجين' : 'متقن'}</button>
+              )}
               {WORKSPACES.map(([to, label]) => <button key={to} onClick={() => { setOpen(false); nav(to) }} className="text-right rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm font-bold text-slate-100">{label}</button>)}
             </div>
           </div>

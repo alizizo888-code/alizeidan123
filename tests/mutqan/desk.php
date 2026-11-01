@@ -47,4 +47,25 @@ $m = call('auth', ['op' => 'me'], $tok2);
 t('old token no longer valid after owner update', is_array($m['data'] ?? null) && array_key_exists('user', $m['data']) && $m['data']['user'] === null, $m);
 $r = call('auth', ['op' => 'desk', 'token' => $PIN]);
 t('PIN still works after owner update', ($r['data']['user']['role'] ?? '') === 'owner' && ($r['data']['user']['handle'] ?? '') === 'ali', $r);
+// 5. The PIN is tolerant of the keyboard: Arabic-Indic / Persian digits, spaces and direction marks mean the same PIN (a hash saved from either spelling still opens)
+// (made-up test digits — never a real PIN)
+t('norm_pin folds Arabic-Indic, Persian digits and spaces', Oxygen_Desk::norm_pin(" ٢٤٦ ٨۰١\u{200F}٣٥٧ ") === '246801357', Oxygen_Desk::norm_pin(" ٢٤٦ ٨۰١\u{200F}٣٥٧ "));
+update_option('oxygen_desk_pin', password_hash('246801357', PASSWORD_DEFAULT));
+t('Western hash: Arabic-Indic typing opens', Oxygen_Desk::valid_secret('٢٤٦٨٠١٣٥٧'));
+t('Western hash: Western typing opens', Oxygen_Desk::valid_secret('246801357'));
+t('Western hash: a wrong PIN stays refused', !Oxygen_Desk::valid_secret('246801358') && !Oxygen_Desk::valid_secret('') && !Oxygen_Desk::valid_secret(str_repeat('9', 80)));
+update_option('oxygen_desk_pin', password_hash('٢٤٦٨٠١٣٥٧', PASSWORD_DEFAULT));   // an OLD hash made from the raw Arabic-Indic text
+t('Old Arabic-Indic hash: Western typing opens', Oxygen_Desk::valid_secret('246801357'));
+t('Old Arabic-Indic hash: Arabic-Indic typing opens', Oxygen_Desk::valid_secret('٢٤٦٨٠١٣٥٧'));
+update_option('oxygen_desk_pin', password_hash($PIN, PASSWORD_DEFAULT));
+
+// 6. Rate limit counts only WRONG PINs: many correct logins never lock the owner out, 12 wrong guesses do (then even the right PIN waits)
+$okc = 0; for ($i = 0; $i < 30; $i++) { $r = call('auth', ['op' => 'desk', 'token' => $PIN]); if ($r['status'] === 200) { $okc++; } }
+t('30 correct logins in a row all succeed (renewals are free)', $okc === 30, $okc);
+$codes = []; for ($i = 0; $i < 11; $i++) { $codes[] = call('auth', ['op' => 'desk', 'token' => 'bad-' . $i])['status']; }   // +1 wrong guess made earlier in this file = 12
+t('wrong guesses answer 403 until the limit', count(array_unique($codes)) === 1 && $codes[0] === 403, $codes);
+$r = call('auth', ['op' => 'desk', 'token' => 'bad-x']);
+t('after 12 wrong guesses the site waits (429)', $r['status'] === 429 && ($r['error']['code'] ?? '') === 'rate_limited', $r);
+$r = call('auth', ['op' => 'desk', 'token' => $PIN]);
+t('…and even the right PIN waits while locked', $r['status'] === 429, $r);
 exit($bad ? 1 : 0);
