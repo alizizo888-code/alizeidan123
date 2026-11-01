@@ -33,7 +33,10 @@ export default function FieldMapCanvas({ points = [], lines = [], me = null, onS
     if (!L || !map.current) return
     const g = layer.current; g.clearLayers()
     const all = []
-    for (const ln of lines) L.polyline([ln.from, ln.to], { color: ln.color || '#38bdf8', weight: 3, dashArray: '6 6' }).addTo(g)
+    for (const ln of lines) {
+      const pl = L.polyline([ln.from, ln.to], { color: ln.color || '#38bdf8', weight: 3, dashArray: '6 6' }).addTo(g)
+      if (ln.label) pl.bindTooltip(esc(ln.label), { permanent: true, direction: 'center', className: 'mq-line-label' })
+    }
     for (const p of points) {
       if (p.lat == null || p.lng == null) continue
       const icon = L.divIcon({ className: '', iconSize: [34, 34], iconAnchor: [17, 17], html: `<div style="width:34px;height:34px;border-radius:50%;background:${esc(p.color || '#38bdf8')};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-size:17px;${p.pulse ? 'animation:mqpulse 1.4s infinite;' : ''}">${esc(p.emoji || '📍')}</div>` })
@@ -51,7 +54,7 @@ export default function FieldMapCanvas({ points = [], lines = [], me = null, onS
 
   return (
     <>
-      <style>{'@keyframes mqpulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}100%{box-shadow:0 0 0 16px rgba(239,68,68,0)}}'}</style>
+      <style>{'.mq-line-label{background:#0f172a;color:#fff;border:1px solid #38bdf8;border-radius:999px;padding:1px 8px;font-weight:800;font-size:11px;box-shadow:none}.mq-line-label:before{display:none}@keyframes mqpulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}100%{box-shadow:0 0 0 16px rgba(239,68,68,0)}}'}</style>
       <div ref={el} className={className} style={{ height, width: '100%', borderRadius: 16, overflow: 'hidden', background: '#0b1220' }} />
     </>
   )
