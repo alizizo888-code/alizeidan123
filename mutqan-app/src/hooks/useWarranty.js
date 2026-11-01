@@ -42,13 +42,5 @@ export async function submitClaim(claim) {
     undefined,
     { groupId: gid, visibleTo: 'creator-and-admin', writableBy: 'admins' }
   )
-  try {
-    await push.sendToAdmins(gid, {
-      title: 'طلب ضمان جديد',
-      body: `${claim.customerName || 'عميل'} — ${claim.problem?.slice(0, 60) || ''}`,
-      url: '#/staff/warranties',
-      sound: 'bell',
-    })
-  } catch {}
   return row
 }

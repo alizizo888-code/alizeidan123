@@ -85,10 +85,11 @@ export class CallSession {
 
 export const hotlineSupported = () => typeof RTCPeerConnection !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 
-export async function createCall({ name, phone, userId, deviceId }) {
+// callback: nobody was online on the paired hotline, so the call is recorded as a missed one with a call-back request (the server alerts the team: app + Telegram).
+export async function createCall({ name, phone, userId, deviceId, callback = false }) {
   const gid = await team.groupId()
   const row = await db.insertShared('calls', {
-    status: 'ringing', name: name || 'عميل', phone: phone || '', userId: userId || '', deviceId: deviceId || '', createdAt: new Date().toISOString(),
+    status: callback ? 'missed' : 'ringing', ...(callback ? { callback: true } : {}), name: name || 'عميل', phone: phone || '', userId: userId || '', deviceId: deviceId || '', createdAt: new Date().toISOString(),
   }, undefined, { groupId: gid, visibleTo: 'creator-and-admin', writableBy: 'creator-and-admin', expiresAt: new Date(Date.now() + 86400000).toISOString() })
   return row?.id
 }

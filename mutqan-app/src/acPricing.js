@@ -1,3 +1,4 @@
+import { BUSINESS_WHATSAPP } from './constants'
 // AC price engine — same data & rules as the Oxygen AC app (v24), configurable by the owner.
 export const AC_TYPES = {
   wash: ['سبليت', 'شباك', 'باكيدج', 'كونسيلد', 'داكت', 'مركزي', 'دولابي'],
@@ -24,7 +25,7 @@ export const DEFAULT_AC = {
   split1: 100, split2: 140, split3: 200, win1: 60, win2: 100, win3: 150, winExtra: 50, other1: 180,
   innerOff1: 10, innerOff2: 20, innerOff3: 40, w1: 10, w2: 20, w3: 30, vatPct: 15,
   installPrices: { 'تركيب مكيف': 0, 'فك مكيف': 0, 'فك ونقل وتركيب': 0, 'تأسيس مواسير نحاس': 0 }, // 0 = يحدد بعد المعاينة
-  visitFee: 50, maxDiscountPct: 10, waNumber: '966549423050',
+  visitFee: 50, maxDiscountPct: 10, waNumber: BUSINESS_WHATSAPP,
 }
 const n = (v, fb) => (v !== '' && v != null && Number.isFinite(Number(v)) ? Number(v) : fb)
 export function normalizeAc(row) {

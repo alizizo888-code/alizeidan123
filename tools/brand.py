@@ -17,7 +17,7 @@ SKIP = {'tests/mutqan/seo.php'}      # asserts BOTH brands, must stay as written
 EXT = ('.css', '.js', '.jsx', '.php', '.json', '.mjs', '.html', '.webmanifest')
 KEEP = ['MUTQAN AI']          # internal prompt persona name, never shown to customers
 
-REV = [('#eff7f5', '#eef4fb'), ('#e8f5f2', '#eaf3fc'), ('background:#12a39a;color:#04121f', 'background:#38bdf8;color:#04121f'), ('background:#0a2a42', 'background:#071a33')]   # Mutqan skin colours -> original Oxygen look
+REV = [('966536554731', '966549423050'), ('0536554731', '0549423050'), ('#eff7f5', '#eef4fb'), ('#e8f5f2', '#eaf3fc'), ('background:#12a39a;color:#04121f', 'background:#38bdf8;color:#04121f'), ('background:#0a2a42', 'background:#071a33')]   # Mutqan skin colours -> original Oxygen look
 SKIN = {'theme.js': 'mutqan-app/theme.js', 'skin.css': 'mutqan-app/src/skin.css'}
 
 def rewrite(s):

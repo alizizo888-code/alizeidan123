@@ -1,9 +1,21 @@
 // Sounds without audio files: synthesized tones the owner can pick from, with volume/repeat/vibration controls.
 let ctx = null
+const stateListeners = new Set()
+// 'idle' = no touch yet (the browser keeps sound locked until the first tap) · 'suspended' = locked again · 'running' = sound works
+export const audioState = () => (!ctx ? 'idle' : ctx.state === 'running' ? 'running' : 'suspended')
+export const onAudioState = (fn) => { stateListeners.add(fn); return () => stateListeners.delete(fn) }
+const emit = () => stateListeners.forEach((f) => { try { f(audioState()) } catch { /* ignore */ } })
 const unlock = () => {
-  try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === 'suspended') ctx.resume() } catch { /* no audio */ }
+  try {
+    if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); ctx.onstatechange = emit }
+    if (ctx.state !== 'running') ctx.resume().then(emit, emit)
+    emit()
+  } catch { /* no audio */ }
 }
-if (typeof window !== 'undefined') ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => window.addEventListener(ev, unlock, { passive: true }))
+if (typeof window !== 'undefined') ['pointerdown', 'keydown', 'touchstart', 'click'].forEach((ev) => window.addEventListener(ev, unlock, { passive: true }))
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && ctx && ctx.state !== 'running') unlock() })
+// Explicit unlock (the sound chip): resumes the audio engine and plays a short confirmation so the person hears that it works.
+export function unlockAudio() { unlock(); try { playTone('bell', { volume: 0.8 }) } catch { /* ignore */ } return audioState() }
 
 // [freq, startSec, durSec, wave]
 export const TONES = {

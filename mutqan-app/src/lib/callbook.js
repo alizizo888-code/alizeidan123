@@ -20,6 +20,9 @@ function hash36(s) {
   return h.toString(36).toUpperCase().padStart(5, '0').slice(-5)
 }
 
+// The code a caller gets when no contact exists yet (what the staff register computes too): a customer's own screen can show / pass it (e.g. Telegram deep link).
+export const baseCode = (keys, seed = '') => 'C-' + hash36(keys[0] || 'x' + seed)
+
 // Identity keys of a call, strongest first: signed-in account, phone number, device.
 export const keysOf = (c) => [isReal(c?.userId) ? 'U' + c.userId : '', phoneKey(c?.phone), c?.deviceId ? 'D' + String(c.deviceId).slice(0, 40) : ''].filter(Boolean)
 

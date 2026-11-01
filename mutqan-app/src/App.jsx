@@ -8,6 +8,8 @@ import Offers from './pages/client/Offers'
 import Notifications from './pages/Notifications'
 const FieldMap = lazyRetry(() => import('./pages/FieldMap'))
 const NotifySettings = lazyRetry(() => import('./pages/NotifySettings'))
+const WpHub = lazyRetry(() => import('./pages/WpHub'))
+const HotlineLink = lazyRetry(() => import('./pages/HotlineLink'))
 import Store from './pages/client/Store'
 import MyOrders from './pages/client/MyOrders'
 import Account from './pages/client/Account'
@@ -77,6 +79,8 @@ export default function App() {
         {/* تدفق الطلب وتفاصيله — شاشات مركّزة بدون شريط تبويب */}
         <Route path="/ai" element={<AiChat />} />
         <Route path="/staff/notify-settings" element={<NotifySettings />} />
+        <Route path="/staff/wp" element={<WpHub />} />
+        <Route path="/staff/link" element={<HotlineLink />} />
         <Route path="/s/:spec" element={<AdEntry />} />
         <Route path="/theme" element={<ThemeSettings />} />
         <Route path="/new" element={<NewOrder />} />

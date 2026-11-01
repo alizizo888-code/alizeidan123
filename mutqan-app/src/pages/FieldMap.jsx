@@ -72,7 +72,7 @@ export default function FieldMap() {
 
   return (
     <div className="h-full flex flex-col bg-[#090c14] text-white" dir="rtl">
-      <header className="shrink-0 px-4 pt-[calc(env(safe-area-inset-top,0px)+0.8rem)] pb-2">
+      <header className="shrink-0 px-4 pt-[calc(var(--page-sat,env(safe-area-inset-top,0px))+0.8rem)] pb-2">
         <div className="flex items-center gap-2"><button onClick={() => navigate('/staff')} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"><ChevronRight size={18} /></button><h1 className="flex-1 font-black">🗺️ الخريطة الميدانية</h1><button onClick={addShop} className="flex items-center gap-1 text-xs font-bold bg-violet-600 rounded-full px-3 py-1.5"><Plus size={14} />محل</button></div>
         <p className="text-[10px] text-slate-400 mt-1">{counts.customers} عميل • {counts.orders} طلب جديد • {counts.techs} فني • {counts.shops} محل — «محل» يُثبَّت في منتصف الخريطة</p>
         <div className="flex gap-1.5 overflow-x-auto pt-2 pb-1">
@@ -90,7 +90,7 @@ function Row({ k, v }) { return v ? <p className="text-xs text-slate-300"><span 
 function Sheet({ sel, onClose, navigate, orders }) {
   const d = sel.data
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 max-h-[72vh] overflow-y-auto bg-[#0d1220] border-t border-white/10 rounded-t-3xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div className="fixed inset-x-0 md:right-64 bottom-0 z-40 max-h-[72vh] overflow-y-auto bg-[#0d1220] border-t border-white/10 rounded-t-3xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <button onClick={onClose} className="absolute left-3 top-3 text-slate-400"><X size={18} /></button>
       {sel.kind === 'customer' && <CustomerCard c={d} />}
       {sel.kind === 'order' && (

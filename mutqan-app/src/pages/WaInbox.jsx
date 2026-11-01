@@ -44,7 +44,7 @@ export default function WaInbox() {
 
   return (
     <div className="h-full flex flex-col bg-[#090c14]" dir="rtl">
-      <header className="shrink-0 border-b border-white/10 pt-[env(safe-area-inset-top,0px)] bg-[#090c14]/95">
+      <header className="shrink-0 border-b border-white/10 pt-[var(--page-sat,env(safe-area-inset-top,0px))] bg-[#090c14]/95">
         <div className="max-w-6xl mx-auto w-full px-4 py-3 flex items-center gap-3">
           <button onClick={() => navigate('/staff/operations')} className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center"><ChevronRight size={18} className="text-slate-300" /></button>
           <div className="flex-1 min-w-0">
@@ -549,7 +549,7 @@ function BotSettings() {
       <Field label="رد التحويل لموظف (أثناء الدوام)"><textarea rows={2} value={c.handoffText} onChange={(e) => set('handoffText', e.target.value)} className={inputCls} /></Field>
       <Field label="رد عدم توفر أحد (خارج الدوام)"><textarea rows={2} value={c.awayText} onChange={(e) => set('awayText', e.target.value)} className={inputCls} /></Field>
       <Field label="رد بعد تسجيل البيانات"><textarea rows={2} value={c.doneText} onChange={(e) => set('doneText', e.target.value)} className={inputCls} /></Field>
-      <div className="fixed bottom-0 inset-x-0 z-30 bg-[#090c14]/95 border-t border-white/10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="fixed bottom-0 inset-x-0 md:right-64 z-30 bg-[#090c14]/95 border-t border-white/10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="max-w-3xl mx-auto flex items-center gap-3"><button onClick={save} className="flex-1 bg-primary text-black font-black rounded-xl py-3 text-sm">حفظ إعدادات البوت</button>{saved && <span className="text-xs font-bold text-emerald-300">{saved}</span>}</div>
       </div>
     </div></div>

@@ -1,8 +1,12 @@
 import IncomingCalls from './IncomingCalls'
 import OpsInstall from './OpsInstall'
+import OrderAlarm from './OrderAlarm'
+import SoundChip from './SoundChip'
+import LinkPinger from './LinkPinger'
+import { brandLabel } from '../lib/brand'
 import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Clock, LayoutDashboard, MessageCircle, Bell, Radar, Wallet, ListChecks, Briefcase, Layers, X, Map as MapIcon, Menu, ChevronDown, Settings2, Bot, Tags, Snowflake, ShieldCheck, Phone, UserPlus, Smartphone, Home, ShoppingBag, Palette } from 'lucide-react'
+import { Clock, LayoutDashboard, MessageCircle, Bell, Radar, Wallet, ListChecks, Briefcase, Layers, X, Map as MapIcon, Menu, ChevronDown, Settings2, Bot, Tags, Snowflake, ShieldCheck, Phone, UserPlus, Smartphone, Home, ShoppingBag, Palette, Globe, Link2 } from 'lucide-react'
 import { useTeamRole } from '../hooks/useTeamRole'
 import { useLiveShared } from '../lib/useLive'
 import { auth } from '../lib/auth'
@@ -16,6 +20,7 @@ const NAV = {
     ['/staff/map', 'الخريطة', MapIcon],
     ['/staff/wa-inbox', 'المحادثات', MessageCircle, false, 'wa'],
     ['/notifications', 'الإشعارات', Bell, false, 'bell'],
+    ['/staff/wp', 'روابط ووردبريس', Globe],
     ['/staff/payment-methods', 'الدفع', Wallet],
   ],
   operations: [
@@ -42,6 +47,8 @@ const WORKSPACES = [
   ['/staff/tech-requests', 'مشرف الموقع — طلبات الفنيين'],
   ['/staff/radar', 'الفني — الرادار والمهام'],
   ['/staff/wa-inbox', 'محادثات الواتساب'],
+  ['/staff/wp', 'روابط ووردبريس (تعديل الموقع)'],
+  ['/staff/link', 'ربط الخط الساخن وتيليجرام'],
   ['/staff/payment-methods', 'طرق الدفع'],
   ['/', 'تطبيق العميل'],
 ]
@@ -50,16 +57,12 @@ function OwnerSwitcher() {
   const nav = useNavigate()
   return (
     <>
-      <button onClick={() => setOpen(true)} aria-label="تبديل الواجهة" className="fixed z-40 left-3 top-[calc(env(safe-area-inset-top,0px)+0.6rem)] w-9 h-9 rounded-full bg-primary text-black flex items-center justify-center shadow-lg"><Layers size={17} /></button>
+      <button onClick={() => setOpen(true)} aria-label="تبديل الواجهة" className="shrink-0 w-9 h-9 rounded-full bg-primary text-black flex items-center justify-center shadow"><Layers size={17} /></button>
       {open && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center" onClick={() => setOpen(false)}>
           <div dir="rtl" onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-[#0d1220] border border-white/10 rounded-t-3xl sm:rounded-3xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center mb-3"><p className="flex-1 text-sm font-black text-white">دخول كل الواجهات (المالك)</p><button onClick={() => setOpen(false)} className="text-slate-400"><X size={18} /></button></div>
             <div className="grid gap-2">
-              {/* Private desk apps only: the same switch as the pill at the top (a second, easy-to-hit way to move between أكسجين and متقن). */}
-              {typeof window !== 'undefined' && window.__DESK_KIND__ && (
-                <button onClick={() => { setOpen(false); window.dispatchEvent(new Event('desk-switch')) }} className="text-right rounded-xl bg-sky-400/15 border border-sky-400/40 px-3 py-3 text-sm font-black text-sky-100">⇄ تبديل الموقع: الانتقال إلى {window.__DESK_BRAND__ === 'mutqan' ? 'أكسجين' : 'متقن'}</button>
-              )}
               {WORKSPACES.map(([to, label]) => <button key={to} onClick={() => { setOpen(false); nav(to) }} className="text-right rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-sm font-bold text-slate-100">{label}</button>)}
             </div>
           </div>
@@ -79,6 +82,8 @@ const MANAGE = [
   ['/staff/ai-command', 'مركز قيادة الذكاء', Bot],
   ['/staff/ai-settings', 'إعدادات البوت', Settings2],
   ['/staff/ai-owner', 'تحكم المالك بالبوت', Bot],
+  ['/staff/link', 'ربط الخط الساخن وتيليجرام', Link2],
+  ['/staff/wp', 'روابط ووردبريس', Globe],
   ['/staff/whatsapp', 'أرقام الواتساب', Smartphone],
   ['/staff/notify-settings', 'الإشعارات والرنين', Bell],
   ['/staff/warranties', 'الضمانات', ShieldCheck],
@@ -103,7 +108,7 @@ function SideMenu({ items, role, bell, unread, open, setOpen }) {
   )
   const body = (
     <nav dir="rtl" className="h-full w-64 bg-[#0d1220] border-l border-white/10 flex flex-col p-3 gap-1 overflow-y-auto pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]" data-keep-colors>
-      <p className="text-xs font-black text-primary px-3 py-2">متقن</p>
+      <p className="text-xs font-black text-primary px-3 py-2">{brandLabel()}</p>
       {items.map(link)}
       {canManage && (
         <>
@@ -157,12 +162,31 @@ function PasskeyOffer() {
 }
 
 // Side navigation for every staff role (drawer on phones, fixed sidebar on wide screens).
-function StaffThemeButton({ light, toggle, shift }) {
+function StaffThemeButton({ light, toggle }) {
   return (
     <button onClick={toggle} data-keep-colors aria-label={light ? 'الوضع الداكن' : 'تفتيح الشاشة'} title={light ? 'الوضع الداكن' : 'تفتيح الشاشة'}
-      className={`fixed z-40 ${shift ? 'left-14' : 'left-3'} top-[calc(env(safe-area-inset-top,0px)+0.6rem)] w-9 h-9 rounded-full bg-white/15 border border-white/25 backdrop-blur flex items-center justify-center text-base active:scale-95`}>
+      className="shrink-0 w-9 h-9 rounded-full bg-white/15 border border-white/25 flex items-center justify-center text-base active:scale-95">
       {light ? '🌙' : '☀️'}
     </button>
+  )
+}
+
+// One real bar at the top of every staff screen (menu · app/site name · sound · workspaces · light/dark). Nothing floats over the page any more:
+// the screens start under it, so a page's own buttons can never be hidden behind the layout's buttons.
+const DESK = typeof window !== 'undefined' && window.__DESK_KIND__
+const DESK_BRAND = DESK ? { mutqan: ['متقن', '#12a39a'], oxygen: ['أكسجين', '#38bdf8'] }[window.__DESK_BRAND__] || null : null
+function TopBar({ onMenu, dot, owner, light, toggleLight }) {
+  return (
+    <div dir="rtl" data-keep-colors className="shrink-0 z-30 flex items-center gap-2 px-3 bg-[#0b0f1a] border-b border-white/10 h-[calc(2.9rem+env(safe-area-inset-top,0px))] pt-[var(--page-sat,env(safe-area-inset-top,0px))]">
+      <button onClick={onMenu} aria-label="القائمة" className="md:hidden relative shrink-0 w-9 h-9 rounded-full bg-white/10 border border-white/15 text-white flex items-center justify-center"><Menu size={18} />{dot && <span className="absolute -top-1 -left-1 w-3 h-3 rounded-full bg-rose-500" />}</button>
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        {DESK_BRAND && <span className="shrink-0 rounded-full px-3 py-1 text-[12px] font-black text-black" style={{ background: DESK_BRAND[1] }}>{DESK_BRAND[0]}</span>}
+        {DESK && <span className="truncate text-[12px] font-bold text-white/70">{window.__DESK_KIND__ === 'ops' ? 'غرفة العمليات' : 'التحكم والإعدادات'}</span>}
+      </div>
+      <SoundChip />
+      {owner && <OwnerSwitcher />}
+      <StaffThemeButton light={light} toggle={toggleLight} />
+    </div>
   )
 }
 
@@ -182,14 +206,16 @@ export default function StaffLayout() {
   return (
     <div className="h-full flex bg-[#090c14]" dir="rtl">
       {!hide && <SideMenu items={items} role={role} bell={bell} unread={unread} open={open} setOpen={setOpen} />}
-      <div className="flex-1 min-w-0 min-h-0 relative" dir="rtl">
-        <Outlet />
-        {!hide && <button onClick={() => setOpen(true)} aria-label="القائمة" className="md:hidden fixed z-40 right-3 top-[calc(env(safe-area-inset-top,0px)+0.6rem)] w-9 h-9 rounded-full bg-[#0d1220]/90 border border-white/15 text-white flex items-center justify-center shadow-lg"><Menu size={18} />{(bell + unread) > 0 && <span className="absolute -top-1 -left-1 w-3 h-3 rounded-full bg-rose-500" />}</button>}
-        {!hide && role === 'owner' && <OwnerSwitcher />}
-        {!hide && <StaffThemeButton light={light} toggle={toggleLight} shift={role === 'owner'} />}
-        {!hide && role === 'owner' && <PasskeyOffer />}
-        {signedIn && <IncomingCalls />}
-        {signedIn && <OpsInstall />}
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col" dir="rtl" style={hide ? undefined : { '--page-sat': '0px' }}>
+        {!hide && <TopBar onMenu={() => setOpen(true)} dot={(bell + unread) > 0} owner={role === 'owner'} light={light} toggleLight={toggleLight} />}
+        <div className="flex-1 min-h-0 relative">
+          <Outlet />
+          {!hide && role === 'owner' && <PasskeyOffer />}
+          {signedIn && <IncomingCalls />}
+          {signedIn && <OpsInstall />}
+          {signedIn && <OrderAlarm />}
+          {signedIn && (role === 'owner' || role === 'operations' || role === 'supervisor') && <LinkPinger />}
+        </div>
       </div>
     </div>
   )

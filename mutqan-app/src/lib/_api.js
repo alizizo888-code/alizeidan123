@@ -5,9 +5,10 @@ export const API_BASE = (CFG.api || (import.meta.env && import.meta.env.VITE_API
 export const APP_URL = CFG.app || (typeof location !== 'undefined' ? location.origin + '/app/' : '')
 
 const DESK = typeof window !== 'undefined' && !!window.__DESK_KIND__   // private desk apps keep one session PER SITE (desk_sess_*): no shared mirror that could mix tokens of two sites
-const TOKEN_KEY = 'mutqan_token'
+const NS = DESK && window.__DESK_BRAND__ ? window.__DESK_BRAND__ + ':' : ''   // a desk app = ONE site: its token/user keys carry the site name so two apps in one browser never mix
+const TOKEN_KEY = NS + 'mutqan_token'
 const ANON_KEY = 'mutqan_anon'
-const USER_KEY = 'mutqan_user'
+const USER_KEY = NS + 'mutqan_user'
 const mem = {}
 
 function lsGet(k) { try { return localStorage.getItem(k) } catch { return mem[k] ?? null } }

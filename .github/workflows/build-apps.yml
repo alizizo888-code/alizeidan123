@@ -43,8 +43,9 @@ jobs:
           npm install --no-audit --no-fund
           npx cap add android
           mkdir -p assets
-          cp ../../brand/oxygen/icon-512.png assets/icon-only.png
-          cp ../../brand/oxygen/icon-512.png assets/icon-foreground.png
+          ICON=../../brand/oxygen/icon-512.png; [ -f icon-512.png ] && ICON=icon-512.png
+          cp "$ICON" assets/icon-only.png
+          cp "$ICON" assets/icon-foreground.png
           python3 - <<'PY'
           import zlib, struct
           w = h = 1024

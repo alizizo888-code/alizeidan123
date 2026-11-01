@@ -19,6 +19,32 @@ class Oxygen_Desk {
         add_action('admin_menu', function () { add_submenu_page('oxygen-seo', 'المكتب السري', 'المكتب السري', 'manage_options', 'oxygen-desk', [__CLASS__, 'admin_page']); }, 23);
         add_action('admin_post_oxygen_desk_pin', [__CLASS__, 'save_pin']);
         add_action('admin_post_oxygen_desk_pin_test', [__CLASS__, 'test_pin']);
+        add_action('admin_post_oxygen_desk_sso', [__CLASS__, 'save_sso']);
+        // Direct, persistent entry to WordPress admin from the desk apps (one-time link → long-lived login) + a «back to the app» button inside wp-admin.
+        add_action('init', [__CLASS__, 'sso_consume'], 1);
+        add_action('admin_bar_menu', [__CLASS__, 'admin_bar'], 1);
+        add_action('admin_head', [__CLASS__, 'back_css']);
+        add_action('wp_head', [__CLASS__, 'back_css']);
+    }
+
+    /* ---------------- what the devices report (no PIN, no token — only what happened) ---------------- */
+    const LOG = 'oxygen_desk_log';
+    /** Ring buffer of the last 80 events (PIN accepted / refused / locked, device diagnostics, WordPress entries). Read it in wp-admin → المكتب السري. */
+    public static function log($kind, $info = []) {
+        try {
+            $rows = get_option(self::LOG, []);
+            if (!is_array($rows)) { $rows = []; }
+            $row = ['t' => time(), 'k' => (string) $kind, 'ip' => substr(md5((string) ($_SERVER['REMOTE_ADDR'] ?? '')), 0, 6)];
+            foreach (['app', 'build', 'step', 'info', 'ua'] as $f) { if (isset($info[$f]) && $info[$f] !== '') { $row[$f] = mb_substr(preg_replace('/[\x00-\x1F]/u', ' ', (string) $info[$f]), 0, $f === 'ua' ? 120 : 160); } }
+            $last = $rows ? end($rows) : null;
+            if ($last && ($last['k'] ?? '') === $row['k'] && ($last['app'] ?? '') === ($row['app'] ?? '') && ($last['info'] ?? '') === ($row['info'] ?? '') && ($last['step'] ?? '') === ($row['step'] ?? '') && ($last['ip'] ?? '') === $row['ip'] && $row['t'] - (int) ($last['t'] ?? 0) < 900) {
+                $rows[count($rows) - 1]['t'] = $row['t']; $rows[count($rows) - 1]['n'] = (int) ($last['n'] ?? 1) + 1;   // same thing again within 15 min → one line with a counter
+            } else {
+                $rows[] = $row;
+            }
+            if (count($rows) > 80) { $rows = array_slice($rows, -80); }
+            update_option(self::LOG, $rows, false);
+        } catch (Throwable $e) { /* logging must never break a login */ }
     }
 
     /** The desk apps' single PIN (stored only as a salted hash in this site's database, never in code). Every old secret link is cancelled. */
@@ -173,6 +199,106 @@ class Oxygen_Desk {
         return 'var B=[["company_name","اسم الشركة","i"],["phone","الجوال","i"],["whatsapp","واتساب (أرقام فقط)","i"],["email","البريد","i"],["city","المدينة","i"],["banner_text","نص البانر","t"],["banner_image","رابط صورة البانر","i"],["offers","العروض (سطر لكل عرض)","t"],["services","الخدمات (1|اسم)","t"],["price_rules","قواعد الأسعار","t"],["gallery_urls","روابط صور المعرض","t"]],S=[["tiktok","رابط تيك توك","i"],["facebook","رابط فيسبوك","i"],["tiktok_videos","فيديوهات تيك توك للمعرض","t"],["facebook_videos","فيديوهات فيسبوك للمعرض","t"]];function fld(p,a,v){return"<label>"+a[1]+"</label>"+(a[2]==="t"?"<textarea data-p="+p+" data-k="+a[0]+">"+esc(v||"")+"</textarea>":"<input data-p="+p+" data-k="+a[0]+" value=\""+esc(v||"")+"\">")}function tab(t){$("#app").innerHTML="<div class=r style=margin-bottom:12px><button class="+(t==="s"?"":"g")+" onclick=tab(\x27s\x27)>الإعدادات</button><button class="+(t==="p"?"":"g")+" onclick=tab(\x27p\x27)>المقالات</button><button class="+(t==="g"?"":"g")+" onclick=tab(\x27g\x27)>الصفحات</button></div><div id=v>…</div>";if(t==="s")sets();else list(t==="g"?"page":"post","")}function sets(){api("settings_get").then(function(j){var h="<div class=c><b>بيانات الموقع والعروض</b><br>"+B.map(function(a){return fld("biz",a,j.biz[a[0]])}).join("")+"</div><div class=c><b>تيك توك وفيسبوك</b><br>"+S.map(function(a){return fld("social",a,j.social[a[0]])}).join("")+"</div><button onclick=saveS()>حفظ (يظهر في ووردبريس فورًا)</button>";$("#v").innerHTML=h})}function saveS(){var d={biz:{},social:{}};document.querySelectorAll("[data-p]").forEach(function(e){d[e.dataset.p][e.dataset.k]=e.value});api("settings_save",d).then(function(){toast("تم الحفظ")}).catch(function(e){toast(e.message)})}function list(type,q){api("posts",{type:type,q:q}).then(function(j){var h="<input id=q placeholder=\"بحث…\" value=\""+esc(q)+"\" onchange=\"list(\x27"+type+"\x27,this.value)\">";j.posts.forEach(function(p){h+="<div class=c><b>"+esc(p.title||"(بدون عنوان)")+"</b> <span class=t>"+esc(p.status)+"</span><div class=r style=margin-top:6px><button onclick=\"edit("+p.id+")\">تعديل</button><a href=\""+esc(p.link)+"\" target=_blank rel=noopener><button class=g>عرض</button></a></div></div>"});$("#v").innerHTML=h})}function edit(id){api("post_get",{id:id}).then(function(p){$("#app").innerHTML="<button class=g onclick=tab(\x27p\x27)>← رجوع</button><div class=c><label>العنوان</label><input id=t value=\""+esc(p.title)+"\"><label>الوصف المختصر</label><textarea id=x>"+esc(p.excerpt)+"</textarea><label>المحتوى (HTML)</label><textarea id=b style=min-height:260px;direction:ltr>"+esc(p.content)+"</textarea><label>الحالة</label><select id=s><option value=publish"+(p.status==="publish"?" selected":"")+">منشور</option><option value=draft"+(p.status==="draft"?" selected":"")+">مسودة</option><option value=private"+(p.status==="private"?" selected":"")+">خاص</option></select><button onclick=\"savePost("+p.id+")\">حفظ</button></div>"})}function savePost(id){api("post_save",{id:id,title:$("#t").value,excerpt:$("#x").value,content:$("#b").value,status:$("#s").value}).then(function(){toast("تم الحفظ")}).catch(function(e){toast(e.message)})}tab("s");';
     }
 
+    /* ---------------- WordPress admin from inside the app ---------------- */
+    const SSO_TTL = 90;
+    public static function sso_enabled() { return get_option('oxygen_desk_sso', '1') !== '0'; }
+    /** The WordPress administrator the app logs in as: the one who last saved the PIN here, else the first administrator. */
+    public static function sso_user_id() {
+        $id = (int) get_option('oxygen_desk_wp_user', 0);
+        if ($id && ($u = get_user_by('id', $id)) && user_can($u, 'manage_options')) { return $id; }
+        $a = get_users(['role' => 'administrator', 'number' => 1, 'orderby' => 'ID', 'order' => 'ASC', 'fields' => 'ID']);
+        return $a ? (int) $a[0] : 0;
+    }
+    /** Only a plain wp-admin screen: `edit.php?post_type=page`, `admin.php?page=oxygen-desk`… never another host, never a path outside wp-admin. */
+    public static function safe_admin_path($to) {
+        $to = ltrim(trim((string) $to), '/');
+        $to = preg_replace('#^wp-admin/#', '', $to);
+        if ($to === '') { $to = 'index.php'; }
+        if (strlen($to) > 200 || strpos($to, '..') !== false || !preg_match('#^[A-Za-z0-9_\-/]+\.php(\?[A-Za-z0-9_\-=&%.,:+\[\]]*)?$#', $to)) { throw new Mutqan_Error('bad_request', 'مسار غير مسموح.', 400); }
+        return $to;
+    }
+    private static function safe_back($u) { $u = (string) $u; return preg_match('#^https://desk\.oxygen11\.com/[A-Za-z0-9_./\-]*(\?[A-Za-z0-9_=&.\-]*)?$#', $u) ? $u : ''; }
+    /** One-time address (valid 90 s) that logs the site's administrator in and lands on `$to`. Called by the REST op `wp_sso`, owner session only. */
+    public static function make_sso_url($to, $back = '') {
+        if (!self::sso_enabled()) { throw new Mutqan_Error('forbidden', 'الدخول المباشر إلى ووردبريس متوقف من ووردبريس ← المكتب السري.', 403); }
+        $to = self::safe_admin_path($to);
+        $uid = self::sso_user_id();
+        if (!$uid) { throw new Mutqan_Error('server_error', 'لا يوجد مدير ووردبريس لإتمام الدخول.', 500); }
+        $tok = bin2hex(random_bytes(24));
+        set_transient('oxsso_' . hash('sha256', $tok), ['uid' => $uid, 'to' => $to, 'back' => self::safe_back($back)], self::SSO_TTL);
+        self::log('wp_sso', ['info' => $to]);
+        return add_query_arg('oxygen_sso', $tok, home_url('/'));
+    }
+    /** Redeems a one-time token (single use, 90 s). Returns ['user' => WP_User, 'to' => path, 'back' => url] or null. */
+    public static function sso_redeem($tok) {
+        if (!is_string($tok) || !preg_match('/^[a-f0-9]{48}$/', $tok)) { return null; }
+        $k = 'oxsso_' . hash('sha256', $tok);
+        $d = get_transient($k); delete_transient($k);   // single use, even when it turns out to be unusable
+        if (!is_array($d) || !self::sso_enabled()) { return null; }
+        $u = get_user_by('id', (int) ($d['uid'] ?? 0));
+        if (!$u || !user_can($u, 'manage_options')) { return null; }
+        return ['user' => $u, 'to' => (string) ($d['to'] ?? 'index.php'), 'back' => (string) ($d['back'] ?? '')];
+    }
+    public static function sso_consume() {
+        if (empty($_GET['oxygen_sso']) || !is_string($_GET['oxygen_sso'])) { return; }
+        if (!defined('DONOTCACHEPAGE')) { define('DONOTCACHEPAGE', true); }
+        do_action('litespeed_control_set_nocache', 'oxygen-sso');
+        nocache_headers();
+        header('X-Robots-Tag: noindex, nofollow'); header('Referrer-Policy: no-referrer');
+        $r = self::sso_redeem(wp_unslash($_GET['oxygen_sso']));
+        if (!$r) { wp_die('انتهت صلاحية رابط الدخول — افتح الصفحة من التطبيق من جديد.', 'رابط منتهٍ', ['response' => 403]); }
+        $u = $r['user'];
+        add_filter('auth_cookie_expiration', function () { return YEAR_IN_SECONDS; }, 99);   // «persistent login»: a year, renewed every time the app opens WordPress
+        wp_set_current_user($u->ID);
+        wp_set_auth_cookie($u->ID, true);
+        if ($r['back'] !== '') { setcookie('oxygen_desk_back', $r['back'], ['expires' => time() + YEAR_IN_SECONDS, 'path' => '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax']); }
+        wp_safe_redirect(admin_url($r['to'])); exit;
+    }
+    private static function back_url() { return isset($_COOKIE['oxygen_desk_back']) && is_user_logged_in() ? self::safe_back(wp_unslash($_COOKIE['oxygen_desk_back'])) : ''; }
+    public static function admin_bar($bar) {
+        $b = self::back_url(); if ($b === '') { return; }
+        $bar->add_node(['id' => 'oxygen-desk-back', 'title' => '◀ العودة للتطبيق', 'href' => $b, 'meta' => ['class' => 'oxygen-desk-back']]);
+    }
+    public static function back_css() {
+        if (self::back_url() === '') { return; }
+        echo '<style>#wpadminbar #wp-admin-bar-oxygen-desk-back{display:block!important}#wpadminbar #wp-admin-bar-oxygen-desk-back>a{background:#0ea5e9!important;color:#04121f!important;font-weight:700!important}</style>';
+    }
+    /** Numbers shown on the app's WordPress cards (what is inside each area). */
+    public static function overview() {
+        $n = function ($o, $k) { return is_object($o) && isset($o->$k) ? (int) $o->$k : 0; };
+        $pc = function_exists('wp_count_posts') ? wp_count_posts('page') : null; $po = function_exists('wp_count_posts') ? wp_count_posts('post') : null;
+        $cm = function_exists('wp_count_comments') ? wp_count_comments() : null;
+        $att = function_exists('wp_count_attachments') ? array_sum(array_map('intval', (array) wp_count_attachments())) : 0;
+        $us = function_exists('count_users') ? count_users() : ['total_users' => 0];
+        return [
+            'site' => ['name' => get_bloginfo('name'), 'url' => home_url('/'), 'wp' => get_bloginfo('version')],
+            'pages' => ['publish' => $n($pc, 'publish'), 'draft' => $n($pc, 'draft')],
+            'posts' => ['publish' => $n($po, 'publish'), 'draft' => $n($po, 'draft'), 'future' => $n($po, 'future')],
+            'comments' => ['pending' => $n($cm, 'moderated'), 'total' => $n($cm, 'total_comments')],
+            'media' => (int) $att,
+            'users' => (int) ($us['total_users'] ?? 0),
+            'plugins' => count((array) get_option('active_plugins', [])),
+            'sso' => self::sso_enabled(),
+        ];
+    }
+    /** Pages or posts of THIS site with the wp-admin address that edits each: the app's «الصفحات / المقالات» lists. */
+    public static function pages($type = 'page', $q = '', $limit = 60) {
+        $type = $type === 'post' ? 'post' : 'page';
+        $args = ['post_type' => $type, 'post_status' => ['publish', 'draft', 'pending', 'private', 'future'], 'posts_per_page' => max(1, min(100, (int) $limit)), 'orderby' => 'modified', 'order' => 'DESC', 'no_found_rows' => true, 'suppress_filters' => true];
+        $q = trim((string) $q); if ($q !== '') { $args['s'] = mb_substr($q, 0, 80); }
+        $out = [];
+        foreach (get_posts($args) as $p) {
+            $out[] = ['id' => (int) $p->ID, 'title' => $p->post_title !== '' ? mb_substr($p->post_title, 0, 120) : '(بدون عنوان)', 'status' => $p->post_status, 'modified' => mysql2date('c', $p->post_modified_gmt ?: $p->post_modified, false), 'view' => get_permalink($p), 'edit' => 'post.php?post=' . (int) $p->ID . '&action=edit'];
+        }
+        return $out;
+    }
+    public static function save_sso() {
+        if (!current_user_can('manage_options')) { wp_die('غير مصرح.'); }
+        check_admin_referer('oxd_sso');
+        update_option('oxygen_desk_sso', !empty($_POST['sso']) ? '1' : '0', false);
+        wp_safe_redirect(admin_url('admin.php?page=oxygen-desk&sso=1')); exit;
+    }
+
     /* ---------------- WP admin: the desk PIN ---------------- */
     public static function admin_page() {
         if (!current_user_can('manage_options')) { return; }
@@ -184,6 +310,19 @@ class Oxygen_Desk {
         if (isset($_GET['test'])) { echo $_GET['test'] === 'ok' ? '<div class="notice notice-success"><p>✅ الرمز الذي كتبته <b>صحيح</b> على هذا الموقع (' . esc_html($host) . ').</p></div>' : '<div class="notice notice-error"><p>❌ الرمز الذي كتبته <b>لا يطابق</b> المحفوظ على هذا الموقع (' . esc_html($host) . ') — اضبطه من جديد بالنموذج الأول.</p></div>'; }
         echo '<p><b>الحالة:</b> ' . (self::pin_is_set() ? 'الرمز مضبوط' . ($at ? ' — آخر ضبط: ' . esc_html(date_i18n('Y-m-d H:i', $at)) : '') : '<span style="color:#b91c1c">الرمز غير مضبوط — لا يمكن لأحد الدخول الآن</span>') . '</p>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="oxygen_desk_pin">' . wp_nonce_field('oxd_pin', '_wpnonce', true, false) . '<p><label>الرمز الجديد (٦ إلى ٣٢ حرفًا أو رقمًا):<br><input type="password" name="pin" autocomplete="new-password" inputmode="numeric" style="min-width:260px" required></label></p><button class="button button-primary">حفظ الرمز</button></form>';
+        echo '<hr><h2>الدخول المباشر إلى ووردبريس من التطبيق</h2><p>زر «روابط ووردبريس» في التطبيق يفتح لوحة ووردبريس لهذا الموقع مباشرة وبدخول ثابت (سنة، يتجدد كل مرة) دون كتابة كلمة مرور، وفي لوحة ووردبريس يظهر زر «العودة للتطبيق». الدخول يتم بحساب المدير الذي حفظ الرمز آخر مرة.</p><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="oxygen_desk_sso">' . wp_nonce_field('oxd_sso', '_wpnonce', true, false) . '<label><input type="checkbox" name="sso" value="1"' . (self::sso_enabled() ? ' checked' : '') . '> السماح للتطبيق بفتح ووردبريس مباشرة</label> <button class="button">حفظ</button></form>';
+        if (isset($_GET['sso'])) { echo '<div class="notice notice-success"><p>تم الحفظ.</p></div>'; }
+        $rows = array_reverse((array) get_option(self::LOG, []));
+        echo '<hr><h2>ماذا تقول الأجهزة (آخر الأحداث)</h2><p>هنا يظهر كل دخول وفشل وحالة تقرير من التطبيقين — دون أي رمز أو كلمة مرور — لنعرف سبب أي مشكلة على جهازك.</p>';
+        if (!$rows) { echo '<p>لا أحداث بعد.</p>'; }
+        else {
+            $names = ['desk_ok' => '✅ دخول', 'desk_bad_pin' => '❌ رمز خاطئ', 'desk_locked' => '⛔ قفل مؤقت', 'desk_unset' => '⚠️ الرمز غير مضبوط', 'wp_sso' => '🔗 فتح ووردبريس', 'diag' => '🩺 تقرير جهاز'];
+            echo '<table class="widefat striped" style="max-width:980px"><thead><tr><th>الوقت</th><th>الحدث</th><th>التطبيق</th><th>الإصدار</th><th>التفاصيل</th><th>×</th></tr></thead><tbody>';
+            foreach (array_slice($rows, 0, 60) as $r) {
+                echo '<tr><td>' . esc_html(date_i18n('m-d H:i:s', (int) ($r['t'] ?? 0))) . '</td><td>' . esc_html($names[$r['k'] ?? ''] ?? ($r['k'] ?? '')) . '</td><td>' . esc_html($r['app'] ?? '') . '</td><td>' . esc_html($r['build'] ?? '') . '</td><td>' . esc_html(trim(($r['step'] ?? '') . ' ' . ($r['info'] ?? ''))) . '</td><td>' . (int) ($r['n'] ?? 1) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
         echo '<hr><h2>اختبار الرمز على هذا الموقع</h2><p>اكتب الرمز لتعرف هل هو مطابق للمحفوظ هنا (لا يغيّر شيئًا).</p><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="oxygen_desk_pin_test">' . wp_nonce_field('oxd_pin_test', '_wpnonce', true, false) . '<p><input type="password" name="pin" autocomplete="off" inputmode="numeric" style="min-width:260px" required></p><button class="button">اختبار</button></form></div>';
     }
     public static function save_pin() {
@@ -193,6 +332,7 @@ class Oxygen_Desk {
         if (strlen($pin) < 6 || strlen($pin) > 32) { wp_die('الرمز من ٦ إلى ٣٢ خانة.'); }
         update_option('oxygen_desk_pin', password_hash($pin, PASSWORD_DEFAULT), false);
         update_option('oxygen_desk_pin_at', time(), false);
+        update_option('oxygen_desk_wp_user', get_current_user_id(), false);
         wp_safe_redirect(admin_url('admin.php?page=oxygen-desk&saved=1')); exit;
     }
     public static function test_pin() {

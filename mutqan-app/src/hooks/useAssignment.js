@@ -19,6 +19,7 @@ export function useAssignment({ profiles, settings, orders }) {
       forced: false,
       status: 'assigned',
       handler: 'technician',
+      dispatch: tech.isSite || by === 'site' || by === 'site-fallback' ? 'site' : 'tech',   // site = the built-in «فني الموقع»; tech = a technician of the team
       transferLog: [...(order.transferLog || []), { from: order.handler || 'operations', to: 'technician', at: new Date().toISOString(), by: by, note: tech.displayName || '' }],
       statusHistory: [...(order.statusHistory || []), { status: 'assigned', at: new Date().toISOString(), by }],
     })
@@ -42,7 +43,7 @@ export function useAssignment({ profiles, settings, orders }) {
   }, [])
 
   // «فني الموقع»: handles orders in in-house mode, and is the fallback when nobody else is open / available.
-  const siteTech = (profiles || []).find((t) => t.userId && t.userId === settings?.siteTechId && t.active !== false) || null
+  const siteTech = (profiles || []).find((t) => t.userId && t.userId === settings?.siteTechId && t.active !== false) || (profiles || []).find((t) => t.isSite && t.active !== false) || null
   const assignToSite = useCallback(async (order) => { if (!siteTech) return null; await linkTech(order, siteTech, 'site'); return siteTech }, [siteTech, linkTech])
 
   const autoAssignOrder = useCallback(async (order, gid) => {
@@ -57,5 +58,16 @@ export function useAssignment({ profiles, settings, orders }) {
     return null
   }, [profiles, orders, settings, siteTech, linkTech, forceOrder])
 
-  return { linkTech, forceOrder, autoAssignOrder, assignToSite, siteTech }
+  // Handing an order over WITHOUT a technician account: directly to technicians on WhatsApp, or to an outside party. The order keeps its status; the tag tells operations where it went.
+  const markForwarded = useCallback(async (order, kind, party = null, by = 'operations') => {
+    const at = new Date().toISOString()
+    await db.updateShared('orders', order.id, {
+      dispatch: kind,   // 'whatsapp' | 'external'
+      externalParty: kind === 'external' ? party : null,
+      forwardedAt: at,
+      transferLog: [...(order.transferLog || []), { from: order.handler || 'operations', to: kind === 'external' ? 'external' : 'whatsapp', at, by, note: kind === 'external' ? (party?.name || 'جهة خارجية') : 'واتساب مباشر' }],
+    })
+  }, [])
+
+  return { linkTech, forceOrder, autoAssignOrder, assignToSite, siteTech, markForwarded }
 }

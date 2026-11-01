@@ -20,3 +20,14 @@ export function rankTechs(order, profiles, orders) {
   return sc.map((r) => ({ t: r.tech, dist: distTo(r.tech, order), rem: r.rem, ok: r.available, pos: techPos(r.tech), score: r.score, reasons: r.reasons }))
 }
 export const sourceLabel = (o) => (o.source === 'whatsapp_manual' ? 'واتساب (يدوي)' : o.routing === 'operations' ? 'الموقع' : o.source === 'whatsapp' ? 'واتساب' : 'التطبيق')
+
+// Where an order was handed over: the built-in site technician, a team technician, technicians directly on WhatsApp, or an outside party.
+export const DISPATCH_META = {
+  site: { label: 'فني الموقع', icon: '🏠', cls: 'bg-sky-500/20 text-sky-200 border-sky-400/40' },
+  tech: { label: 'فني الفريق', icon: '🧰', cls: 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30' },
+  whatsapp: { label: 'واتساب مباشر', icon: '📲', cls: 'bg-green-500/20 text-green-200 border-green-400/40' },
+  external: { label: 'جهة خارجية', icon: '🤝', cls: 'bg-amber-500/20 text-amber-200 border-amber-400/40' },
+}
+// Already handed over outside the app (technicians directly on WhatsApp, or an outside party): auto-distribution must not give it a second technician.
+export const isForwarded = (o) => o.dispatch === 'whatsapp' || o.dispatch === 'external'
+export const dispatchOf = (o) => (o.dispatch && DISPATCH_META[o.dispatch] ? o.dispatch : o.inhouse ? 'site' : o.technicianId ? 'tech' : null)

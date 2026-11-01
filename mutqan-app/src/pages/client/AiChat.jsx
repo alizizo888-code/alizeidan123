@@ -8,6 +8,7 @@ import { db } from '../../lib/db'
 import { auth } from '../../lib/auth'
 import { team } from '../../lib/team'
 import { push } from '../../lib/push'
+import { BUSINESS_WHATSAPP } from '../../constants'
 import { audio } from '../../lib/audio'
 import { useLiveShared } from '../../lib/useLive'
 import { useSession } from '../../hooks/useSession'
@@ -559,17 +560,10 @@ export default function AiChat() {
       if (highValue) payload.escalation = { reason: 'high_value', level: 'operations', at: now, by: 'mutqan_ai', note: value >= Number(esc.highValueAmount) ? `قيمة الطلب ${value} ر.س` : `عميل لديه ${pastCount} طلبات سابقة` }
       const order = await db.insertShared('orders', payload, undefined, { groupId: gid, visibleTo: 'creator-and-admin' })
       cancelNudge()
-      try {
-        await push.sendToAdmins(gid, {
-          title: highValue ? '⭐ طلب عميل عالي القيمة عبر MUTQAN AI' : 'طلب جديد عبر MUTQAN AI',
-          body: `${specialtyLabel(d.specialtyId)} — ${who.name || ''}`,
-          url: `#/staff/order/${order.id}`,
-          sound: 'bell',
-        })
-      } catch {}
+      // the server alerts operations (full details) the moment the order is stored — nothing to send from here
       const verifyUrl = await sealOrder({ draft: d, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
       const waText = buildOrderMessage({ verifyUrl, draft: d, who: { ...who, name: who.name || d.contact?.name, phone: who.phone || d.contact?.phone }, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
-      const waNumber = ac.cfg.waNumber || '966549423050'
+      const waNumber = ac.cfg.waNumber || BUSINESS_WHATSAPP
       if (routing.mode !== 'operations') openWhatsApp(waNumber, waText)
       setDraft(null)
       setPanel(null)
@@ -620,14 +614,7 @@ export default function AiChat() {
       localStorage.setItem(TICKET_KEY, t)
       setTicket(t)
       setPanel(null)
-      try {
-        await push.sendToAdmins(gid, {
-          title: reason === 'human' ? 'عميل يطلب موظفًا' : `تصعيد: ${escalationLabel(reason)}`,
-          body: `${customer.name || 'زائر'} — ${sum.intent || ''}`,
-          url: `#/staff/handoff/${row.id}`,
-          sound: 'bell',
-        })
-      } catch {}
+      // the server raises the alert for operations when the request is stored
       await addMessage({ role: 'assistant', kind: 'system', content: `تم تحويلك إلى موظف خدمة العملاء 🎧${reason !== 'human' ? ` (${escalationLabel(reason)})` : ''} أرسلنا له ملخص المحادثة كاملًا، وسيرد عليك هنا قريبًا.` })
     } catch {
       setError('تعذر التحويل لموظف الآن، حاول مرة أخرى')
@@ -646,7 +633,7 @@ export default function AiChat() {
 
   return (
     <div className="h-full flex flex-col bg-[#eff7f5]" dir="rtl">
-      <header className="shrink-0 bg-white/85 backdrop-blur-xl border-b border-sky-100/60 pt-[env(safe-area-inset-top,0px)]">
+      <header className="shrink-0 bg-white/85 backdrop-blur-xl border-b border-sky-100/60 pt-[var(--page-sat,env(safe-area-inset-top,0px))]">
         <div className="max-w-3xl mx-auto w-full px-4 py-3 flex items-center gap-2.5">
           <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-white border border-sky-100 shadow-sm flex items-center justify-center active:scale-95 transition-transform shrink-0">
             <ChevronRight size={18} className="text-slate-600" />
@@ -675,7 +662,7 @@ export default function AiChat() {
             onClick={() => {
               const lines = messages.filter((m) => m.role && m.content && m.kind !== 'system').slice(-8).map((m) => `${m.role === 'user' ? 'أنا' : 'المساعد'}: ${m.content}`).join('\n')
               const txt = `السلام عليكم، أبغى أكمل طلبي مع متقن.${customer?.name ? `\nالاسم: ${customer.name}` : ''}${draft?.description ? `\nالطلب: ${draft.description}` : ''}${finalPrice ? `\nالسعر المتفق: ${finalPrice} ر.س` : ''}${lines ? `\n\nآخر المحادثة:\n${lines}` : ''}`
-              window.open(`https://wa.me/${ac.cfg.waNumber || '966549423050'}?text=${encodeURIComponent(txt)}`, '_blank', 'noopener')
+              window.open(`https://wa.me/${ac.cfg.waNumber || BUSINESS_WHATSAPP}?text=${encodeURIComponent(txt)}`, '_blank', 'noopener')
             }}
             aria-label="إرسال عبر واتساب"
             className="shrink-0 text-[10px] font-bold text-white bg-emerald-500 rounded-full px-3 py-2 shadow-sm active:scale-95"

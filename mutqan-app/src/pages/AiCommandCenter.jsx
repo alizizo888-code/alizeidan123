@@ -86,7 +86,7 @@ export default function AiCommandCenter() {
 
   return (
     <div className="h-full overflow-y-auto bg-[#090c14]" dir="rtl">
-      <header className="sticky top-0 z-20 bg-[#090c14]/90 backdrop-blur border-b border-white/10 pt-[env(safe-area-inset-top,0px)]">
+      <header className="sticky top-0 z-20 bg-[#090c14]/90 backdrop-blur border-b border-white/10 pt-[var(--page-sat,env(safe-area-inset-top,0px))]">
         <div className="max-w-6xl mx-auto w-full px-4 md:px-8 py-4 flex items-center gap-3">
           <button onClick={() => navigate('/staff/operations')} className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10">
             <ChevronRight size={18} className="text-slate-300" />

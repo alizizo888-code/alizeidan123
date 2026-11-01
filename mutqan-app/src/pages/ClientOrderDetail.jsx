@@ -114,7 +114,7 @@ export default function ClientOrderDetail() {
 
   return (
     <div className="h-full overflow-y-auto pb-28" dir="rtl">
-      <header className="sticky top-0 z-20 bg-[#f5f7f5]/90 backdrop-blur border-b border-black/5 pt-[env(safe-area-inset-top,0px)]">
+      <header className="sticky top-0 z-20 bg-[#f5f7f5]/90 backdrop-blur border-b border-black/5 pt-[var(--page-sat,env(safe-area-inset-top,0px))]">
         <div className="max-w-2xl mx-auto w-full px-4 py-4 flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-white border border-black/5 shadow-sm flex items-center justify-center active:scale-[0.95] transition-transform">
             <ChevronRight size={18} className="text-slate-600" />

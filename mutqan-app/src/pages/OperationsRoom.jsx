@@ -17,6 +17,7 @@ import { useOpsMode } from '../hooks/useOpsMode'
 import { useOrderRouting } from '../hooks/useOrderRouting'
 import ManualOrderModal from '../components/ManualOrderModal'
 import AssignModal from '../components/ops/AssignModal'
+import { openWhatsApp, buildDispatchMessage } from '../lib/waOrder'
 import OpsMap from '../components/ops/OpsMap'
 import IntakeBoard from '../components/ops/IntakeBoard'
 import DispatchBoard from '../components/ops/DispatchBoard'
@@ -24,7 +25,7 @@ import TechTable from '../components/ops/TechTable'
 import OrdersTable from '../components/ops/OrdersTable'
 import CallsTab from '../components/CallsTab'
 import { needsFollowUp } from '../lib/callbook'
-import { DONE, RUNNING, isToday, isUnassigned } from '../components/ops/helpers'
+import { DONE, RUNNING, isToday, isUnassigned, isForwarded } from '../components/ops/helpers'
 import { serviceScopeLabel, specialtyLabel } from '../constants'
 
 const TABS = [
@@ -39,19 +40,32 @@ const TABS = [
 
 // Desk (private ops app): KPIs, then the field map and live customers FIRST; dispatch/owner settings sink below.
 const DESK_OPS = typeof window !== 'undefined' && window.__DESK_KIND__ === 'ops'
+const ROUTING_LABEL = { both: 'واتساب + غرفة العمليات (معًا)', whatsapp: 'واتساب فقط', operations: 'غرفة العمليات فقط' }
+// Link the receiving person opens: the staff app on this site.
+const orderLink = (o) => { try { return new URL('#/staff/order/' + o.id, window.__MUTQAN__?.app || location.origin + '/app/').toString() } catch { return '' } }
+const ROUTING_NEXT = { both: 'operations', operations: 'whatsapp', whatsapp: 'both' }
 
 export default function OperationsRoom() {
   const navigate = useNavigate()
   const { role, isOwner, loading: roleLoading } = useTeamRole()
   const { profiles, settings, updateSettings } = useTechProfiles()
   const { data: orders, loading: ordersLoading } = useLiveShared('orders', { order: '-createdAt', limit: 300 })
-  const { autoAssignOrder, linkTech, assignToSite, siteTech } = useAssignment({ profiles, settings, orders })
+  const { autoAssignOrder, linkTech, assignToSite, siteTech, markForwarded } = useAssignment({ profiles, settings, orders })
   const { data: crmRows } = useLiveShared('customer_profiles', { limit: 800 })
   const [sp] = useSearchParams()
   const [tab, setTab] = useState(() => (TABS.some((x) => x[0] === sp.get('tab')) ? sp.get('tab') : 'map'))
   useEffect(() => { const t = sp.get('tab'); if (t && TABS.some((x) => x[0] === t)) setTab(t) }, [sp])
   // a tab opened from a link (e.g. ?tab=calls) may sit off-screen in the scrolling tab bar
-  useEffect(() => { try { document.querySelector(`[data-tab="${tab}"]`)?.scrollIntoView({ block: 'nearest', inline: 'center' }) } catch { /* ignore */ } }, [tab])
+  // Centre the chosen tab inside its own strip only — scrollIntoView would also scroll the whole page down to the strip (and hide the top of the page under the sticky header).
+  useEffect(() => {
+    try {
+      const el = document.querySelector(`[data-tab="${tab}"]`)
+      const page = el && el.closest('.overflow-y-auto')
+      const top = page ? page.scrollTop : 0
+      el?.scrollIntoView({ block: 'nearest', inline: 'center' })
+      if (page) page.scrollTop = top
+    } catch { /* ignore */ }
+  }, [tab])
   const { data: callLog } = useLiveShared('call_log', { order: '-createdAt', limit: 300 })
   const { data: callContacts } = useLiveShared('call_contacts', { limit: 1000 })
   const missedCalls = useMemo(() => callLog.filter((l) => needsFollowUp(l)).length, [callLog])
@@ -77,7 +91,7 @@ export default function OperationsRoom() {
 
   const mode = settings?.mode || 'manual'
   const strategy = settings?.strategy || 'smart'
-  const unassigned = useMemo(() => orders.filter((o) => o.status === 'new' && !o.technicianId && !o.inhouse), [orders])
+  const unassigned = useMemo(() => orders.filter((o) => o.status === 'new' && !o.technicianId && !o.inhouse && !isForwarded(o)), [orders])
 
   useEffect(() => { team.groupId().then(setGid) }, [])
 
@@ -215,7 +229,7 @@ export default function OperationsRoom() {
 
   return (
     <div className="h-full overflow-y-auto pb-24 bg-[#090c14]" dir="rtl">
-      <header className="sticky top-0 z-20 bg-[#090c14]/90 backdrop-blur border-b border-white/10 pt-[env(safe-area-inset-top,0px)]">
+      <header className="sticky top-0 z-20 bg-[#090c14]/90 backdrop-blur border-b border-white/10 pt-[var(--page-sat,env(safe-area-inset-top,0px))]">
         <div className="max-w-6xl mx-auto w-full px-4 py-3 flex items-center gap-2 overflow-x-auto pl-24">
           <button onClick={() => navigate('/staff')} className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center">
             <ChevronRight size={18} className="text-slate-300" />
@@ -343,8 +357,8 @@ export default function OperationsRoom() {
             <div className="flex items-center gap-2 mb-3"><Radar size={16} className="text-primary" /><h2 className="text-white font-bold text-sm">استقبال الطلبات (المالك)</h2></div>
             <div className="flex gap-2 flex-wrap">
 
-              <button onClick={() => routing.setMode(routing.mode === 'operations' ? 'whatsapp' : 'operations').catch(() => {})} className={`shrink-0 rounded-xl px-3 py-2 text-[11px] font-black border ${routing.mode === 'operations' ? 'bg-amber-400 text-black border-amber-200' : 'bg-white/5 border-white/10 text-slate-200'}`}>
-                📋 توجيه الطلبات: {routing.mode === 'operations' ? 'لمشرف العمليات' : 'للواتساب'}
+              <button onClick={() => routing.setMode(ROUTING_NEXT[routing.mode]).catch(() => {})} className={`shrink-0 rounded-xl px-3 py-2 text-[11px] font-black border ${routing.mode === 'both' ? 'bg-emerald-400 text-black border-emerald-200' : routing.mode === 'operations' ? 'bg-amber-400 text-black border-amber-200' : 'bg-white/5 border-white/10 text-slate-200'}`}>
+                📋 توجيه الطلبات: {ROUTING_LABEL[routing.mode]}
               </button>
               <button onClick={() => routing.setOpsCreate(!routing.opsCreate).catch(() => {})} className={`shrink-0 rounded-xl px-3 py-2 text-[11px] font-black border ${routing.opsCreate ? 'bg-emerald-400 text-black border-emerald-200' : 'bg-white/5 border-white/10 text-slate-200'}`}>
                 ➕ إنشاء طلبات يدوية: {routing.opsCreate ? 'مفعّل' : 'متوقف'}
@@ -481,7 +495,19 @@ export default function OperationsRoom() {
           </>
         )}
       </div>
-      {assignOrder && <AssignModal order={assignOrder} profiles={profiles} orders={orders} onAssign={(o, t) => linkTech(o, t, 'operations')} onClose={() => setAssignOrder(null)} />}
+      {assignOrder && (
+        <AssignModal order={assignOrder} profiles={profiles.filter((t) => !t.isSite)} orders={orders} siteTech={siteTech} parties={settings?.externalParties || []}
+          onAssign={(o, t) => linkTech(o, t, 'operations')}
+          onSite={(o) => assignToSite(o)}
+          onWhatsApp={async (o) => { openWhatsApp('', buildDispatchMessage(o, { appUrl: orderLink(o) })); await markForwarded(o, 'whatsapp') }}   // WhatsApp opens first, inside the tap (browsers block it after a wait)
+          onExternal={async (o, party) => {
+            openWhatsApp(party.phone, buildDispatchMessage(o, { appUrl: orderLink(o) }))
+            const list = [party, ...(settings?.externalParties || []).filter((x) => x.phone !== party.phone)].slice(0, 12)
+            updateSettings({ externalParties: list }).catch(() => {})
+            await markForwarded(o, 'external', party)
+          }}
+          onClose={() => setAssignOrder(null)} />
+      )}
       {manualOpen && <ManualOrderModal by={role} onClose={() => setManualOpen(false)} />}
     </div>
   )
