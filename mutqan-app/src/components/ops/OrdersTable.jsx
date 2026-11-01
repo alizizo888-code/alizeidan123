@@ -1,3 +1,4 @@
+import { orderFacts } from '../../lib/orderFacts'
 import DispatchBadge from './DispatchBadge'
 import { useMemo, useState } from 'react'
 import { Search, Phone } from 'lucide-react'
@@ -44,7 +45,7 @@ export default function OrdersTable({ orders, onOpen, onAssign }) {
               return (
                 <tr key={o.id} className="border-t border-white/5 text-slate-200 hover:bg-white/[0.03]">
                   <td className="px-2.5 py-2"><button onClick={() => onOpen(o)} className="font-black text-primary" dir="ltr">#{String(o.id).slice(-5)}</button>{o.priority === 'urgent' && <span className="mr-1 rounded bg-rose-500/25 text-rose-200 px-1.5 text-[9px] font-black">عاجل</span>}</td>
-                  <td className="px-2.5 py-2 whitespace-nowrap">{specialtyLabel(o.specialtyId)}{o.preferredTime ? <p className="text-[9px] text-slate-500">⏰ {o.preferredTime}</p> : null}</td>
+                  <td className="px-2.5 py-2 whitespace-nowrap">{specialtyLabel(o.specialtyId)}{(o.preferredTime || o.appointmentAt) ? <p className="text-[9px] text-slate-500">📅 {orderFacts(o).when}</p> : null}</td>
                   <td className="px-2.5 py-2 max-w-[200px]"><p className="font-bold text-white truncate">{o.clientName || 'عميل'}</p><p className="text-[10px] text-slate-500 truncate">{o.address || '—'}</p></td>
                   <td className="px-2.5 py-2 whitespace-nowrap">{dispatchOf(o) ? <DispatchBadge order={o} /> : <span className="text-rose-300">بدون فني</span>}</td>
                   <td className="px-2.5 py-2"><span className="rounded-full px-2 py-0.5 text-[10px] font-black whitespace-nowrap" style={{ background: (m.color || '#64748b') + '33', color: m.color }}>{m.label || o.status}</span></td>

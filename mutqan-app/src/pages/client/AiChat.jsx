@@ -562,7 +562,7 @@ export default function AiChat() {
       cancelNudge()
       // the server alerts operations (full details) the moment the order is stored — nothing to send from here
       const verifyUrl = await sealOrder({ draft: d, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
-      const waText = buildOrderMessage({ verifyUrl, draft: d, who: { ...who, name: who.name || d.contact?.name, phone: who.phone || d.contact?.phone }, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
+      const waText = buildOrderMessage({ verifyUrl, draft: { ...d, acQuote: d.acq, description: d.problem }, who: { ...who, name: who.name || d.contact?.name, phone: who.phone || d.contact?.phone }, price: d.agreedPrice || quoteFor(d)?.total, orderId: order.id })
       const waNumber = ac.cfg.waNumber || BUSINESS_WHATSAPP
       if (routing.mode !== 'operations') openWhatsApp(waNumber, waText)
       setDraft(null)

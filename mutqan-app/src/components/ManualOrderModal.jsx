@@ -26,7 +26,7 @@ export default function ManualOrderModal({ onClose, onCreated, by, initial }) {
       const price = Number(f.price)
       const order = await db.insertShared('orders', {
         clientId: null, clientName: f.name.trim(), clientPhone: '966' + phone.slice(-9), clientType: 'guest',
-        specialtyId: f.specialtyId, description: f.description.trim(), serviceDetails: f.description.trim() || null,
+        specialtyId: f.specialtyId, description: f.description.trim(), serviceDetails: null,
         preferredTime: appt.label || null, appointmentAt: appt.at || null, address: f.address.trim(),
         ...(price > 0 ? { agreedPrice: price } : {}),
         priority: initial?.priority === 'urgent' ? 'urgent' : 'normal', status: 'new', statusHistory: [{ status: 'new', at: now, by: by || 'operations' }],

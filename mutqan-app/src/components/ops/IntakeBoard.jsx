@@ -2,6 +2,7 @@ import { MapPin, Phone, Zap, UserCheck, Eye } from 'lucide-react'
 import { specialtyLabel } from '../../constants'
 import { isUnassigned, isForwarded, ageText, minsAgo, sourceLabel } from './helpers'
 import DispatchBadge from './DispatchBadge'
+import { orderFacts } from '../../lib/orderFacts'
 
 // Order reception board: everything that has come in and is still waiting for a technician, oldest urgent first.
 export default function IntakeBoard({ orders, mode, onAssign, onAuto, onOpen, onLocate, busyId }) {
@@ -34,7 +35,7 @@ export default function IntakeBoard({ orders, mode, onAssign, onAuto, onOpen, on
                   <p className="text-[10px] text-slate-500">{sourceLabel(o)}</p>
                 </div>
               </div>
-              {(o.preferredTime || o.agreedPrice || o.price || o.priceQuote?.total) && <p className="text-[11px] text-slate-300">{o.preferredTime ? `⏰ ${o.preferredTime}` : ''}{o.preferredTime && (o.agreedPrice || o.price || o.priceQuote?.total) ? ' · ' : ''}{o.agreedPrice || o.price || o.priceQuote?.total ? `💰 ${o.agreedPrice || o.price || o.priceQuote?.total} ر.س` : ''}</p>}
+              {(o.preferredTime || o.appointmentAt || o.agreedPrice || o.price || o.priceQuote?.total) && <p className="text-[11px] text-slate-300">{(o.preferredTime || o.appointmentAt) ? `📅 ${orderFacts(o).when}` : ''}{(o.preferredTime || o.appointmentAt) && (o.agreedPrice || o.price || o.priceQuote?.total) ? ' · ' : ''}{o.agreedPrice || o.price || o.priceQuote?.total ? `💰 ${o.agreedPrice || o.price || o.priceQuote?.total} ر.س` : ''}</p>}
               <div className="flex gap-1.5 flex-wrap">
                 <button onClick={() => onAssign(o)} className="flex-1 min-w-[90px] flex items-center justify-center gap-1 bg-primary text-black font-black rounded-xl py-2 text-xs"><UserCheck size={13} />إسناد يدوي</button>
                 <button onClick={() => onAuto(o)} disabled={busyId === o.id} className="flex-1 min-w-[90px] flex items-center justify-center gap-1 bg-emerald-500 text-black font-black rounded-xl py-2 text-xs disabled:opacity-50"><Zap size={13} />آلي</button>

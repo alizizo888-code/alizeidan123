@@ -145,6 +145,49 @@ final class Mutqan_Rest {
         if ($event !== 'telegram_msg' && class_exists('Mutqan_Telegram')) { try { Mutqan_Telegram::notify($title, $body); } catch (Throwable $e) { error_log('[mutqan] telegram notify: ' . get_class($e)); } }
     }
 
+
+    /* ---- one fact, one line: the same split the app uses (kind / units / customer note / appointment / sent time) ---- */
+    private static function kind_label($d) {
+        $modes = ['wash' => 'غسيل', 'install' => 'تركيب ونقل', 'maintenance' => 'صيانة وفحص'];
+        $m = $d['acQuote']['mode'] ?? '';
+        if (isset($modes[$m])) { return $modes[$m]; }
+        $sd = trim((string) ($d['serviceDetails'] ?? ''));
+        if ($sd === '' || $sd === trim((string) ($d['description'] ?? ''))) { return ''; }
+        $parts = explode(' — ', $sd, 2);
+        return mb_substr(trim($parts[0]), 0, 60);
+    }
+    private static function units_text($d) {
+        $aq = $d['acQuote'] ?? [];
+        $qty = (int) ($aq['qty'] ?? ($d['qty'] ?? 0));
+        $type = (string) ($aq['type'] ?? '');
+        if (!$type && !empty($d['serviceDetails']) && strpos($d['serviceDetails'], ' — ') !== false) { $type = trim(preg_replace('/\s*×\s*\d+\s*$/u', '', explode(' — ', $d['serviceDetails'], 2)[1])); }
+        if (($d['specialtyId'] ?? '') === 'ac') {
+            if (self::kind_label($d) === 'صيانة وفحص') { return $type; }
+            return trim(($type ? $type . ' ' : '') . '× ' . max(1, $qty));
+        }
+        return $qty > 1 ? '× ' . $qty : '';
+    }
+    private static function note_text($d) {
+        $n = trim((string) ($d['description'] ?? ''));
+        $k = self::kind_label($d);
+        return ($k !== '' && ($n === $k || $n === trim((string) ($d['serviceDetails'] ?? '')))) ? '' : mb_substr($n, 0, 280);
+    }
+    private static function full_when($iso) {
+        try { $dt = new DateTime($iso); $dt->setTimezone(new DateTimeZone('Asia/Riyadh')); $now = new DateTime('now', new DateTimeZone('Asia/Riyadh')); } catch (Throwable $e) { return (string) $iso; }
+        $days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+        $months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+        $diff = (int) round((strtotime($dt->format('Y-m-d')) - strtotime($now->format('Y-m-d'))) / 86400);
+        $word = [0 => 'اليوم', 1 => 'غدًا', 2 => 'بعد غد', -1 => 'أمس'][$diff] ?? '';
+        $h = (int) $dt->format('G');
+        $t = (($h % 12) ?: 12) . ':' . $dt->format('i') . ' ' . ($h < 12 ? 'ص' : 'م');
+        return implode(' — ', array_filter([$word, $days[(int) $dt->format('w')] . ' ' . $dt->format('j') . ' ' . $months[(int) $dt->format('n') - 1] . ' ' . $dt->format('Y'), $t]));
+    }
+    private static function when_text($d) {
+        if (!empty($d['appointmentAt']) && strtotime((string) $d['appointmentAt'])) { return self::full_when((string) $d['appointmentAt']); }
+        if (($d['priority'] ?? '') === 'urgent') { return '⚡ عاجل — الآن'; }
+        return !empty($d['preferredTime']) ? (string) $d['preferredTime'] : 'أقرب وقت';
+    }
+
     /** Top priority: every new order alerts the whole admin team immediately, server-side (cannot be skipped by the client). */
     private static function alert_new_order($doc) {
         $urgent = (($doc['priority'] ?? '') === 'urgent');
@@ -156,12 +199,12 @@ final class Mutqan_Rest {
         $lines = array_filter([
             'الطلب: #' . substr((string) $doc['id'], -5) . ' · المصدر: ' . $src,
             !empty($doc['specialtyId']) ? 'الخدمة: ' . $doc['specialtyId'] : '',
-            !empty($doc['description']) ? 'التفاصيل: ' . mb_substr((string) $doc['description'], 0, 280) : '',
             $price ? 'السعر: ' . $price . ' ر.س' : '',
-            !empty($doc['serviceDetails']) ? 'نوع الطلب: ' . mb_substr((string) $doc['serviceDetails'], 0, 160) : '',
-            (!empty($doc['qty']) && (int) $doc['qty'] > 1) ? 'عدد المكيفات/الوحدات: ' . (int) $doc['qty'] : '',
-            !empty($doc['preferredTime']) ? 'الموعد: ' . $doc['preferredTime'] : '',
-            !empty($doc['appointmentAt']) ? 'الموعد المحدد: ' . $doc['appointmentAt'] : '',
+            self::kind_label($doc) ? 'نوع الطلب: ' . self::kind_label($doc) : '',
+            self::units_text($doc) ? ((($doc['specialtyId'] ?? '') === 'ac' ? 'المكيفات: ' : 'العدد: ') . self::units_text($doc)) : '',
+            self::note_text($doc) ? 'التفاصيل: ' . self::note_text($doc) : '',
+            'الموعد: ' . self::when_text($doc),
+            'وقت إرسال الطلب: ' . self::full_when(gmdate('c')),
             !empty($doc['taxInvoice']) ? 'مطلوب فاتورة ضريبية' . (!empty($doc['invoiceVat']) ? ' — الرقم الضريبي: ' . preg_replace('/\D/', '', (string) $doc['invoiceVat']) : '') : '',
             !empty($doc['clientName']) ? 'الاسم: ' . $doc['clientName'] : '',
             !empty($doc['clientPhone']) ? 'الجوال: ' . $doc['clientPhone'] : '',
