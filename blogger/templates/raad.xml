@@ -41,6 +41,7 @@ a{color:var(--c);text-decoration:none}a:hover{text-decoration:underline}
 .foot{text-align:center;color:var(--mut);font-size:13px;padding:10px 16px 24px}
 .blog-pager{display:flex;justify-content:space-between;margin:10px 0}
 .read-more{font-weight:700}
+.side .widget.cta-box{background:var(--c);color:#fff;border:0}
 ]]></b:skin>
 <script type='application/ld+json'>{"@context":"https://schema.org","@type":"HomeAndConstructionBusiness","name":"رعد السماء للصيانة والمقاولات العامة","url":"https://blog-raad.oxygen11.com/","areaServed":["مكة المكرمة","جدة"],"parentOrganization":{"@type":"Organization","name":"مجموعة أكسجين للصيانة والمقاولات العامة","url":"https://oxygen11.com/"},"sameAs":["https://oxygen11.com/"]}</script>
 </head>
@@ -49,9 +50,7 @@ a{color:var(--c);text-decoration:none}a:hover{text-decoration:underline}
  <div class='brand'><div class='mark'>ر</div><div>
   <b:if cond='data:view.isHomepage'><h1><a expr:href='data:blog.homepageUrl' style='color:#fff'><data:blog.title/></a></h1><b:else/><div class='h1'><a expr:href='data:blog.homepageUrl' style='color:#fff'><data:blog.title/></a></div></b:if>
   <p>مكافحة الحشرات والقوارض — مكة المكرمة وجدة</p></div></div>
- <b:section class='nav' id='nav' maxwidgets='1' showaddelement='false'>
-  <b:widget id='PageList1' locked='true' title='الصفحات' type='PageList' version='2'/>
- </b:section>
+ <nav class='PageList'><ul><li><a href='/'>الرئيسية</a></li><li><a href='/p/blog-page.html'>من نحن</a></li><li><a href='/p/blog-page_01.html'>برامج المكافحة</a></li><li><a href='/p/blog-page_45.html'>أمان الأسرة</a></li><li><a href='/p/blog-page_505.html'>احجز رشّة</a></li><li><a href='/p/blog-page_777.html'>سياسة الخصوصية</a></li></ul></nav>
 </div></header>
 <div class='wrap'>
  <main>

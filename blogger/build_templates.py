@@ -60,6 +60,7 @@ a{color:var(--c);text-decoration:none}a:hover{text-decoration:underline}
 .foot{text-align:center;color:var(--mut);font-size:13px;padding:10px 16px 24px}
 .blog-pager{display:flex;justify-content:space-between;margin:10px 0}
 .read-more{font-weight:700}
+.side .widget.cta-box{background:var(--c);color:#fff;border:0}
 ]]></b:skin>
 <script type='application/ld+json'>{"@context":"https://schema.org","@type":"HomeAndConstructionBusiness","name":"__FULL__","url":"https://__HOST__/","areaServed":["مكة المكرمة","جدة"],"parentOrganization":{"@type":"Organization","name":"مجموعة أكسجين للصيانة والمقاولات العامة","url":"__HUB__/"},"sameAs":["__HUB__/"]}</script>
 </head>
@@ -68,9 +69,7 @@ a{color:var(--c);text-decoration:none}a:hover{text-decoration:underline}
  <div class='brand'><div class='mark'>__INITIAL__</div><div>
   <b:if cond='data:view.isHomepage'><h1><a expr:href='data:blog.homepageUrl' style='color:#fff'><data:blog.title/></a></h1><b:else/><div class='h1'><a expr:href='data:blog.homepageUrl' style='color:#fff'><data:blog.title/></a></div></b:if>
   <p>__ANGLE__ — مكة المكرمة وجدة</p></div></div>
- <b:section class='nav' id='nav' maxwidgets='1' showaddelement='false'>
-  <b:widget id='PageList1' locked='true' title='الصفحات' type='PageList' version='2'/>
- </b:section>
+ <nav class='PageList'><ul><li><a href='/'>الرئيسية</a></li>__PAGES__</ul></nav>
 </div></header>
 <div class='wrap'>
  <main>
@@ -125,6 +124,7 @@ for b in net:
         "__COLOR__": b["color"], "__NAME__": escape(b["name"]), "__FULL__": escape(full), "__HOST__": b["host"],
         "__HUB__": HUB, "__ANGLE__": escape(b["angle_label"]), "__INITIAL__": escape(b["name"].replace("ال", "", 1)[:1]),
         "__ORDER__": f"{HUB}/app/?via={b['id']}#/new", "__NETWORK__": "".join(items),
+        "__PAGES__": "".join(f"<li><a href='{u}'>{escape(t)}</a></li>" for t, u in b.get("page_paths", [])),
     }
     xml = TPL
     for k, v in rep.items():
