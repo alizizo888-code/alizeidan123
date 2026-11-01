@@ -168,6 +168,14 @@ final class Mutqan_Auth {
         return self::find_by_id($id);
     }
 
+    /** The built-in «فني الموقع»: a real technician user of the site (handle `site`) that in-house orders go to and that backs up the pool when nobody else is free.
+     *  Its password is random and never shown; the owner can set one from the team page and hand the account to whoever works on site. */
+    public static function ensure_site_tech() {
+        $u = self::find_by_handle('site');
+        if (!$u) { $u = self::create_user('site', 'فني الموقع', '', bin2hex(random_bytes(12)), 'technician', 'active'); }
+        return $u;
+    }
+
     public static function issue_session($uid) {
         global $wpdb;
         $token = bin2hex(random_bytes(32));
