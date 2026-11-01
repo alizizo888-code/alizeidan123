@@ -14,7 +14,9 @@
    "أسعار تقريبية",
    "تواصل معنا",
    "سياسة الخصوصية"
-  ]
+  ],
+  "blog_id": "6391057821086543844",
+  "blogspot": "https://oxygen11-ac.blogspot.com/"
  },
  {
   "id": "mutqan",
@@ -31,7 +33,9 @@
    "مشاريعنا",
    "اطلب معاينة",
    "الخصوصية والشروط"
-  ]
+  ],
+  "blog_id": "3179938514491708346",
+  "blogspot": "https://mutqan-cold-rooms.blogspot.com/"
  },
  {
   "id": "motakhases",
@@ -48,7 +52,9 @@
    "ضمان الإصلاح",
    "احجز فني",
    "الخصوصية"
-  ]
+  ],
+  "blog_id": "391427769394449046",
+  "blogspot": "https://almotakhases-fridges.blogspot.com/"
  },
  {
   "id": "muhandis",
@@ -65,7 +71,9 @@
    "السلامة أولاً",
    "اتصل بالمهندس",
    "سياسة الخصوصية"
-  ]
+  ],
+  "blog_id": "7081285325132302655",
+  "blogspot": "https://almuhandis-electric.blogspot.com/"
  },
  {
   "id": "aqsa",
@@ -82,7 +90,9 @@
    "خدمات السباكة",
    "اطلب سباك",
    "الخصوصية"
-  ]
+  ],
+  "blog_id": "1802546498472066184",
+  "blogspot": "https://alaqsa-plumbing.blogspot.com/"
  },
  {
   "id": "raad",
@@ -99,7 +109,9 @@
    "أمان الأسرة",
    "احجز رشّة",
    "الخصوصية"
-  ]
+  ],
+  "blog_id": "8806802594842501644",
+  "blogspot": "https://raad-alsamaa-pest.blogspot.com/"
  },
  {
   "id": "mutamakkin",
@@ -116,7 +128,9 @@
    "العزل والتعقيم",
    "احجز موعد",
    "الخصوصية"
-  ]
+  ],
+  "blog_id": null,
+  "blogspot": null
  },
  {
   "id": "khabeer",
@@ -133,7 +147,9 @@
    "أسئلة شائعة",
    "اطلب زيارة",
    "الخصوصية"
-  ]
+  ],
+  "blog_id": null,
+  "blogspot": null
  },
  {
   "id": "homeservice",
@@ -150,7 +166,9 @@
    "باقات الصيانة",
    "اشترك الآن",
    "الخصوصية"
-  ]
+  ],
+  "blog_id": null,
+  "blogspot": null
  },
  {
   "id": "ibtikar",
@@ -167,7 +185,9 @@
    "حاسبة التوفير",
    "اطلب مهندس",
    "الخصوصية"
-  ]
+  ],
+  "blog_id": null,
+  "blogspot": null
  },
  {
   "id": "mutamad",
@@ -184,7 +204,9 @@
    "فروعنا",
    "تواصل",
    "الخصوصية"
-  ]
+  ],
+  "blog_id": null,
+  "blogspot": null
  },
  {
   "id": "misriya",
@@ -201,6 +223,8 @@
    "مواعيد العمل",
    "تواصل",
    "الخصوصية"
-  ]
+  ],
+  "blog_id": null,
+  "blogspot": null
  }
 ]

@@ -116,9 +116,10 @@ a{color:var(--c);text-decoration:none}a:hover{text-decoration:underline}
 """
 
 for b in net:
-    others = [o for o in net if o["id"] != b["id"]]
+    # only blogs that exist; the blogspot address keeps working and Blogger redirects it to the custom domain once one is set
+    others = [o for o in net if o["id"] != b["id"] and o.get("blogspot")]
     items = [f"<li><a href='{HUB}/'><i style='background:#38bdf8'></i>الموقع الرئيسي — أكسجين</a></li>"]
-    items += [f"<li><a href='https://{o['host']}/'><i style='background:{o['color']}'></i>{escape(o['title'])}</a></li>" for o in others]
+    items += [f"<li><a href='{o['blogspot']}'><i style='background:{o['color']}'></i>{escape(o['title'])}</a></li>" for o in others]
     full = f"{b['name']} للصيانة والمقاولات العامة" if b["id"] != "oxygen" else "مجموعة أكسجين للصيانة والمقاولات العامة"
     rep = {
         "__COLOR__": b["color"], "__NAME__": escape(b["name"]), "__FULL__": escape(full), "__HOST__": b["host"],
