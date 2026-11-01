@@ -220,6 +220,11 @@ final class Mutqan_Store {
         $row = self::fetch_row($coll, $id);
         return $row ? (json_decode($row['data'], true) ?: []) : [];
     }
+    /** Creator id of a doc ('' when unknown) — used to tell an order's customer from everyone else. */
+    public static function owner_of($coll, $id) {
+        $row = self::fetch_row(self::valid_coll($coll), (string) $id);
+        return $row ? (string) $row['owner_id'] : '';
+    }
     private static function fetch_row($coll, $id) {
         global $wpdb;
         $t = self::table('docs');
