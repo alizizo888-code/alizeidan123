@@ -5,7 +5,7 @@ import os, re, sys
 from PIL import Image, ImageDraw, ImageFont
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 src = open(os.path.join(ROOT, 'oxygen-ac-automation/includes/class-oxygen-network.php'), encoding='utf-8').read()
-BR = re.findall(r"'(\w+)'\s*=>\s*\['name' => '([^']+)',\s*'label' => '([^']+)',\s*'color' => '(#[0-9a-f]{6})'\]", src)
+BR = re.findall(r"'(\w+)'\s*=>\s*\['name' => '([^']+)',\s*'label' => '([^']+)',\s*'color' => '(#[0-9a-f]{6})'(?:,\s*'twin' => '\w+')?\]", src)
 FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
 
 def shade(h, k):

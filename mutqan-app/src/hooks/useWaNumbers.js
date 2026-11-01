@@ -29,7 +29,7 @@ export function useWaNumbers() {
     // A satellite shows only the numbers tagged with its own brand; with none tagged, its own number (from the network registry) serves every department.
     const mine = all.filter((n) => n.brand === NET.id)
     if (mine.length || !NET.wa) return mine
-    return WA_DEPARTMENTS.slice(0, 4).map((d, i) => ({ id: `brand-${d.id}`, phone: NET.wa, label: NET.name, department: d.id, enabled: true, type: 'business', sort: i }))
+    return WA_DEPARTMENTS.slice(0, 4).map((d, i) => ({ id: `brand-${d.id}`, phone: (i % 2 && NET.wa2) || NET.wa, label: NET.name, department: d.id, enabled: true, type: 'business', sort: i }))
   }, [data])
   return { numbers, loading }
 }

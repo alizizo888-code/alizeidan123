@@ -19,6 +19,7 @@ $ok = true; $t = function ($n, $c, $x = null) use (&$ok) { echo ($c ? 'PASS ' : 
 $E = 'Oxygen_SEO_Engine';
 $reset = function ($host) use ($E) { $GLOBALS['__host'] = $host; $r = new ReflectionClass($E); $pc = $r->getProperty('cache'); $pc->setAccessible(true); $pc->setValue(null, []); };
 $sats = Oxygen_Network::satellites();
+$t('20 satellites', count($sats) === 20);
 $all = []; $titles = []; $keys = [];
 foreach ($sats as $id) {
     $reset($id . '.oxygen11.com');
@@ -28,7 +29,7 @@ foreach ($sats as $id) {
     $head = array_slice($plan, 0, 1000);
     $foc = count(array_filter($head, function ($i) { return in_array($i['sid'], ['ac-wash', 'ac-maint', 'ac-install', 'ac-central', 'cold-room', 'freezer-room', 'fridge'], true); })) / 1000;
     $loc = count(array_filter($head, function ($i) { return $i['city'] === 'مكة المكرمة' || $i['city'] === 'جدة' || $i['city'] === 'مكة وجدة' || (strpos($i['city'], 'بمكة المكرمة') !== false) || (strpos($i['city'], 'بجدة') !== false); })) / 1000;
-    $t("$id plan size + 70% A/C-cold ($foc) + 70% Makkah/Jeddah ($loc)", $n >= 1000 && $foc >= 0.67 && $foc <= 0.73 && $loc >= 0.67 && $loc <= 0.73, [$n, $foc, $loc]);
+    $t("$id plan size + 70% A/C-cold ($foc) + 70% Makkah/Jeddah ($loc)", $n >= 2900 && $foc >= 0.67 && $foc <= 0.73 && $loc >= 0.67 && $loc <= 0.73, [$n, $foc, $loc]);
     $t("$id has both cold-room kinds and other fields", count(array_filter($plan, function ($i) { return $i['sid'] === 'cold-room'; })) > 20 && count(array_filter($plan, function ($i) { return $i['sid'] === 'plumbing'; })) > 5);
     $t("$id keys namespaced + owned", !array_filter($plan, function ($i) use ($E, $id) { return strpos($i['key'], 'oxy-net-' . $id . '-') !== 0 || !$E::owns($i); }));
     $t("$id titles end with its brand", !array_filter($head, function ($i) use ($id) { return substr($i['title'], -strlen(' | ' . Oxygen_Network::registry()[$id]['name'])) !== ' | ' . Oxygen_Network::registry()[$id]['name']; }));
@@ -39,7 +40,11 @@ $t('no key shared by two satellites', max($keys) === 1);
 $flat = []; foreach ($titles as $id => $ts) { foreach ($ts as $x) { $flat[$x] = ($flat[$x] ?? 0) + 1; } }
 $t('first 300 titles unique across all 10 sites', max($flat) === 1, array_slice(array_filter($flat, function ($v) { return $v > 1; }), 0, 3));
 $firsts = array_map(function ($p) { return $p[0]['sid'] . '|' . $p[0]['city'] . '|' . $p[0]['title']; }, $all);
-$t('every site starts with a different article', count(array_unique($firsts)) === 10);
+$t('every site starts with a different article', count(array_unique($firsts)) === 20);
+// how alike are two sites' first 300 articles (same service in the same place)? must stay low
+$pairs = []; foreach ($all as $id => $pl) { $pairs[$id] = array_flip(array_map(function ($i) { return $i['sid'] . '|' . $i['city'] . '|' . ($i['facet'] ?? ''); }, array_slice($pl, 0, 300))); }
+$ids = array_keys($pairs); $worst = 0; for ($i = 0; $i < 20; $i++) { for ($j = $i + 1; $j < 20; $j++) { $worst = max($worst, count(array_intersect_key($pairs[$ids[$i]], $pairs[$ids[$j]])) / 300); } }
+$t('no two sites overlap on more than 15% of (service, place, facet) topics in the first 300 articles (worst ' . round($worst, 3) . ')', $worst <= 0.15, $worst);
 // body: same builder, different rotation per site; never an empty / broken article
 $reset('raad.oxygen11.com'); $pa = $E::plan(); $reset('khabeer.oxygen11.com'); $pb = $E::plan();
 $ha = null;
@@ -53,11 +58,12 @@ $pq = $E::build($pb[3], 0, []); $t('faq + desc present', !empty($pq['faq']) && !
 // core sites unaffected
 $reset('oxygen11.com'); $core = $E::plan(); $t('core plan untouched (no oxy-net keys, no cold-room)', !array_filter($core, function ($i) { return strpos($i['key'], 'oxy-net-') === 0 || $i['sid'] === 'cold-room'; }) && $E::brand() === 'أكسجين');
 $reset('mutqan.oxygen11.com'); $t('mutqan core unchanged', $E::brand() === 'متقن' && $E::salt() === 11);
-// ramp
-$GLOBALS['__opts'] = ['oxygen_net_seo' => ['start' => 6, 'step' => 4, 'every' => 3, 'cap' => 40, 'since' => 1000000]];
+// rhythm: 6 burst days at the core sites' pace, then 10 a day
+$GLOBALS['__opts'] = ['oxygen_net_seo' => ['burst' => 180, 'burst_days' => 6, 'steady' => 10, 'since' => 1000000]];
 $day = 86400;
-$t('ramp: day 0 = start', Oxygen_Network_SEO::quota(1000000 + 100) === 6);
-$t('ramp: +step every 3 days', Oxygen_Network_SEO::quota(1000000 + 3 * $day) === 10 && Oxygen_Network_SEO::quota(1000000 + 6 * $day + 5) === 14);
-$t('ramp: never above the cap', Oxygen_Network_SEO::quota(1000000 + 400 * $day) === 40);
+$t('burst: first day 180', Oxygen_Network_SEO::quota(1000000 + 100) === 180 && Oxygen_Network_SEO::phase(1000000 + 100) === 'burst');
+$t('burst: still 180 on day 6 (index 5)', Oxygen_Network_SEO::quota(1000000 + 5 * $day + 80000) === 180);
+$t('then 10 a day from the 7th day', Oxygen_Network_SEO::quota(1000000 + 6 * $day) === 10 && Oxygen_Network_SEO::phase(1000000 + 6 * $day) === 'steady' && Oxygen_Network_SEO::quota(1000000 + 90 * $day) === 10);
+$t('plan is long enough for 6 burst days + 40 steady days', count($all['raad']) >= 6 * 180 + 40 * 10);
 echo $ok ? "ALL PASSED\n" : "SOME FAILED\n";
 exit($ok ? 0 : 1);

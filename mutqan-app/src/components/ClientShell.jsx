@@ -2,7 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { Home, ClipboardList, Calculator, LayoutGrid, User, Wrench, Percent, ShoppingBag, Snowflake, Sparkles } from 'lucide-react'
 import FloatingContact from './FloatingContact'
 import { AdForward } from './AdLanding'
-import { BL } from '../lib/netBrand'
+import { BL, NET } from '../lib/netBrand'
 
 // ترتيب التبويبات كما في الواجهة المعتمدة (من اليمين لليسار): طلباتي، حاسب الأسعار، الرئيسية، المزيد، حسابي
 const TABS = [
@@ -32,9 +32,11 @@ export default function ClientShell() {
       {/* Desktop sidebar */}
       <aside className="hidden md:flex md:w-60 shrink-0 flex-col bg-white border-e border-sky-100 p-4 gap-1">
         <div className="flex items-center gap-2 px-2 py-3 mb-2">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-md shadow-sky-300/50">
-            <Snowflake size={20} className="text-white" />
-          </div>
+          {NET.core ? (
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-md shadow-sky-300/50">
+              <Snowflake size={20} className="text-white" />
+            </div>
+          ) : <img src={`${window.__MUTQAN__?.app || '/app/'}icon-192.png`} alt={NET.name} className="w-10 h-10 rounded-2xl shadow-md" />}
           <div>
             <p className="font-display font-black text-slate-900 text-lg leading-none">{BL}</p>
             <p className="text-[10px] text-sky-600 font-bold mt-1">الصيانة والمقاولات العامة</p>

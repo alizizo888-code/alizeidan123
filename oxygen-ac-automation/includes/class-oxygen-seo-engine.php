@@ -50,6 +50,8 @@ class Oxygen_SEO_Engine {
         if (!$urls || !function_exists('wp_remote_post')) { return; }
         $key = self::indexnow_key();
         $host = (string) wp_parse_url(home_url('/'), PHP_URL_HOST);
+        $d = wp_date('Y-m-d'); $cnt = get_option('oxygen_indexnow_day', []); $cnt = is_array($cnt) ? array_slice($cnt, -7, null, true) : [];
+        $cnt[$d] = (int) ($cnt[$d] ?? 0) + min(100, count($urls)); update_option('oxygen_indexnow_day', $cnt, false);
         wp_remote_post('https://api.indexnow.org/indexnow', [
             'timeout' => 5, 'blocking' => false, 'headers' => ['Content-Type' => 'application/json; charset=utf-8'],
             'body' => wp_json_encode(['host' => $host, 'key' => $key, 'keyLocation' => home_url('/' . $key . '.txt'), 'urlList' => array_slice($urls, 0, 100)]),
