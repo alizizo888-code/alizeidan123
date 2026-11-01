@@ -1,4 +1,5 @@
 import ServiceDocs from '../components/ServiceDocs'
+import { orderFacts } from '../lib/orderFacts'
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronRight, MapPin, Wrench, Navigation, CheckCircle2, XCircle, Send, Sparkles, GitBranch, Wallet, AlertTriangle, Loader2, Phone, Clock, Ruler } from 'lucide-react'
@@ -281,9 +282,6 @@ export default function OrderDetailStaff() {
           </div>
         )}
 
-        {order.description && (
-          <Card><p className="text-sm text-slate-300">{order.description}</p></Card>
-        )}
 
         {order.address && (
           <Card>
@@ -295,12 +293,16 @@ export default function OrderDetailStaff() {
           </Card>
         )}
 
-        {order.serviceDetails && (
-          <Card>
-            <p className="text-xs font-bold text-slate-500 mb-1">تفاصيل الخدمة</p>
-            <p className="text-sm text-white font-bold">{order.serviceDetails}</p>
-          </Card>
-        )}
+        {(() => {
+          const f = orderFacts(order)
+          const rows = [['🧰', 'نوع الطلب', f.kind], ['❄️', f.unitsLabel, f.units], ['📝', 'التفاصيل', f.note], ['📅', 'الموعد', f.when], ['🕐', 'وقت إرسال الطلب', f.sentAt], ['🧾', 'فاتورة ضريبية', order.taxInvoice ? `مطلوبة${order.invoiceVat ? ` — ${order.invoiceVat}` : ''}` : '']].filter((r) => r[2])
+          return rows.length ? (
+            <Card>
+              <p className="text-xs font-bold text-slate-500 mb-2">تفاصيل الطلب</p>
+              <div className="grid gap-1.5">{rows.map(([i, l, v]) => <p key={l} className="text-sm text-white"><span className="text-slate-400 text-xs font-bold">{i} {l}: </span><b>{v}</b></p>)}</div>
+            </Card>
+          ) : null
+        })()}
 
         {order.technicianName && (
           <Card>

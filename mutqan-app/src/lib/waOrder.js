@@ -1,6 +1,7 @@
 // Builds the full order message and opens the customer's own WhatsApp toward the business number.
 import { specialtyLabel } from '../constants'
 import { post } from './_api'
+import { orderFacts } from './orderFacts'
 
 // Registers the order's key facts on the server and returns a short verification link (null if offline).
 export async function sealOrder({ draft = {}, price, orderId }) {
@@ -13,18 +14,18 @@ export async function sealOrder({ draft = {}, price, orderId }) {
 
 export function buildOrderMessage({ draft = {}, who = {}, price, orderId, detail, verifyUrl, bookedAt }) {
   const c = draft.coords || {}
+  const f = orderFacts({ ...draft, description: detail || draft.problem || draft.description, bookedAt: bookedAt || new Date().toISOString() })
   const lines = [
     '🔔 *طلب جديد — متقن*',
     orderId ? `رقم الطلب: #${String(orderId).slice(-5)}` : null,
     who.name ? `👤 الاسم: ${who.name}` : null,
     who.phone ? `📱 الجوال: ${who.phone}` : null,
-    `🛠️ الخدمة: ${specialtyLabel(draft.specialtyId) || '-'}`,
-    detail || draft.problem ? `📝 التفاصيل: ${detail || draft.problem}` : null,
-    draft.serviceDetails ? `🧰 نوع الطلب: ${draft.serviceDetails}` : null,
-    draft.qty >= 1 && draft.specialtyId === 'ac' ? `❄️ عدد المكيفات: ${draft.qty}` : draft.qty > 1 ? `🔢 العدد: ${draft.qty}` : null,
-    `⏰ الموعد المطلوب: ${draft.preferredTime || (draft.priority === 'urgent' ? 'عاجل — الآن' : 'أقرب وقت')}`,
-    draft.appointmentAt ? `📅 الموعد المحدد: ${new Date(draft.appointmentAt).toLocaleString('ar-SA', { dateStyle: 'full', timeStyle: 'short' })}` : null,
-    bookedAt ? `🕐 وقت إرسال الطلب: ${new Date(bookedAt).toLocaleString('ar-SA', { dateStyle: 'medium', timeStyle: 'short' })}` : null,
+    `🛠️ الخدمة: ${f.service || '-'}`,
+    f.kind ? `🧰 نوع الطلب: ${f.kind}` : null,
+    f.units ? `${draft.specialtyId === 'ac' ? '❄️' : '🔢'} ${f.unitsLabel}: ${f.units}` : null,
+    f.note ? `📝 التفاصيل: ${f.note}` : null,
+    `📅 الموعد: ${f.when}`,
+    f.sentAt ? `🕐 وقت إرسال الطلب: ${f.sentAt}` : null,
     draft.welcomeDiscountPct ? `🎁 خصم ترحيبي ${draft.welcomeDiscountPct}%${draft.welcomeOff ? ` (−${draft.welcomeOff} ر.س)` : ' حتى 20 ر.س'} على أول طلب` : null,
     price ? `💰 السعر المتفق: ${price} ر.س` : null,
     c.address || draft.locationText ? `🏠 العنوان: ${c.address || draft.locationText}` : null,
@@ -45,15 +46,17 @@ export function openWhatsApp(number, text) {
 // The order exactly as operations forwards it to a technician / an outside party over WhatsApp (everything needed to do the job, nothing about prices paid to others).
 export function buildDispatchMessage(order = {}, { appUrl } = {}) {
   const o = order
+  const f = orderFacts(o)
   const lines = [
     '📋 *طلب للتنفيذ — متقن*',
     `رقم الطلب: #${String(o.id || '').slice(-5)}`,
-    `🛠️ الخدمة: ${specialtyLabel(o.specialtyId) || '-'}`,
-    o.serviceDetails || o.description ? `📝 التفاصيل: ${o.serviceDetails || o.description}` : null,
-    o.qty >= 1 && o.specialtyId === 'ac' ? `❄️ عدد المكيفات: ${o.qty}` : o.qty > 1 ? `🔢 العدد: ${o.qty}` : null,
-    o.appointmentAt ? `📅 الموعد المحدد: ${new Date(o.appointmentAt).toLocaleString('ar-SA', { dateStyle: 'full', timeStyle: 'short' })}` : null,
+    `🛠️ الخدمة: ${f.service || '-'}`,
+    f.kind ? `🧰 نوع الطلب: ${f.kind}` : null,
+    f.units ? `${o.specialtyId === 'ac' ? '❄️' : '🔢'} ${f.unitsLabel}: ${f.units}` : null,
+    f.note ? `📝 التفاصيل: ${f.note}` : null,
+    `📅 الموعد: ${f.when}`,
+    f.sentAt ? `🕐 وقت إرسال الطلب: ${f.sentAt}` : null,
     o.taxInvoice ? `🧾 مطلوب فاتورة ضريبية${o.invoiceVat ? ` — الرقم الضريبي للعميل: ${o.invoiceVat}` : ''}` : null,
-    `⏰ الموعد: ${o.preferredTime || (o.priority === 'urgent' ? 'عاجل — الآن' : 'أقرب وقت')}`,
     o.clientName ? `👤 العميل: ${o.clientName}` : null,
     o.clientPhone ? `📱 الجوال: ${o.clientPhone}` : null,
     o.address ? `🏠 العنوان: ${o.address}` : null,
