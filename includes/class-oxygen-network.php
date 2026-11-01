@@ -37,6 +37,10 @@ final class Oxygen_Network {
         return $r;
     }
 
+    public static function is_satellite() { $id = self::current_id(); return !empty($id) && empty(self::registry()[$id]['core']); }
+    /** 0..9 among the satellites (stable: registry order). */
+    public static function slot($id = null) { $i = array_search($id ?: self::current_id(), self::satellites(), true); return $i === false ? -1 : (int) $i; }
+
     public static function ids() { return array_keys(self::registry()); }
     public static function satellites() { return array_values(array_filter(self::ids(), function ($id) { return empty(self::registry()[$id]['core']); })); }
     public static function valid($id) { return is_string($id) && isset(self::registry()[$id]); }
