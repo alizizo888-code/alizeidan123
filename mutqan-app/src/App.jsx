@@ -46,6 +46,7 @@ import { AdEntry } from './components/AdLanding'
 import HomeFab from './components/HomeFab'
 import TitleBoot from './components/TitleBoot'
 import GlobalContact from './components/GlobalContact'
+const Inventory = lazyRetry(() => import('./pages/Inventory'))
 const Accounts = lazyRetry(() => import('./pages/Accounts'))
 const BusinessSettings = lazyRetry(() => import('./pages/BusinessSettings'))
 const SecuritySettings = lazyRetry(() => import('./pages/SecuritySettings'))
@@ -112,6 +113,7 @@ export default function App() {
         <Route path="/staff/theme" element={<ThemeSettings staff />} />
         <Route path="/staff/pay-links" element={<PayLinks />} />
         <Route path="/staff/ai-command" element={<AiCommandCenter />} />
+        <Route path="/staff/inventory" element={<Inventory />} />
         <Route path="/staff/accounts" element={<Accounts />} />
         <Route path="/staff/payment-methods" element={<PaymentMethods />} />
         <Route path="/staff/ai-owner" element={<AiOwnerControl />} />
