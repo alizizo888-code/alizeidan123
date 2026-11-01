@@ -1,5 +1,7 @@
 import ServiceDocs from '../components/ServiceDocs'
 import { orderFacts } from '../lib/orderFacts'
+import TechTools from '../components/TechTools'
+import { sendOrderMsg } from '../lib/orderMsgs'
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronRight, MapPin, Wrench, Navigation, CheckCircle2, XCircle, Send, Sparkles, GitBranch, Wallet, AlertTriangle, Loader2, Phone, Clock, Ruler } from 'lucide-react'
@@ -471,7 +473,7 @@ export default function OrderDetailStaff() {
         )}
 
         {isMyTask && (order.status === 'en_route' || order.status === 'nearby') && (
-          <button disabled={busy} onClick={() => transition('arrived', {}, 'arrived')} className="w-full bg-teal-500/15 border border-teal-500/40 text-teal-300 font-bold rounded-2xl py-3.5">
+          <button disabled={busy} onClick={async () => { await transition('arrived', {}, 'arrived'); sendOrderMsg(order.id, 'arrived', '').catch(() => {}) }} className="w-full bg-teal-500/15 border border-teal-500/40 text-teal-300 font-bold rounded-2xl py-3.5">
             لقد وصلت
           </button>
         )}
@@ -533,6 +535,8 @@ export default function OrderDetailStaff() {
             {!order.clientId && <p className="text-[10px] text-slate-500 mt-2">العميل زائر بدون حساب — لا تصله إشعارات، تواصل بالاتصال.</p>}
           </Card>
         )}
+
+        <TechTools order={order} role={role} isMyTask={isMyTask} myId={myId} profiles={profiles} fire={fire} toast={toast} />
 
         {!order.inhouse && (role === 'operations' || role === 'owner') && ['assigned', 'accepted', 'en_route'].includes(order.status) && (
           <button onClick={() => setShowAssign(true)} className="w-full text-slate-400 text-sm font-bold py-2">إعادة إسناد لفني آخر</button>

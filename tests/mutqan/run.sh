@@ -15,6 +15,7 @@ php ac_floor.php
 php promo.php
 php inhouse.php
 php wa.php
+php order_msgs.php
 MQ_DATA="$(mktemp -d)" php shop.php
 MQ_DATA="$(mktemp -d)" php seo.php
 php notif.php

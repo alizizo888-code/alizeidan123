@@ -124,6 +124,7 @@ final class Mutqan_Rest {
             case 'insert': case 'insertShared': {
                 $doc = Mutqan_Store::insert($coll, $in['data'] ?? [], $in['id'] ?? null, $opts, $p, $private);
                 if ($coll === 'orders' && !$private) { self::after_order_created($doc); if (self::alert_new_order($doc)) { $doc['waSent'] = true; } }
+                if ($coll === 'order_msgs' && !$private) { self::after_order_msg($doc); }
                 if ($coll === 'tech_applications' && !$private) { self::alert_tech_application($doc); }
                 if (in_array($coll, ['handoffs', 'warranty_claims', 'calls'], true) && !$private) { self::alert_customer_action($coll, $doc); }
                 return $doc;
@@ -209,6 +210,47 @@ final class Mutqan_Rest {
             $seal ? '✅ للتحقق من صحة الطلب (توثيق): ' . $seal : '',
         ]);
         return implode("\n", $lines) . "\n\nسيصلك إشعار فور إسناد طلبك لفني، وتتابعه من التطبيق.";
+    }
+
+
+    /** A message / request inside an order: delivered to the other side at once (push + the admin alert center), server-side so it arrives even if the sender closes the app. */
+    private static function after_order_msg($m) {
+        $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
+        $ord = Mutqan_Store::get_raw('orders', (string) $m['orderId']) ?: [];
+        $short = '#' . substr((string) $m['orderId'], -5);
+        $from = $m['from']; $kind = $m['kind'];
+        $clientId = $m['clientId'] ?? null; $techId = $m['techId'] ?? null;
+        $urlStaff = '#/staff/order/' . $m['orderId']; $urlClient = '#/order/' . $m['orderId'];
+        $txt = mb_substr((string) ($m['text'] ?? ''), 0, 200);
+        $push = function ($user, $title, $body, $url, $sound = 'chime', $prio = 'normal') use ($sys) {
+            if (!$user) { return; }
+            try { Mutqan_Store::insert('_push', ['target' => ['user' => (string) $user], 'title' => mb_substr($title, 0, 120), 'body' => mb_substr($body, 0, 300), 'url' => $url, 'sound' => $sound, 'priority' => $prio, 'event' => 'order_msg', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 7 * 86400)], $sys, false); }
+            catch (Throwable $e) { error_log('[mutqan] order_msg push: ' . $e->getMessage()); }
+        };
+        if ($from === 'client') {
+            if ($kind === 'nudge') {
+                self::admin_alert('🔔 العميل يستعجل طلبه ' . $short, ($ord['clientName'] ?? 'العميل') . ' يطلب سرعة المتابعة' . ($techId ? ' — الطلب مسند لـ ' . ($ord['technicianName'] ?? 'فني') : ' — لم يُسند بعد'), $urlStaff, 'order_nudge', 'high', $m['orderId']);
+                $push($techId, '🔔 العميل يستعجل ' . $short, 'العميل ينتظر وصولك — حدّث له موعدك.', $urlStaff, 'bell', 'high');
+            } elseif ($kind === 'postpone_req') {
+                $when = !empty($m['newTime']) ? ' — الموعد المقترح: ' . $m['newTime'] : '';
+                self::admin_alert('⏳ العميل يطلب تأجيل الطلب ' . $short, ($txt ?: 'بدون ملاحظة') . $when, $urlStaff, 'order_postpone_req', 'high', $m['orderId']);
+                $push($techId, '⏳ طلب تأجيل ' . $short, ($txt ?: 'العميل يطلب تأجيل الموعد') . $when, $urlStaff, 'bell', 'high');
+            } elseif (($m['channel'] ?? '') === 'ops') {
+                self::admin_alert('💬 رسالة من عميل — ' . $short, $txt, $urlStaff, 'order_msg', 'normal', $m['orderId']);
+            } else {
+                $push($techId, '💬 رسالة من العميل ' . $short, $txt, $urlStaff);
+                if (!$techId) { self::admin_alert('💬 رسالة من عميل — ' . $short, $txt, $urlStaff, 'order_msg', 'normal', $m['orderId']); }
+            }
+        } elseif ($from === 'tech') {
+            $titles = ['eta' => '🚗 الفني سيصل خلال 10 دقائق', 'arrived' => '📍 وصل الفني إلى موقعك', 'postponed' => '⏳ تم تأجيل طلبك'];
+            $title = ($titles[$kind] ?? '💬 رسالة من الفني') . ' ' . $short;
+            $ring = in_array($kind, ['eta', 'arrived', 'postponed'], true);
+            $push($clientId, $title, $txt ?: ($kind === 'arrived' ? 'افتح الباب — الفني عند موقعك.' : ''), $urlClient, $ring ? 'bell' : 'chime', $ring ? 'high' : 'normal');
+            if ($ring || $kind === 'text') { self::admin_alert($title, ($m['fromName'] ?? 'الفني') . ($txt ? ': ' . $txt : ''), $urlStaff, 'order_msg', 'normal', $m['orderId']); }
+        } else {
+            $push($clientId, '💬 رسالة من خدمة العملاء ' . $short, $txt, $urlClient);
+            if (($m['channel'] ?? '') === 'tech') { $push($techId, '💬 رسالة من العمليات ' . $short, $txt, $urlStaff); }
+        }
     }
 
     /** Top priority: every new order alerts the whole admin team immediately, server-side (cannot be skipped by the client). */
