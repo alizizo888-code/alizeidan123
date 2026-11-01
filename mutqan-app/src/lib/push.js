@@ -14,7 +14,7 @@ const seen = new Set()   // ids already shown (the server may repeat the boundar
 const supported = () => typeof Notification !== 'undefined'
 export const notificationState = () => (supported() ? Notification.permission : 'unsupported')
 
-const iconUrl = () => `${window.__MUTQAN__?.app || '/app/'}icon-192.png`
+const iconUrl = () => (window.__DESK_BRAND__ ? `./icon-${window.__DESK_BRAND__}-192.png` : `${window.__MUTQAN__?.app || '/app/'}icon-192.png`)
 async function showSystem(m) {
   const hi = m.priority === 'high'
   const opts = { body: m.body || '', tag: m.id, icon: iconUrl(), badge: iconUrl(), dir: 'rtl', lang: 'ar', vibrate: m.silent || soundCfg?.vibrate === false ? [] : hi ? [220, 90, 220, 90, 320] : [120], silent: !!m.silent, requireInteraction: hi, renotify: true, data: { url: m.url || '' } }
@@ -46,7 +46,7 @@ function resolve(m) {
 }
 
 async function poll() {
-  if (!currentUser() || document.visibilityState === 'hidden') return
+  if (!currentUser()) return   // keeps running while the app is in the background (the browser throttles it, but a ringing order still gets through)
   try {
     const r = await post('/push', { op: 'inbox', since: since || undefined })
     const now = Date.parse(r.now) || Date.now()

@@ -49,7 +49,7 @@ export default function ThemeSettings({ staff = false }) {
           {dark === 'dark' ? <Sun size={18} className="text-amber-500" /> : <Moon size={18} />}<span className="flex-1 text-right">{dark === 'dark' ? 'الوضع النهاري' : 'الوضع الليلي'}</span>
         </button>
       )}
-      <div className="fixed bottom-0 inset-x-0 z-40 p-3 bg-gradient-to-t from-black/30 to-transparent pb-[max(0.75rem,env(safe-area-inset-bottom))]" data-keep-colors>
+      <div className={`fixed bottom-0 inset-x-0 ${staff ? 'md:right-64' : ''} z-40 p-3 bg-gradient-to-t from-black/30 to-transparent pb-[max(0.75rem,env(safe-area-inset-bottom))]`} data-keep-colors>
         <div className="max-w-3xl mx-auto grid gap-2">
           {msg && <p className="text-center text-xs font-bold bg-emerald-600 text-white rounded-full py-1.5">{msg}</p>}
           <div className="flex gap-2">

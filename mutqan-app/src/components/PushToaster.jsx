@@ -18,6 +18,7 @@ export default function PushToaster() {
     const on = (e) => {
       const m = e.detail || {}
       const hi = m.priority === 'high'
+      if (hi && window.__ALARM_UI__ && !m.silent) return   // staff screens: the alarm card (OrderAlarm) shows and rings this one
       if (!m.silent) chime(hi ? 'high' : 'normal', cfgRef.current)
       const id = m.id || Math.random().toString(36).slice(2)
       setItems((l) => [{ ...m, id, hi }, ...l.filter((x) => x.id !== id)].slice(0, 3))

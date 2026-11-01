@@ -37,3 +37,23 @@ export function waLink(number, text) {
 export function openWhatsApp(number, text) {
   try { window.open(waLink(number, text), '_blank', 'noopener') } catch {}
 }
+
+// The order exactly as operations forwards it to a technician / an outside party over WhatsApp (everything needed to do the job, nothing about prices paid to others).
+export function buildDispatchMessage(order = {}, { appUrl } = {}) {
+  const o = order
+  const lines = [
+    '📋 *طلب للتنفيذ — أكسجين*',
+    `رقم الطلب: #${String(o.id || '').slice(-5)}`,
+    `🛠️ الخدمة: ${specialtyLabel(o.specialtyId) || '-'}`,
+    o.serviceDetails || o.description ? `📝 التفاصيل: ${o.serviceDetails || o.description}` : null,
+    o.qty > 1 ? `🔢 العدد: ${o.qty}` : null,
+    `⏰ الموعد: ${o.preferredTime || (o.priority === 'urgent' ? 'عاجل — الآن' : 'أقرب وقت')}`,
+    o.clientName ? `👤 العميل: ${o.clientName}` : null,
+    o.clientPhone ? `📱 الجوال: ${o.clientPhone}` : null,
+    o.address ? `🏠 العنوان: ${o.address}` : null,
+    o.lat != null && o.lng != null ? `📍 الموقع: https://maps.google.com/?q=${o.lat},${o.lng}` : null,
+    o.agreedPrice || o.acQuote?.total ? `💰 السعر المتفق مع العميل: ${o.agreedPrice || o.acQuote.total} ر.س` : null,
+    appUrl ? `🔗 افتح الطلب: ${appUrl}` : null,
+  ]
+  return lines.filter(Boolean).join('\n')
+}

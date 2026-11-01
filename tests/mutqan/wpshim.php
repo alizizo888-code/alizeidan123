@@ -62,10 +62,11 @@ function add_filter($h, $cb, $p = 10, $a = 1) { $GLOBALS['__hooks'][$h][] = $cb;
 function do_action($h, ...$a) { foreach ($GLOBALS['__hooks'][$h] ?? [] as $cb) { call_user_func_array($cb, $a); } }
 function wp_next_scheduled($h) { return true; } function wp_schedule_event(...$a) {}
 function register_rest_route($ns, $route, $args) { $GLOBALS['__routes'][$ns . $route] = $args; }  // $args is one handler or a list of handlers keyed by method
-function home_url($p = '') { return 'http://127.0.0.1:8099' . ($p === '' ? '' : '/' . ltrim($p, '/')); }
+function home_url($p = '') { $h = $_SERVER['HTTP_X_SITE_HOST'] ?? null; return ($h ? 'https://' . $h : 'http://127.0.0.1:8099') . ($p === '' ? '' : '/' . ltrim($p, '/')); }   // X-Site-Host: the browser E2E fronts each test site under its real hostname
 function rest_url($p = '') { return 'http://127.0.0.1:8099/wp-json/' . ltrim($p, '/'); }
 function esc_url_raw($u) { return $u; } function esc_url($u) { return $u; } function esc_attr($s) { return htmlspecialchars((string) $s, ENT_QUOTES); } function esc_html($s) { return htmlspecialchars((string) $s, ENT_QUOTES); }
 function wp_parse_url($u, $c = -1) { return parse_url($u, $c); }
+function add_query_arg($k, $v, $url = '') { return $url . (strpos($url, '?') === false ? '?' : '&') . rawurlencode($k) . '=' . rawurlencode($v); }
 function wp_unslash($v) { return $v; } function sanitize_text_field($s) { return trim(strip_tags((string) $s)); }
 function wp_json_encode($d, $f = 0) { return json_encode($d, $f); }
 function trailingslashit($s) { return rtrim($s, '/\\') . '/'; }
@@ -73,7 +74,7 @@ function plugin_dir_path($f) { return trailingslashit(dirname($f)); }
 function wp_generate_uuid4() { return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0x0fff) | 0x4000, mt_rand(0, 0x3fff) | 0x8000, mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)); }
 function wp_salt($x = '') { return 'test-salt'; } function nocache_headers() {} function status_header($c) { http_response_code($c); }
 function wp_safe_redirect($u) { header('Location: ' . $u); } function is_wp_error($x) { return $x instanceof WP_Error; }
-function current_user_can($c) { return true; } function wp_die($m) { die($m); } function is_admin() { return false; }
+function current_user_can($c) { return true; } function wp_die($m, $t = '', $a = []) { if (is_array($a) && isset($a['response'])) { http_response_code((int) $a['response']); } die($m); } function is_admin() { return false; }
 function wp_upload_dir() { $d = $GLOBALS['__dir'] . '/uploads'; @mkdir($d, 0777, true); return ['basedir' => $d, 'baseurl' => 'http://127.0.0.1:8099/uploads']; }
 function wp_mkdir_p($d) { return is_dir($d) || mkdir($d, 0777, true); }
 class WP_Error { public $m; function __construct($c = '', $m = '') { $this->m = $m; } function get_error_message() { return $this->m; } }
@@ -92,6 +93,12 @@ function wp_remote_post($url, $a) {
     file_put_contents($log, json_encode(['url' => $url, 'body' => json_decode($a['body'] ?? '', true)], JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
     $mode = @file_get_contents($GLOBALS['__dir'] . '/ai_mode_' . (strpos($url, 'groq') !== false ? 'groq' : (strpos($url, 'generativelanguage') !== false ? 'gemini' : 'other'))) ?: 'ok';
     if (strpos($url, 'graph.facebook.com') !== false) { return ['code' => 200, 'body' => '{}', 'headers' => []]; }
+    if (strpos($url, 'api.telegram.org') !== false) {   // Telegram Bot API stand-in: getMe / setWebhook / deleteWebhook / sendMessage all succeed; the call is logged WITHOUT the token
+        $meth = substr($url, strrpos($url, '/') + 1);
+        file_put_contents($log, json_encode(['tg' => $meth, 'body' => json_decode($a['body'] ?? '', true)], JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
+        $res = $meth === 'getMe' ? ['id' => 4242, 'is_bot' => true, 'username' => 'mq_test_bot'] : true;
+        return ['code' => 200, 'body' => json_encode(['ok' => true, 'result' => $res]), 'headers' => []];
+    }
     if ($mode === '429') { return ['code' => 429, 'body' => '{"error":{"message":"Rate limit exceeded: per day"}}', 'headers' => ['retry-after' => '60']]; }
     $b = json_decode($a['body'], true);
     $prompt = $b['messages'][0]['content'] ?? ($b['contents'][0]['parts'][0]['text'] ?? '');
@@ -109,7 +116,7 @@ function wp_parse_args($a, $d = []) { return array_merge($d, (array) $a); }
 function register_post_type(...$a) {} function wp_insert_post($a, $e = false) { static $n = 0; return ++$n; } function update_post_meta(...$a) {} function sanitize_textarea_field($s) { return trim(strip_tags((string) $s)); } function wp_strip_all_tags($s) { return strip_tags($s); }
 $P = dirname(__DIR__, 2) . '/oxygen-ac-automation/includes/';
 require $P . 'class-oxygen-orders-chat.php';
-foreach (['store', 'policy', 'auth', 'passkey', 'promo', 'wa', 'ai', 'shop', 'rest', 'admin'] as $part) { require $P . 'mutqan/class-mutqan-' . $part . '.php'; }
+foreach (['store', 'policy', 'auth', 'passkey', 'promo', 'wa', 'ai', 'shop', 'defaults', 'link', 'telegram', 'rest', 'admin'] as $part) { require $P . 'mutqan/class-mutqan-' . $part . '.php'; }
 Mutqan_Rest::boot();
 do_action('init'); do_action('rest_api_init');
 

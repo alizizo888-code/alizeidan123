@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { brandLabel } from '../lib/brand'
 import { useNavigate } from 'react-router-dom'
 import { Users, Radar, LayoutList, Wrench, TrendingUp, Star, DollarSign } from 'lucide-react'
 import { useLiveShared } from '../lib/useLive'
@@ -57,10 +58,10 @@ export default function StaffDashboard({ roles }) {
 
   return (
     <div className="h-full overflow-y-auto pb-24 bg-[#090c14]" dir="rtl">
-      <header className="sticky top-0 z-20 bg-[#090c14]/90 backdrop-blur border-b border-white/10 pt-[env(safe-area-inset-top,0px)]">
+      <header className="sticky top-0 z-20 bg-[#090c14]/90 backdrop-blur border-b border-white/10 pt-[var(--page-sat,env(safe-area-inset-top,0px))]">
         <div className="max-w-4xl mx-auto w-full px-4 py-4 flex items-center justify-between">
           <div>
-            <p className="text-[11px] text-primary font-bold tracking-widest">مُتقن</p>
+            <p className="text-[11px] text-primary font-bold tracking-widest">{brandLabel()}</p>
             <h1 className="font-display text-lg font-black text-white">{ROLE_LABELS[effectiveRole] || 'الفريق'}</h1>
           </div>
           <div className="flex items-center gap-1.5">

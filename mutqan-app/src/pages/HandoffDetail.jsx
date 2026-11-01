@@ -73,7 +73,7 @@ export default function HandoffDetail() {
 
   return (
     <div className="h-full flex flex-col bg-[#090c14]" dir="rtl">
-      <header className="shrink-0 bg-[#090c14]/95 border-b border-white/10 pt-[env(safe-area-inset-top,0px)]">
+      <header className="shrink-0 bg-[#090c14]/95 border-b border-white/10 pt-[var(--page-sat,env(safe-area-inset-top,0px))]">
         <div className="max-w-5xl mx-auto w-full px-4 py-3 flex items-center gap-3">
           <button onClick={() => navigate('/staff/operations')} className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center">
             <ChevronRight size={18} className="text-slate-300" />

@@ -89,5 +89,6 @@ export const priceRange = (specialtyId, urgent) => {
 }
 
 // أرقام تواصل المنشأة بصيغة دولية بدون + — يضبطها المالك، وعند تركها فارغة تعتمد بدائل مناسبة
-export const BUSINESS_PHONE = ''
-export const BUSINESS_WHATSAPP = ''
+// This site's own numbers (the owner can change them any time from «أرقام الموقع»; the branding step swaps the pair for the Oxygen site).
+export const BUSINESS_PHONE = '966549423050'
+export const BUSINESS_WHATSAPP = '966549423050'

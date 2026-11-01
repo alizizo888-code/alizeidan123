@@ -24,7 +24,7 @@ export default function StaffGate() {
       <div className="h-full relative" dir="rtl">
         <button
           onClick={() => navigate('/')}
-          className="absolute top-[calc(env(safe-area-inset-top,0px)+1rem)] right-4 z-30 w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+          className="absolute top-[calc(var(--page-sat,env(safe-area-inset-top,0px))+1rem)] right-4 z-30 w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
         >
           <ChevronRight size={18} className="text-white" />
         </button>

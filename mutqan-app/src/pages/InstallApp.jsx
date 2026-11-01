@@ -13,7 +13,7 @@ export default function InstallApp() {
   const [sheet, setSheet] = useState(false)
   return (
     <div className="h-full overflow-y-auto bg-[#f5f7f5] pb-16" dir="rtl">
-      <header className="sticky top-0 z-20 bg-[#f5f7f5]/90 backdrop-blur border-b border-black/5 pt-[env(safe-area-inset-top,0px)]">
+      <header className="sticky top-0 z-20 bg-[#f5f7f5]/90 backdrop-blur border-b border-black/5 pt-[var(--page-sat,env(safe-area-inset-top,0px))]">
         <div className="max-w-xl mx-auto w-full px-4 py-4 flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-full bg-white border border-black/5 shadow-sm flex items-center justify-center"><ChevronRight size={18} className="text-slate-600" /></button>
           <h1 className="font-display text-lg font-black text-slate-900">تحميل تطبيق أكسجين</h1>

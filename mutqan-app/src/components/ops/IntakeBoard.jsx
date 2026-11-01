@@ -1,10 +1,12 @@
 import { MapPin, Phone, Zap, UserCheck, Eye } from 'lucide-react'
 import { specialtyLabel } from '../../constants'
-import { isUnassigned, ageText, minsAgo, sourceLabel } from './helpers'
+import { isUnassigned, isForwarded, ageText, minsAgo, sourceLabel } from './helpers'
+import DispatchBadge from './DispatchBadge'
 
 // Order reception board: everything that has come in and is still waiting for a technician, oldest urgent first.
 export default function IntakeBoard({ orders, mode, onAssign, onAuto, onOpen, onLocate, busyId }) {
   const rows = (orders || []).filter(isUnassigned).sort((a, b) => ((b.priority === 'urgent') - (a.priority === 'urgent')) || new Date(a.createdAt) - new Date(b.createdAt))
+  const fwd = rows.filter(isForwarded).length   // handed over on WhatsApp / to an outside party: listed with its tag until someone confirms the technician, never auto-assigned again
   const today = (orders || []).filter((o) => new Date(o.createdAt).toDateString() === new Date().toDateString())
   const src = today.reduce((m, o) => { const k = sourceLabel(o); m[k] = (m[k] || 0) + 1; return m }, {})
   return (
@@ -12,6 +14,7 @@ export default function IntakeBoard({ orders, mode, onAssign, onAuto, onOpen, on
       <div className="flex gap-1.5 overflow-x-auto pb-1 text-[11px] font-bold">
         <span className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-slate-200">وصل اليوم: {today.length}</span>
         {Object.entries(src).map(([k, v]) => <span key={k} className="shrink-0 rounded-full bg-white/5 border border-white/10 px-3 py-1 text-slate-300">{k}: {v}</span>)}
+        {fwd > 0 && <span className="shrink-0 rounded-full bg-green-500/15 border border-green-400/30 px-3 py-1 text-green-200">📲 محوّلة خارج التطبيق: {fwd}</span>}
         <span className={`shrink-0 rounded-full px-3 py-1 ${mode === 'auto' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>{mode === 'auto' ? 'التوزيع آلي — يُسند فور الوصول' : 'التوزيع يدوي — بانتظار قرارك'}</span>
       </div>
       {rows.length === 0 && <p className="text-slate-500 text-sm text-center py-8">لا توجد طلبات بانتظار الإسناد ✅</p>}
@@ -24,6 +27,7 @@ export default function IntakeBoard({ orders, mode, onAssign, onAuto, onOpen, on
                 <div className="flex-1 min-w-0">
                   <p className="font-black text-white text-sm truncate">{o.priority === 'urgent' ? '🚨 ' : ''}{specialtyLabel(o.specialtyId)} · {o.clientName || 'عميل'}</p>
                   <p className="text-[11px] text-slate-400 truncate flex items-center gap-1"><MapPin size={11} />{o.address || 'بدون عنوان'}</p>
+                  {o.dispatch && <DispatchBadge order={o} className="mt-1" />}
                 </div>
                 <div className="text-left shrink-0">
                   <p className={`text-[11px] font-black ${late ? 'text-rose-300' : 'text-slate-300'}`}>منذ {ageText(o.createdAt)}</p>

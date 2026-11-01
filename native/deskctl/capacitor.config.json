@@ -1,6 +1,6 @@
 {
-  "appId": "com.oxygen11.deskctl",
-  "appName": "التحكم والإعدادات",
+  "appId": "com.oxygen11.oxygendesk",
+  "appName": "أكسجين",
   "webDir": "www",
   "backgroundColor": "#0b1220",
   "server": {
