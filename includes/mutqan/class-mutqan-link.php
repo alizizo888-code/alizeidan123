@@ -44,6 +44,13 @@ final class Mutqan_Link {
         foreach (self::recv() as $d) { if ((int) ($d['seen'] ?? 0) >= $from) { return true; } }
         return false;
     }
+    /** Paired devices for the operations room: label, role, last ping — no ids, no code. */
+    public static function devices() {
+        $out = []; $from = time() - self::ONLINE_SECS;
+        foreach (self::recv() as $d) { $out[] = ['label' => (string) ($d['label'] ?? 'جهاز'), 'role' => (string) ($d['role'] ?? ''), 'seen' => (int) ($d['seen'] ?? 0), 'online' => (int) ($d['seen'] ?? 0) >= $from]; }
+        usort($out, function ($a, $b) { return $b['seen'] <=> $a['seen']; });
+        return $out;
+    }
     /** For the public hotline button: no code, no secrets — only whether the line is paired / answered and which Telegram bot (if any) customers may use. */
     public static function public_state() {
         $set = self::is_set();
