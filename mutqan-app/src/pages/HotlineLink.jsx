@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Loader2, Link2, Send, Copy, Check, Unplug, Smartphone, Headphones, Phone, Video } from 'lucide-react'
 import { useTeamRole } from '../hooks/useTeamRole'
-import { hotlink, telegram, brandName } from '../lib/link'
+import { hotlink, telegram, brandName, blocklist } from '../lib/link'
 import { errText } from '../lib/_api'
 
 const inp = 'w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none focus:border-primary'
@@ -12,6 +12,40 @@ const ago = (iso) => { const s = Math.max(0, (Date.now() - new Date(iso).getTime
 // «ربط الخط الساخن»: a secret link code pairs the site's hotline button with the devices that answer it (like a TeamViewer partner code),
 // plus a free Telegram bot so orders and calls ring on the phone even when the app is closed, and customers can chat with no registration.
 // The code and the bot token are typed here, sent straight to the server and kept there only (the code as a hash, the token encrypted).
+const KINDS = { phone: 'رقم جوال', ip: 'عنوان IP', device: 'معرّف جهاز' }
+// Block a customer who harasses the team: by phone, IP address or device id. Values are stored hashed on the server; staff are never blocked.
+function BlockList() {
+  const [items, setItems] = useState(null)
+  const [kind, setKind] = useState('phone')
+  const [val, setVal] = useState('')
+  const [label, setLabel] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(async () => { try { setItems((await blocklist.list()).items || []) } catch (e) { setErr(errText(e, 'تعذر قراءة قائمة الحظر')) } }, [])
+  useEffect(() => { load() }, [load])
+  const add = async () => { setErr(''); try { await blocklist.add(kind, val.trim(), label.trim()); setVal(''); setLabel(''); await load() } catch (e) { setErr(errText(e, 'تعذر الحظر')) } }
+  const rm = async (it) => { try { await blocklist.remove(it.kind, it.hash); await load() } catch (e) { setErr(errText(e, 'تعذر الإلغاء')) } }
+  return (
+    <section className="rounded-2xl bg-white/5 border border-white/10 p-4 grid gap-3">
+      <p className="font-black text-sm">حظر المتطفلين</p>
+      <p className="text-[12px] leading-relaxed text-slate-300">أي عميل يحاول يرسل طلب أو يتصل أو يستخدم الموقع من رقم أو IP أو جهاز محظور يتم منعه. الفريق لا يتأثر. القيم تُحفظ مشفّرة.</p>
+      {err && <p className="text-xs font-bold text-rose-300">{err}</p>}
+      <div className="flex flex-wrap gap-2">
+        <select value={kind} onChange={(e) => setKind(e.target.value)} className={inp + ' !w-auto'} aria-label="نوع الحظر">{Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+        <input dir="ltr" value={val} onChange={(e) => setVal(e.target.value)} placeholder={kind === 'phone' ? '05xxxxxxxx' : kind === 'ip' ? '1.2.3.4' : 'معرّف الجهاز'} className={inp + ' flex-1 min-w-[8rem]'} />
+        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="ملاحظة (اختياري)" className={inp + ' flex-1 min-w-[8rem]'} />
+        <button disabled={val.trim().length < 4} onClick={add} className={`${btn} bg-rose-500 text-white`}>حظر</button>
+      </div>
+      {items && items.length > 0 && (
+        <ul className="grid gap-1.5">{items.map((it) => (
+          <li key={it.hash} className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/5 px-3 py-2">
+            <span className="flex-1 text-sm font-bold">{KINDS[it.kind]} — {it.label}</span>
+            <button onClick={() => rm(it)} className="text-[11px] font-bold text-sky-300">إلغاء الحظر</button>
+          </li>))}</ul>
+      )}
+    </section>
+  )
+}
+
 export default function HotlineLink() {
   const nav = useNavigate()
   const { isOwner, role, loading } = useTeamRole()
@@ -98,6 +132,8 @@ export default function HotlineLink() {
             </>
           ) : <p className="text-xs text-amber-300">بوت تيليجرام غير مفعّل بعد — يفعّله المالك.</p>}
         </section>
+
+        <BlockList />
 
         <section className="rounded-2xl bg-white/5 border border-white/10 p-4 grid gap-2.5">
           <p className="font-black text-sm">طرق ربط أخرى سهلة ومجانية</p>

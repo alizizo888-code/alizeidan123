@@ -28,6 +28,12 @@ export const hotlink = {
   ping: () => post('/link', { op: 'ping', ...dev() }).then((r) => { if (r && r.linked === false) ls.del(FLAG); return r }),
 }
 
+export const blocklist = {
+  list: () => post('/team', { op: 'blockList' }),
+  add: (kind, value, label) => post('/team', { op: 'blockAdd', kind, value, label }),
+  remove: (kind, hash) => post('/team', { op: 'blockRemove', kind, hash }),
+}
+
 export const telegram = {
   status: () => post('/link', { op: 'tg_status' }),
   save: (token) => post('/link', { op: 'tg_save', token }),
