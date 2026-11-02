@@ -52,9 +52,39 @@ final class Oxygen_Network {
     /** 0..9 among the satellites (stable: registry order). */
     public static function slot($id = null) { $i = array_search($id ?: self::current_id(), self::satellites(), true); return $i === false ? -1 : (int) $i; }
 
+    /** Blogger-only faces (blog-<id>.oxygen11.com): no WordPress site, but their orders are tagged with their own id. */
+    public static function blog_brands() {
+        return [
+        'nasim' => ['name' => 'نسيم البارد', 'color' => '#0284c7', 'twin' => 'oxygen'],
+        'qimma' => ['name' => 'القمة للتبريد', 'color' => '#0e7490', 'twin' => 'mutqan'],
+        'baroda' => ['name' => 'برودة', 'color' => '#0369a1', 'twin' => 'motakhases'],
+        'taqa' => ['name' => 'الطاقة الآمنة', 'color' => '#ca8a04', 'twin' => 'muhandis'],
+        'nabea' => ['name' => 'النبع', 'color' => '#0891b2', 'twin' => 'aqsa'],
+        'hisn' => ['name' => 'الحصن', 'color' => '#4d7c0f', 'twin' => 'raad'],
+        'safaa' => ['name' => 'صفاء الماء', 'color' => '#2563eb', 'twin' => 'mutamakkin'],
+        'muhtarif' => ['name' => 'المحترف', 'color' => '#9333ea', 'twin' => 'khabeer'],
+        'baytak' => ['name' => 'بيتك', 'color' => '#16a34a', 'twin' => 'homeservice'],
+        'manakh' => ['name' => 'المناخ', 'color' => '#ea580c', 'twin' => 'ibtikar'],
+        'amin' => ['name' => 'الأمين', 'color' => '#475569', 'twin' => 'mutamad'],
+        'dar' => ['name' => 'الدار', 'color' => '#be185d', 'twin' => 'misriya'],
+        'ayn' => ['name' => 'العين الساهرة', 'color' => '#047857', 'twin' => 'nukhba'],
+        'shams' => ['name' => 'شمس الحجاز', 'color' => '#d97706', 'twin' => 'riyada'],
+        'lamsa' => ['name' => 'لمسة فن', 'color' => '#e11d48', 'twin' => 'baraa'],
+        'naqaa' => ['name' => 'النقاء', 'color' => '#0d9488', 'twin' => 'safwa'],
+        'itqan' => ['name' => 'الإتقان', 'color' => '#b91c1c', 'twin' => 'tamayuz'],
+        'ishara' => ['name' => 'الإشارة', 'color' => '#1e40af', 'twin' => 'nasmat'],
+        'rahhal' => ['name' => 'الرحّال', 'color' => '#a16207', 'twin' => 'wahat'],
+        'miftah' => ['name' => 'المفتاح الذهبي', 'color' => '#6d28d9', 'twin' => 'amaan'],
+        'idara' => ['name' => 'الإدارة الذكية', 'color' => '#1d4ed8', 'twin' => 'kafaa'],
+        'bina' => ['name' => 'البناء المتين', 'color' => '#78350f', 'twin' => 'jawda'],
+        ];
+    }
+    /** Registry entry or Blogger-only entry for an id (null when unknown). */
+    public static function brand($id) { $r = self::registry(); if (isset($r[$id])) { return $r[$id]; } $b = self::blog_brands(); return $b[$id] ?? null; }
+
     public static function ids() { return array_keys(self::registry()); }
     public static function satellites() { return array_values(array_filter(self::ids(), function ($id) { return empty(self::registry()[$id]['core']); })); }
-    public static function valid($id) { return is_string($id) && isset(self::registry()[$id]); }
+    public static function valid($id) { return is_string($id) && (isset(self::registry()[$id]) || isset(self::blog_brands()[$id])); }
 
     public static function host_of($id) {
         $r = self::registry();
@@ -71,6 +101,7 @@ final class Oxygen_Network {
         if ($h === 'blog.' . self::HUB_HOST) { return 'oxygen'; }
         if (preg_match('/^blog-([a-z0-9]+)\.' . preg_quote(self::HUB_HOST, '/') . '$/', $h, $m)) {
             foreach (self::registry() as $id => $b) { if ($id === $m[1] || ($b['label'] !== '' && $b['label'] === $m[1])) { return $id; } }
+            if (isset(self::blog_brands()[$m[1]])) { return $m[1]; }
         }
         return 'oxygen';
     }
