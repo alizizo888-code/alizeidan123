@@ -29,6 +29,8 @@ $t('unknown id refused', Oxygen_Network::set_contacts('nope', '1') === false && 
 
 // the JS mirror (desk filter chips) must equal the PHP registry
 $js = file_get_contents(dirname(__DIR__, 2) . '/mutqan-app/src/lib/netBrand.js');
+$jsBlog = substr($js, (int) strpos($js, 'export const BLOG_NETWORK'));
+$js = substr($js, 0, (int) strpos($js, 'export const BLOG_NETWORK') ?: strlen($js));
 preg_match_all("/\\{ id: '(\\w+)', name: '([^']+)', color: '(#[0-9a-f]{6})'/u", $js, $mm, PREG_SET_ORDER);
 $jsmap = []; foreach ($mm as $m) { $jsmap[$m[1]] = [$m[2], $m[3]]; }
 $same = count($jsmap) === 22;
@@ -66,15 +68,23 @@ $t('...but not twice in the same hour', Oxygen_Network_Report::maybe_send($fetch
 $t('...and not at an unconfigured hour', Oxygen_Network_Report::maybe_send($fetch, 3, false, ['brand' => 'x', 'today' => 0, 'total' => 0]) === false);
 $t('five reports a day by default', Oxygen_Network_Report::settings()['hours'] === [9, 12, 15, 18, 21]);
 $_SERVER['HTTP_ORIGIN'] = 'https://evil.example.com';
-$_SERVER['REMOTE_ADDR'] = '10.9.9.9';
+$_SERVER['REMOTE_ADDR'] = '10.9.' . mt_rand(1, 250) . '.' . mt_rand(1, 250);
 $e = $mk($cust, ['brand' => 'raad']); $t('foreign origin cannot claim a face', $e['brand'] === 'oxygen', $e['brand'] ?? null);
 $_SERVER['HTTP_ORIGIN'] = 'https://blog-aqsa.oxygen11.com';
 $f = $mk($cust); $t('Blogger face blog-aqsa -> aqsa', $f['brand'] === 'aqsa', $f['brand'] ?? null);
 $_SERVER['HTTP_ORIGIN'] = 'https://blog.oxygen11.com';
-$g = $mk($cust); $t('Blogger face blog. -> oxygen', $g['brand'] === 'oxygen', $g['brand'] ?? null);
+$c3 = array_merge($cust, ['id' => 'anon-cust000003']); $g = $mk($c3); $t('Blogger face blog. -> oxygen', $g['brand'] === 'oxygen', $g['brand'] ?? null);
 $_SERVER['HTTP_ORIGIN'] = 'https://oxygen11.com';
 $h = $mk($cust, ['brand' => 'misriya']); $t('hub app ?via=misriya keeps the tag', $h['brand'] === 'misriya', $h['brand'] ?? null);
 $_SERVER['HTTP_ORIGIN'] = 'https://mutqan.oxygen11.com';
 $i = $mk(['id' => 'anon-cust000002', 'role' => null, 'kind' => 'anon', 'powers' => []], ['brand' => 'misriya']); $t('other faces still cannot claim', $i['brand'] === 'mutqan', $i['brand'] ?? null);
+$_SERVER['REMOTE_ADDR'] = '10.9.' . mt_rand(1, 250) . '.' . mt_rand(1, 250); $_SERVER['HTTP_ORIGIN'] = 'https://blog-nasim.oxygen11.com';
+$c3 = array_merge($cust, ['id' => 'anon-cust000003']); $g = $mk($c3); $t('Blogger-only face blog-nasim -> nasim', $g['brand'] === 'nasim', $g['brand'] ?? null);
+$_SERVER['HTTP_ORIGIN'] = 'https://oxygen11.com';
+$_SERVER['REMOTE_ADDR'] = '10.8.' . mt_rand(1, 250) . '.' . mt_rand(1, 250); $c4 = array_merge($cust, ['id' => 'anon-cust000004']); $g2 = $mk($c4, ['brand' => 'bina']); $t('hub app ?via=bina keeps the Blogger-only tag', $g2['brand'] === 'bina', $g2['brand'] ?? null);
+preg_match_all("/\\{ id: '(\\w+)', name: '([^']+)', color: '(#[0-9a-f]{6})'/u", $jsBlog, $bm, PREG_SET_ORDER);
+$bb = Oxygen_Network::blog_brands(); $sameB = count($bm) === count($bb) && count($bb) === 22; foreach ($bm as $m) { if (!isset($bb[$m[1]]) || $bb[$m[1]]['name'] !== $m[2] || $bb[$m[1]]['color'] !== $m[3]) { $sameB = false; } }
+$t('JS Blogger-only list mirrors PHP (22)', $sameB);
+$t('brand() resolves Blogger-only names', (Oxygen_Network::brand('shams')['name'] ?? '') === 'شمس الحجاز');
 echo $ok ? "ALL PASSED\n" : "SOME FAILED\n";
 exit($ok ? 0 : 1);

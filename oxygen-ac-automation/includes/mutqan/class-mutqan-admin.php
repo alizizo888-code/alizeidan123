@@ -11,6 +11,7 @@ final class Mutqan_Admin {
         add_action('admin_post_mutqan_save_ai', [__CLASS__, 'save_ai']);
         add_action('admin_post_mutqan_save_root', [__CLASS__, 'save_root']);
         add_action('admin_post_mutqan_test_ai', [__CLASS__, 'test_ai']);
+        add_action('admin_post_mutqan_save_agent', [__CLASS__, 'save_agent']);
     }
 
     public static function menu() {
@@ -43,6 +44,22 @@ final class Mutqan_Admin {
         check_admin_referer('mutqan_save_root');
         update_option('mutqan_root_app2', isset($_POST['root_app']) ? '1' : '0', false);
         self::back('تم حفظ إعداد الصفحة الرئيسية.');
+    }
+
+    /** Control assistant: Hostinger API token (DNS of oxygen11.com only) and the Claude models per workload tier. */
+    public static function save_agent() {
+        if (!current_user_can('manage_options')) { wp_die('غير مصرح.'); }
+        check_admin_referer('mutqan_save_agent');
+        $tok = trim((string) wp_unslash($_POST['hostinger_token'] ?? ''));
+        if ($tok !== '') { update_option(Mutqan_Agent::OPT_HOSTINGER, sanitize_text_field($tok), false); }
+        if (!empty($_POST['hostinger_clear'])) { delete_option(Mutqan_Agent::OPT_HOSTINGER); }
+        $s = Mutqan_AI::settings();
+        foreach (['mid', 'routine', 'high'] as $t) {
+            $m = sanitize_text_field(wp_unslash($_POST['tier_' . $t] ?? ''));
+            if (preg_match('/^[a-z0-9.\-]{3,60}$/', $m)) { $s['tiers'][$t] = $m; }
+        }
+        update_option(Mutqan_AI::OPT, $s, false);
+        self::back('اتحفظت إعدادات مساعد التحكم.');
     }
 
     public static function save_ai() {
@@ -160,6 +177,24 @@ final class Mutqan_Admin {
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="mutqan_test_ai"><?php wp_nonce_field('mutqan_test_ai'); ?>
                 <?php submit_button('اختبار الاتصال بالمزودين', 'secondary'); ?>
+            </form>
+
+            <?php Mutqan_Blogger::admin_section(); ?>
+
+            <h2>مساعد التحكم والمستويات</h2>
+            <p>مفتاح Claude يتحط في قسم المزودين فوق (Claude (Anthropic)). هنا موديل كل مستوى شغل، ومفتاح Hostinger اللي المساعد بيستخدمه لـ DNS نطاق oxygen11.com بس.</p>
+            <?php $tiers = array_merge(Mutqan_AI::defaults()['tiers'], (array) (Mutqan_AI::settings()['tiers'] ?? [])); ?>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" autocomplete="off">
+                <input type="hidden" name="action" value="mutqan_save_agent"><?php wp_nonce_field('mutqan_save_agent'); ?>
+                <table class="form-table">
+                    <tr><th>شات العملاء</th><td>المزودون المجانيون (المستوى الأقل استهلاكًا)</td></tr>
+                    <tr><th><label for="tier_mid">خدمة العملاء والطلبات والتحويلات</label></th><td><input id="tier_mid" name="tier_mid" dir="ltr" class="regular-text" value="<?php echo esc_attr($tiers['mid']); ?>"></td></tr>
+                    <tr><th><label for="tier_routine">المقالات اليومية والتتبع والروتين</label></th><td><input id="tier_routine" name="tier_routine" dir="ltr" class="regular-text" value="<?php echo esc_attr($tiers['routine']); ?>"></td></tr>
+                    <tr><th><label for="tier_high">أوامر المالك والعمليات والتعديل والتصميم</label></th><td><input id="tier_high" name="tier_high" dir="ltr" class="regular-text" value="<?php echo esc_attr($tiers['high']); ?>"></td></tr>
+                    <tr><th><label for="hostinger_token">Hostinger API</label></th><td><input type="password" id="hostinger_token" name="hostinger_token" dir="ltr" class="regular-text" autocomplete="new-password" placeholder="<?php echo get_option(Mutqan_Agent::OPT_HOSTINGER, '') !== '' ? 'محفوظ — اتركه فارغًا للإبقاء عليه' : 'من hPanel ← API'; ?>">
+                        <label><input type="checkbox" name="hostinger_clear" value="1"> مسح المفتاح</label></td></tr>
+                </table>
+                <?php submit_button('حفظ إعدادات المساعد'); ?>
             </form>
 
             <h2>٣) واتساب</h2>

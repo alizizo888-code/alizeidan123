@@ -66,7 +66,7 @@ $t('burst: still 180 on day 6 (index 5)', Oxygen_Network_SEO::quota(1000000 + 5 
 $t('then 10 a day from the 7th day', Oxygen_Network_SEO::quota(1000000 + 6 * $day) === 10 && Oxygen_Network_SEO::phase(1000000 + 6 * $day) === 'steady' && Oxygen_Network_SEO::quota(1000000 + 90 * $day) === 10);
 // a twin (second company) bursts for 5 days, its first company for 6; options not set -> defaults
 $GLOBALS['__opts'] = []; $GLOBALS['__host'] = 'nukhba-maintenance-general-contracting.oxygen11.com';
-$t('twin: 6 burst days then steady (same as first company)', Oxygen_Network_SEO::settings()['burst_days'] === 6);
+$t('twin: 5 burst days then steady', Oxygen_Network_SEO::settings()['burst_days'] === 5);
 $GLOBALS['__opts'] = []; $GLOBALS['__host'] = 'raad-maintenance-general-contracting.oxygen11.com';
 $t('first company: 6 burst days', Oxygen_Network_SEO::settings()['burst_days'] === 6);
 $GLOBALS['__opts'] = ['oxygen_net_seo' => ['burst' => 180, 'burst_days' => 6, 'steady' => 10, 'since' => 1000000]];

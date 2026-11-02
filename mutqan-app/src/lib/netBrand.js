@@ -65,7 +65,32 @@ export const NETWORK = [
   { id: 'kafaa', name: 'الكفاءة', color: '#0891b2' },
   { id: 'jawda', name: 'الجودة', color: '#9a3412' },
 ]
-export const brandMeta = (id) => NETWORK.find((b) => b.id === id) || null
+// Blogger-only faces (blog-<id>.oxygen11.com) — mirror of Oxygen_Network::blog_brands(); their orders keep their own tag.
+export const BLOG_NETWORK = [
+  { id: 'nasim', name: 'نسيم البارد', color: '#0284c7', twin: 'oxygen' },
+  { id: 'qimma', name: 'القمة للتبريد', color: '#0e7490', twin: 'mutqan' },
+  { id: 'baroda', name: 'برودة', color: '#0369a1', twin: 'motakhases' },
+  { id: 'taqa', name: 'الطاقة الآمنة', color: '#ca8a04', twin: 'muhandis' },
+  { id: 'nabea', name: 'النبع', color: '#0891b2', twin: 'aqsa' },
+  { id: 'hisn', name: 'الحصن', color: '#4d7c0f', twin: 'raad' },
+  { id: 'safaa', name: 'صفاء الماء', color: '#2563eb', twin: 'mutamakkin' },
+  { id: 'muhtarif', name: 'المحترف', color: '#9333ea', twin: 'khabeer' },
+  { id: 'baytak', name: 'بيتك', color: '#16a34a', twin: 'homeservice' },
+  { id: 'manakh', name: 'المناخ', color: '#ea580c', twin: 'ibtikar' },
+  { id: 'amin', name: 'الأمين', color: '#475569', twin: 'mutamad' },
+  { id: 'dar', name: 'الدار', color: '#be185d', twin: 'misriya' },
+  { id: 'ayn', name: 'العين الساهرة', color: '#047857', twin: 'nukhba' },
+  { id: 'shams', name: 'شمس الحجاز', color: '#d97706', twin: 'riyada' },
+  { id: 'lamsa', name: 'لمسة فن', color: '#e11d48', twin: 'baraa' },
+  { id: 'naqaa', name: 'النقاء', color: '#0d9488', twin: 'safwa' },
+  { id: 'itqan', name: 'الإتقان', color: '#b91c1c', twin: 'tamayuz' },
+  { id: 'ishara', name: 'الإشارة', color: '#1e40af', twin: 'nasmat' },
+  { id: 'rahhal', name: 'الرحّال', color: '#a16207', twin: 'wahat' },
+  { id: 'miftah', name: 'المفتاح الذهبي', color: '#6d28d9', twin: 'amaan' },
+  { id: 'idara', name: 'الإدارة الذكية', color: '#1d4ed8', twin: 'kafaa' },
+  { id: 'bina', name: 'البناء المتين', color: '#78350f', twin: 'jawda' },
+]
+export const brandMeta = (id) => NETWORK.find((b) => b.id === id) || BLOG_NETWORK.find((b) => b.id === id) || null
 // The brand an order came from, for staff screens and dispatch texts (no tag = the site's own face).
 export const orderBrandName = (o) => { const m = o && o.brand ? brandMeta(o.brand) : null; return m && !m.core ? m.name : BN }
 
