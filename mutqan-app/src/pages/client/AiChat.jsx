@@ -29,7 +29,7 @@ import AiOrderCard from '../../components/AiOrderCard'
 import RegisterModal from '../../components/RegisterModal'
 import WarrantyClaimForm from '../../components/WarrantyClaimForm'
 import { useWarrantyPolicy } from '../../hooks/useWarranty'
-import { ttsSpeak, sttStart, sttStop, can } from '../../aiAdapter'
+import { ttsSpeak, sttStart, sttStop, can, conversationId } from '../../aiAdapter'
 import AiLogo from '../../components/AiLogo'
 import MagicRobot from '../../components/MagicRobot'
 import PermissionHelp from '../../components/PermissionHelp'
@@ -393,7 +393,12 @@ export default function AiChat() {
           dialect: prefs.dialect,
           verified: customer.verified,
           customerName: customer.name || 'زائر',
-          text: text.slice(0, 200),
+          customerId: customer.id || customer.userId || null,
+          customerPhone: customer.phone || null,
+          conversation: conversationId(),
+          text: text.slice(0, 400),
+          reply: String(res.reply || '').slice(0, 500),
+          engine: res.engine || null,
         })
       }
 

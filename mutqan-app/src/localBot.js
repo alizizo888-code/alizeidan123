@@ -126,10 +126,20 @@ export function kbMatch(t, toks) {
 // ── main ─────────────────────────────────────────────────────────────────────
 import { offerFor, isReceiving, nextSlot, bucketLoad, hourText } from './lib/schedule.js'
 
+// A long message that just repeats itself ("دلوقتي انا اشتركت … دلوقتي انا اشتركت …") is reduced to its distinct words in first-seen order.
+export function squash(text) {
+  const t = String(text || '')
+  const w = t.split(/\s+/).filter(Boolean)
+  if (w.length < 25) return t
+  const seen = new Set(), keep = []
+  for (const x of w) { const k = norm(x); if (!seen.has(k)) { seen.add(k); keep.push(x) } }
+  return keep.length / w.length < 0.6 ? keep.join(' ') : t
+}
+
 export function localTurn(ctx) {
   const { history = [], customer, orders = [], draft = {}, rules = {}, quote, nego, settings } = ctx
   const ac = ctx.ac || {}
-  const userMsgs = history.filter((m) => m.role === 'user').map((m) => m.content)
+  const userMsgs = history.filter((m) => m.role === 'user').map((m) => squash(m.content))
   const raw = userMsgs[userMsgs.length - 1] || ''
   const t = norm(raw)
   const toks = t.split(' ').filter(Boolean)
@@ -180,11 +190,16 @@ export function localTurn(ctx) {
     const d = new Date().toLocaleDateString('ar-SA', { timeZone: 'Asia/Riyadh', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     return out(`اليوم ${d}.${draft.specialtyId ? ' نكمل طلبك؟' : ' كيف أقدر أخدمك؟'}`, { action: 'none' })
   }
+  // ── paying after the service ("the tech came, I have no cash, send me an account number") ──
+  if (/(?:رقم|حساب|ايبان|آيبان|iban)\S* .*(?:احول|حول|تحويل|اسدد|ادفع)|(?:احول|اسدد|ادفع) (?:عليه|لكم|لك|ليكم)|(?:معيش|ما معي|ماعندي|مافي|ما عندي) (?:كاش|نقد|فلوس|سيوله)|(?:الفني|الفنى) (?:جالي|جاني|وصل|جا|خلص)/.test(t) && /(?:ادفع|دفع|احاسب|حساب|احول|تحويل|فلوس|كاش|سداد|اسدد)/.test(t) && !/كم السعر|بكم/.test(t)) {
+    const last = (orders || [])[0]
+    return out(`أبشر، الدفع عندنا رسمي وآمن: رابط دفع (مدى/فيزا) من التطبيق، أو كاش للفني مع فاتورة ضريبية. ما نعطي أرقام حسابات شخصية في المحادثة. ${last ? 'بحوّلك الحين لموظف الحسابات عشان يرسل لك رابط الدفع لطلبك الأخير.' : 'اكتب لي رقم الطلب أو الجوال المسجّل وأحوّلك لموظف الحسابات يرسل لك رابط الدفع.'}`, { action: 'handoff', escalation: 'payment', confidence: 0.9 })
+  }
   // ── conduct: insults, vulgarity, scams, exaggeration, jokes, movies, "are you human" — calm, short, then back to the job ──
   { const ABUSE = /(?:^|\s)(?:كلب|كلاب|حمار|حمير|غبي|غبيه|اغبي|زباله|حيوان|حقير|ولد (?:ال)?(?:كلب|حرام|زنا)|ابن (?:ال)?(?:كلب|حرام)|يلعن|لعنه|الله يلعن|يا (?:ايها )?(?:الغبي|الحمار)|اخرس|اسكت|احمق)(?:\s|$)/
     const VULG = /(?:^|\s)(?:كس|نيك|منيوك|سكس|شرموطه|عاهره|قحبه|زب|طيز|بزاز|جنس)(?:\s|$)/
     const abusedBefore = userMsgs.slice(0, -1).filter((m) => ABUSE.test(norm(m)) || VULG.test(norm(m))).length
-    if (VULG.test(t)) return out(abusedBefore ? 'نحترم الجميع ونتوقع نفس الشي. هذا الكلام ما نقدر نتعامل معه، وبحوّلك لمسؤول إذا حاب تكمل.' : 'تكفى خلنا بالأدب 🙏 أنا هنا لخدمة الصيانة بس. إذا عندك عطل في مكيف أو سباكة أو كهرباء قل لي وأخدمك.', { action: abusedBefore ? 'handoff' : 'none', escalation: abusedBefore ? 'abusive' : null, confidence: 0.9 })
+    if (VULG.test(t)) return out(abusedBefore ? 'نحترم الجميع ونتوقع نفس الشي. هذا الكلام ما نقدر نتعامل معه، وبحوّلك لمسؤول إذا حاب تكمل.' : 'تكفى خلنا بالأدب 🙏 أنا هنا لخدمة الصيانة بس. إذا عندك عطل في مكيف أو سباكة أو كهرباء قل لي وأخدمك.', { action: abusedBefore ? 'handoff' : 'none', escalation: abusedBefore ? 'sensitive' : null, confidence: 0.9 })
     if (ABUSE.test(t)) return out(abusedBefore >= 1 ? 'واضح إنك متضايق، وما أبغى أطوّل عليك. أحوّلك الحين لمسؤول يسمعك ويحل الموضوع مباشرة 🙏' : 'حقك علينا لو ضايقناك 🙏 بس خلنا نحل الموضوع بالهدوء. وش اللي صار بالضبط؟ وإذا تبغى صيانة قل لي وش العطل وأرتب لك الفني.', { action: abusedBefore >= 1 ? 'handoff' : 'collect', escalation: abusedBefore >= 1 ? 'frustrated' : null, confidence: 0.9 })
     if (/(?:رقم|كود|كلمه سر|باسورد|الرقم السري|cvv|رمز التحقق|otp|بطاقه)\S*\s*(?:ال)?(?:بطاقه|فيزا|حساب|ائتمان|التحقق|سري)?/.test(t) && /(ابعث|ارسل|اعطيك|عطيك|اديك|ابعتلك|هاك|خذ)/.test(t) && /(بطاقه|فيزا|cvv|otp|رمز التحقق|الرقم السري|كلمه سر|باسورد)/.test(t)) return out('لا ترسل أي بيانات بطاقة أو رمز تحقق في المحادثة أبداً 🔒 الدفع عندنا فقط عبر رابط رسمي من التطبيق أو كاش/شبكة بعد الخدمة، وما نطلب أرقام بطاقات هنا.', { action: 'none', confidence: 0.95 })
     if (/(حول|حوّل|ارسل|ابعث) (?:لي|لك|لنا|للفني|له)?\s*(?:فلوس|مبلغ|عربون|سلفه|رصيد)|(?:بدون|من غير) فاتوره|(?:تحويل|حواله) (?:على )?(?:حساب )?(?:شخصي|الفني|خارجي)|عربون (?:للفني|شخصي)/.test(t)) return out('للأمان وحمايتك: ما نقبل تحويل لحسابات شخصية ولا الفني يستلم عربون. الدفع يكون رسمي (رابط الدفع من التطبيق أو بعد إنجاز الخدمة) وبفاتورة ضريبية.', { action: 'none', confidence: 0.95 })
