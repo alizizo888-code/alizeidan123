@@ -1,0 +1,514 @@
+[
+ {
+  "id": "oxygen",
+  "name": "أكسجين",
+  "title": "أكسجين | دليل تبريد البيوت في مكة وجدة",
+  "slug": "oxygen11-ac",
+  "host": "blog.oxygen11.com",
+  "color": "#38bdf8",
+  "angle": "ac",
+  "angle_label": "صيانة وغسيل وتركيب المكيفات",
+  "pages": [
+   "من نحن",
+   "خدمات التكييف",
+   "أسعار تقريبية",
+   "تواصل معنا",
+   "سياسة الخصوصية"
+  ],
+  "blog_id": "6391057821086543844",
+  "blogspot": "https://oxygen11-ac.blogspot.com/",
+  "page_paths": [
+   [
+    "من نحن",
+    "/p/blog-page.html"
+   ],
+   [
+    "خدمات التكييف",
+    "/p/blog-page_01.html"
+   ],
+   [
+    "أسعار تقريبية",
+    "/p/blog-page_791.html"
+   ],
+   [
+    "تواصل معنا",
+    "/p/blog-page_146.html"
+   ],
+   [
+    "سياسة الخصوصية",
+    "/p/blog-page_52.html"
+   ]
+  ],
+  "spec": "ac"
+ },
+ {
+  "id": "mutqan",
+  "name": "متقن",
+  "title": "متقن للتبريد التجاري وغرف التجميد",
+  "slug": "mutqan-cold-rooms",
+  "host": "blog-mutqan.oxygen11.com",
+  "color": "#12a39a",
+  "angle": "coldrooms",
+  "angle_label": "غرف التبريد والتجميد والثلاجات التجارية",
+  "pages": [
+   "قصتنا",
+   "حلول التبريد التجاري",
+   "مشاريعنا",
+   "اطلب معاينة",
+   "الخصوصية والشروط"
+  ],
+  "blog_id": "3179938514491708346",
+  "blogspot": "https://mutqan-cold-rooms.blogspot.com/",
+  "page_paths": [
+   [
+    "قصتنا",
+    "/p/blog-page.html"
+   ],
+   [
+    "حلول التبريد التجاري",
+    "/p/blog-page_01.html"
+   ],
+   [
+    "مشاريعنا",
+    "/p/blog-page_919.html"
+   ],
+   [
+    "اطلب معاينة",
+    "/p/blog-page_704.html"
+   ],
+   [
+    "سياسة الخصوصية",
+    "/p/blog-page_782.html"
+   ]
+  ],
+  "spec": "fridge"
+ },
+ {
+  "id": "motakhases",
+  "name": "المتخصص",
+  "title": "عيادة الثلاجات من المتخصص",
+  "slug": "almotakhases-fridges",
+  "host": "blog-motakhases.oxygen11.com",
+  "color": "#1d4ed8",
+  "angle": "fridge",
+  "angle_label": "الثلاجات والفريزرات المنزلية",
+  "pages": [
+   "تعرّف علينا",
+   "أعطال الثلاجات الشائعة",
+   "ضمان الإصلاح",
+   "احجز فني",
+   "الخصوصية"
+  ],
+  "blog_id": "391427769394449046",
+  "blogspot": "https://almotakhases-fridges.blogspot.com/",
+  "page_paths": [
+   [
+    "تعرّف علينا",
+    "/p/blog-page.html"
+   ],
+   [
+    "أعطال الثلاجات الشائعة",
+    "/p/blog-page_01.html"
+   ],
+   [
+    "ضمان الإصلاح",
+    "/p/blog-page_203.html"
+   ],
+   [
+    "احجز فني",
+    "/p/blog-page_404.html"
+   ],
+   [
+    "سياسة الخصوصية",
+    "/p/blog-page_111.html"
+   ]
+  ],
+  "spec": "fridge"
+ },
+ {
+  "id": "muhandis",
+  "name": "المهندس",
+  "title": "دفتر المهندس للكهرباء المنزلية",
+  "slug": "almuhandis-electric",
+  "host": "blog-muhandis.oxygen11.com",
+  "color": "#0f766e",
+  "angle": "electric",
+  "angle_label": "الكهرباء والإنارة المنزلية",
+  "pages": [
+   "عن الفريق",
+   "خدمات الكهرباء",
+   "السلامة أولاً",
+   "اتصل بالمهندس",
+   "سياسة الخصوصية"
+  ],
+  "blog_id": "7081285325132302655",
+  "blogspot": "https://almuhandis-electric.blogspot.com/",
+  "page_paths": [
+   [
+    "عن الفريق",
+    "/p/blog-page.html"
+   ],
+   [
+    "خدمات الكهرباء",
+    "/p/blog-page_01.html"
+   ],
+   [
+    "السلامة أولاً",
+    "/p/blog-page_93.html"
+   ],
+   [
+    "اتصل بالمهندس",
+    "/p/blog-page_479.html"
+   ],
+   [
+    "سياسة الخصوصية",
+    "/p/blog-page_233.html"
+   ]
+  ],
+  "spec": "electric"
+ },
+ {
+  "id": "aqsa",
+  "name": "الأقصى",
+  "title": "الأقصى: سباكة بلا تسريبات",
+  "slug": "alaqsa-plumbing",
+  "host": "blog-aqsa.oxygen11.com",
+  "color": "#b45309",
+  "angle": "plumbing",
+  "angle_label": "السباكة وكشف التسربات",
+  "pages": [
+   "من نحن",
+   "كشف التسربات",
+   "خدمات السباكة",
+   "اطلب سباك",
+   "الخصوصية"
+  ],
+  "blog_id": "1802546498472066184",
+  "blogspot": "https://alaqsa-plumbing.blogspot.com/",
+  "page_paths": [
+   [
+    "من نحن",
+    "/p/blog-page.html"
+   ],
+   [
+    "كشف التسربات",
+    "/p/blog-page_01.html"
+   ],
+   [
+    "خدمات السباكة",
+    "/p/blog-page_138.html"
+   ],
+   [
+    "اطلب سباك",
+    "/p/blog-page_699.html"
+   ],
+   [
+    "سياسة الخصوصية",
+    "/p/blog-page_870.html"
+   ]
+  ],
+  "spec": "plumbing"
+ },
+ {
+  "id": "raad",
+  "name": "رعد السماء",
+  "title": "رعد السماء — بيت نظيف بلا حشرات",
+  "slug": "raad-alsamaa-pest",
+  "host": "blog-raad.oxygen11.com",
+  "color": "#6d28d9",
+  "angle": "pest",
+  "angle_label": "مكافحة الحشرات والقوارض",
+  "pages": [
+   "من نحن",
+   "برامج المكافحة",
+   "أمان الأسرة",
+   "احجز رشّة",
+   "الخصوصية"
+  ],
+  "blog_id": "8806802594842501644",
+  "blogspot": "https://raad-alsamaa-pest.blogspot.com/",
+  "page_paths": [
+   [
+    "من نحن",
+    "/p/blog-page.html"
+   ],
+   [
+    "برامج المكافحة",
+    "/p/blog-page_01.html"
+   ],
+   [
+    "أمان الأسرة",
+    "/p/blog-page_45.html"
+   ],
+   [
+    "احجز رشّة",
+    "/p/blog-page_505.html"
+   ],
+   [
+    "سياسة الخصوصية",
+    "/p/blog-page_777.html"
+   ]
+  ],
+  "spec": "pest"
+ },
+ {
+  "id": "mutamakkin",
+  "name": "المتمكن",
+  "title": "المتمكن | ماء نقي وخزانات آمنة",
+  "slug": "almutamakkin-tanks",
+  "host": "blog-mutamakkin.oxygen11.com",
+  "color": "#be123c",
+  "angle": "tanks",
+  "angle_label": "تنظيف وتعقيم وعزل خزانات المياه",
+  "pages": [
+   "من نحن",
+   "تنظيف الخزانات",
+   "العزل والتعقيم",
+   "احجز موعد",
+   "الخصوصية"
+  ],
+  "blog_id": "5745164860808994352",
+  "blogspot": "https://almutamakkin-tanks.blogspot.com/",
+  "spec": "tanks"
+ },
+ {
+  "id": "khabeer",
+  "name": "الخبير",
+  "title": "اسأل الخبير عن أجهزة بيتك",
+  "slug": "alkhabeer-appliances",
+  "host": "blog-khabeer.oxygen11.com",
+  "color": "#0369a1",
+  "angle": "appliances",
+  "angle_label": "الغسالات والأفران والأجهزة المنزلية",
+  "pages": [
+   "تعرّف على الخبير",
+   "الأجهزة التي نصلحها",
+   "أسئلة شائعة",
+   "اطلب زيارة",
+   "الخصوصية"
+  ],
+  "blog_id": "5575605521494614665",
+  "blogspot": "https://alkhabeer-appliances.blogspot.com/",
+  "spec": "appliances"
+ },
+ {
+  "id": "homeservice",
+  "name": "هوم سيرفيس",
+  "title": "هوم سيرفيس — تقويم صيانة البيت",
+  "slug": "homeservice-maintenance",
+  "host": "blog-homeservice.oxygen11.com",
+  "color": "#15803d",
+  "angle": "routine",
+  "angle_label": "جداول الصيانة الدورية للمنزل",
+  "pages": [
+   "من نحن",
+   "جدول الصيانة السنوي",
+   "باقات الصيانة",
+   "اشترك الآن",
+   "الخصوصية"
+  ],
+  "blog_id": "6595945845302491823",
+  "blogspot": "https://homeservice-maintenance.blogspot.com/",
+  "spec": "general"
+ },
+ {
+  "id": "ibtikar",
+  "name": "ابتكار راحة",
+  "title": "ابتكار راحة: تكييف مركزي أوفر",
+  "slug": "ibtikar-raha-hvac",
+  "host": "blog-ibtikar.oxygen11.com",
+  "color": "#c2410c",
+  "angle": "central",
+  "angle_label": "التكييف المركزي والكونسيلد وتوفير الكهرباء",
+  "pages": [
+   "من نحن",
+   "التكييف المركزي والكونسيلد",
+   "حاسبة التوفير",
+   "اطلب مهندس",
+   "الخصوصية"
+  ],
+  "blog_id": "3449695580708303588",
+  "blogspot": "https://ibtikar-raha-hvac.blogspot.com/",
+  "spec": "ac"
+ },
+ {
+  "id": "mutamad",
+  "name": "المعتمد",
+  "title": "المعتمد — صيانة أحياء جدة",
+  "slug": "almutamad-jeddah-maintenance",
+  "host": "blog-mutamad.oxygen11.com",
+  "color": "#334155",
+  "angle": "jeddah",
+  "angle_label": "خدمات الصيانة حسب أحياء جدة",
+  "pages": [
+   "من نحن",
+   "أحياء جدة التي نغطيها",
+   "فروعنا",
+   "تواصل",
+   "الخصوصية"
+  ],
+  "blog_id": "3078737633547325251",
+  "blogspot": "https://almutamad-jeddah-maintenance.blogspot.com/",
+  "spec": "general"
+ },
+ {
+  "id": "misriya",
+  "name": "المصرية",
+  "title": "المصرية — خدمات الصيانة في أحياء مكة",
+  "slug": "almasriya-makkah",
+  "host": "blog-misriya.oxygen11.com",
+  "color": "#a21caf",
+  "angle": "makkah",
+  "angle_label": "خدمات الصيانة حسب أحياء مكة المكرمة",
+  "pages": [
+   "من نحن",
+   "أحياء مكة التي نغطيها",
+   "مواعيد العمل",
+   "تواصل",
+   "الخصوصية"
+  ],
+  "blog_id": null,
+  "blogspot": null,
+  "spec": "general"
+ },
+ {
+  "id": "nukhba",
+  "name": "النخبة",
+  "title": "النخبة لكاميرات المراقبة وأنظمة الأمان",
+  "slug": "alnukhba-security",
+  "host": "blog-nukhba.oxygen11.com",
+  "color": "#0e7490",
+  "angle": "cameras",
+  "angle_label": "كاميرات المراقبة وأنظمة الأمان",
+  "spec": "cameras",
+  "twin": "motakhases",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "riyada",
+  "name": "الريادة",
+  "title": "الريادة | طاقة شمسية للبيوت والمزارع",
+  "slug": "alriyada-solar",
+  "host": "blog-riyada.oxygen11.com",
+  "color": "#7c3aed",
+  "angle": "solar",
+  "angle_label": "أنظمة الطاقة الشمسية",
+  "spec": "solar",
+  "twin": "muhandis",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "baraa",
+  "name": "البراعة",
+  "title": "البراعة في الدهانات والديكور",
+  "slug": "albaraa-paint",
+  "host": "blog-baraa.oxygen11.com",
+  "color": "#ca8a04",
+  "angle": "paint",
+  "angle_label": "الدهانات وورق الجدران والديكور",
+  "spec": "paint",
+  "twin": "aqsa",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "safwa",
+  "name": "الصفوة",
+  "title": "الصفوة للتنظيف العميق والتعقيم",
+  "slug": "alsafwa-cleaning",
+  "host": "blog-safwa.oxygen11.com",
+  "color": "#db2777",
+  "angle": "cleaning",
+  "angle_label": "التنظيف العميق والتعقيم",
+  "spec": "cleaning",
+  "twin": "raad",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "tamayuz",
+  "name": "التميز",
+  "title": "التميز في التبليط والترميم والعزل",
+  "slug": "altamayuz-tiling",
+  "host": "blog-tamayuz.oxygen11.com",
+  "color": "#0d9488",
+  "angle": "tiling",
+  "angle_label": "التبليط والترميم والعزل",
+  "spec": "tiling",
+  "twin": "mutamakkin",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "nasmat",
+  "name": "نسمة الحجاز",
+  "title": "نسمة الحجاز — دش وساتلايت وشاشات",
+  "slug": "nasmat-alhijaz-dish",
+  "host": "blog-nasmat.oxygen11.com",
+  "color": "#2563eb",
+  "angle": "satellite",
+  "angle_label": "تركيب الدش والساتلايت وضبط القنوات",
+  "spec": "satellite",
+  "twin": "khabeer",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "wahat",
+  "name": "واحة الراحة",
+  "title": "واحة الراحة لنقل الأثاث والعفش",
+  "slug": "wahat-alraha-moving",
+  "host": "blog-wahat.oxygen11.com",
+  "color": "#65a30d",
+  "angle": "moving",
+  "angle_label": "نقل الأثاث وفكه وتركيبه",
+  "spec": "moving",
+  "twin": "homeservice",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "amaan",
+  "name": "الأمان",
+  "title": "الأمان للأقفال الذكية والأبواب",
+  "slug": "alamaan-smartlocks",
+  "host": "blog-amaan.oxygen11.com",
+  "color": "#dc2626",
+  "angle": "locks",
+  "angle_label": "الأقفال الذكية والأبواب",
+  "spec": "locks",
+  "twin": "ibtikar",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "kafaa",
+  "name": "الكفاءة",
+  "title": "الكفاءة لعقود صيانة المنشآت",
+  "slug": "alkafaa-facilities",
+  "host": "blog-kafaa.oxygen11.com",
+  "color": "#0891b2",
+  "angle": "corporate",
+  "angle_label": "عقود الصيانة للشركات والمنشآت",
+  "spec": "corporate",
+  "twin": "mutamad",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "jawda",
+  "name": "الجودة",
+  "title": "الجودة للمقاولات العامة والترميم",
+  "slug": "aljawda-contracting",
+  "host": "blog-jawda.oxygen11.com",
+  "color": "#9a3412",
+  "angle": "contracting",
+  "angle_label": "المقاولات العامة والإشراف الهندسي",
+  "spec": "contracting",
+  "twin": "misriya",
+  "blog_id": null,
+  "blogspot": null
+ }
+]

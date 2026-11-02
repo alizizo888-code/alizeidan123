@@ -68,3 +68,15 @@ export const NETWORK = [
 export const brandMeta = (id) => NETWORK.find((b) => b.id === id) || null
 // The brand an order came from, for staff screens and dispatch texts (no tag = the site's own face).
 export const orderBrandName = (o) => { const m = o && o.brand ? brandMeta(o.brand) : null; return m && !m.core ? m.name : BN }
+
+// Orders that arrive from a brand's Blogger face land on the hub app as /app/?via=<brand id>#/... ; remember that tag for the session
+// so the order is stamped with the brand it really came from (the server only honours it for valid registry ids).
+export function viaBrand() {
+  if (typeof window === 'undefined') return null
+  try {
+    const q = new URLSearchParams(window.location.search).get('via') || ''
+    if (/^[a-z]{3,20}$/.test(q)) sessionStorage.setItem('mutqan_via', q)
+    return sessionStorage.getItem('mutqan_via') || null
+  } catch { return null }
+}
+viaBrand()
