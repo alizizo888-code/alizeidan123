@@ -25,6 +25,9 @@ const SecuritySettings = lazyRetry(() => import('../pages/SecuritySettings'))
 const ThemeSettings = lazyRetry(() => import('../pages/ThemeSettings'))
 const PayLinks = lazyRetry(() => import('../pages/PayLinks'))
 const AiCommandCenter = lazyRetry(() => import('../pages/AiCommandCenter'))
+const ControlAssistant = lazyRetry(() => import('../pages/ControlAssistant'))
+const AdminHub = lazyRetry(() => import('../pages/AdminHub'))
+const Reports = lazyRetry(() => import('../pages/Reports'))
 const PaymentMethods = lazyRetry(() => import('../pages/PaymentMethods'))
 const AiOwnerControl = lazyRetry(() => import('../pages/AiOwnerControl'))
 const WhatsappCenter = lazyRetry(() => import('../pages/WhatsappCenter'))
@@ -251,6 +254,9 @@ export default function DeskApp() {
               <Route path="/staff/theme" element={<ThemeSettings staff />} />
               <Route path="/staff/pay-links" element={<PayLinks />} />
               <Route path="/staff/ai-command" element={<AiCommandCenter />} />
+              <Route path="/staff/assistant" element={<ControlAssistant />} />
+              <Route path="/staff/admin" element={<AdminHub />} />
+              <Route path="/staff/reports" element={<Reports />} />
               <Route path="/staff/inventory" element={<Inventory />} />
         <Route path="/staff/accounts" element={<Accounts />} />
         <Route path="/staff/payment-methods" element={<PaymentMethods />} />

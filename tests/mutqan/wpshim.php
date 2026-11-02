@@ -117,7 +117,7 @@ function register_post_type(...$a) {} function wp_insert_post($a, $e = false) { 
 $P = dirname(__DIR__, 2) . '/oxygen-ac-automation/includes/';
 require $P . 'class-oxygen-network.php';
 require $P . 'class-oxygen-orders-chat.php';
-foreach (['store', 'policy', 'auth', 'passkey', 'promo', 'wa', 'ai', 'shop', 'defaults', 'link', 'telegram', 'rest', 'admin'] as $part) { require $P . 'mutqan/class-mutqan-' . $part . '.php'; }
+foreach (['store', 'policy', 'auth', 'passkey', 'promo', 'wa', 'ai', 'shop', 'defaults', 'link', 'telegram', 'blogger', 'agent', 'rest', 'admin'] as $part) { require $P . 'mutqan/class-mutqan-' . $part . '.php'; }
 Mutqan_Rest::boot();
 do_action('init'); do_action('rest_api_init');
 

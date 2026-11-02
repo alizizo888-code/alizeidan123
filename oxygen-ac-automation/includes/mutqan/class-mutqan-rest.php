@@ -10,6 +10,7 @@ final class Mutqan_Rest {
 
     public static function boot() {
         add_action('init', ['Mutqan_Store', 'maybe_install'], 1);
+        add_action('init', [__CLASS__, 'heal_static_app'], 1);
         add_action('init', [__CLASS__, 'serve_app'], 2);
         add_action('rest_api_init', [__CLASS__, 'routes']);
         // Cross-origin use (the static Oxygen front on oxygen11.com talks to this API). Token auth, no cookies -> safe to allow the brand origins.
@@ -35,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'push', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'push', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -193,7 +194,7 @@ final class Mutqan_Rest {
     /** The order as the customer receives it on WhatsApp (same layout as the app's message). */
     /** The face the customer ordered from; the two core sites keep their own (build-branded) name. */
     private static function order_brand_name($d) {
-        $b = isset($d['brand']) && class_exists('Oxygen_Network') && Oxygen_Network::valid($d['brand']) ? Oxygen_Network::registry()[$d['brand']] : null;
+        $b = isset($d['brand']) && class_exists('Oxygen_Network') && Oxygen_Network::valid($d['brand']) ? Oxygen_Network::brand($d['brand']) : null;
         return $b && empty($b['core']) ? $b['name'] : 'أكسجين';
     }
 
@@ -433,6 +434,9 @@ final class Mutqan_Rest {
         return Mutqan_AI::run($in['prompt'] ?? '', is_array($in['opts'] ?? null) ? $in['opts'] : [], $p);
     }
 
+    /** Owner/operations control assistant (Claude with business-only tools). */
+    public static function h_agent($req, $p) { return Mutqan_Agent::handle(self::body($req), $p); }
+
     /* ------------------------------------------------------------------ /push (in-app notifications) */
 
     /** 15 minutes before a booked appointment: push to the customer (account) and to the team. Runs from cron and, throttled, from inbox polls. */
@@ -563,6 +567,21 @@ final class Mutqan_Rest {
     }
 
     /* ------------------------------------------------------------------ serving /app/ */
+
+    /**
+     * An old static copy of the app (public_html/app/, a past build with gen.txt) shadows the real /app/ route: the web
+     * server answers it before WordPress runs, and its index.html points at build files the plugin no longer ships, so the
+     * app shows only the «إعادة تشغيل» screen. Move that copy aside (renamed, never deleted) so /app/ is served by the plugin.
+     */
+    public static function heal_static_app() {
+        $dir = ABSPATH . 'app';
+        if (!is_dir($dir) || is_link($dir) || !is_file($dir . '/gen.txt') || !is_file($dir . '/index.html')) { return; }
+        if (get_transient('mq_heal_static_app')) { return; }
+        set_transient('mq_heal_static_app', 1, 600);
+        $to = ABSPATH . 'app-static-old-' . gmdate('Ymd-His');
+        if (@rename($dir, $to)) { update_option('mutqan_static_app_moved', ['to' => basename($to), 'at' => gmdate('c')], false); }
+        else { error_log('[mutqan] could not move static app copy aside'); }
+    }
 
     public static function app_dir() { return plugin_dir_path(dirname(dirname(__FILE__))) . 'app/'; }
 

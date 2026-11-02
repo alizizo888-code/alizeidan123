@@ -6,7 +6,7 @@ import LinkPinger from './LinkPinger'
 import { brandLabel } from '../lib/brand'
 import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Clock, LayoutDashboard, MessageCircle, Bell, Radar, Wallet, ListChecks, Briefcase, Layers, X, Map as MapIcon, Menu, ChevronDown, Settings2, Bot, Tags, Snowflake, ShieldCheck, Phone, UserPlus, Smartphone, Home, ShoppingBag, Palette, Globe, Link2 } from 'lucide-react'
+import { Clock, LayoutDashboard, MessageCircle, Bell, Radar, Wallet, ListChecks, Briefcase, Layers, X, Map as MapIcon, Menu, ChevronDown, Settings2, Bot, Tags, Snowflake, ShieldCheck, Phone, UserPlus, Smartphone, Home, ShoppingBag, Palette, Globe, Link2, LayoutGrid, BarChart3 } from 'lucide-react'
 import { useTeamRole } from '../hooks/useTeamRole'
 import { useLiveShared } from '../lib/useLive'
 import { auth } from '../lib/auth'
@@ -42,6 +42,8 @@ NAV.supervisor = NAV.operations
 // Owner only: jump into every workspace (operations room, supervisor board, technician radar, the customer app…) without logging out.
 const WORKSPACES = [
   ['/staff', 'لوحة المالك (كل التحكمات)'],
+  ['/staff/admin', 'الإدارة الشاملة (كل الإعدادات)'],
+  ['/staff/reports', 'التقارير'],
   ['/staff/operations', 'غرفة العمليات'],
   ['/staff/map', 'الخريطة الميدانية'],
   ['/staff/tech-requests', 'مشرف الموقع — طلبات الفنيين'],
@@ -76,11 +78,14 @@ function OwnerSwitcher() {
 
 // Management pages, shown inside the collapsible "إدارة" group of the side menu.
 const MANAGE = [
+  ['/staff/admin', 'الإدارة الشاملة', LayoutGrid],
+  ['/staff/reports', 'التقارير', BarChart3],
   ['/staff/pricing', 'التسعير والخصومات', Tags],
   ['/staff/ac', 'خدمات المكيفات', Snowflake],
   ['/staff/used-ac', 'متجر المستعمل', ShoppingBag],
   ['/staff/schedule', 'نظام المواعيد', Clock],
   ['/staff/pay-links', 'روابط الدفع', Wallet],
+  ['/staff/assistant', 'مساعد التحكم', Bot],
   ['/staff/ai-command', 'مركز قيادة الذكاء', Bot],
   ['/staff/ai-settings', 'إعدادات البوت', Settings2],
   ['/staff/ai-owner', 'تحكم المالك بالبوت', Bot],
