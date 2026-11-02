@@ -130,7 +130,7 @@ final class Oxygen_Network_SEO {
     public static function settings() {
         $o = get_option(self::OPT, []); if (!is_array($o)) { $o = []; }
         $reg = Oxygen_Network::registry(); $cur = Oxygen_Network::current_id();
-        $s = array_merge(['burst' => 180, 'burst_days' => isset($reg[$cur]['twin']) ? 5 : 6, 'steady' => 10, 'since' => 0], $o);   // first company: 6 days at the core pace; its twin: 5 days
+        $s = array_merge(['burst' => 180, 'burst_days' => 6, 'steady' => 10, 'since' => 0], $o);   // every company (first and twin) runs the same 6-day burst, then 10 a day
         if (empty($s['since'])) { $s['since'] = time(); update_option(self::OPT, $s, false); }
         return $s;
     }
@@ -140,7 +140,9 @@ final class Oxygen_Network_SEO {
     public static function tick() {
         if (!Oxygen_Network::is_satellite()) { return; }
         $quota = self::quota();
-        $allowed = min($quota, (int) ceil($quota * ((int) wp_date('G') + 1) / 24));
-        for ($i = 0; $i < 8 && Oxygen_SEO_Engine::today_count('new_seo') < $allowed; $i++) { if (!Oxygen_SEO_Engine::create_next(null, 'seo')) { break; } }
+        // three publishing windows a day (08:00, 14:00, 20:00): each releases a third of the day's quota
+        $h = (int) wp_date('G'); $per = (int) ceil($quota / 3); $passed = count(array_filter([8, 14, 20], function ($w) use ($h) { return $h >= $w; }));
+        $allowed = min($quota, $per * $passed);
+        for ($i = 0; $i < 20 && Oxygen_SEO_Engine::today_count('new_seo') < $allowed; $i++) { if (!Oxygen_SEO_Engine::create_next(null, 'seo')) { break; } }
     }
 }
