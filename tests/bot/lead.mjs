@@ -22,4 +22,7 @@ const noPrice = (r) => !/\d{2,4}\s*(ريال|ر\.س|جنيه)/.test(r)
 { const r = run(['الفنيين عندكم سعوديين']); t('tech:nat', noPrice(r.last.reply) && /مدرّب|معتمد/.test(r.last.reply), r.last.reply) }
 // 8. refund -> escalated
 { const r = run(['ابغى استرجاع المبلغ']); t('refund:escalate', r.last.action === 'handoff', r.last.action) }
+// 9. out of scope + spam never become a generic service request
+{ const r = run(['عندي طياره الجناح بتاعها في مشكله']); t('oos:plane', /خارج تخصصنا/.test(r.last.reply) && !r.last.draft.specialtyId, r.last.reply)
+  const sp = run(['عندي طياره الجناح بتاعها في مشكله ومحتاج مهندس '.repeat(8)]); t('oos:spam', /مكررة|جملة وحدة/.test(sp.last.reply), sp.last.reply) }
 console.log(`lead: ${pass}/${pass + fail}`); if (fail) process.exit(1)
