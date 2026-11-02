@@ -208,7 +208,11 @@ final class Mutqan_Policy {
         if (!class_exists('Oxygen_Network')) { return 'oxygen'; }
         if ($priv && Oxygen_Network::valid($claimed)) { return $claimed; }
         $o = isset($_SERVER['HTTP_ORIGIN']) ? strtolower((string) wp_parse_url((string) $_SERVER['HTTP_ORIGIN'], PHP_URL_HOST)) : '';
-        return $o !== '' ? Oxygen_Network::id_for_host($o) : Oxygen_Network::current_id();
+        $from = $o !== '' ? Oxygen_Network::id_for_host($o) : Oxygen_Network::current_id();
+        // A customer sent over from a brand's Blogger face orders inside the hub app (?via=<id>): keep that brand's tag.
+        $on_hub = in_array(preg_replace('/^www\\./', '', $o), ['', Oxygen_Network::HUB_HOST], true);
+        if ($on_hub && $from === 'oxygen' && Oxygen_Network::valid($claimed)) { return $claimed; }
+        return $from;
     }
 
     public static function sanitize_insert($coll, $data, $p) {
