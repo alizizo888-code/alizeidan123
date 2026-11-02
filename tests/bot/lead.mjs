@@ -25,4 +25,14 @@ const noPrice = (r) => !/\d{2,4}\s*(ريال|ر\.س|جنيه)/.test(r)
 // 9. out of scope + spam never become a generic service request
 { const r = run(['عندي طياره الجناح بتاعها في مشكله']); t('oos:plane', /خارج تخصصنا/.test(r.last.reply) && !r.last.draft.specialtyId, r.last.reply)
   const sp = run(['عندي طياره الجناح بتاعها في مشكله ومحتاج مهندس '.repeat(8)]); t('oos:spam', /مكررة|جملة وحدة/.test(sp.last.reply), sp.last.reply) }
+// 10. conduct: insult, vulgar, scam, exaggeration, movies, joke, are-you-human
+{ const a = run(['يا حمار انتم']); t('conduct:abuse1', /حقك علينا/.test(a.last.reply) && a.last.action !== 'handoff', a.last.reply)
+  const b = run(['يا حمار انتم', 'انتم كلاب']); t('conduct:abuse2', b.last.action === 'handoff', b.last.reply)
+  const v = run(['سكس']); t('conduct:vulgar', /بالأدب/.test(v.last.reply), v.last.reply)
+  const f = run(['حول لي عربون للفني']); t('conduct:scam', /ما نقبل تحويل/.test(f.last.reply), f.last.reply)
+  const e = run(['ابغى الف مكيف في ساعه']); t('conduct:exaggerate', /عمليين/.test(e.last.reply), e.last.reply)
+  const m = run(['تشوف مسلسل نتفلكس']); t('conduct:movie', /تخصصي الصيانة/.test(m.last.reply), m.last.reply)
+  const j = run(['قول نكته']); t('conduct:joke', /الفني/.test(j.last.reply), j.last.reply)
+  const h = run(['انت بشر ولا روبوت']); t('conduct:human', /مساعد ذكي/.test(h.last.reply), h.last.reply)
+  const ok = run(['ابغى غسيل مكيف']); t('conduct:normal-ok', ok.last.draft.specialtyId === 'ac', ok.last.reply) }
 console.log(`lead: ${pass}/${pass + fail}`); if (fail) process.exit(1)
