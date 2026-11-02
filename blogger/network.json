@@ -267,8 +267,8 @@
    "احجز موعد",
    "الخصوصية"
   ],
-  "blog_id": null,
-  "blogspot": null,
+  "blog_id": "5745164860808994352",
+  "blogspot": "https://almutamakkin-tanks.blogspot.com/",
   "spec": "tanks"
  },
  {
@@ -287,8 +287,8 @@
    "اطلب زيارة",
    "الخصوصية"
   ],
-  "blog_id": null,
-  "blogspot": null,
+  "blog_id": "5575605521494614665",
+  "blogspot": "https://alkhabeer-appliances.blogspot.com/",
   "spec": "appliances"
  },
  {
@@ -307,8 +307,8 @@
    "اشترك الآن",
    "الخصوصية"
   ],
-  "blog_id": null,
-  "blogspot": null,
+  "blog_id": "6595945845302491823",
+  "blogspot": "https://homeservice-maintenance.blogspot.com/",
   "spec": "general"
  },
  {
@@ -327,15 +327,15 @@
    "اطلب مهندس",
    "الخصوصية"
   ],
-  "blog_id": null,
-  "blogspot": null,
+  "blog_id": "3449695580708303588",
+  "blogspot": "https://ibtikar-raha-hvac.blogspot.com/",
   "spec": "ac"
  },
  {
   "id": "mutamad",
   "name": "المعتمد",
   "title": "المعتمد — صيانة أحياء جدة",
-  "slug": "almutamad-jeddah",
+  "slug": "almutamad-jeddah-maintenance",
   "host": "blog-mutamad.oxygen11.com",
   "color": "#334155",
   "angle": "jeddah",
@@ -347,8 +347,8 @@
    "تواصل",
    "الخصوصية"
   ],
-  "blog_id": null,
-  "blogspot": null,
+  "blog_id": "3078737633547325251",
+  "blogspot": "https://almutamad-jeddah-maintenance.blogspot.com/",
   "spec": "general"
  },
  {
