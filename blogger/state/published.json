@@ -42,18 +42,32 @@
   ],
   "oxygen": [
    "الدليل الشامل إلى التكييف في البيوت: كل ما تحتاج معرفته",
-   "لماذا تتكرر مشاكل التكييف؟ تشخيص عملي للأسباب"
+   "لماذا تتكرر مشاكل التكييف؟ تشخيص عملي للأسباب",
+   "كيف تدفع السعر العادل في التكييف دون مفاجآت"
+  ],
+  "mutqan": [
+   "لماذا تتكرر مشاكل التبريد؟ تشخيص عملي للأسباب"
+  ],
+  "motakhases": [
+   "عروض التبريد: كيف تقارن بينها وتختار الأنسب"
+  ],
+  "muhandis": [
+   "ما لا يخبرك به أحد عن أخطاء الكهرباء"
+  ],
+  "aqsa": [
+   "خطة الأقصى الوقائية للسباكة شهراً بشهر"
+  ],
+  "raad": [
+   "كيف يؤثر مناخ المنطقة الغربية على مكافحة الحشرات؟"
   ]
  },
  "pending_long": {
   "oxygen": [
-   2,
    3,
    4,
    5
   ],
   "mutqan": [
-   0,
    1,
    2,
    3,
@@ -61,7 +75,6 @@
    5
   ],
   "motakhases": [
-   0,
    1,
    2,
    3,
@@ -69,7 +82,6 @@
    5
   ],
   "muhandis": [
-   0,
    1,
    2,
    3,
@@ -77,7 +89,6 @@
    5
   ],
   "aqsa": [
-   0,
    1,
    2,
    3,
@@ -85,7 +96,6 @@
    5
   ],
   "raad": [
-   0,
    1,
    2,
    3,
@@ -362,20 +372,96 @@
    5
   ]
  },
- "published_topics": {},
- "title_fixes_pending": [
-  "khabeer: خطة الخبير الوقائية لـالأجهزة المنزلية شهراً بشهر",
-  "mutamakkin: long4 (لـالسباكة)",
-  "homeservice: long2 (لـالصيانة)",
-  "ibtikar: long1 (لـالتكييف)",
-  "mutamad: long0 (لـالصيانة)"
- ],
+ "published_topics": {
+  "tanks": [
+   "لون الماء أصفر: هل الخزان هو السبب؟"
+  ],
+  "appliances": [
+   "الغسالة تهتز بقوة أثناء العصر"
+  ],
+  "general": [
+   "قائمة صيانة البيت قبل الصيف",
+   "قائمة الاستلام عند شراء شقة جديدة"
+  ],
+  "ac": [
+   "لماذا يفصل المكيف بعد دقائق من تشغيله؟"
+  ]
+ },
+ "title_fixes_pending": [],
  "daily_cap_per_blog": 4,
  "log": [
   {
    "date": "2026-11-02",
    "published": 45,
    "note": "Blogger blocked new posts after ~45 in one burst; edits also blocked"
+  },
+  {
+   "date": "2026-11-02",
+   "time": "22:02",
+   "pass": 1,
+   "published": [
+    {
+     "brand": "oxygen",
+     "title": "كيف تدفع السعر العادل في التكييف دون مفاجآت",
+     "url": "https://blog.oxygen11.com/2026/11/blog-post_168.html"
+    },
+    {
+     "brand": "mutqan",
+     "title": "لماذا تتكرر مشاكل التبريد؟ تشخيص عملي للأسباب",
+     "url": "https://blog-mutqan.oxygen11.com/2026/11/blog-post_02.html"
+    },
+    {
+     "brand": "motakhases",
+     "title": "عروض التبريد: كيف تقارن بينها وتختار الأنسب",
+     "url": "https://blog-motakhases.oxygen11.com/2026/11/blog-post_02.html"
+    },
+    {
+     "brand": "muhandis",
+     "title": "ما لا يخبرك به أحد عن أخطاء الكهرباء",
+     "url": "https://blog-muhandis.oxygen11.com/2026/11/blog-post_02.html"
+    },
+    {
+     "brand": "aqsa",
+     "title": "خطة الأقصى الوقائية للسباكة شهراً بشهر",
+     "url": "https://blog-aqsa.oxygen11.com/2026/11/blog-post_02.html"
+    },
+    {
+     "brand": "raad",
+     "title": "كيف يؤثر مناخ المنطقة الغربية على مكافحة الحشرات؟",
+     "url": "https://blog-raad.oxygen11.com/2026/11/blog-post_02.html"
+    },
+    {
+     "brand": "mutamakkin",
+     "title": "لون الماء أصفر: هل الخزان هو السبب؟ اختبار الكوب الأبيض قبل أن تدفع",
+     "url": "https://blog-mutamakkin.oxygen11.com/2026/11/blog-post_02.html"
+    },
+    {
+     "brand": "khabeer",
+     "title": "اسأل الخبير: لماذا تهتز الغسالة بقوة أثناء العصر؟ وهل تحتاج فنياً؟",
+     "url": "https://blog-khabeer.oxygen11.com/2026/11/blog-post_02.html"
+    },
+    {
+     "brand": "homeservice",
+     "title": "قائمة صيانة البيت قبل الصيف: جدول ثمانية أسابيع يبدأ من مارس",
+     "url": "https://blog-homeservice.oxygen11.com/2026/11/blog-post_02.html"
+    },
+    {
+     "brand": "ibtikar",
+     "title": "لماذا يفصل المكيف المركزي أو الكونسيلد بعد دقائق من تشغيله؟ اقرأ التوقيت قبل العطل",
+     "url": "https://blog-ibtikar.oxygen11.com/2026/11/blog-post_02.html"
+    },
+    {
+     "brand": "mutamad",
+     "title": "قائمة استلام الشقة الجديدة في جدة: ما تفحصه بحسب موقع الحي",
+     "url": "https://blog-mutamad.oxygen11.com/2026/11/blog-post_02.html"
+    }
+   ],
+   "blocked": false,
+   "errors": [
+    "ملاحظة للمالك: أُزيل قسم «حالة من الميدان» من 6 مقالات مولّدة نُشرت في هذه الجولة، لأنه يروي زيارات عملاء مختلقة (وبعضها خاطئ فنياً: تنقيط ماء نُسب لضعف الكبستور). النسخ المنشورة سابقاً والمقالات المعلقة في articles_long.json ما زالت تحتوي القسم؛ يلزم قرارك بشأن حذفه منها.",
+    "اتصال Chrome انقطع لحظياً مرتين وعاد؛ لم يؤثر على النشر.",
+    "تم إصلاح عناوين title_fixes_pending الخمسة (كان khabeer مصلحاً مسبقاً، والأربعة الأخرى عُدلت). مدونتا mutamakkin وhomeservice فيهما مسودة فارغة (بلا عنوان) لم تُحذف."
+   ]
   }
  ],
  "max_posts_per_pass": 15

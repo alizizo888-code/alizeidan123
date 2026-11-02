@@ -318,6 +318,18 @@ final class Mutqan_Policy {
         'tanks' => 180, 'moving' => 300, 'solar' => 400, 'corporate' => 500, 'general' => 100, 'contracting' => 600,
     ];
 
+    public static function price_bases() { return self::$PRICE_BASE; }
+
+    /** The owner's AC price table merged over the built-in defaults (same keys as acPricing.js). */
+    public static function ac_table() {
+        $row = Mutqan_Store::get_raw('pricing', 'ac_calc') ?: [];
+        $d = ['split1' => 100, 'split2' => 140, 'split3' => 200, 'win1' => 60, 'win2' => 100, 'win3' => 150, 'winExtra' => 50, 'other1' => 180,
+              'innerOff1' => 10, 'innerOff2' => 20, 'innerOff3' => 40, 'w1' => 10, 'w2' => 20, 'w3' => 30, 'vatPct' => 15, 'maxDiscountPct' => 10];
+        $c = [];
+        foreach ($d as $k => $fb) { $c[$k] = (isset($row[$k]) && is_numeric($row[$k])) ? max(0, (float) $row[$k]) : (float) $fb; }
+        return $c;
+    }
+
     /** Port of pricing.js computeQuote (without add-ons): the lowest total negotiation may reach. */
     public static function floor_for($specialtyId, $qty, $urgent) {
         $base0 = (float) (self::$PRICE_BASE[$specialtyId] ?? 100);

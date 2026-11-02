@@ -58,7 +58,8 @@
     chips.style.display='none';
     add('me',text);history.push({role:'user',content:text});store();input.value='';setBusy(true);
     var typing=add('bot','...');
-    var body={messages:history};if(loc){body.lat=loc.lat;body.lng=loc.lng;}
+    var sid='';try{sid=sessionStorage.getItem('oxc_sid')||'';if(!sid){sid='s'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);sessionStorage.setItem('oxc_sid',sid);}}catch(e){}
+    var body={messages:history,sid:sid};if(loc){body.lat=loc.lat;body.lng=loc.lng;}
     fetch(C.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
       .then(function(r){return r.json().catch(function(){return {};});})
       .then(function(d){
