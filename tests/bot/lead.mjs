@@ -24,7 +24,7 @@ const noPrice = (r) => !/\d{2,4}\s*(ريال|ر\.س|جنيه)/.test(r)
 { const r = run(['ابغى استرجاع المبلغ']); t('refund:escalate', r.last.action === 'handoff', r.last.action) }
 // 9. out of scope + spam never become a generic service request
 { const r = run(['عندي طياره الجناح بتاعها في مشكله']); t('oos:plane', /خارج تخصصنا/.test(r.last.reply) && !r.last.draft.specialtyId, r.last.reply)
-  const sp = run(['عندي طياره الجناح بتاعها في مشكله ومحتاج مهندس '.repeat(8)]); t('oos:spam', /مكررة|جملة وحدة/.test(sp.last.reply), sp.last.reply) }
+  const sp = run(['عندي طياره الجناح بتاعها في مشكله ومحتاج مهندس '.repeat(8)]); t('oos:spam', /مكررة|جملة وحدة|خارج تخصصنا/.test(sp.last.reply), sp.last.reply) }
 // 10. conduct: insult, vulgar, scam, exaggeration, movies, joke, are-you-human
 { const a = run(['يا حمار انتم']); t('conduct:abuse1', /حقك علينا/.test(a.last.reply) && a.last.action !== 'handoff', a.last.reply)
   const b = run(['يا حمار انتم', 'انتم كلاب']); t('conduct:abuse2', b.last.action === 'handoff', b.last.reply)
@@ -35,4 +35,7 @@ const noPrice = (r) => !/\d{2,4}\s*(ريال|ر\.س|جنيه)/.test(r)
   const j = run(['قول نكته']); t('conduct:joke', /الفني/.test(j.last.reply), j.last.reply)
   const h = run(['انت بشر ولا روبوت']); t('conduct:human', /مساعد ذكي/.test(h.last.reply), h.last.reply)
   const ok = run(['ابغى غسيل مكيف']); t('conduct:normal-ok', ok.last.draft.specialtyId === 'ac', ok.last.reply) }
+// 11. long repeated "I owe the tech, send account number" -> payment hand-off, never a random discount
+{ const msg = ('دلوقتي انا اشتركت معاكم في خدمه والفني جالي بس انا معيش اللي انا ادفع له كاش فابعت لي رقم حساب احول عليه ').repeat(6)
+  const r = run(['ابغى غسيل ٣ مكيفات', 'غالي', msg]); t('pay:after-service', r.last.action === 'handoff' && /رابط دفع|الدفع عندنا/.test(r.last.reply) && !/تخفيض/.test(r.last.reply), r.last.action + ' ' + r.last.reply) }
 console.log(`lead: ${pass}/${pass + fail}`); if (fail) process.exit(1)

@@ -2,7 +2,7 @@
 // it replies naturally AND returns the understood intent + the next workflow action.
 import { aiRun, can } from './aiAdapter'
 import { SPECIALTIES, STATUS_META, specialtyLabel } from './constants'
-import { localTurn } from './localBot'
+import { localTurn, squash } from './localBot'
 import { norm } from './botData'
 import { pricesForPrompt, NEGOTIATION_STYLES } from './pricing'
 import { ESCALATION_REASONS, trackingText } from './workflow'
@@ -168,7 +168,7 @@ function buildPromptRaw({ history, customer, orders, draft, dialect, rules, quot
   const tone = TONES[settings?.tone] || TONES.friendly
   const convo = history
     .slice(-24)
-    .map((m) => `${m.role === 'user' ? 'العميل' : 'MUTQAN AI'}: ${m.content}`)
+    .map((m) => `${m.role === 'user' ? 'العميل' : 'MUTQAN AI'}: ${m.role === 'user' ? squash(m.content) : m.content}`)
     .join('\n')
 
   return `## 1) الدور والأسلوب

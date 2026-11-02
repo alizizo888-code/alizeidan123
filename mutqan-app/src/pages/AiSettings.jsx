@@ -576,7 +576,9 @@ function Logs({ enabled, onToggle }) {
                 <p className="text-xs font-bold text-white truncate">{l.customerName} {l.voice ? '🎙️' : ''}</p>
                 <span className="text-[10px] text-slate-500 shrink-0" dir="ltr">{l.at ? new Date(l.at).toLocaleString('ar') : ''}</span>
               </div>
-              <p className="text-[11px] text-slate-400 truncate mt-0.5">{l.text}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5 break-words">العميل: {l.text}</p>
+              {l.reply && <p className="text-[11px] text-sky-300/80 mt-0.5 break-words">المساعد: {l.reply}</p>}
+              {l.conversation && <p className="text-[10px] text-slate-600 mt-0.5" dir="ltr">{l.conversation}{l.customerPhone ? ' · ' + l.customerPhone : ''}</p>}
               <div className="flex flex-wrap gap-1 mt-1">
                 <Chip>{ACTION_LABELS[l.action] || l.action}</Chip>
                 {l.specialtyId && <Chip>{specialtyLabel(l.specialtyId)}</Chip>}
