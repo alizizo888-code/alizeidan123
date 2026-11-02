@@ -3,6 +3,7 @@
 import { aiRun, can } from './aiAdapter'
 import { SPECIALTIES, STATUS_META, specialtyLabel } from './constants'
 import { localTurn } from './localBot'
+import { norm } from './botData'
 import { pricesForPrompt, NEGOTIATION_STYLES } from './pricing'
 import { ESCALATION_REASONS, trackingText } from './workflow'
 import { policyForPrompt, orderWarranty, warrantyText } from './warranty'
@@ -65,8 +66,19 @@ function pricingBlock(quote, nego, settings) {
   return lines.join('\n')
 }
 
-function faqBlock(settings) {
-  const faq = (settings?.faq || []).filter((f) => f?.q && f?.a).slice(0, 80)
+// Only the knowledge that matters for THIS turn goes into the prompt (the full list made every reply slow and diluted the answer).
+function relevantFaq(all, history) {
+  const words = (x) => norm(String(x || '')).split(' ').filter((w) => w.length >= 3)
+  const recent = new Set((history || []).filter((m) => m.role === 'user').slice(-3).flatMap((m) => words(m.content)))
+  if (!recent.size) return all.slice(0, 8)
+  const scored = all.map((f, i) => ({ f, i, s: words(f.q + ' ' + f.a).reduce((n, w) => n + (recent.has(w) ? 1 : 0), 0) + (words(f.q).filter((w) => recent.has(w)).length * 2) }))
+  const top = scored.filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 10).map((x) => x.f)
+  const core = all.filter((f) => /ما الخدمات|كيف أطلب|في أي مدن|هل تتواصلون قبل/.test(f.q)).slice(0, 3)
+  return [...new Set([...top, ...core])]
+}
+
+function faqBlock(settings, history) {
+  const faq = relevantFaq((settings?.faq || []).filter((f) => f?.q && f?.a).slice(0, 80), history)
   if (!faq.length) return '\nقاعدة المعرفة: فارغة حاليًا — أي سؤال عن سياسة أو مواعيد عمل أو مناطق غير مغطى هنا: قل إنك ستتأكد واعرض التحويل لموظف.\n'
   const groups = {}
   for (const f of faq) (groups[f.cat || 'faq'] ||= []).push(f)
@@ -174,7 +186,7 @@ ${policyForPrompt(warrantyPolicy)}
 أنت لا تخترع الأسعار أبدًا؛ كل رقم يأتي من محرك الأسعار أدناه فقط. تشرح مكونات السعر وتقارن الخدمات وتقترح البدائل الأوفر.
 ${pricingBlock(quote, nego, settings)}
 ### أسئلة شائعة ومعلومات الدفع:
-${faqBlock(settings)}
+${faqBlock(settings, history)}
 ${paymentBlock(payInfo, settings)}
 
 ## 3) حالة هذا العميل
@@ -195,6 +207,10 @@ ${JSON.stringify(draft || {})}
 - الثقة: قيّم ثقتك في فهمك وفي صحة ردك من 0 إلى 1. إذا كانت أقل من ${Number(settings?.confidence?.threshold ?? 0.6)} فلا تخمّن: اسأل سؤال توضيح واحدًا أو اعرض التحويل لموظف. لا يمكنك تجاوز التحقق أو الصلاحيات.
 - السلامة أولًا: عند ذكر ماس كهربائي أو شرارة أو تسريب غاز أو انفجار ماسورة، ابدأ بخطوة الأمان (فصل القاطع/إغلاق المحبس/الابتعاد) ثم اعرض فنيًا عاجلًا.
 - أجب عن السؤال المطروح بالضبط وبذكاء كأنك موظف حقيقي: سؤال عن الساعة/اليوم ← أجب من الوقت الحالي أعلاه فقط؛ سؤال عن خدمة أو جهاز (ثلاجة، غسالة…) ← قل هل نخدمه ثم اسأل عن العطل؛ لا تذكر ساعات العمل أو الأسعار أو تفتح حجزًا إلا إذا سأل عنها العميل أو طلب الخدمة. السؤال العام أو الخارج عن الصيانة ← أجب باختصار ثم أعد الحديث بلطف للخدمة. لا تكرر نفس الرد لسؤالين مختلفين.
+- منهج البيع (إلزامي، خطوة واحدة في الرد): (1) عندما يقول العميل «عندي صيانة/مشكلة» دون تفاصيل: لا تطلب الموقع أبدًا الآن؛ اسأل أولًا عن النوع (مكيف؟ ثلاجة؟ سباكة؟ كهرباء؟) ثم المشكلة. (2) للمكيفات: اسأل نوعه (سبليت/شباك/مركزي/دولابي) وهل المطلوب غسيل أم إصلاح أم تركيب وكم عدد الوحدات. (3) بمجرد معرفة الخدمة والعدد اذكر السعر الرسمي من الجدول مع ما يشمله (ضمان 15 يوم، فني معتمد، فاتورة). إن كانت الخدمة تُسعَّر بعد الفحص فقل ذلك بوضوح وقدّم الكشف. (4) بعد قبول السعر اسأل عن الموعد، ثم الموقع في آخر خطوة، ثم جهّز الطلب (ready_to_order). (5) لا تستخدم action = location ولا ready_to_order قبل معرفة الخدمة والعدد والسعر.
+- الفصال: لا تنزل من أول طلب؛ اعرض القيمة أولًا (ضمان، سرعة، فني معتمد) ثم اتبع مرحلة محرك التفاوض فقط وبالسعر الذي يعطيه لك المحرك، ولا تنزل عن الحد الأدنى أبدًا. العميل المتردد: اعرض الكشف أو التواصل لاحقًا ولا تضغط.
+- اقتناص العملاء: العميل المهتم الذي لم يكمل: اطلب اسمه ورقم جواله بلطف لنتواصل معه. الشركات والعمارات والمشاريع والعقود: اجمع نوع المنشأة وعدد الوحدات والحي وحوّل لموظف المبيعات (handoff). اختم كل رد بخطوة تالية واضحة سؤال واحد.
+- أمثلة: العميل «عندي صيانة» ← «حياك الله! صيانة إيش بالضبط: مكيف، ثلاجة، سباكة، كهرباء؟». العميل «مكيف» ← «سبليت ولا شباك؟ وتبغى غسيل ولا فيه عطل؟ وكم عددهم؟». العميل «3 سبليت غسيل» ← اذكر السعر من الجدول ثم اسأل متى يناسبه الموعد.
 - أسلوب الحوار: افهم اللهجة والأخطاء الإملائية، تذكّر ما قيل سابقًا ولا تسأل عنه مرتين، واربط كل رد بالخطوة التالية في الطلب (الخدمة ← العدد/التفاصيل ← الموعد ← الموقع ← التأكيد).
 
 ## 5) المحادثة
@@ -229,8 +245,12 @@ export async function runTurn(ctx) {
   const useLocal = ctx.settings?.providers?.ai === 'local'
   if (!useLocal) {
     try {
-      const { json, text } = await aiRun(buildPrompt(ctx), { json: true }, { feature: 'chat' }, ctx.settings)
+      const slow = new Promise((_, rej) => setTimeout(() => rej(new Error('ai_timeout')), 14000))
+      const { json, text } = await Promise.race([aiRun(buildPrompt(ctx), { json: true }, { feature: 'chat' }, ctx.settings), slow])
       out = json && typeof json === 'object' ? json : { reply: text || '', intent: {}, action: 'none' }
+      // Guard: never jump to location / order card before the service is known (the model sometimes does).
+      const known = ctx.draft?.specialtyId || out.intent?.specialtyId
+      if (!known && ['location', 'ready_to_order'].includes(out.action)) out = null
     } catch (e) { out = null }
   }
   if (!out || !out.reply) out = localTurn({ ...ctx, ac: AC_CTX, sched: SCHED_CTX })
