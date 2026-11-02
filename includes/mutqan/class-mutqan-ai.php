@@ -216,13 +216,20 @@ final class Mutqan_AI {
         $text = trim(mb_substr(preg_replace('/[*_#`]/u', '', (string) $text), 0, 700));
         if ($text === '') { return ['ok' => false, 'error' => 'empty']; }
         if (!in_array($voice, ['Charon', 'Puck', 'Fenrir', 'Orus', 'Algenib'], true)) { $voice = 'Charon'; }
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent';
-        list($code, $data) = self::http($url, ['x-goog-api-key' => $c['key'], 'Content-Type' => 'application/json'], [
-            'contents' => [['parts' => [['text' => 'بصوت رجل سعودي واضح وودود وبنبرة طبيعية: ' . $text]]]],
-            'generationConfig' => ['responseModalities' => ['AUDIO'], 'speechConfig' => ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice]]]],
-        ], 40);
-        $b64 = $data['candidates'][0]['content']['parts'][0]['inlineData']['data'] ?? '';
-        if ($code < 200 || $code >= 300 || $b64 === '') { return ['ok' => false, 'error' => 'HTTP ' . $code]; }
+        $why = '';
+        foreach (['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'] as $m) {
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $m . ':generateContent';
+            list($code, $data, $raw) = self::http($url, ['x-goog-api-key' => $c['key'], 'Content-Type' => 'application/json'], [
+                'contents' => [['role' => 'user', 'parts' => [['text' => 'Say the following in Arabic with a natural Saudi (Najdi/Hijazi) male accent, a warm friendly adult man, steady natural pace, no pauses between words: ' . $text]]]],
+                'generationConfig' => ['responseModalities' => ['AUDIO'], 'speechConfig' => ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice]]]],
+            ], 45);
+            $part = $data['candidates'][0]['content']['parts'][0] ?? [];
+            $b64 = $part['inlineData']['data'] ?? ($part['inline_data']['data'] ?? '');
+            if ($code >= 200 && $code < 300 && $b64 !== '') { break; }
+            $why = $m . ' HTTP ' . $code . ' ' . ($data['candidates'][0]['finishReason'] ?? '') . ' ' . mb_substr((string) ($data['error']['message'] ?? ''), 0, 120) . (($code === 200 && empty($data['candidates'])) ? ' ' . mb_substr((string) $raw, 0, 160) : '');
+            $b64 = '';
+        }
+        if ($b64 === '') { return ['ok' => false, 'error' => $why]; }
         $pcm = base64_decode($b64); $n = strlen($pcm);
         $wav = 'RIFF' . pack('V', 36 + $n) . 'WAVEfmt ' . pack('VvvVVvv', 16, 1, 1, 24000, 48000, 2, 16) . 'data' . pack('V', $n) . $pcm;
         return ['ok' => true, 'wav' => base64_encode($wav)];
