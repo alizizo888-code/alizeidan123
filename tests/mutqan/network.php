@@ -65,5 +65,16 @@ $t('sends at a configured hour', is_string($sent) && strpos($sent, 'تقرير �
 $t('...but not twice in the same hour', Oxygen_Network_Report::maybe_send($fetch, 12, false, ['brand' => 'x', 'today' => 0, 'total' => 0]) === false);
 $t('...and not at an unconfigured hour', Oxygen_Network_Report::maybe_send($fetch, 3, false, ['brand' => 'x', 'today' => 0, 'total' => 0]) === false);
 $t('five reports a day by default', Oxygen_Network_Report::settings()['hours'] === [9, 12, 15, 18, 21]);
+$_SERVER['HTTP_ORIGIN'] = 'https://evil.example.com';
+$_SERVER['REMOTE_ADDR'] = '10.9.9.9';
+$e = $mk($cust, ['brand' => 'raad']); $t('foreign origin cannot claim a face', $e['brand'] === 'oxygen', $e['brand'] ?? null);
+$_SERVER['HTTP_ORIGIN'] = 'https://blog-aqsa.oxygen11.com';
+$f = $mk($cust); $t('Blogger face blog-aqsa -> aqsa', $f['brand'] === 'aqsa', $f['brand'] ?? null);
+$_SERVER['HTTP_ORIGIN'] = 'https://blog.oxygen11.com';
+$g = $mk($cust); $t('Blogger face blog. -> oxygen', $g['brand'] === 'oxygen', $g['brand'] ?? null);
+$_SERVER['HTTP_ORIGIN'] = 'https://oxygen11.com';
+$h = $mk($cust, ['brand' => 'misriya']); $t('hub app ?via=misriya keeps the tag', $h['brand'] === 'misriya', $h['brand'] ?? null);
+$_SERVER['HTTP_ORIGIN'] = 'https://mutqan.oxygen11.com';
+$i = $mk(['id' => 'anon-cust000002', 'role' => null, 'kind' => 'anon', 'powers' => []], ['brand' => 'misriya']); $t('other faces still cannot claim', $i['brand'] === 'mutqan', $i['brand'] ?? null);
 echo $ok ? "ALL PASSED\n" : "SOME FAILED\n";
 exit($ok ? 0 : 1);
