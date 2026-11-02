@@ -2,7 +2,7 @@
 // The 10 satellite article plans: 70/30 service mix, 70/30 place mix, per-site rotation, no collisions, gradual ramp.
 if (PHP_SAPI !== 'cli') { exit; }
 define('ABSPATH', __DIR__ . '/');
-$GLOBALS['__host'] = 'raad.oxygen11.com';
+$GLOBALS['__host'] = 'raad-maintenance-general-contracting.oxygen11.com';
 $GLOBALS['__opts'] = [];
 function get_option($k, $d = false) { return $GLOBALS['__opts'][$k] ?? $d; }
 function update_option($k, $v, $a = null) { $GLOBALS['__opts'][$k] = $v; return true; }
@@ -22,7 +22,7 @@ $sats = Oxygen_Network::satellites();
 $t('20 satellites', count($sats) === 20);
 $all = []; $titles = []; $keys = [];
 foreach ($sats as $id) {
-    $reset($id . '.oxygen11.com');
+    $reset(Oxygen_Network::host_of($id));
     $t("$id is a satellite with its own brand", Oxygen_Network::is_satellite() && $E::brand() === Oxygen_Network::registry()[$id]['name'] && $E::salt() === 13 + 7 * Oxygen_Network::slot($id));
     $plan = $E::plan(); $all[$id] = $plan;
     $n = count($plan);
@@ -46,10 +46,10 @@ $pairs = []; foreach ($all as $id => $pl) { $pairs[$id] = array_flip(array_map(f
 $ids = array_keys($pairs); $worst = 0; for ($i = 0; $i < 20; $i++) { for ($j = $i + 1; $j < 20; $j++) { $worst = max($worst, count(array_intersect_key($pairs[$ids[$i]], $pairs[$ids[$j]])) / 300); } }
 $t('no two sites overlap on more than 15% of (service, place, facet) topics in the first 300 articles (worst ' . round($worst, 3) . ')', $worst <= 0.15, $worst);
 // body: same builder, different rotation per site; never an empty / broken article
-$reset('raad.oxygen11.com'); $pa = $E::plan(); $reset('khabeer.oxygen11.com'); $pb = $E::plan();
+$reset('raad-maintenance-general-contracting.oxygen11.com'); $pa = $E::plan(); $reset('khabeer-maintenance-general-contracting.oxygen11.com'); $pb = $E::plan();
 $ha = null;
-$reset('raad.oxygen11.com'); $ha = $E::build($pa[0], 0, [])['html'];
-$reset('khabeer.oxygen11.com'); $hb = $E::build($pb[0], 0, [])['html'];
+$reset('raad-maintenance-general-contracting.oxygen11.com'); $ha = $E::build($pa[0], 0, [])['html'];
+$reset('khabeer-maintenance-general-contracting.oxygen11.com'); $hb = $E::build($pb[0], 0, [])['html'];
 $t('bodies built, brand-named', strlen($ha) > 1500 && strpos($ha, 'رعد السماء') !== false && strpos($hb, 'الخبير') !== false && strpos($ha, 'الخبير') === false);
 $cold = null; foreach ($pb as $i) { if ($i['sid'] === 'cold-room') { $cold = $i; break; } }
 $hc = $E::build($cold, 0, [])['html'];
@@ -65,9 +65,9 @@ $t('burst: first day 180', Oxygen_Network_SEO::quota(1000000 + 100) === 180 && O
 $t('burst: still 180 on day 6 (index 5)', Oxygen_Network_SEO::quota(1000000 + 5 * $day + 80000) === 180);
 $t('then 10 a day from the 7th day', Oxygen_Network_SEO::quota(1000000 + 6 * $day) === 10 && Oxygen_Network_SEO::phase(1000000 + 6 * $day) === 'steady' && Oxygen_Network_SEO::quota(1000000 + 90 * $day) === 10);
 // a twin (second company) bursts for 5 days, its first company for 6; options not set -> defaults
-$GLOBALS['__opts'] = []; $GLOBALS['__host'] = 'nukhba.oxygen11.com';
+$GLOBALS['__opts'] = []; $GLOBALS['__host'] = 'nukhba-maintenance-general-contracting.oxygen11.com';
 $t('twin: 5 burst days then steady', Oxygen_Network_SEO::settings()['burst_days'] === 5);
-$GLOBALS['__opts'] = []; $GLOBALS['__host'] = 'raad.oxygen11.com';
+$GLOBALS['__opts'] = []; $GLOBALS['__host'] = 'raad-maintenance-general-contracting.oxygen11.com';
 $t('first company: 6 burst days', Oxygen_Network_SEO::settings()['burst_days'] === 6);
 $GLOBALS['__opts'] = ['oxygen_net_seo' => ['burst' => 180, 'burst_days' => 6, 'steady' => 10, 'since' => 1000000]];
 $t('plan is long enough for 6 burst days + 40 steady days', count($all['raad']) >= 6 * 180 + 40 * 10);
