@@ -95,6 +95,7 @@ class Oxygen_Home_Page {
         $app = home_url('/app/');
         $title = $post->post_title;
         $desc = $brand . ' للصيانة والخدمات المنزلية في مكة المكرمة وجدة: تكييف، كهرباء، سباكة، أجهزة منزلية والمزيد. اطلب الخدمة وتابع طلبك من التطبيق.';
+        if (class_exists('Oxygen_Network') && Oxygen_Network::is_satellite() && class_exists('Oxygen_SEO_Engine')) { $title = Oxygen_SEO_Engine::front_title($title); }
         $c = class_exists('Oxygen_Article_Boost') ? Oxygen_Article_Boost::contact() : ['wa' => '', 'phone' => ''];
         $wa = $c['wa'] ? 'https://wa.me/' . $c['wa'] . '?text=' . rawurlencode('السلام عليكم، أرغب بطلب خدمة من ' . $brand) : '';
         $tel = $c['phone'] ? 'tel:' . $c['phone'] : '';
