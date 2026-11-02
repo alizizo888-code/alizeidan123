@@ -12,6 +12,7 @@ PID=$!
 trap 'kill $PID 2>/dev/null || true' EXIT
 sleep 1
 php ac_floor.php
+php oxchat.php
 php promo.php
 php inhouse.php
 php wa.php
