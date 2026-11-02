@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' b:responsive='true' b:templateVersion='2.0.0' dir='rtl' lang='ar' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+<head>
+<meta charset='UTF-8'/>
+<meta content='width=device-width, initial-scale=1, viewport-fit=cover' name='viewport'/>
+<meta content='__COLOR__' name='theme-color'/>
+<meta content='yes' name='mobile-web-app-capable'/>
+<b:include data='blog' name='all-head-content'/>
+<title><b:if cond='data:view.isHomepage'>__FULL__ | __SPECLABEL__ وجميع خدمات الصيانة في مكة وجدة<b:else/><data:view.title.escaped/> | __NAME__</b:if></title>
+<b:if cond='data:view.isHomepage'><meta content='__FULL__: __ANGLE__ وجميع خدمات الصيانة والمقاولات في مكة المكرمة وجدة. اطلب الخدمة من التطبيق مباشرة ويتابعها فريق العمليات حتى التنفيذ.' name='description'/></b:if>
+<link href='https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&amp;display=swap' rel='stylesheet'/>
+<b:skin><![CDATA[
+:root{--c:__COLOR__;--ink:#0f172a;--mut:#64748b;--bg:#f4f7fb;--card:#fff;--line:#e2e8f0;--soft:color-mix(in srgb,var(--c) 10%,transparent)}
+@media (prefers-color-scheme:dark){:root{--ink:#e5edf7;--mut:#94a3b8;--bg:#0a1120;--card:#111b2e;--line:#1f2b40}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;font-family:Tajawal,system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.85;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+a{color:var(--c);text-decoration:none}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px}
+.hd{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.hd .wrap{display:flex;align-items:center;gap:12px;min-height:62px}
+.mark{width:40px;height:40px;border-radius:12px;background:var(--c);color:#fff;display:grid;place-items:center;font-weight:800;font-size:20px;flex:none}
+.brand{display:flex;align-items:center;gap:10px;color:var(--ink);font-weight:800;font-size:17px;line-height:1.3}
+.brand small{display:block;font-weight:500;color:var(--mut);font-size:12px}
+.nav{margin-inline-start:auto;display:flex;gap:4px;list-style:none;padding:0;margin-block:0;overflow-x:auto;scrollbar-width:none}
+.nav a{display:block;white-space:nowrap;color:var(--ink);font-size:14px;padding:6px 10px;border-radius:999px}
+.nav a:hover{background:var(--soft)}
+.hd .go{background:var(--c);color:#fff;padding:8px 16px;border-radius:999px;font-weight:800;white-space:nowrap}
+@media (max-width:820px){.nav{display:none}}
+.hero{background:radial-gradient(1200px 400px at 80% -10%,color-mix(in srgb,var(--c) 35%,transparent),transparent),linear-gradient(160deg,color-mix(in srgb,var(--c) 22%,var(--bg)),var(--bg));padding:46px 0 34px}
+.hero h1{font-size:clamp(26px,4.4vw,42px);line-height:1.35;margin:0 0 10px}
+.hero p{font-size:17px;color:var(--mut);max-width:680px;margin:0 0 20px}
+.btns{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-block;background:var(--c);color:#fff;padding:12px 22px;border-radius:14px;font-weight:800}
+.btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0 0;padding:0}
+.chips span,.trust span{background:var(--card);border:1px solid var(--line);padding:4px 12px;border-radius:999px;font-size:13px}
+.trust{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+section.blk{padding:34px 0}
+section.blk,.wrap.blk{padding:34px 16px}
+.blk h2{font-size:24px;margin:0 0 6px}.blk .sub{color:var(--mut);margin:0 0 18px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 12px;color:var(--ink);display:flex;flex-direction:column;gap:2px;transition:transform .15s,border-color .15s}
+.tile:hover{transform:translateY(-2px);border-color:var(--c)}
+.tile i{font-style:normal;font-size:28px}.tile b{font-size:15px}.tile small{color:var(--mut);font-size:12px;line-height:1.5}
+.tile:first-child{border-color:var(--c);background:var(--soft)}
+.feat{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:14px}
+.feat h3{margin:0 0 8px;font-size:20px}.feat h4{margin:14px 0 6px;font-size:16px;color:var(--c)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media (max-width:720px){.two{grid-template-columns:1fr}}
+ul.ticks,ul.warn{list-style:none;padding:0;margin:0}
+ul.ticks li,ul.warn li{position:relative;padding-inline-start:24px;margin:4px 0}
+ul.ticks li:before{content:'✓';position:absolute;inset-inline-start:0;color:var(--c);font-weight:800}
+ul.warn li:before{content:'!';position:absolute;inset-inline-start:4px;color:#e11d48;font-weight:800}
+details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin:8px 0}
+details summary{cursor:pointer;font-weight:700}
+.svcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}.svcs details{margin:0}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;counter-reset:s}
+.steps div{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+.steps div:before{counter-increment:s;content:counter(s);display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--c);color:#fff;font-weight:800;margin-bottom:6px}
+.cov{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media (max-width:720px){.cov{grid-template-columns:1fr}}
+.cov h4{margin:0 0 6px}
+.posts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column}
+.card h3{font-size:17px;margin:0 0 6px;line-height:1.5}.card p{color:var(--mut);font-size:14px;margin:0 0 8px;flex:1}
+.net{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px}
+.net a{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+.net i{width:9px;height:9px;border-radius:50%;flex:none}
+.art{display:grid;grid-template-columns:1fr 300px;gap:22px;padding:24px 0}@media (max-width:900px){.art{grid-template-columns:1fr}}
+.post{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px}
+.post h1{margin:0 0 6px;font-size:clamp(22px,3.4vw,30px);line-height:1.45}
+.meta{color:var(--mut);font-size:13px;margin-bottom:14px}
+.post-body img{max-width:100%;height:auto;border-radius:14px}.post-body h2,.post-body h3{line-height:1.5}
+.box{background:var(--c);color:#fff;border-radius:18px;padding:18px;text-align:center;margin:18px 0}
+.box a{display:inline-block;margin-top:8px;background:#fff;color:var(--c);padding:9px 20px;border-radius:999px;font-weight:800}
+.side>div{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px}
+.side .net{grid-template-columns:1fr}.side h3{margin:0 0 8px;font-size:16px;color:var(--c)}
+.pager{display:flex;justify-content:space-between;margin:16px 0}
+.foot{border-top:1px solid var(--line);padding:22px 0;color:var(--mut);font-size:13px;text-align:center}
+.bar{position:fixed;inset:auto 0 0 0;z-index:30;background:var(--card);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+.bar a{display:flex;flex-direction:column;align-items:center;gap:1px;font-size:11px;color:var(--mut);padding:4px 0}
+.bar a i{font-style:normal;font-size:20px}
+.bar a.order{color:#fff}.bar a.order i{background:var(--c);width:46px;height:46px;border-radius:50%;display:grid;place-items:center;margin-top:-22px;box-shadow:0 6px 18px color-mix(in srgb,var(--c) 45%,transparent)}
+.bar a.order span{color:var(--c);font-weight:800}
+#appx{position:fixed;inset:0;z-index:100;background:var(--bg);display:none;flex-direction:column}
+#appx.on{display:flex}
+#appx .top{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--c);color:#fff;font-weight:800}
+#appx .top button{margin-inline-start:auto;background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:999px;padding:6px 14px;font:inherit;cursor:pointer}
+#appx iframe{flex:1;border:0;width:100%;background:var(--bg)}
+body.lock{overflow:hidden}
+.tags .widget{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin:0 0 16px}.tags h2{font-size:16px;margin:0 0 6px}.tags ul{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:6px}.tags li a{display:inline-block;background:var(--soft);padding:3px 10px;border-radius:999px;font-size:13px}
+]]></b:skin>
+<script type='application/ld+json'>__SCHEMA__</script>
+</head>
+<body>
+<header class='hd'><div class='wrap'>
+ <a class='brand' expr:href='data:blog.homepageUrl'><span class='mark'>__INITIAL__</span><span>__NAME__<small>__ANGLE__</small></span></a>
+ <ul class='nav'><li><a expr:href='data:blog.homepageUrl'>الرئيسية</a></li><li><a expr:href='data:blog.homepageUrl + &quot;#services&quot;'>الخدمات</a></li>__PAGES__</ul>
+ <a class='go' data-app='/new' href='__HUB__/app/?via=__ID__#/new'>اطلب الآن</a>
+</div></header>
+
+<b:if cond='data:view.isHomepage'>
+<section class='hero'><div class='wrap'>
+ <h1>__FULL__<br/>__SPECLABEL__ وجميع خدمات الصيانة في مكة وجدة</h1>
+ <p>__ANGLE__، ومعها كل تخصصات الصيانة والمقاولات: تكييف، كهرباء، سباكة، تبريد، أجهزة، مكافحة حشرات، خزانات، دهانات وغيرها. اطلب من التطبيق، ويتابع فريق العمليات طلبك حتى التنفيذ.</p>
+ <div class='btns'><a class='btn' data-app='/new' href='__HUB__/app/?via=__ID__#/new'>اطلب خدمة الآن</a><a class='btn ghost' data-app='/calculator' href='__HUB__/app/?via=__ID__#/calculator'>احسب السعر</a><a class='btn ghost' data-app='/ai' href='__HUB__/app/?via=__ID__#/ai'>اسأل المساعد</a></div>
+ <div class='trust'><span>✓ فحص مجاني حتى مكيفين</span><span>✓ سعر واضح قبل البدء</span><span>✓ ضمان على العمل</span><span>✓ تغطية مكة المكرمة وجدة</span></div>
+</div></section>
+
+<section class='blk' id='services'><div class='wrap'>
+ <h2>كل التخصصات في تطبيق واحد</h2><p class='sub'>اختر التخصص ليفتح لك التطبيق صفحة الطلب مباشرة.</p>
+ <div class='tiles'>__TILES__</div>
+</div></section>
+
+<section class='blk'><div class='wrap'>
+ <h2>تخصصنا الأول: __SPECLABEL__</h2><p class='sub'>تفاصيل الخدمة كما ينفذها فريق __NAME__.</p>
+ __FEATURED__
+</div></section>
+
+<section class='blk'><div class='wrap'>
+ <h2>باقي خدماتنا</h2><p class='sub'>كل خدمة يمكن طلبها من نفس التطبيق، وتصل لغرفة العمليات نفسها.</p>
+ <div class='svcs'>__OTHERS__</div>
+</div></section>
+
+<section class='blk'><div class='wrap'>
+ <h2>كيف تطلب الخدمة؟</h2><p class='sub'>أربع خطوات من التطبيق.</p>
+ <div class='steps'><div><b>اختر التخصص</b><p>من القائمة أو من زر اطلب الآن.</p></div><div><b>حدد التفاصيل والموقع</b><p>نوع الجهاز أو المشكلة، وموقعك على الخريطة.</p></div><div><b>اعرف السعر</b><p>الحاسبة تعطيك السعر قبل التأكيد، والفحص مجاني حتى مكيفين.</p></div><div><b>يتواصل معك الفريق</b><p>تصل طلبك لغرفة العمليات ويُسند للفني الأقرب وتتابعه من طلباتي.</p></div></div>
+</div></section>
+
+<section class='blk'><div class='wrap'>
+ <h2>مناطق التغطية</h2><p class='sub'>تغطية مباشرة في الأحياء التالية، وخارجها عبر الفروع والشركاء المتعاقدين.</p>
+ <div class='cov'>__COVERAGE__</div>
+</div></section>
+</b:if>
+
+<b:if cond='data:view.isHomepage'><style>.art{grid-template-columns:1fr!important;padding:34px 0}</style></b:if>
+<div class='wrap art'>
+ <main>
+  <b:if cond='data:view.isHomepage'><h2>أحدث المقالات</h2><p class='sub'>نصائح عملية من الفريق.</p></b:if>
+  <b:section id='main' showaddelement='false'>
+   <b:widget id='Blog1' locked='true' title='المقالات' type='Blog' version='2'>
+    <b:includable id='main' var='this'>
+     <b:if cond='data:view.isSingleItem'>
+      <b:loop values='data:posts' var='post'>
+       <article class='post'>
+        <h1><data:post.title/></h1>
+        <div class='meta'><data:post.date/> · __NAME__</div>
+        <div class='post-body'><data:post.body/></div>
+        <div class='box'>تحتاج خدمة الآن؟ اطلبها من تطبيق __NAME__ ويتابعها فريق العمليات حتى التنفيذ.<br/><a data-app='/new' href='__HUB__/app/?via=__ID__#/new'>اطلب الخدمة</a></div>
+       </article>
+      </b:loop>
+     <b:else/>
+      <div class='posts'><b:loop values='data:posts' var='post'>
+       <div class='card'><h3><a expr:href='data:post.url'><data:post.title/></a></h3><p><data:post.snippets.short/></p><a expr:href='data:post.url'>اقرأ المقال ←</a></div>
+      </b:loop></div>
+      <b:include name='postPagination'/>
+     </b:if>
+    </b:includable>
+   </b:widget>
+  </b:section>
+ </main>
+ <b:if cond='!data:view.isHomepage'>
+ <aside class='side'>
+  <div><h3>اطلب من التطبيق</h3><div class='tiles' style='grid-template-columns:1fr 1fr'>__TILES__</div></div>
+  <div><h3>شبكة مواقعنا</h3><ul class='net'>__NETWORK__</ul></div>
+ </aside>
+ </b:if>
+</div>
+
+<b:if cond='data:view.isHomepage'>
+<section class='blk'><div class='wrap'><h2>شبكة مواقعنا</h2><p class='sub'>مواقع شقيقة ضمن مجموعة أكسجين للصيانة والمقاولات العامة.</p><ul class='net'>__NETWORK__</ul></div></section>
+</b:if>
+
+<div class='wrap tags'><b:section class='sidebar' id='sidebar' showaddelement='true'><b:widget id='Label1' locked='false' title='التصنيفات' type='Label' version='2'/></b:section></div>
+<footer class='foot'><div class='wrap'>© __FULL__ — جزء من <a href='__HUB__/'>مجموعة أكسجين للصيانة والمقاولات العامة</a> · مكة المكرمة وجدة</div></footer>
+
+<nav class='bar'>
+ <a expr:href='data:blog.homepageUrl'><i>🏠</i><span>الرئيسية</span></a>
+ <a expr:href='data:blog.homepageUrl + &quot;#services&quot;'><i>🧰</i><span>الخدمات</span></a>
+ <a class='order' data-app='/new' href='__HUB__/app/?via=__ID__#/new'><i>＋</i><span>اطلب</span></a>
+ <a data-app='/orders' href='__HUB__/app/?via=__ID__#/orders'><i>📋</i><span>طلباتي</span></a>
+ <a data-app='/ai' href='__HUB__/app/?via=__ID__#/ai'><i>💬</i><span>المساعد</span></a>
+</nav>
+
+<div id='appx' role='dialog' aria-label='تطبيق __NAME__'><div class='top'><span class='mark' style='width:30px;height:30px;font-size:15px;background:rgba(255,255,255,.2)'>__INITIAL__</span>تطبيق __NAME__<button type='button' id='appx-close'>إغلاق ✕</button></div><iframe allow='geolocation; clipboard-write' id='appx-f' title='تطبيق الطلبات'></iframe></div>
+
+<script>//<![CDATA[
+(function(){
+  var HUB='__HUB__', ID='__ID__', box=document.getElementById('appx'), fr=document.getElementById('appx-f');
+  function open(route, push){
+    fr.src = HUB + '/app/?via=' + ID + '&embed=1#' + (route || '/');
+    box.classList.add('on'); document.body.classList.add('lock');
+    if (push !== false) history.pushState({appx: route}, '', '#app' + route);
+  }
+  function close(){ box.classList.remove('on'); document.body.classList.remove('lock'); fr.src = 'about:blank'; }
+  document.addEventListener('click', function(ev){
+    var a = ev.target.closest && ev.target.closest('[data-app]');
+    if (!a || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+    ev.preventDefault(); open(a.getAttribute('data-app'));
+  });
+  document.getElementById('appx-close').addEventListener('click', function(){ if (history.state && history.state.appx) history.back(); else close(); });
+  window.addEventListener('popstate', function(ev){ if (ev.state && ev.state.appx) open(ev.state.appx, false); else close(); });
+  var h = location.hash; if (h.indexOf('#app/') === 0) open(h.slice(4), false);
+})();
+//]]></script>
+</body>
+</html>

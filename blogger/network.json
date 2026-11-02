@@ -38,7 +38,8 @@
     "سياسة الخصوصية",
     "/p/blog-page_52.html"
    ]
-  ]
+  ],
+  "spec": "ac"
  },
  {
   "id": "mutqan",
@@ -79,7 +80,8 @@
     "سياسة الخصوصية",
     "/p/blog-page_782.html"
    ]
-  ]
+  ],
+  "spec": "fridge"
  },
  {
   "id": "motakhases",
@@ -120,7 +122,8 @@
     "سياسة الخصوصية",
     "/p/blog-page_111.html"
    ]
-  ]
+  ],
+  "spec": "fridge"
  },
  {
   "id": "muhandis",
@@ -161,7 +164,8 @@
     "سياسة الخصوصية",
     "/p/blog-page_233.html"
    ]
-  ]
+  ],
+  "spec": "electric"
  },
  {
   "id": "aqsa",
@@ -202,7 +206,8 @@
     "سياسة الخصوصية",
     "/p/blog-page_870.html"
    ]
-  ]
+  ],
+  "spec": "plumbing"
  },
  {
   "id": "raad",
@@ -243,7 +248,8 @@
     "سياسة الخصوصية",
     "/p/blog-page_777.html"
    ]
-  ]
+  ],
+  "spec": "pest"
  },
  {
   "id": "mutamakkin",
@@ -262,7 +268,8 @@
    "الخصوصية"
   ],
   "blog_id": null,
-  "blogspot": null
+  "blogspot": null,
+  "spec": "tanks"
  },
  {
   "id": "khabeer",
@@ -281,7 +288,8 @@
    "الخصوصية"
   ],
   "blog_id": null,
-  "blogspot": null
+  "blogspot": null,
+  "spec": "appliances"
  },
  {
   "id": "homeservice",
@@ -300,7 +308,8 @@
    "الخصوصية"
   ],
   "blog_id": null,
-  "blogspot": null
+  "blogspot": null,
+  "spec": "general"
  },
  {
   "id": "ibtikar",
@@ -319,7 +328,8 @@
    "الخصوصية"
   ],
   "blog_id": null,
-  "blogspot": null
+  "blogspot": null,
+  "spec": "ac"
  },
  {
   "id": "mutamad",
@@ -338,7 +348,8 @@
    "الخصوصية"
   ],
   "blog_id": null,
-  "blogspot": null
+  "blogspot": null,
+  "spec": "general"
  },
  {
   "id": "misriya",
@@ -356,6 +367,147 @@
    "تواصل",
    "الخصوصية"
   ],
+  "blog_id": null,
+  "blogspot": null,
+  "spec": "general"
+ },
+ {
+  "id": "nukhba",
+  "name": "النخبة",
+  "title": "النخبة لكاميرات المراقبة وأنظمة الأمان",
+  "slug": "alnukhba-security",
+  "host": "blog-nukhba.oxygen11.com",
+  "color": "#0e7490",
+  "angle": "cameras",
+  "angle_label": "كاميرات المراقبة وأنظمة الأمان",
+  "spec": "cameras",
+  "twin": "motakhases",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "riyada",
+  "name": "الريادة",
+  "title": "الريادة | طاقة شمسية للبيوت والمزارع",
+  "slug": "alriyada-solar",
+  "host": "blog-riyada.oxygen11.com",
+  "color": "#7c3aed",
+  "angle": "solar",
+  "angle_label": "أنظمة الطاقة الشمسية",
+  "spec": "solar",
+  "twin": "muhandis",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "baraa",
+  "name": "البراعة",
+  "title": "البراعة في الدهانات والديكور",
+  "slug": "albaraa-paint",
+  "host": "blog-baraa.oxygen11.com",
+  "color": "#ca8a04",
+  "angle": "paint",
+  "angle_label": "الدهانات وورق الجدران والديكور",
+  "spec": "paint",
+  "twin": "aqsa",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "safwa",
+  "name": "الصفوة",
+  "title": "الصفوة للتنظيف العميق والتعقيم",
+  "slug": "alsafwa-cleaning",
+  "host": "blog-safwa.oxygen11.com",
+  "color": "#db2777",
+  "angle": "cleaning",
+  "angle_label": "التنظيف العميق والتعقيم",
+  "spec": "cleaning",
+  "twin": "raad",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "tamayuz",
+  "name": "التميز",
+  "title": "التميز في التبليط والترميم والعزل",
+  "slug": "altamayuz-tiling",
+  "host": "blog-tamayuz.oxygen11.com",
+  "color": "#0d9488",
+  "angle": "tiling",
+  "angle_label": "التبليط والترميم والعزل",
+  "spec": "tiling",
+  "twin": "mutamakkin",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "nasmat",
+  "name": "نسمة الحجاز",
+  "title": "نسمة الحجاز — دش وساتلايت وشاشات",
+  "slug": "nasmat-alhijaz-dish",
+  "host": "blog-nasmat.oxygen11.com",
+  "color": "#2563eb",
+  "angle": "satellite",
+  "angle_label": "تركيب الدش والساتلايت وضبط القنوات",
+  "spec": "satellite",
+  "twin": "khabeer",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "wahat",
+  "name": "واحة الراحة",
+  "title": "واحة الراحة لنقل الأثاث والعفش",
+  "slug": "wahat-alraha-moving",
+  "host": "blog-wahat.oxygen11.com",
+  "color": "#65a30d",
+  "angle": "moving",
+  "angle_label": "نقل الأثاث وفكه وتركيبه",
+  "spec": "moving",
+  "twin": "homeservice",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "amaan",
+  "name": "الأمان",
+  "title": "الأمان للأقفال الذكية والأبواب",
+  "slug": "alamaan-smartlocks",
+  "host": "blog-amaan.oxygen11.com",
+  "color": "#dc2626",
+  "angle": "locks",
+  "angle_label": "الأقفال الذكية والأبواب",
+  "spec": "locks",
+  "twin": "ibtikar",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "kafaa",
+  "name": "الكفاءة",
+  "title": "الكفاءة لعقود صيانة المنشآت",
+  "slug": "alkafaa-facilities",
+  "host": "blog-kafaa.oxygen11.com",
+  "color": "#0891b2",
+  "angle": "corporate",
+  "angle_label": "عقود الصيانة للشركات والمنشآت",
+  "spec": "corporate",
+  "twin": "mutamad",
+  "blog_id": null,
+  "blogspot": null
+ },
+ {
+  "id": "jawda",
+  "name": "الجودة",
+  "title": "الجودة للمقاولات العامة والترميم",
+  "slug": "aljawda-contracting",
+  "host": "blog-jawda.oxygen11.com",
+  "color": "#9a3412",
+  "angle": "contracting",
+  "angle_label": "المقاولات العامة والإشراف الهندسي",
+  "spec": "contracting",
+  "twin": "misriya",
   "blog_id": null,
   "blogspot": null
  }
