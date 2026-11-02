@@ -67,6 +67,11 @@ final class Oxygen_Network {
         $h = strtolower(preg_replace('/^www\./', '', (string) $host));
         $h = preg_replace('/:\d+$/', '', $h);
         foreach (self::ids() as $id) { if (self::host_of($id) === $h) { return $id; } }
+        // The Blogger face of each brand: blog.oxygen11.com (Oxygen) and blog-<label>.oxygen11.com (the other 11).
+        if ($h === 'blog.' . self::HUB_HOST) { return 'oxygen'; }
+        if (preg_match('/^blog-([a-z0-9]+)\.' . preg_quote(self::HUB_HOST, '/') . '$/', $h, $m)) {
+            foreach (self::registry() as $id => $b) { if ($id === $m[1] || ($b['label'] !== '' && $b['label'] === $m[1])) { return $id; } }
+        }
         return 'oxygen';
     }
 
