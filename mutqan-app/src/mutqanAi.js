@@ -149,6 +149,8 @@ function acBlock() {
 ${offers.length ? 'العروض الحالية:\n' + offers.map((o) => `- ${o.title}: ${o.price} ر.س${o.badge ? ` (${o.badge})` : ''}${o.warranty ? ` — ضمان ${o.warranty}` : ''}`).join('\n') : ''}`
 }
 
+const clockNow = () => new Date().toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+
 function buildPromptRaw({ history, customer, orders, draft, dialect, rules, quote, nego, settings, pastHandoffs, area, payInfo, warrantyPolicy }) {
   const d = DIALECTS.find((x) => x.id === dialect) || DIALECTS[0]
   const tone = TONES[settings?.tone] || TONES.friendly
@@ -158,6 +160,7 @@ function buildPromptRaw({ history, customer, orders, draft, dialect, rules, quot
     .join('\n')
 
   return `## 1) الدور والأسلوب
+الآن: ${clockNow()} (توقيت مكة). استخدم هذا الوقت والتاريخ عند أي سؤال عن الساعة أو اليوم، ولا تخترع وقتًا.
 أنت "MUTQAN AI"، موظف خدمة العملاء الذكي لمنصة ${BN} للصيانة والمقاولات. تتكلم ${d.hint}، ${tone} (جملتان إلى ثلاث)، وتطرح سؤالًا واحدًا فقط في كل رد.
 هدفك: تفهم حاجة العميل بسرعة، تعطيه السعر الرسمي، تتفق معه على الموعد والموقع، ثم تجهّز الطلب كاملًا ليُرسل على واتساب الإدارة بضغطة. كن دافئًا ومباشرًا وبدون حشو، ولا تكرر ما قاله العميل.
 
@@ -191,6 +194,7 @@ ${JSON.stringify(draft || {})}
 - متى تحوّل لموظف (escalation): ${ESCALATION_REASONS.map((r) => `${r.id} = ${r.label}`).join('، ')}. إذا انطبقت إحداها على آخر رسالة ضع معرّفها في escalation وaction = handoff، ورد بتعاطف أنك ستحوّله لموظف مختص دون محاولة حل المشكلة (لا استرداد ولا تعويض ولا رأي قانوني). خلاف ذلك escalation = null.
 - الثقة: قيّم ثقتك في فهمك وفي صحة ردك من 0 إلى 1. إذا كانت أقل من ${Number(settings?.confidence?.threshold ?? 0.6)} فلا تخمّن: اسأل سؤال توضيح واحدًا أو اعرض التحويل لموظف. لا يمكنك تجاوز التحقق أو الصلاحيات.
 - السلامة أولًا: عند ذكر ماس كهربائي أو شرارة أو تسريب غاز أو انفجار ماسورة، ابدأ بخطوة الأمان (فصل القاطع/إغلاق المحبس/الابتعاد) ثم اعرض فنيًا عاجلًا.
+- أجب عن السؤال المطروح بالضبط وبذكاء كأنك موظف حقيقي: سؤال عن الساعة/اليوم ← أجب من الوقت الحالي أعلاه فقط؛ سؤال عن خدمة أو جهاز (ثلاجة، غسالة…) ← قل هل نخدمه ثم اسأل عن العطل؛ لا تذكر ساعات العمل أو الأسعار أو تفتح حجزًا إلا إذا سأل عنها العميل أو طلب الخدمة. السؤال العام أو الخارج عن الصيانة ← أجب باختصار ثم أعد الحديث بلطف للخدمة. لا تكرر نفس الرد لسؤالين مختلفين.
 - أسلوب الحوار: افهم اللهجة والأخطاء الإملائية، تذكّر ما قيل سابقًا ولا تسأل عنه مرتين، واربط كل رد بالخطوة التالية في الطلب (الخدمة ← العدد/التفاصيل ← الموعد ← الموقع ← التأكيد).
 
 ## 5) المحادثة
@@ -222,7 +226,7 @@ export const buildPrompt = (o) => rebrand(buildPromptRaw(o))
 export async function runTurn(ctx) {
   // Local engine: owner-selected (zero cost) or automatic fallback when no AI key/provider is available
   let out
-  const useLocal = ctx.settings?.providers?.ai !== 'platform'
+  const useLocal = ctx.settings?.providers?.ai === 'local'
   if (!useLocal) {
     try {
       const { json, text } = await aiRun(buildPrompt(ctx), { json: true }, { feature: 'chat' }, ctx.settings)

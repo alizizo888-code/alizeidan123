@@ -115,7 +115,7 @@ export const DEFAULT_AI_SETTINGS = {
   logging: { enabled: true },
   confidence: { threshold: 0.6, guardSensitive: true },
   payment: { aiPayButton: true },
-  providers: { ai: 'local', aiModel: 'auto', stt: 'platform', tts: 'platform', sttLanguage: 'ar' },
+  providers: { ai: 'platform', aiModel: 'auto', stt: 'platform', tts: 'platform', sttLanguage: 'ar' },
   permissions: DEFAULT_PERMISSIONS,
   // Owner-only global policy: caps every service regardless of per-service rules
   globalPolicy: { maxDiscountPct: 20, voiceEnabled: true, negotiationAllowed: true },
