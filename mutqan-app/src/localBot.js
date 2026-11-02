@@ -171,6 +171,19 @@ export function localTurn(ctx) {
     return res
   }
   if (!t) return out(rep('greet') + (draft.specialtyId ? '' : ' ' + rep('ask_need')), { confidence: 0.5 })
+  // ── clock / date questions: answer from the real clock (Riyadh), never with working hours or a booking ──
+  if (/(الساعه كام|كم الساعه|الساعه كم|كام الساعه|الوقت كام|كم الوقت|الوقت كم|الساعه الان|الساعه دلوقتي|الساعه الحين|الوقت الحين|الوقت الان|الساعه بكم|كم صارت الساعه|كم صار الوقت)/.test(t) && !/(موعد|دوام|مواعيد|فتح|تفتح|تقفل|تشتغل)/.test(t) && toks.length <= 7) {
+    const now = new Date(); const tm = now.toLocaleTimeString('ar-SA', { timeZone: 'Asia/Riyadh', hour: 'numeric', minute: '2-digit', hour12: true })
+    return out(`الساعة الآن ${tm} بتوقيت مكة 🕒${draft.specialtyId ? ' ونكمل طلبك؟' : ' وفيه شي أخدمك فيه؟'}`, { action: 'none' })
+  }
+  if (/(اي يوم اليوم|ايش اليوم|وش اليوم|التاريخ اليوم|تاريخ اليوم|اليوم كم|اليوم ايه|اليوم اي يوم)/.test(t) && toks.length <= 6) {
+    const d = new Date().toLocaleDateString('ar-SA', { timeZone: 'Asia/Riyadh', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    return out(`اليوم ${d}.${draft.specialtyId ? ' نكمل طلبك؟' : ' كيف أقدر أخدمك؟'}`, { action: 'none' })
+  }
+  // ── "do you service X?" — answer the question asked (yes + ask for the fault), no price dump ──
+  { const m = t.match(/(?:عندكم|تصلحون|تصلحوا|تصلح|تعملون|تشتغلون في|هل تصلحون|تخدمون|تصيانه|تصلحو) (?:ال)?(?:صيانه )?(ثلاج[هات]*|تلاج[هات]*|غساله|غسالات|فرن|بوتجاز|سخان|سخانات|ديب فريزر|فريزر|نشافه|ميكرويف|ميكروويف|مكيف|مكيفات|مضخه|مضخات|بوابه|بوابات|كاميرا|كاميرات)/)
+    if (m && !/(سعر|بكم|(?:^|\s)كم(?:\s|$)|(?:^|\s)كام(?:\s|$))/.test(t) && toks.length <= 6) return out(`نعم نخدم ${m[1].replace(/^ال/, '')} ✅ وش العطل بالضبط أو وش الأعراض؟ وأحوّلك للفني المناسب ويعطيك السعر بعد الفحص.`, { action: 'collect' })
+  }
   // ── guided AC flow: the customer is answering "what is the problem?" ──
   if (draft.acAsk && draft.specialtyId === 'ac' && !draft.acMode && !draft.acq && t.length > 1) {
     const wash = /غسيل|غسل|اغسل|نظف|تنظيف|وسخ/.test(t)
