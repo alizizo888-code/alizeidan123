@@ -79,6 +79,16 @@ class Oxygen_SEO_Engine {
         if (is_singular('post')) { $id = get_queried_object_id(); if ($id && get_post_meta($id, '_oxy_seo_key', true)) { return html_entity_decode(get_the_title($id), ENT_QUOTES, 'UTF-8'); } }
         return $t;
     }
+    /** Satellite sites present as independent companies: home title = brand + service line in Arabic and English, never the hub host. */
+    const TAG_AR = 'صيانة تكييف ومقاولات عامة';
+    const TAG_EN = 'AC Service, Maintenance & General Contracting';
+    public static function site_name($v) { return (class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) ? self::brand() : $v; }
+    public static function site_tagline($v) { return (class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) ? self::TAG_AR . ' | ' . self::TAG_EN : $v; }
+    public static function front_title($t) {
+        if (!(class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) || !(is_front_page() || is_home())) { return $t; }
+        return self::brand() . ' | ' . self::TAG_AR . ' | ' . self::TAG_EN;
+    }
+    public static function front_title_yoast($t) { return self::front_title($t); }
     /** WordPress ships a public «Hello world!» post and a «Sample Page»: thin, duplicate-looking pages that get indexed. Move the untouched originals to the trash (recoverable). */
     public static function trash_defaults() {
         if (get_option('oxygen_defaults_trashed') === '1') { return; }
@@ -391,6 +401,10 @@ class Oxygen_SEO_Engine {
         add_action('init', [__CLASS__, 'ensure_real_pages'], 30);
         add_filter('wp_sitemaps_enabled', function ($on) { return defined('WPSEO_VERSION') ? $on : true; }, 20);
         add_filter('wpseo_title', [__CLASS__, 'yoast_title'], 20);
+        add_filter('pre_get_document_title', [__CLASS__, 'front_title'], 99);
+        add_filter('wpseo_title', [__CLASS__, 'front_title_yoast'], 25);
+        add_filter('pre_option_blogname', [__CLASS__, 'site_name'], 20);
+        add_filter('pre_option_blogdescription', [__CLASS__, 'site_tagline'], 20);
         add_action('init', [__CLASS__, 'trash_defaults'], 31);
         add_filter('wpseo_metadesc', [__CLASS__, 'seo_meta_desc'], 30);
         add_filter('wpseo_opengraph_desc', [__CLASS__, 'seo_meta_desc'], 30);

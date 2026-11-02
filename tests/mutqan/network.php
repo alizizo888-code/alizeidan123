@@ -9,14 +9,14 @@ $R = Oxygen_Network::registry();
 $t('22 faces: 2 core + 10 sites + 10 twins', count($R) === 22 && count(Oxygen_Network::satellites()) === 20 && count(array_filter($R, function ($b) { return !empty($b['twin']); })) === 10, count($R));
 $t('every twin points at a real site, one each', count(array_unique(array_column(array_filter($R, function ($b) { return !empty($b['twin']); }), 'twin'))) === 10 && !array_filter($R, function ($b) use ($R) { return !empty($b['twin']) && (!isset($R[$b['twin']]) || !empty($R[$b['twin']]['twin']) || !empty($R[$b['twin']]['core'])); }));
 $labels = array_column(array_filter($R, function ($b) { return empty($b['core']); }), 'label');
-$t('labels unique + latin', count(array_unique($labels)) === count($labels) && !array_filter($labels, function ($l) { return !preg_match('/^[a-z0-9]+$/', $l) && $l !== ''; }), $labels);
+$t('labels unique + latin', count(array_unique($labels)) === count($labels) && !array_filter($labels, function ($l) { return !preg_match('/^[a-z0-9-]{1,63}$/', $l) && $l !== ''; }), $labels);
 $names = array_column($R, 'name');
 $t('names unique', count(array_unique($names)) === 22);
 $cols = array_column($R, 'color'); $t('colours unique (distinct icons)', count(array_unique($cols)) === 22);
 foreach (['النخبة', 'الريادة', 'البراعة', 'الصفوة', 'التميز', 'نسمة الحجاز', 'واحة الراحة', 'الأمان', 'الكفاءة', 'الجودة', 'المتخصص', 'المهندس', 'الأقصى', 'رعد السماء', 'المتمكن', 'الخبير', 'هوم سيرفيس', 'ابتكار راحة', 'المعتمد', 'المصرية'] as $n) { $t("name $n", in_array($n, $names, true)); }
 $t('host oxygen', Oxygen_Network::id_for_host('oxygen11.com') === 'oxygen' && Oxygen_Network::id_for_host('www.oxygen11.com') === 'oxygen');
 $t('host mutqan', Oxygen_Network::id_for_host('mutqan.oxygen11.com') === 'mutqan');
-$t('host satellite', Oxygen_Network::id_for_host('raad.oxygen11.com') === 'raad' && Oxygen_Network::id_for_host('RAAD.oxygen11.com:443') === 'raad');
+$t('host satellite', Oxygen_Network::id_for_host('raad-maintenance-general-contracting.oxygen11.com') === 'raad' && Oxygen_Network::id_for_host('RAAD-MAINTENANCE-GENERAL-CONTRACTING.oxygen11.com:443') === 'raad');
 $t('unknown host -> hub', Oxygen_Network::id_for_host('evil.example.com') === 'oxygen' && Oxygen_Network::id_for_host('x.oxygen11.com') === 'oxygen');
 $c = Oxygen_Network::brand_config('raad');
 $t('config', $c['name'] === 'رعد السماء' && $c['full'] === 'رعد السماء للصيانة والمقاولات العامة' && $c['core'] === false && preg_match('/^#[0-9a-f]{6}$/', $c['color']), $c);
@@ -40,7 +40,7 @@ $cust = ['id' => 'anon-cust000001', 'role' => null, 'kind' => 'anon', 'powers' =
 $ops = ['id' => 'u-ops', 'role' => 'operations', 'kind' => 'user', 'powers' => ['read', 'write', 'manage'], 'name' => 'x'];
 $o = ['visibleTo' => 'creator-and-admin', 'writableBy' => 'admins'];
 $mk = function ($p, $extra = []) use ($o) { return Mutqan_Store::insert('orders', array_merge(['specialtyId' => 'ac', 'clientName' => 'س', 'clientPhone' => '0501234567', 'address' => 'ج'], $extra), null, $o, $p, false); };
-$_SERVER['HTTP_ORIGIN'] = 'https://homeservice.oxygen11.com';
+$_SERVER['HTTP_ORIGIN'] = 'https://homeservice-maintenance-general-contracting.oxygen11.com';
 $a = $mk($cust, ['brand' => 'raad']);
 $t('customer cannot claim another face: origin wins', $a['brand'] === 'homeservice', $a['brand'] ?? null);
 $_SERVER['HTTP_ORIGIN'] = 'https://evil.example.com';
@@ -54,7 +54,7 @@ $t('customer cannot change the face afterwards', $u['brand'] === 'homeservice' &
 // the report: public summary per site, one combined text, sent at the configured hours only
 if (!function_exists('wp_date')) { function wp_date($f) { return date($f); } }
 require_once dirname(__DIR__, 2) . '/oxygen-ac-automation/includes/class-oxygen-network-report.php';
-$fetch = function ($host) { if ($host === 'raad.oxygen11.com') { return null; } return ['today' => 12, 'total' => 340, 'quota' => 180, 'phase' => 'burst', 'day_no' => 2, 'gsc_tokens' => 0]; };
+$fetch = function ($host) { if ($host === 'raad-maintenance-general-contracting.oxygen11.com') { return null; } return ['today' => 12, 'total' => 340, 'quota' => 180, 'phase' => 'burst', 'day_no' => 2, 'gsc_tokens' => 0]; };
 $rows = Oxygen_Network_Report::collect($fetch);
 $t('collect asks the 21 other sites', count($rows) === 21 && !isset($rows['oxygen']));
 $txt = Oxygen_Network_Report::format($rows, ['brand' => 'أكسجين', 'today' => 60, 'total' => 9000], 12);
