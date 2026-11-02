@@ -250,11 +250,11 @@ export function localTurn(ctx) {
 
   // ── conversation layer: rapport, trust, objections, budget, hours ──
   {
-    const ex = extraTopic(t, toks, { spec, qty, hasQuote: !!quote, hasDraft: !!draft.specialtyId, problem: draft.problem })
-    if (ex && !(['hours', 'experience'].includes(ex.key) && kbMatch(t, toks))) {
+    const ex = extraTopic(t, toks, { spec, qty, hasQuote: !!quote, hasDraft: !!draft.specialtyId, hasOrders: orders.length > 0, problem: draft.problem })
+    if (ex && !(['hours', 'experience', 'visit_fee', 'business', 'project', 'think_later', 'papers', 'show_works', 'method', 'annual_pkg', 'tech_nationality'].includes(ex.key) && kbMatch(t, toks))) {
       const body = fmt(pickv(ex[D] || ex.sa, ex.key + t), {})
       const ask = ['howru', 'tired', 'praise'].includes(ex.key) && draft.specialtyId ? ' ' + (!draft.preferredTime ? rep('time_prompt') : !draft.coords ? rep('location_prompt') : rep('ready')) : ''
-      return out(body + ask, { action: ex.key === 'objection' ? 'negotiate' : 'none', confidence: 0.85, sources: ['knowledge'] })
+      return out(body + ask, { action: ex.key === 'objection' ? 'negotiate' : ex.escalate ? 'handoff' : 'none', escalation: ex.escalate || null, confidence: 0.85, sources: ['knowledge'] })
     }
   }
 
@@ -459,6 +459,10 @@ export function localTurn(ctx) {
     return out(lead + rep('ready'), { intent, action: 'ready_to_order' })
   }
   if (draft.specialtyId && draft.preferredTime && draft.coords) return out(rep('ready'), { action: 'ready_to_order' })
+  if (timeHit && !draft.specialtyId && !spec && !is('price_ask') && !is('greet') && !is('smalltalk') && !is('thanks') && !is('bye') && !is('offtopic') && toks.length <= 8) {
+    const when = timePhrase(t, raw)
+    if (when !== String(raw).slice(0, 60)) return out(`تمام{n}، سجلت الموعد: ${when}. وش الخدمة اللي تحتاجها وكم العدد؟`.replace('{n}', nm), { intent: { preferredTime: when }, action: 'collect' })
+  }
   if (urgentHit && !draft.specialtyId) return out(rep('urgent_ack') + rep('need_service'), { intent: { priority: 'urgent' }, action: 'collect' })
 
   // ── smalltalk ──
