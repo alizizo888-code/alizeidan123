@@ -85,7 +85,7 @@ class Oxygen_SEO_Engine {
     public static function site_name($v) { return (class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) ? self::brand() : $v; }
     public static function site_tagline($v) { return (class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) ? self::TAG_AR . ' | ' . self::TAG_EN : $v; }
     public static function front_title($t) {
-        if (!(class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) || !(is_front_page() || is_home())) { return $t; }
+        if (!(class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) || !(is_front_page() || is_home() || trim((string) wp_parse_url(isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '/', PHP_URL_PATH), '/') === '')) { return $t; }
         return self::brand() . ' | ' . self::TAG_AR . ' | ' . self::TAG_EN;
     }
     public static function front_title_yoast($t) { return self::front_title($t); }
