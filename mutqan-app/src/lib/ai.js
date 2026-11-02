@@ -3,4 +3,5 @@ import { post } from './_api'
 export const ai = {
   // opts.tier: 'low' (default, free providers) | 'mid' (customer service/orders) | 'routine' | 'high' — the server caps it by role.
   run: (prompt, opts = {}) => post('/ai', { prompt, opts }),
+  tts: (text, voice = 'Charon') => post('/ai', { tts: String(text || '').slice(0, 700), voice }),
 }

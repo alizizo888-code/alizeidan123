@@ -38,7 +38,13 @@ export const TTS_PROVIDERS = {
   platform: {
     id: 'platform',
     label: 'تحويل النص إلى كلام — مزوّد المنصة',
-    speak: (text, { voice, lang }) => audio.speak(text, { voice, lang }),
+    speak: async (text, { voice, lang }) => {
+      try {   // Gemini male voice from the server first; the browser's own voice is the fallback
+        const r = await ai.tts(text)
+        if (r?.ok && r.wav) return { url: 'data:audio/wav;base64,' + r.wav, utterance: null }
+      } catch {}
+      return audio.speak(text, { voice, lang })
+    },
   },
 }
 

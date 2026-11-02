@@ -3,6 +3,8 @@ const SR = typeof window !== 'undefined' ? window.SpeechRecognition || window.we
 
 function pickVoice(lang) {
   const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || []
+  const male = vs.find((v) => /^ar/i.test(v.lang) && /(male|maged|majed|naayf|hamed|tarik|shakir|ahmed|\bرجل)/i.test(v.name) && !/female/i.test(v.name))
+  if (male) return male
   return vs.find((v) => v.lang && v.lang.toLowerCase().startsWith(lang.toLowerCase())) || vs.find((v) => /^ar/i.test(v.lang)) || null
 }
 

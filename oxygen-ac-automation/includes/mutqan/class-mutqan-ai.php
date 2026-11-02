@@ -209,6 +209,25 @@ final class Mutqan_AI {
         return self::classify($code, $data, $raw, $retry);
     }
 
+    /** Gemini text-to-speech (male voice). @return array ['ok'=>true,'wav'=>base64] or ['ok'=>false] */
+    public static function tts($text, $voice = 'Charon') {
+        $s = self::settings(); $c = $s['providers']['gemini'];
+        if (!self::usable('gemini', $c)) { return ['ok' => false, 'error' => 'no_gemini']; }
+        $text = trim(mb_substr(preg_replace('/[*_#`]/u', '', (string) $text), 0, 700));
+        if ($text === '') { return ['ok' => false, 'error' => 'empty']; }
+        if (!in_array($voice, ['Charon', 'Puck', 'Fenrir', 'Orus', 'Algenib'], true)) { $voice = 'Charon'; }
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent';
+        list($code, $data) = self::http($url, ['x-goog-api-key' => $c['key'], 'Content-Type' => 'application/json'], [
+            'contents' => [['parts' => [['text' => 'بصوت رجل سعودي واضح وودود وبنبرة طبيعية: ' . $text]]]],
+            'generationConfig' => ['responseModalities' => ['AUDIO'], 'speechConfig' => ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice]]]],
+        ], 40);
+        $b64 = $data['candidates'][0]['content']['parts'][0]['inlineData']['data'] ?? '';
+        if ($code < 200 || $code >= 300 || $b64 === '') { return ['ok' => false, 'error' => 'HTTP ' . $code]; }
+        $pcm = base64_decode($b64); $n = strlen($pcm);
+        $wav = 'RIFF' . pack('V', 36 + $n) . 'WAVEfmt ' . pack('VvvVVvv', 16, 1, 1, 24000, 48000, 2, 16) . 'data' . pack('V', $n) . $pcm;
+        return ['ok' => true, 'wav' => base64_encode($wav)];
+    }
+
     private static function call_gemini($c, $prompt, $json, $temp) {
         $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($c['model']) . ':generateContent';
         $gen = ['temperature' => $temp, 'maxOutputTokens' => 900];

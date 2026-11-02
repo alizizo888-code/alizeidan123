@@ -180,6 +180,10 @@ export function localTurn(ctx) {
     const d = new Date().toLocaleDateString('ar-SA', { timeZone: 'Asia/Riyadh', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     return out(`اليوم ${d}.${draft.specialtyId ? ' نكمل طلبك؟' : ' كيف أقدر أخدمك؟'}`, { action: 'none' })
   }
+  // ── out of scope (aircraft, ships, weapons…) and spammed/repeated text: never fall through to a generic service ──
+  { const w = t.split(' ').filter(Boolean)
+    if (w.length >= 25 && new Set(w).size / w.length < 0.35) return out('وصلتني رسالتك لكنها مكررة وما قدرت أفهم المطلوب بالضبط. اكتب لي بجملة وحدة: وش الخدمة اللي تحتاجها (مكيف، سباكة، كهرباء…) وش العطل؟', { action: 'collect' })
+    if (/(?:^|\s)(?:ال)?(?:طياره|طيارات|طائره|طائرات|هليكوبتر|مروحيه|سفينه|يخت|قارب|غواصه|صاروخ|دبابه|رشاش)(?:\s|$)/.test(t)) return out('للأسف هذا خارج تخصصنا 🙏 نحن في الصيانة المنزلية والتجارية: مكيفات، سباكة، كهرباء، أجهزة منزلية، كاميرات، وأبواب. إذا عندك عطل في شي منها قل لي وش هو وأرسل لك الفني المناسب.', { action: 'collect' }) }
   // ── "do you service X?" — answer the question asked (yes + ask for the fault), no price dump ──
   { const m = t.match(/(?:عندكم|تصلحون|تصلحوا|تصلح|تعملون|تشتغلون في|هل تصلحون|تخدمون|تصيانه|تصلحو) (?:ال)?(?:صيانه )?(ثلاج[هات]*|تلاج[هات]*|غساله|غسالات|فرن|بوتجاز|سخان|سخانات|ديب فريزر|فريزر|نشافه|ميكرويف|ميكروويف|مكيف|مكيفات|مضخه|مضخات|بوابه|بوابات|كاميرا|كاميرات)/)
     if (m && !/(سعر|بكم|(?:^|\s)كم(?:\s|$)|(?:^|\s)كام(?:\s|$))/.test(t) && toks.length <= 6) return out(`نعم نخدم ${m[1].replace(/^ال/, '')} ✅ وش العطل بالضبط أو وش الأعراض؟ وأحوّلك للفني المناسب ويعطيك السعر بعد الفحص.`, { action: 'collect' })
