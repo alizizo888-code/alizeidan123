@@ -70,6 +70,7 @@ final class Mutqan_Rest {
         try {
             Mutqan_Auth::reset_memo();
             $p = Mutqan_Auth::principal($req);
+            if (class_exists('Mutqan_Block')) { Mutqan_Block::check_request($p); }
             $out = call_user_func($fn, $req, $p);
             $res = new WP_REST_Response(['data' => $out], 200);
         } catch (Mutqan_Error $e) {

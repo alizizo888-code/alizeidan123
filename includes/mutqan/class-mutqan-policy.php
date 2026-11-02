@@ -278,6 +278,7 @@ final class Mutqan_Policy {
         }
         if ($coll === 'customers' && !$priv) { $data['userId'] = $p['id']; }
         if ($coll === 'handoffs' && !self::is_staff($p)) { Mutqan_Limiter::hit('handoff_insert', 10, 3600); }
+        if (in_array($coll, ['orders', 'calls', 'handoffs'], true) && class_exists('Mutqan_Block')) { Mutqan_Block::check_row($data, $p); }
         if ($coll === 'calls' && !self::is_staff($p)) { Mutqan_Limiter::hit('call_insert', 8, 3600); }
         return $data;
     }
