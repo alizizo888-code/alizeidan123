@@ -308,6 +308,9 @@ final class Mutqan_Agent {
                 Mutqan_Telegram::notify(mb_substr((string) ($in['title'] ?? 'غرفة العمليات'), 0, 80), mb_substr((string) ($in['text'] ?? ''), 0, 1000));
                 return ['sent' => true];
             }
+            case 'block_list': return Mutqan_Block::list_all();
+            case 'block_add': return Mutqan_Block::add((string) ($in['kind'] ?? ''), (string) ($in['value'] ?? ''), (string) ($in['label'] ?? ''));
+            case 'block_remove': return Mutqan_Block::remove((string) ($in['kind'] ?? ''), (string) ($in['hash'] ?? ''));
             case 'tech_create': {
                 $handle = strtolower(trim((string) ($in['handle'] ?? '')));
                 $name = trim((string) ($in['name'] ?? ''));
@@ -456,7 +459,7 @@ final class Mutqan_Agent {
     /** GET ?tool=orders_list|order_get|stats_summary|wa_recent|wp_search|network_list&...args (read tools only). */
     public static function control_get($req) {
         $tool = (string) $req->get_param('tool');
-        if (!in_array($tool, ['orders_list', 'order_get', 'stats_summary', 'wa_recent', 'wp_search', 'wp_get', 'network_list', 'blogger_list', 'techs_list', 'customers_list', 'shops_list', 'settings_get', 'dns_list', 'ai_engine', 'hotline_status', 'calls_list'], true)) { return new WP_REST_Response(['error' => 'unknown tool'], 400); }
+        if (!in_array($tool, ['orders_list', 'order_get', 'stats_summary', 'wa_recent', 'wp_search', 'wp_get', 'network_list', 'blogger_list', 'techs_list', 'customers_list', 'shops_list', 'settings_get', 'dns_list', 'ai_engine', 'hotline_status', 'calls_list', 'block_list'], true)) { return new WP_REST_Response(['error' => 'unknown tool'], 400); }
         try { return new WP_REST_Response(['data' => self::run_tool($tool, (array) $req->get_params(), self::admin_principal())], 200); }
         catch (Throwable $e) { return new WP_REST_Response(['error' => $e->getMessage()], 422); }
     }
@@ -465,7 +468,7 @@ final class Mutqan_Agent {
     public static function control_post($req) {
         $b = (array) $req->get_json_params();
         $tool = (string) ($b['tool'] ?? '');
-        if (!in_array($tool, ['order_update', 'order_assign', 'settings_set', 'ai_engine_set', 'ai_ask', 'wa_send', 'wp_draft', 'wp_update', 'blogger_publish', 'blogger_title', 'tech_create', 'tech_update', 'call_followup', 'tg_notify'], true)) { return new WP_REST_Response(['error' => 'unknown tool'], 400); }
+        if (!in_array($tool, ['order_update', 'order_assign', 'settings_set', 'ai_engine_set', 'ai_ask', 'wa_send', 'wp_draft', 'wp_update', 'blogger_publish', 'blogger_title', 'tech_create', 'tech_update', 'call_followup', 'tg_notify', 'block_add', 'block_remove'], true)) { return new WP_REST_Response(['error' => 'unknown tool'], 400); }
         $p = self::admin_principal(); $in = (array) ($b['input'] ?? []);
         try { $out = self::run_tool($tool, $in, $p); self::audit($tool, $in, true, $p, true); return new WP_REST_Response(['data' => $out], 200); }
         catch (Throwable $e) { self::audit($tool, $in, false, $p, true); return new WP_REST_Response(['error' => $e->getMessage()], 422); }

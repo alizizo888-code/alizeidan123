@@ -375,6 +375,9 @@ final class Mutqan_Auth {
                 $rows = $wpdb->get_results("SELECT * FROM $U WHERE status='pending' ORDER BY created_at ASC LIMIT 200", ARRAY_A) ?: [];
                 return ['list' => array_map([__CLASS__, 'member_row'], $rows)];
             }
+            case 'blockList': self::require_manage($p); return ['items' => Mutqan_Block::list_all()];
+            case 'blockAdd': self::require_manage($p); try { return Mutqan_Block::add((string) ($in['kind'] ?? ''), (string) ($in['value'] ?? ''), (string) ($in['label'] ?? '')); } catch (Exception $e) { throw new Mutqan_Error('bad_request', $e->getMessage(), 422); }
+            case 'blockRemove': self::require_manage($p); return Mutqan_Block::remove((string) ($in['kind'] ?? ''), (string) ($in['hash'] ?? ''));
             case 'createMember': return self::create_member($in);
             case 'bulkCreateMembers': {
                 $rows = isset($in['rows']) && is_array($in['rows']) ? array_slice($in['rows'], 0, 100) : [];
