@@ -35,7 +35,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'push', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'push', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -193,7 +193,7 @@ final class Mutqan_Rest {
     /** The order as the customer receives it on WhatsApp (same layout as the app's message). */
     /** The face the customer ordered from; the two core sites keep their own (build-branded) name. */
     private static function order_brand_name($d) {
-        $b = isset($d['brand']) && class_exists('Oxygen_Network') && Oxygen_Network::valid($d['brand']) ? Oxygen_Network::registry()[$d['brand']] : null;
+        $b = isset($d['brand']) && class_exists('Oxygen_Network') && Oxygen_Network::valid($d['brand']) ? Oxygen_Network::brand($d['brand']) : null;
         return $b && empty($b['core']) ? $b['name'] : 'متقن';
     }
 
@@ -432,6 +432,9 @@ final class Mutqan_Rest {
         if (($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
         return Mutqan_AI::run($in['prompt'] ?? '', is_array($in['opts'] ?? null) ? $in['opts'] : [], $p);
     }
+
+    /** Owner/operations control assistant (Claude with business-only tools). */
+    public static function h_agent($req, $p) { return Mutqan_Agent::handle(self::body($req), $p); }
 
     /* ------------------------------------------------------------------ /push (in-app notifications) */
 

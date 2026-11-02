@@ -22,7 +22,12 @@ final class Mutqan_AI {
                 'gemini'     => ['enabled' => 0, 'key' => '', 'model' => 'gemini-3.1-flash-lite'],
                 'cloudflare' => ['enabled' => 0, 'key' => '', 'account' => '', 'model' => '@cf/meta/llama-3.3-70b-instruct-fp8-fast'],
                 'openrouter' => ['enabled' => 0, 'key' => '', 'model' => 'meta-llama/llama-3.3-70b-instruct:free'],
+                // Paid, used only for the higher tiers (see tier_model()); the free providers above keep serving the 'low' tier.
+                'anthropic'  => ['enabled' => 0, 'key' => '', 'model' => 'claude-haiku-5-5'],
             ],
+            // Workload tiers (owner's policy): low = customer chat on the free providers; mid = customer service, orders,
+            // transfers; routine = daily articles, tracking, routine jobs; high = owner/operations commands, edits, design.
+            'tiers' => ['mid' => 'claude-haiku-5-5', 'routine' => 'claude-sonnet-5-5', 'high' => 'claude-opus-5-5'],
             'per_ip_10min' => 30,
             'per_ip_day' => 250,
             'mask_pii' => 1,
@@ -41,7 +46,7 @@ final class Mutqan_AI {
     }
 
     public static function labels() {
-        return ['groq' => 'Groq', 'gemini' => 'Google Gemini', 'cloudflare' => 'Cloudflare Workers AI', 'openrouter' => 'OpenRouter'];
+        return ['groq' => 'Groq', 'gemini' => 'Google Gemini', 'cloudflare' => 'Cloudflare Workers AI', 'openrouter' => 'OpenRouter', 'anthropic' => 'Claude (Anthropic)'];
     }
 
     public static function any_enabled($s = null) {
@@ -54,6 +59,29 @@ final class Mutqan_AI {
         if (empty($c['enabled']) || $c['key'] === '') { return false; }
         return $id !== 'cloudflare' || $c['account'] !== '';
     }
+
+    /* ------------------------------------------------------------------ workload tiers */
+
+    const TIERS = ['low', 'mid', 'routine', 'high'];
+
+    /** The tier a caller may use: customers at most 'mid', staff at most 'routine', owner/operations 'high'. */
+    public static function allowed_tier($want, $p) {
+        $want = in_array($want, self::TIERS, true) ? $want : 'low';
+        $role = $p['role'] ?? null;
+        $cap = $role === 'owner' || $role === 'operations' ? 'high' : (Mutqan_Policy::is_staff($p) ? 'routine' : 'mid');
+        return array_search($want, self::TIERS, true) <= array_search($cap, self::TIERS, true) ? $want : $cap;
+    }
+
+    /** Claude model for a tier, or '' when the tier runs on the free providers / Claude is not configured. */
+    public static function tier_model($tier, $s = null) {
+        $s = $s ?: self::settings();
+        $c = $s['providers']['anthropic'] ?? null;
+        if ($tier === 'low' || !$c || !self::usable('anthropic', $c)) { return ''; }
+        $t = array_merge(self::defaults()['tiers'], (array) ($s['tiers'] ?? []));
+        return $tier === 'mid' ? ($c['model'] ?: $t['mid']) : (string) ($t[$tier] ?? '');
+    }
+
+    public static function anthropic_key() { $s = self::settings(); $c = $s['providers']['anthropic']; return self::usable('anthropic', $c) ? $c['key'] : ''; }
 
     /* ------------------------------------------------------------------ public entry */
 
@@ -79,8 +107,22 @@ final class Mutqan_AI {
         $wantJson = !empty($opts['json']);
         $temp = isset($opts['temperature']) && is_numeric($opts['temperature']) ? max(0, min(1.2, (float) $opts['temperature'])) : 0.4;
 
+        $tier = self::allowed_tier($opts['tier'] ?? 'low', $p);
+        $model = self::tier_model($tier, $s);
+        if ($model !== '' && !self::cooling('anthropic')) {
+            $r = self::call_anthropic(array_merge($s['providers']['anthropic'], ['model' => $model]), $prompt, $wantJson, $temp);
+            if ($r['ok']) {
+                $text = trim($r['text']); $json = $wantJson ? self::extract_json($text) : null;
+                if (!$wantJson || $json !== null) { self::note('anthropic', 'ok'); return ['text' => $text, 'json' => $json, 'provider' => 'anthropic', 'tier' => $tier]; }
+            } else {
+                self::note('anthropic', $r['error']);
+                if ($r['cooldown']) { self::set_cooldown('anthropic', $r['cooldown']); }
+            }
+        }
+
         $tried = 0; $lastText = ''; $lastProvider = '';
         foreach ($s['order'] as $id) {
+            if ($id === 'anthropic') { continue; }
             $c = $s['providers'][$id] ?? null;
             if (!$c || !self::usable($id, $c) || self::cooling($id)) { continue; }
             if ($tried >= 3) { break; }
@@ -121,8 +163,8 @@ final class Mutqan_AI {
 
     /* ------------------------------------------------------------------ providers */
 
-    private static function http($url, $headers, $body) {
-        $res = wp_remote_post($url, ['timeout' => 22, 'headers' => $headers, 'body' => wp_json_encode($body)]);
+    private static function http($url, $headers, $body, $timeout = 22) {
+        $res = wp_remote_post($url, ['timeout' => $timeout, 'headers' => $headers, 'body' => wp_json_encode($body)]);
         if (is_wp_error($res)) { return [0, null, $res->get_error_message(), '']; }
         $code = (int) wp_remote_retrieve_response_code($res);
         $raw = wp_remote_retrieve_body($res);
@@ -147,6 +189,7 @@ final class Mutqan_AI {
             case 'openrouter': return self::call_openai_compat('https://openrouter.ai/api/v1/chat/completions', $c, $prompt, $json, $temp, ['X-Title' => 'Mutqan']);
             case 'gemini': return self::call_gemini($c, $prompt, $json, $temp);
             case 'cloudflare': return self::call_cloudflare($c, $prompt, $temp);
+            case 'anthropic': return self::call_anthropic($c, $prompt, $json, $temp);
         }
         return ['ok' => false, 'error' => 'unknown provider', 'cooldown' => 0];
     }
@@ -179,6 +222,33 @@ final class Mutqan_AI {
             if ($t !== '') { return ['ok' => true, 'text' => $t]; }
         }
         return self::classify($code, $data, $raw, $retry);
+    }
+
+    /** Raw Messages API call (used by run() and by the owner agent with tools). @return array [code, data, raw, retry] */
+    public static function anthropic_request($body, $key = null) {
+        $key = $key ?: self::anthropic_key();
+        return self::http('https://api.anthropic.com/v1/messages', ['x-api-key' => $key, 'anthropic-version' => '2023-06-01', 'Content-Type' => 'application/json'], $body, 90);
+    }
+
+    private static function call_anthropic($c, $prompt, $json, $temp) {
+        $body = ['model' => $c['model'], 'max_tokens' => 1200, 'temperature' => $temp, 'messages' => [['role' => 'user', 'content' => $prompt]]];
+        if ($json) { $body['system'] = 'Reply with one JSON object only.'; }
+        list($code, $data, $raw, $retry) = self::anthropic_request($body, $c['key']);
+        if ($code >= 200 && $code < 300 && isset($data['content'])) {
+            $t = ''; foreach ($data['content'] as $b) { if (($b['type'] ?? '') === 'text') { $t .= $b['text']; } }
+            self::usage('anthropic', $c['model'], $data['usage'] ?? [], 'chat');
+            if ($t !== '') { return ['ok' => true, 'text' => $t]; }
+        }
+        return self::classify($code, $data, $raw, $retry);
+    }
+
+    /** One row per paid call in the shared _ai_usage collection (owner AI dashboard reads it). */
+    public static function usage($provider, $model, $u, $feature) {
+        try {
+            $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
+            Mutqan_Store::insert('_ai_usage', ['at' => gmdate('c'), 'date' => gmdate('Y-m-d'), 'kind' => $provider, 'model' => $model, 'feature' => $feature,
+                'tokensIn' => (int) ($u['input_tokens'] ?? 0), 'tokensOut' => (int) ($u['output_tokens'] ?? 0)], null, [], $sys);
+        } catch (Throwable $e) { /* usage logging never blocks the answer */ }
     }
 
     private static function call_cloudflare($c, $prompt, $temp) {
