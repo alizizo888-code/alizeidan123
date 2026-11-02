@@ -9,8 +9,10 @@ $ESB blind.mjs --bundle --platform=node --format=esm --outfile="$T/mutqan-bot-bl
 $ESB v2.mjs --bundle --platform=node --format=esm --outfile="$T/mutqan-bot-v2.mjs" --log-level=error
 $ESB kb.mjs --bundle --platform=node --format=esm --outfile="$T/mutqan-bot-kb.mjs" --log-level=error
 $ESB sales.mjs --bundle --platform=node --format=esm --outfile="$T/mutqan-bot-sales.mjs" --log-level=error
+$ESB lead.mjs --bundle --platform=node --format=esm --outfile="$T/mutqan-bot-lead.mjs" --log-level=error
 node "$T/mutqan-bot-test.mjs"
 node "$T/mutqan-bot-blind.mjs"
 node "$T/mutqan-bot-v2.mjs"
 node "$T/mutqan-bot-kb.mjs"
 node "$T/mutqan-bot-sales.mjs"
+node "$T/mutqan-bot-lead.mjs"
