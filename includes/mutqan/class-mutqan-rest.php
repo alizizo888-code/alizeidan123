@@ -431,6 +431,12 @@ final class Mutqan_Rest {
     public static function h_ai($req, $p) {
         $in = self::body($req);
         if (($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
+        if (!empty($in['tts'])) {
+            $key = 'mq_tts_' . md5((string) ($p['id'] ?? '') . ($_SERVER['REMOTE_ADDR'] ?? '')); $n = (int) get_transient($key);
+            if ($n >= 60) { throw new Mutqan_Error('rate_limited', 'كثير.', 429); }
+            set_transient($key, $n + 1, 600);
+            return Mutqan_AI::tts((string) $in['tts'], (string) ($in['voice'] ?? 'Charon'));
+        }
         return Mutqan_AI::run($in['prompt'] ?? '', is_array($in['opts'] ?? null) ? $in['opts'] : [], $p);
     }
 
