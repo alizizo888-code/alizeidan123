@@ -104,6 +104,8 @@ final class Mutqan_Agent {
             ['name' => 'dns_set', 'description' => 'إضافة أو تعديل سجل DNS (CNAME/A/TXT) في oxygen11.com. (تحتاج تأكيد)', 'input_schema' => $s(['name' => $str, 'type' => ['type' => 'string', 'enum' => ['CNAME', 'A', 'TXT']], 'content' => $str, 'ttl' => $int], ['name', 'type', 'content'])],
             ['name' => 'network_list', 'description' => 'قائمة مواقع ومدونات الشبكة وروابطها.', 'input_schema' => $s([])],
             ['name' => 'techs_list', 'description' => 'الفنيون: الاسم والتخصص والحالة وآخر ظهور وعدد الطلبات الشغالة.', 'input_schema' => $s([])],
+            ['name' => 'tech_create', 'description' => 'إصدار حساب فني جديد (يرجع كلمة مرور مؤقتة): name, handle (إنجليزي/أرقام)، اختياري phone, rating 0-5, creditBalance, discountPct, specialties, password. (تحتاج تأكيد)', 'input_schema' => $s(['name' => $str, 'handle' => $str, 'phone' => $str, 'password' => $str, 'rating' => ['type' => 'number'], 'creditBalance' => ['type' => 'number'], 'discountPct' => ['type' => 'number']], ['name', 'handle'])],
+            ['name' => 'tech_update', 'description' => 'تعديل فني: rating, creditBalance أو addCredit (زيادة رصيد), discountPct, available, phone, dailyCapacity. (تحتاج تأكيد)', 'input_schema' => $s(['techId' => $str, 'rating' => ['type' => 'number'], 'creditBalance' => ['type' => 'number'], 'addCredit' => ['type' => 'number'], 'discountPct' => ['type' => 'number'], 'available' => ['type' => 'boolean']], ['techId'])],
             ['name' => 'order_assign', 'description' => 'إسناد طلب لفني (techId من techs_list).', 'input_schema' => $s(['id' => $str, 'techId' => $str], ['id', 'techId'])],
             ['name' => 'customers_list', 'description' => 'العملاء مجمّعين من الطلبات: جديد/متكرر/قديم، عدد الطلبات وآخر تعامل. q للبحث بالاسم أو الجوال.', 'input_schema' => $s(['q' => $str, 'kind' => ['type' => 'string', 'enum' => ['new', 'returning', 'old', 'all']], 'limit' => $int])],
             ['name' => 'shops_list', 'description' => 'محلات الصيانة المسجّلة على الخريطة الميدانية.', 'input_schema' => $s([])],
@@ -118,7 +120,7 @@ final class Mutqan_Agent {
 
     /** Which calls wait for the owner's "تنفيذ" (policy: confirm what matters only). */
     public static function needs_confirm($name, $input) {
-        if (in_array($name, ['wa_send', 'dns_set', 'settings_set', 'ai_engine_set'], true)) { return true; }
+        if (in_array($name, ['wa_send', 'dns_set', 'settings_set', 'ai_engine_set', 'tech_create', 'tech_update'], true)) { return true; }
         if ($name === 'wp_update') {
             $post = get_post((int) ($input['id'] ?? 0));
             return ($input['status'] ?? '') === 'publish' || ($post && $post->post_status === 'publish');
@@ -230,7 +232,7 @@ final class Mutqan_Agent {
                 $techs = Mutqan_Store::select('tech_profiles', [], ['limit' => 300], $p);
                 $active = Mutqan_Store::select('orders', ['status' => ['in' => ['assigned', 'accepted', 'en_route', 'nearby', 'arrived', 'in_progress']]], ['limit' => 500], $p);
                 $load = []; foreach ($active as $o) { $k = (string) ($o['technicianId'] ?? ''); if ($k !== '') { $load[$k] = ($load[$k] ?? 0) + 1; } }
-                return array_map(function ($t) use ($load) { $id = (string) ($t['userId'] ?? $t['id']); return ['id' => $id, 'name' => $t['displayName'] ?? ($t['name'] ?? 'فني'), 'phone' => $t['phone'] ?? '', 'specialties' => $t['specialties'] ?? '', 'available' => ($t['available'] ?? true) !== false, 'lastSeenAt' => $t['lastSeenAt'] ?? '', 'active' => $load[$id] ?? 0]; }, $techs);
+                return array_map(function ($t) use ($load) { $id = (string) ($t['userId'] ?? $t['id']); return ['id' => $id, 'name' => $t['displayName'] ?? ($t['name'] ?? 'فني'), 'phone' => $t['phone'] ?? '', 'specialties' => $t['specialties'] ?? '', 'available' => ($t['available'] ?? true) !== false, 'lastSeenAt' => $t['lastSeenAt'] ?? '', 'active' => $load[$id] ?? 0, 'rating' => $t['rating'] ?? null, 'creditBalance' => $t['creditBalance'] ?? null, 'discountPct' => $t['discountPct'] ?? null]; }, $techs);
             case 'customers_list':
                 $rows = Mutqan_Store::select('orders', [], ['order' => '-createdAt', 'limit' => 2000], $p);
                 $by = [];
@@ -283,6 +285,29 @@ final class Mutqan_Agent {
                 foreach (array_keys($patch) as $f) { if (preg_match('/key|secret|token|pass|pin|otp/i', (string) $f) || in_array($f, ['id', 'createdAt', 'createdBy', 'groupId'], true)) { throw new Exception('الحقل «' . $f . '» مش بيتعدل من هنا.'); } }
                 if (!$patch) { throw new Exception('مفيش حقول للتعديل.'); }
                 return self::strip_secrets(Mutqan_Store::update($key, (string) $in['doc_id'], $patch, $p));
+            case 'tech_create': {
+                $handle = strtolower(trim((string) ($in['handle'] ?? '')));
+                $name = trim((string) ($in['name'] ?? ''));
+                if ($handle === '' || $name === '') { throw new Exception('محتاج اسم الفني واسم المستخدم (إنجليزي أو أرقام).'); }
+                $m = Mutqan_Auth::team_op('createMember', ['handle' => $handle, 'displayName' => $name, 'role' => 'technician', 'password' => (string) ($in['password'] ?? '')], $p);
+                $prof = ['userId' => $m['userId'], 'displayName' => $name, 'phone' => preg_replace('/\D/', '', Mutqan_Auth::fold_digits((string) ($in['phone'] ?? ''))), 'dailyCapacity' => 10, 'scope' => 'wash_maintenance_install', 'active' => true, 'available' => true, 'specialties' => (array) ($in['specialties'] ?? []), 'level' => 'expert', 'homeLat' => null, 'homeLng' => null];
+                foreach (['rating' => [0, 5], 'creditBalance' => [0, 1000000], 'discountPct' => [0, 90]] as $f => $r) { if (isset($in[$f]) && is_numeric($in[$f])) { $prof[$f] = max($r[0], min($r[1], (float) $in[$f])); } }
+                Mutqan_Store::insert('tech_profiles', $prof, $m['userId'], ['groupId' => 'main', 'visibleTo' => 'group', 'writableBy' => 'creator-and-admin'], $p);
+                return ['created' => true, 'techId' => $m['userId'], 'handle' => $m['handle'], 'tempPassword' => $m['tempPassword'], 'rating' => $prof['rating'] ?? null, 'creditBalance' => $prof['creditBalance'] ?? null, 'discountPct' => $prof['discountPct'] ?? null, 'loginUrl' => $m['url']];
+            }
+            case 'tech_update': {
+                $id = (string) ($in['techId'] ?? '');
+                if ($id === '' || !Mutqan_Store::peek_doc('tech_profiles', $id)) { throw new Exception('الفني مش موجود (استخدم techs_list).'); }
+                $patch = [];
+                foreach (['rating' => [0, 5], 'creditBalance' => [0, 1000000], 'discountPct' => [0, 90], 'dailyCapacity' => [1, 100]] as $f => $r) { if (isset($in[$f]) && is_numeric($in[$f])) { $patch[$f] = max($r[0], min($r[1], (float) $in[$f])); } }
+                if (isset($in['addCredit']) && is_numeric($in['addCredit'])) { $cur = Mutqan_Store::peek_doc('tech_profiles', $id); $patch['creditBalance'] = max(0, (float) ($cur['creditBalance'] ?? 0) + (float) $in['addCredit']); }
+                foreach (['available', 'active'] as $f) { if (isset($in[$f])) { $patch[$f] = (bool) $in[$f]; } }
+                if (isset($in['phone'])) { $patch['phone'] = preg_replace('/\D/', '', Mutqan_Auth::fold_digits((string) $in['phone'])); }
+                if (isset($in['specialties'])) { $patch['specialties'] = (array) $in['specialties']; }
+                if (!$patch) { throw new Exception('مفيش حقول للتعديل.'); }
+                Mutqan_Store::update('tech_profiles', $id, $patch, $p);
+                return ['updated' => true, 'techId' => $id] + $patch;
+            }
             case 'order_update':
                 if (isset($in['assignedTo']) && !isset($in['technicianId'])) { $in['technicianId'] = $in['assignedTo']; }
                 $patch = array_intersect_key((array) $in, array_flip(['status', 'appointmentAt', 'staffNote', 'technicianId']));
@@ -417,7 +442,7 @@ final class Mutqan_Agent {
     public static function control_post($req) {
         $b = (array) $req->get_json_params();
         $tool = (string) ($b['tool'] ?? '');
-        if (!in_array($tool, ['order_update', 'order_assign', 'settings_set', 'ai_engine_set', 'ai_ask', 'wa_send', 'wp_draft', 'wp_update', 'blogger_publish', 'blogger_title'], true)) { return new WP_REST_Response(['error' => 'unknown tool'], 400); }
+        if (!in_array($tool, ['order_update', 'order_assign', 'settings_set', 'ai_engine_set', 'ai_ask', 'wa_send', 'wp_draft', 'wp_update', 'blogger_publish', 'blogger_title', 'tech_create', 'tech_update'], true)) { return new WP_REST_Response(['error' => 'unknown tool'], 400); }
         $p = self::admin_principal(); $in = (array) ($b['input'] ?? []);
         try { $out = self::run_tool($tool, $in, $p); self::audit($tool, $in, true, $p, true); return new WP_REST_Response(['data' => $out], 200); }
         catch (Throwable $e) { self::audit($tool, $in, false, $p, true); return new WP_REST_Response(['error' => $e->getMessage()], 422); }
