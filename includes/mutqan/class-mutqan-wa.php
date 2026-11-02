@@ -294,7 +294,7 @@ final class Mutqan_WA_Bot {
         if (empty($d['patterns'])) { return null; }
         $words = count(array_filter(explode(' ', $n)));
         $svc = $hasService || (bool) preg_match('/(?:مكيف|سباك|كهرب|غسيل|تركيب|تسريب|فريون|مجاري|سخان|قفل|ثلاج)/u', $n);
-        $order = [['compare', 99, true], ['why_us', 99, true], ['triage', 99, true], ['howru', 5, false], ['tired', 5, false], ['praise', 5, false], ['budget', 99, true]];
+        $order = [['callback', 9, true], ['refund', 99, true], ['visit_fee', 99, true], ['package_vs_wash', 99, true], ['method', 8, true], ['own_tech', 99, true], ['tech_nationality', 99, true], ['papers', 99, true], ['trust_fear', 99, true], ['show_works', 8, true], ['join_how', 99, true], ['think_later', 99, true], ['contact_info', 8, true], ['annual_pkg', 99, true], ['part_change', 99, true], ['project', 99, true], ['business', 99, true], ['compare', 99, true], ['why_us', 99, true], ['triage', 99, true], ['howru', 5, false], ['tired', 5, false], ['praise', 5, false], ['budget', 99, true]];
         foreach ($order as $o) {
             [$k, $max, $any] = $o;
             if ($words > $max || (!$any && $svc) || empty($d['patterns'][$k]) || empty($d['replies'][$k])) { continue; }
