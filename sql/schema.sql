@@ -1,0 +1,43 @@
+-- Oxygen master schema. Portable between MySQL/MariaDB and SQLite (used by the test suite).
+CREATE TABLE IF NOT EXISTS settings (
+    k VARCHAR(64) PRIMARY KEY,
+    v TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash CHAR(64) PRIMARY KEY,
+    csrf CHAR(64) NOT NULL,
+    created INT NOT NULL,
+    expires INT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sites (
+    id VARCHAR(40) PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    host VARCHAR(190) NOT NULL,
+    secret_enc TEXT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'unpaired',
+    last_checked INT NULL,
+    last_info TEXT NULL,
+    last_error VARCHAR(255) NULL
+);
+
+CREATE TABLE IF NOT EXISTS jobs (
+    id VARCHAR(40) PRIMARY KEY,
+    type VARCHAR(32) NOT NULL,
+    site_id VARCHAR(40) NULL,
+    status VARCHAR(16) NOT NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    run_after INT NOT NULL,
+    created INT NOT NULL,
+    finished INT NULL,
+    result TEXT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audit (
+    id VARCHAR(40) PRIMARY KEY,
+    ts INT NOT NULL,
+    action VARCHAR(64) NOT NULL,
+    target VARCHAR(64) NULL,
+    detail TEXT NULL
+);

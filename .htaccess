@@ -1,0 +1,20 @@
+# Oxygen master: public root = the desk subdomain. Private code is blocked here.
+Options -Indexes
+<IfModule mod_rewrite.c>
+RewriteEngine On
+# Route /api/<x> to the PHP router (real files such as api/index.php are left alone)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^api/(.*)$ api/index.php?r=$1 [QSA,L]
+</IfModule>
+
+# Private folders and files are never served
+RedirectMatch 403 ^/(src|sql|seed|tests|bridge|docs|\.github|\.git)(/|$)
+RedirectMatch 403 \.(env|md|lock|log|bak|old)$
+
+<IfModule mod_headers.c>
+Header set X-Frame-Options "DENY"
+Header set X-Content-Type-Options "nosniff"
+Header set Referrer-Policy "no-referrer"
+Header set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+Header set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+</IfModule>

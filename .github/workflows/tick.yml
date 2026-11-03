@@ -1,0 +1,27 @@
+# Calls the master every 10 minutes so queued jobs run without anyone visiting the panel.
+# Secrets live in the repository settings (MASTER_URL, CRON_TOKEN), never in this file.
+name: tick
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Run one queue batch on the master
+        env:
+          MASTER_URL: ${{ secrets.MASTER_URL }}
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$MASTER_URL" && test -n "$CRON_TOKEN"
+          curl --fail --silent --show-error --max-time 120 \
+            -X POST -H "X-Cron-Token: $CRON_TOKEN" \
+            "$MASTER_URL/api/tick"
