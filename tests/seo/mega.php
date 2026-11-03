@@ -11,7 +11,7 @@ $f = 0; $ok = function ($c, $m) use (&$f) { if (!$c) { $f++; echo "FAIL: $m\n"; 
 $counts = Oxygen_SEO_Mega::counts();
 echo "districts={$counts['districts']} places={$counts['places']} brands={$counts['brands']} items={$counts['items']}\n";
 $ok($counts['items'] >= 138000, 'at least 80x the base plan (1,732)');
-$max = count(Oxygen_SEO_Mega::entities()) * 21 * 20; $keys = []; $kws = []; $n = 0; $titles = [];
+$max = count(Oxygen_SEO_Mega::entities()) * 21 * count(Oxygen_SEO_Mega::templates()); $keys = []; $kws = []; $n = 0; $titles = [];
 for ($i = 0; $i < $max; $i++) {
     $it = Oxygen_SEO_Mega::item($i); if (!$it) { continue; } $n++;
     if (isset($keys[$it['key']])) { $ok(false, 'dup key ' . $it['key']); break; } $keys[$it['key']] = 1;

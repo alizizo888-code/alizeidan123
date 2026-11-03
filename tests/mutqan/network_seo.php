@@ -28,8 +28,8 @@ foreach ($sats as $id) {
     $n = count($plan);
     $head = array_slice($plan, 0, 1000);
     $foc = count(array_filter($head, function ($i) { return in_array($i['sid'], ['ac-wash', 'ac-maint', 'ac-install', 'ac-central', 'cold-room', 'freezer-room', 'fridge'], true); })) / 1000;
-    $loc = count(array_filter($head, function ($i) { return $i['city'] === 'مكة المكرمة' || $i['city'] === 'جدة' || $i['city'] === 'مكة وجدة' || (strpos($i['city'], 'بمكة المكرمة') !== false) || (strpos($i['city'], 'بجدة') !== false); })) / 1000;
-    $t("$id plan size + 70% A/C-cold ($foc) + 70% Makkah/Jeddah ($loc)", $n >= 2900 && $foc >= 0.67 && $foc <= 0.73 && $loc >= 0.67 && $loc <= 0.73, [$n, $foc, $loc]);
+    $loc = count(array_filter($head, function ($i) { return mb_strpos($i['city'], 'مكة') !== false; })) / 1000;   // Makkah only: 70%
+    $t("$id plan size + 70% A/C-cold ($foc) + 70% Makkah ($loc)", $n >= 2900 && $foc >= 0.67 && $foc <= 0.73 && $loc >= 0.67 && $loc <= 0.73, [$n, $foc, $loc]);
     $t("$id has both cold-room kinds and other fields", count(array_filter($plan, function ($i) { return $i['sid'] === 'cold-room'; })) > 20 && count(array_filter($plan, function ($i) { return $i['sid'] === 'plumbing'; })) > 5);
     $t("$id keys namespaced + owned", !array_filter($plan, function ($i) use ($E, $id) { return strpos($i['key'], 'oxy-net-' . $id . '-') !== 0 || !$E::owns($i); }));
     $t("$id titles end with its brand", !array_filter($head, function ($i) use ($id) { return substr($i['title'], -strlen(' | ' . Oxygen_Network::registry()[$id]['name'])) !== ' | ' . Oxygen_Network::registry()[$id]['name']; }));

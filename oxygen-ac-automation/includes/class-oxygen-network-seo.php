@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) { exit; }
 /**
  * Article plan of the 10 satellite sites. One code base, ten different plans:
  *  - service mix: 70% A/C + cold / freezer rooms, 30% every other field;
- *  - place mix:   70% Makkah + Jeddah (cities and their districts), 30% the rest of the Kingdom;
+ *  - place mix:   70% Makkah (the city and its districts), 30% Jeddah and the rest of the Kingdom;
  *  - each site has its own rotation (different service/place order, title wording, hook and angle salt), its own key namespace
  *    `oxy-net-<id>-…` (so no article can ever collide with another site's or with the two core sites'), and
  *  - a gradual volume: it starts small and rises on a schedule (option `oxygen_net_seo`), so ten sites never switch on at full speed.
@@ -62,17 +62,15 @@ final class Oxygen_Network_SEO {
     private static function data($name) { static $c = []; if (!isset($c[$name])) { $c[$name] = include __DIR__ . '/seo/data-' . $name . '.php'; } return $c[$name]; }
     private static function rot($a, $k) { $n = count($a); if (!$n) { return $a; } $k = $k % $n; return array_merge(array_slice($a, $k), array_slice($a, 0, $k)); }
 
-    /** places grouped: [makkah/jeddah list, rest-of-kingdom list], rotated per site */
+    /** places grouped: [Makkah list (70% of articles), the rest = Jeddah and the other cities (30%)], rotated per site */
     public static function places($slot) {
-        $a = ['مكة المكرمة', 'جدة', 'مكة وجدة'];
-        $mk = []; foreach (self::data('districts') as $d) { $mk[] = ['حي ' . $d . ' بمكة المكرمة', $d]; }
-        $jd = []; foreach (self::data('districts-jeddah') as $d) { $jd[] = ['حي ' . $d . ' بجدة', $d]; }
-        $A = [];
-        foreach ($a as $c) { $A[] = [$c, '']; }
-        $m = max(count($mk), count($jd));
-        for ($i = 0; $i < $m; $i++) { if (isset($mk[$i])) { $A[] = $mk[$i]; } if (isset($jd[$i])) { $A[] = $jd[$i]; } }
-        $B = []; foreach (self::data('cities') as $c) { $B[] = [$c, '']; }
-        return [self::rot($A, $slot * 5), self::rot($B, $slot * 3)];
+        $mk = [['مكة المكرمة', ''], ['مكة', '']];
+        foreach (self::data('districts') as $d) { $mk[] = ['حي ' . $d . ' بمكة المكرمة', $d]; }
+        $jd = [['جدة', '']]; foreach (self::data('districts-jeddah') as $d) { $jd[] = ['حي ' . $d . ' بجدة', $d]; }
+        $cities = []; foreach (self::data('cities') as $c) { if (mb_strpos((string) $c, 'مكة') === false) { $cities[] = [$c, '']; } }
+        $B = []; $m = max(count($jd), count($cities));
+        for ($i = 0; $i < $m; $i++) { if (isset($jd[$i])) { $B[] = $jd[$i]; } if (isset($jd[$i + 1]) && $i % 2) { $B[] = $jd[$i + 1]; } if (isset($cities[$i])) { $B[] = $cities[$i]; } }
+        return [self::rot($mk, $slot * 5), self::rot($B, $slot * 3)];
     }
 
     public static function plan($id = null) {
@@ -86,7 +84,7 @@ final class Oxygen_Network_SEO {
         $svc = array_merge(self::data('services'), self::data('net-services'));
         list($A, $B) = self::places($slot);
         $F = self::rot(self::FOCUS, $slot * 3); $O = self::rot(self::OTHER, $slot * 2);
-        $fi = $oi = $ai = $bi = 0; $plan = []; $seen = [];
+        $fi = $oi = $ai = $bi = 0; $plan = []; $seen = []; $usedT = [];
         for ($p = 0; $p < self::TOTAL; $p++) {
             $focus = (($p * 7 + $slot) % 10) < 7;
             $makkah = (($p * 3 + $slot * 7) % 10) < 7;
@@ -95,7 +93,27 @@ final class Oxygen_Network_SEO {
             $pl = $makkah ? $A[$ai++ % count($A)] : $B[$bi++ % count($B)];
             // five of every six articles carry a facet (a symptom, an audience or an appliance brand) so the TOPIC differs between sites; the rest use plain wording.
             $FC = self::facets($sid, $svc); $facet = null; $key = '';
-            $useF = $FC && (($p * 5 + $slot) % 6) !== 0;
+            // 70% of the plan is buy-intent wording ("أفضل شركة غسيل مكيفات", "فني اصلاح تكيفات", "معلم مكيفات"...): it makes the reader call or order.
+            // The other 30% keeps the older mix (symptoms, audiences, brands, plain wording) so the sites stay varied.
+            $buy = class_exists('Oxygen_SEO_Mega') && (($p * 3 + $slot * 5) % 10) < 7;
+            if ($buy) {
+                $CT = Oxygen_SEO_Mega::commercial(); $nc = count($CT); $c0 = ($p + $slot * 7) % $nc;
+                // two of every three buy-intent articles also carry an audience or an appliance brand ("فني صيانة مكيفات للفلل", "معلم صيانة مكيفات كاريير"), so two sites never publish the same thing in the same place
+                $BF = array_values(array_filter($FC, function ($x) { return $x[0] === 'brand' || ($x[0] === 'who' && mb_substr($x[1], 0, 1) === 'ل'); }));
+                $bf = $BF && (($p * 5 + $slot) % 3) !== 0 ? $BF[(int) (($p * 7 + $slot * 11 + intdiv($p, count($BF))) % count($BF))] : null;
+                for ($b = 0; $b < $nc; $b++) {
+                    $ci = ($c0 + $b) % $nc;
+                    $k = 'oxy-net-' . $id . '-' . $sid . '-' . substr(md5($pl[0]), 0, 6) . '-c' . $ci . ($bf ? '-f' . substr(md5($bf[1]), 0, 5) : '');
+                    if (!isset($seen[$k])) {
+                        $v = Oxygen_SEO_Mega::variant($sid, $pl[0] . $ci) . ($bf ? ' ' . $bf[1] : '');
+                        $full = str_replace(['{v}', '{P}'], [$v, $pl[0]], $CT[$ci][0]);
+                        if (mb_strlen($full) > 82 || isset($usedT[$full])) { continue; }   // readable in a search result, and never the same headline twice on one site (cold-room and freezer-room share wording)
+                        $usedT[$full] = 1;
+                        $key = $k; $tt = str_replace(['{v}', '{P}'], [$v, $pl[0]], $CT[$ci][0]); $kk = str_replace(['{v}', '{P}'], [$v, $pl[0]], $CT[$ci][1]); $facet = $bf ?: ['buy', Oxygen_SEO_Mega::variant($sid, $pl[0] . $ci) . '#' . $ci]; break;
+                    }
+                }
+            }
+            $useF = $key === '' && $FC && (($p * 5 + $slot) % 6) !== 0;
             if ($useF) {
                 $f0 = (int) (($p * 7 + $slot * 11 + intdiv($p, count($FC))) % count($FC));
                 for ($b = 0; $b < count($FC); $b++) {
