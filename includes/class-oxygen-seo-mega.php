@@ -28,7 +28,8 @@ class Oxygen_SEO_Mega {
 
     /** 20 grand, price-free title styles. {n} = service (or brand service), {P} = place phrase. [title, keyword] */
     public static function templates() {
-        return [
+        static $all = null; if ($all !== null) { return $all; }
+        $legacy = [
             ['أفضل شركة {n} في {P} | خبراء مهندسون مختصون', 'أفضل شركة {n} {P}'],
             ['الشركة الرائدة في {n} بـ{P} — مهندسون وخصومات', 'شركة رائدة {n} {P}'],
             ['خصومات حصرية على {n} في {P} مع نخبة الخبراء', 'خصومات {n} {P}'],
@@ -50,7 +51,59 @@ class Oxygen_SEO_Mega {
             ['أقوى خصومات {n} في {P} من الرواد', 'أقوى خصومات {n} {P}'],
             ['لماذا نحن الأفضل في {n} بـ{P}؟ خبراء مهندسون', 'لماذا الأفضل {n} {P}'],
         ];
+        return $all = array_merge($legacy, self::commercial());
     }
+
+    /**
+     * Search-intent titles that make the reader call or order ("أفضل شركة غسيل مكيفات"، "فني اصلاح تكيفات"، "معلم مكيفات"...).
+     * {v} = one of the real search wordings of the service (see variants()). Appended after the 20 legacy styles, so old keys keep working;
+     * 48 of the 68 styles are commercial, which is what makes ~70% of new articles buy-intent and the rest the older, broader style.
+     */
+    public static function commercial() {
+        static $c = null; if ($c !== null) { return $c; }
+        $roles = [
+            ['أفضل شركة {v} في {P} تصلك فوراً', 'أفضل شركة {v} {P} اتصل'],
+            ['أفضل فني {v} في {P}', 'أفضل فني {v} {P}'],
+            ['مهندس {v} في {P} يعاين ويصلح', 'اتصل بمهندس {v} {P}'],
+            ['معلم {v} في {P} يصلك فوراً', 'معلم {v} {P}'],
+            ['فني {v} في {P} جاهز للزيارة', 'فني {v} {P}'],
+            ['رقم أفضل شركة {v} في {P}', 'رقم شركة {v} {P}'],
+            ['شركة {v} قريبة منك في {P}', 'شركة {v} قريبة {P}'],
+            ['احجز فني {v} في {P} الآن', 'حجز فني {v} {P}'],
+            ['أرقام فنيين {v} في {P} للتواصل والحجز', 'أرقام فنيين {v} {P}'],
+            ['خدمة {v} في {P} على مدار الساعة', '{v} {P} 24 ساعة'],
+            ['هل تبحث عن فني {v} في {P}؟ اتصل بنا', 'ابحث عن فني {v} {P}'],
+            ['اطلب أفضل شركة {v} في {P} بخطوة واحدة', 'اطلب شركة {v} {P}'],
+            ['أسرع فني {v} في {P} للمنازل والمحلات', 'أسرع فني {v} {P}'],
+            ['شركة {v} المعتمدة في {P} بضمان على العمل', 'شركة {v} معتمدة {P}'],
+            ['مكتب {v} في {P} بفنيين جاهزين للزيارة', 'مكتب {v} {P}'],
+            ['تواصل مع أفضل معلم {v} في {P}', 'أفضل معلم {v} {P}'],
+        ];
+        // three wordings of each role; the tails carry no separator, so Oxygen_SEO_Mega::compact() can never collapse two of them into one title
+        $tail = [['', ''], [' واطلب الآن', ' الآن'], [' وزيارة اليوم', ' عاجل']];
+        $c = [];
+        foreach ($tail as $t) { foreach ($roles as $r) { $c[] = [$r[0] . $t[0], $r[1] . $t[1]]; } }
+        return $c;
+    }
+
+    /** Real search wordings of each service (what customers type), used by the commercial titles. */
+    public static function variants($sid) {
+        static $m = [
+            'ac-wash' => ['غسيل مكيفات', 'غسيل تكييف', 'تنظيف مكيفات', 'غسيل مكيفات سبليت', 'غسيل مكيف شباك'],
+            'ac-maint' => ['صيانة مكيفات', 'اصلاح تكيفات', 'تصليح مكيفات', 'صيانة تكييف', 'اصلاح مكيفات', 'شحن فريون مكيفات'],
+            'ac-install' => ['تركيب مكيفات', 'تركيب سبليت', 'فك وتركيب مكيفات', 'نقل وتركيب مكيفات'],
+            'ac-central' => ['صيانة تكييف مركزي', 'صيانة مكيفات دكت', 'صيانة التكييف المركزي', 'صيانة شيلر'],
+            'fridge' => ['صيانة ثلاجات', 'تصليح ثلاجات', 'صيانة فريزر', 'صيانة غرف التبريد', 'صيانة غرف التجميد', 'صيانة غرف التبريد والتجميد'],
+            'cold-room' => ['صيانة غرف التبريد', 'صيانة غرف التبريد والتجميد', 'غرف تبريد'],
+            'freezer-room' => ['صيانة غرف التجميد', 'صيانة غرف التبريد والتجميد', 'غرف تجميد'],
+        ];
+        static $o = ['plumbing' => ['سباكة', 'كشف تسربات المياه'], 'electric' => ['كهرباء', 'صيانة كهرباء'], 'appliances' => ['صيانة أجهزة منزلية', 'صيانة غسالات'], 'pest' => ['مكافحة حشرات', 'مكافحة صراصير ونمل'],
+            'tanks' => ['تنظيف خزانات', 'تنظيف وعزل خزانات المياه'], 'locks' => ['أقفال ومفاتيح', 'فتح وتركيب أقفال'], 'cameras' => ['كاميرات مراقبة', 'تركيب كاميرات مراقبة'], 'satellite' => ['تركيب دش', 'ضبط وتركيب ستلايت'],
+            'paint' => ['دهانات وديكور', 'دهانات'], 'tiling' => ['تبليط وعزل', 'ترميم وتبليط'], 'cleaning' => ['تنظيف وتعقيم', 'تنظيف منازل'], 'moving' => ['نقل أثاث', 'فك ونقل وتركيب أثاث'],
+            'solar' => ['طاقة شمسية', 'تركيب ألواح شمسية'], 'corporate' => ['صيانة منشآت', 'عقود صيانة للشركات'], 'general' => ['صيانة عامة', 'صيانة منازل'], 'contracting' => ['مقاولات', 'مقاولات عامة وتشطيب']];
+        return $m[$sid] ?? ($o[$sid] ?? [self::short($sid)]);
+    }
+    public static function variant($sid, $seed) { $v = self::variants($sid); return $v[abs(crc32((string) $seed)) % count($v)]; }
 
     private static function hash($s) { return substr(md5($s), 0, 6); }
 
@@ -129,12 +182,13 @@ class Oxygen_SEO_Mega {
             $P = $cityShort; $n = self::brand_phrase($sid, $e['label']);
             $item['city'] = $cityName; $item['brand'] = $e['label'];
         }
-        $title = str_replace(['بـ{P}', '{n}', '{P}'], ['ب' . $P, $n, $P], $T[0]);
+        $v = ($e['t'] === 'b') ? $n : self::variant($sid, $e['h'] . $t);
+        $title = str_replace(['بـ{P}', '{n}', '{v}', '{P}'], ['ب' . $P, $n, $v, $P], $T[0]);
         $title = self::compact($title);
         $suffix = ' | ' . Oxygen_SEO_Engine::brand();
         if (mb_strlen($title) + mb_strlen($suffix) <= 70) { $title .= $suffix; }
         $item['title'] = $title;
-        $item['kw'] = str_replace(['{n}', '{P}'], [$n, ($e['t'] === 'b' ? 'في ' : '') . $P], $T[1]);
+        $item['kw'] = str_replace(['{n}', '{v}', '{P}'], [$n, $v, ($e['t'] === 'b' ? 'في ' : '') . $P], $T[1]);
         return $item;
     }
 
@@ -166,17 +220,51 @@ class Oxygen_SEO_Mega {
     }
     public static function is_key($k) { return strncmp((string) $k, 'oxy-m-', 6) === 0; }
 
-    /** Next item (from the persisted cursor) that is owned by this site and has no post yet. Scans at most $scan indexes per call. */
+    /** Cooling, refrigeration, freezer and cold-room services: the focus of the daily mix. */
+    const FOCUS_SIDS = ['ac-wash', 'ac-maint', 'ac-install', 'ac-central', 'fridge'];
+    const FOCUS_SHARE = 0.7;   // share of each day's articles about A/C + cold / freezer rooms
+    const MAKKAH_SHARE = 0.7;  // share of each day's articles located in Makkah
+
+    public static function is_focus($it) { return in_array($it['sid'] ?? '', self::FOCUS_SIDS, true); }
+    public static function is_makkah($it) { return mb_strpos((string) ($it['city'] ?? ''), 'مكة') !== false; }
+
+    /** Today's running counts (reset each day) used to steer the next article toward the 70% / 70% targets. */
+    private static function mix() {
+        $m = get_option('oxygen_seo_mix', []); $d = function_exists('current_time') ? current_time('Y-m-d') : gmdate('Y-m-d');
+        if (!is_array($m) || ($m['d'] ?? '') !== $d) { $m = ['d' => $d, 'n' => 0, 'f' => 0, 'm' => 0]; }
+        return $m;
+    }
+
+    /**
+     * Next item that is owned by this site and has no post yet. The day's mix is steered: each call decides whether the next article
+     * should be a focus (cooling / freezer) one and a Makkah one, from what was already published today, then reads from the cursor of
+     * that (focus x city) bucket. Every bucket has its own persisted cursor, so no unpublished item is ever skipped for good.
+     */
     public static function next(array $map, $owns, $scan = 4000) {
-        $cur = (int) get_option('oxygen_seo_mega_cur', 0);
+        $m = self::mix();
+        $wantF = $m['n'] === 0 || ($m['f'] / $m['n']) < self::FOCUS_SHARE;
+        $wantM = $m['n'] === 0 || ($m['m'] / $m['n']) < self::MAKKAH_SHARE;
+        $legacy = (int) get_option('oxygen_seo_mega_cur', 0);
+        $cur = get_option('oxygen_seo_mega_bk', []); if (!is_array($cur)) { $cur = []; }
         $max = count(self::entities()) * 21 * count(self::templates());
-        $found = null; $i = $cur;
-        for ($n = 0; $n < $scan && $i < $max; $n++, $i++) {
-            $it = self::item($i);
-            if (!$it || isset($map[$it['key']]) || !$owns($it)) { continue; }
-            $found = $it; $i++; break;
+        $order = [[$wantF, $wantM], [$wantF, !$wantM], [!$wantF, $wantM], [!$wantF, !$wantM]];
+        foreach ($order as $o) {
+            list($f, $mk) = $o; $bk = ($f ? 'f' : 'o') . ($mk ? 'm' : 'j');
+            $i = isset($cur[$bk]) ? (int) $cur[$bk] : $legacy; $found = null;
+            for ($n = 0; $n < $scan && $i < $max; $n++, $i++) {
+                $it = self::item($i);
+                if (!$it || self::is_focus($it) !== $f || self::is_makkah($it) !== $mk || isset($map[$it['key']]) || !$owns($it)) { continue; }
+                $found = $it; $i++; break;
+            }
+            $cur[$bk] = $i;
+            if ($found) {
+                update_option('oxygen_seo_mega_bk', $cur, false);
+                $m['n']++; if (self::is_focus($found)) { $m['f']++; } if (self::is_makkah($found)) { $m['m']++; }
+                update_option('oxygen_seo_mix', $m, false);
+                return $found;
+            }
         }
-        update_option('oxygen_seo_mega_cur', $i, false);
-        return $found;
+        update_option('oxygen_seo_mega_bk', $cur, false);
+        return null;
     }
 }
