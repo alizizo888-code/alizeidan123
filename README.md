@@ -40,7 +40,7 @@ Oxygen Bridge plugin on each face (bridge/oxy-bridge)  →  /wp-json/oxy-bridge/
 
 1. **Database.** Create a MySQL database and user on Hostinger (hPanel, or the Hostinger API). Note the name, user and password. The host is `127.0.0.1:3306` from the app.
 2. **Server config.** Copy `docs/config.example.php` to `<account>/oxy-master-config.php`, which is two levels above `public_html`. Fill in the DB values and generate three secrets (`master_key`, `setup_token`, `cron_token`). This file is never in git.
-3. **Deploy the desk.** Point the `desk.oxygen11.com` document root at this repository (the old build is archived in git first, see below).
+3. **Deploy the desk.** Follow `docs/CUTOVER.md`. The old desk build is kept in git (branch `desk-dist`) before the desk folder is cleared.
 4. **First run.** Open `https://desk.oxygen11.com/`. The setup screen asks for the setup token and a new 6-digit PIN. It creates the tables and the 22 faces.
 5. **Pair each face.** Install `bridge/oxy-bridge` on the face (Plugins › Add, upload the folder zip). Open **Settings › Oxygen Bridge**, copy the key, and in the panel press **ربط المفتاح** on that face. The key is encrypted at rest.
 6. **Scheduler.** In GitHub, add repository secrets `MASTER_URL` (for example `https://desk.oxygen11.com`) and `CRON_TOKEN` (the same value as in the config). The workflow `.github/workflows/tick.yml` then runs every 10 minutes.
