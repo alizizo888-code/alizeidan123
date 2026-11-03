@@ -46,6 +46,51 @@ function BlockList() {
   )
 }
 
+
+// One «ربط» button: shows what is linked and does the next missing step (link code → Telegram → this device receives calls).
+function QuickLink({ st, tg, isOwner, load, nav }) {
+  const [v, setV] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  if (!st || !tg) return null
+  const step = !st.set ? 'code-set' : !st.linkedHere ? 'code-link' : !tg.on ? 'tg-token' : !tg.mine ? 'tg-pair' : 'done'
+  const rows = [['رمز الخط الساخن', st.set], ['هذا الجهاز يستقبل المكالمات', !!st.linkedHere], ['بوت تيليجرام', !!tg.on], ['تيليجرام مربوط بي', !!tg.mine]]
+  const need = { 'code-set': isOwner ? 'اكتب رمز ربط جديد (٦ حروف/أرقام أو أكتر)' : 'الرمز لسه ما اتحددش — المالك يحدده', 'code-link': 'اكتب رمز الربط عشان الجهاز ده يستقبل المكالمات', 'tg-token': isOwner ? 'الصق رمز البوت من BotFather' : 'تيليجرام لسه ما اتفعّلش — المالك يفعّله', 'tg-pair': '', done: '' }[step]
+  const needsInput = ['code-set', 'code-link', 'tg-token'].includes(step)
+  const canGo = !busy && (!needsInput || (step === 'tg-token' ? v.trim().length >= 20 : v.trim().length >= 6)) && !((step === 'code-set' || step === 'tg-token') && !isOwner)
+  const go = async () => {
+    setBusy(true); setErr(''); setMsg('')
+    try {
+      if (step === 'code-set') { await hotlink.set(v.trim()); setMsg('تم تحديد الرمز وربط الجهاز') }
+      else if (step === 'code-link') { await hotlink.link(v.trim()); setMsg('تم ربط الجهاز') }
+      else if (step === 'tg-token') { await telegram.save(v.trim()); setMsg('تم تفعيل البوت') }
+      else if (step === 'tg-pair') { const r = await telegram.pair(); setMsg('اضغط الرابط لفتح تيليجرام وإكمال الربط'); if (r?.link) window.open(r.link, '_blank', 'noopener') }
+      setV(''); await load()
+    } catch (e) { setErr(errText(e, 'تعذر الربط')) } finally { setBusy(false) }
+  }
+  return (
+    <section className="rounded-2xl bg-primary/10 border border-primary/30 p-4 grid gap-3">
+      <p className="font-black text-sm flex items-center gap-2"><Link2 size={16} className="text-primary" />الربط السريع</p>
+      <ul className="grid gap-1">{rows.map(([l, ok]) => <li key={l} className="flex items-center gap-2 text-[12px] font-bold"><span className={ok ? 'text-emerald-300' : 'text-slate-500'}>{ok ? '✓' : '○'}</span><span className={ok ? 'text-white' : 'text-slate-300'}>{l}</span></li>)}</ul>
+      {err && <p className="text-xs font-bold text-rose-300">{err}</p>}
+      {msg && <p className="text-xs font-bold text-emerald-300">{msg}</p>}
+      {step === 'done' ? <p className="text-[12px] font-bold text-emerald-300">كل شيء مربوط. المكالمات والطلبات توصلك على التطبيق وتيليجرام.</p> : (
+        <>
+          {need && <p className="text-[12px] text-slate-200">{need}</p>}
+          {needsInput && <input type="password" autoComplete="off" dir="ltr" value={v} onChange={(e) => setV(e.target.value)} className={inp} aria-label="قيمة الربط" />}
+          <button disabled={!canGo} onClick={go} className={`${btn} bg-primary text-white`}>{busy ? <Loader2 size={16} className="animate-spin" /> : null}ربط</button>
+        </>
+      )}
+      <div className="flex flex-wrap gap-2 pt-1 border-t border-white/10">
+        <button onClick={() => nav('/staff/notify-settings')} className="text-[12px] font-bold text-sky-300">ضبط الإشعارات والرنين</button>
+        <button onClick={() => nav('/staff/operations?tab=calls')} className="text-[12px] font-bold text-sky-300">سجل المكالمات والمتابعة</button>
+        {st.linkedHere && <button onClick={async () => { await hotlink.unlink(); await load() }} className="text-[12px] font-bold text-amber-300">إيقاف استقبال المكالمات على هذا الجهاز</button>}
+      </div>
+    </section>
+  )
+}
+
 export default function HotlineLink() {
   const nav = useNavigate()
   const { isOwner, role, loading } = useTeamRole()
@@ -77,6 +122,8 @@ export default function HotlineLink() {
       <div className="p-4 max-w-xl mx-auto grid gap-4">
         {err && <p className="rounded-xl bg-rose-500/10 border border-rose-400/30 p-3 text-xs font-bold text-rose-200 leading-relaxed">{err}</p>}
         {msg && <p className="rounded-xl bg-emerald-500/10 border border-emerald-400/30 p-3 text-xs font-bold text-emerald-200">{msg}</p>}
+
+        <QuickLink st={st} tg={tg} isOwner={isOwner} load={load} nav={nav} />
 
         <section className="rounded-2xl bg-white/5 border border-white/10 p-4 grid gap-3">
           <p className="font-black text-sm flex items-center gap-2"><Link2 size={16} className="text-primary" />رمز الربط بين زر الخط الساخن في الموقع والتطبيق</p>
