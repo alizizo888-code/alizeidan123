@@ -1,5 +1,5 @@
 <?php
-// TEMPLATE ONLY. Copy to <account>/oxy-master-config.php (two levels above public_html), fill in the
+// TEMPLATE ONLY. Copy to domains/oxygen11.com/oxy-master-config.php (one level above public_html), fill in the
 // values on the server, and never commit the filled copy. The web root cannot reach this file.
 //
 // Generate each secret with:  php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"

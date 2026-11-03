@@ -39,7 +39,7 @@ Oxygen Bridge plugin on each face (bridge/oxy-bridge)  →  /wp-json/oxy-bridge/
 ## Install (one time)
 
 1. **Database.** Create a MySQL database and user on Hostinger (hPanel, or the Hostinger API). Note the name, user and password. The host is `127.0.0.1:3306` from the app.
-2. **Server config.** Copy `docs/config.example.php` to `<account>/oxy-master-config.php`, which is two levels above `public_html`. Fill in the DB values and generate three secrets (`master_key`, `setup_token`, `cron_token`). This file is never in git.
+2. **Server config.** Copy `docs/config.example.php` to `domains/oxygen11.com/oxy-master-config.php`, the folder that contains `public_html` (one level above it, not inside it). Fill in the DB values and generate three secrets (`master_key`, `setup_token`, `cron_token`). This file is never in git.
 3. **Deploy the desk.** Follow `docs/CUTOVER.md`. The old desk build is kept in git (branch `desk-dist`) before the desk folder is cleared.
 4. **First run.** Open `https://desk.oxygen11.com/`. The setup screen asks for the setup token and a new 6-digit PIN. It creates the tables and the 22 faces.
 5. **Pair each face.** Install `bridge/oxy-bridge` on the face (Plugins › Add, upload the folder zip). Open **Settings › Oxygen Bridge**, copy the key, and in the panel press **ربط المفتاح** on that face. The key is encrypted at rest.
