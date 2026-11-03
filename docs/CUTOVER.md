@@ -12,8 +12,9 @@ Scope: replace the old build on `desk.oxygen11.com` with the master. The old bui
 
 ## Owner, next
 
-3. **Create the MySQL database and user** in hPanel (Databases › MySQL). Use database name `oxymaster`,
-   user `oxymaster`, and a password you choose. Keep the password out of chat.
+3. **Create the MySQL database and user** in hPanel (Databases › MySQL). Name them `oxymaster` and `oxymaster`,
+   and choose a password. Keep the password out of chat. Hostinger adds the account prefix, so the real names
+   are `u283616892_oxymaster` (database) and `u283616892_oxymaster` (user). Use those full names in the config.
 4. **Upload the config file** `oxy-master-config.php` to `domains/oxygen11.com/`. That is the folder that
    contains `public_html`, not a folder inside it. Fill in `FILL_DB_NAME`, `FILL_DB_USER` and `FILL_DB_PASSWORD`.
 5. **GitHub secrets** (repo `alizizo888-code/alizeidan123` › Settings › Secrets › Actions):
