@@ -24,6 +24,8 @@ MQ_DATA="$(mktemp -d)" php seo.php
 php notif.php
 php desk.php
 php calls.php
+php seo_mix.php
+php article_front.php
 php defaults.php
 MQ_DATA="$(mktemp -d)" php link.php
 MQ_DATA="$(mktemp -d)" php passkey.php
