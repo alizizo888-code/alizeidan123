@@ -4,7 +4,7 @@
   const app = document.getElementById('app');
   const toastEl = document.getElementById('toast');
   const pairDialog = document.getElementById('pair');
-  const state = { csrf: null, timer: null, pairId: null, view: 'sites' };
+  const state = { csrf: null, timer: null, pairId: null, view: 'sites', preselect: null };
 
   // Sections of the panel. A new section is one line here plus its render function.
   const VIEWS = [
@@ -204,7 +204,8 @@
       const err = s.last_error ? `<div class="errline" dir="ltr">${esc(s.last_error)}</div>` : '';
       const actions = s.paired
         ? `<button class="btn ghost sm" data-act="health" data-id="${esc(s.id)}">فحص</button>
-           <button class="btn ghost sm" data-act="purge" data-id="${esc(s.id)}">تنظيف الكاش</button>`
+           <button class="btn ghost sm" data-act="purge" data-id="${esc(s.id)}">تنظيف الكاش</button>
+           <button class="btn ghost sm" data-act="edit-site" data-id="${esc(s.id)}">تعديل الإعدادات</button>`
         : `<button class="btn primary sm" data-act="pair" data-id="${esc(s.id)}" data-name="${esc(s.name)}">ربط المفتاح</button>`;
       return `<article class="card" data-tone="${tone}">
         <header><span class="dot" aria-hidden="true"></span><div><h3>${esc(s.name)}</h3><small dir="ltr">${esc(s.host)}</small></div></header>
@@ -323,8 +324,10 @@
     bulkBatch = meta.max_batch;
     state.csrf = overview.csrf;
 
+    const preselect = state.preselect;
+    state.preselect = null;
     const sites = overview.sites.map((s) => `<label class="pick${s.paired ? '' : ' off'}">
-          <input type="checkbox" name="site" value="${esc(s.id)}"${s.paired ? '' : ' disabled'}>
+          <input type="checkbox" name="site" value="${esc(s.id)}"${s.paired ? '' : ' disabled'}${s.paired && s.id === preselect ? ' checked' : ''}>
           <span>${esc(s.name)}</span><small dir="ltr">${esc(s.host)}</small>
           ${s.paired ? '' : '<em>غير مربوط</em>'}
         </label>`).join('');
@@ -616,6 +619,7 @@
     if (act === 'health_all') return run('health_all');
     if (act === 'purge_all') return run('purge_all');
     if (act === 'health') return run('health', id);
+    if (act === 'edit-site') { state.preselect = id; return show('bulk'); }
     if (act === 'purge') return run('purge', id);
     if (act === 'person-toggle') return togglePerson(id, next === '1');
     if (act === 'bulk-all' || act === 'bulk-none') {
