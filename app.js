@@ -13,6 +13,7 @@
     ['settings', 'الإعدادات العامة'],
     ['bulk', 'الإعدادات الجماعية'],
     ['articles', 'المقالات'],
+    ['ops', 'غرفة العمليات'],
   ];
   const AREAS = { makkah: 'مكة', jeddah: 'جدة', other: 'أخرى' };
   // [key, label, max length] for the general settings form. Must match General::FIELDS on the server.
@@ -289,6 +290,43 @@
   }
 
   /** General settings: plain business details, saved on the server. */
+  /**
+   * Operations room, first version: the state of every face in one place, with what needs attention.
+   * Built only from the face list the desk already has. Orders and calls are not here yet: they wait
+   * for the decision on where orders are stored.
+   */
+  async function renderOps() {
+    app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
+    const overview = await api('overview');
+    state.csrf = overview.csrf;
+    const sites = overview.sites;
+    const count = (key) => sites.filter((s) => s.status === key).length;
+    const attention = sites.filter((s) => s.status === 'down' || s.status === 'unpaired');
+    const list = attention.length
+      ? attention.map((s) => {
+          const [label, tone] = STATUS[s.status] || ['—', 'idle'];
+          const reason = s.last_error ? `<div class="errline" dir="ltr">${esc(s.last_error)}</div>` : '';
+          return `<div class="pick"><span class="pill ${tone}">${label}</span><span>${esc(s.name)}</span><small dir="ltr">${esc(s.host)}</small>${reason}</div>`;
+        }).join('')
+      : '<p class="muted">كل المواقع المربوطة شغالة، ومفيش حاجة محتاجة متابعة.</p>';
+
+    app.innerHTML = shell(`
+      <section class="stats">
+        <div class="stat"><b>${sites.length}</b><span>موقع</span></div>
+        <div class="stat"><b>${count('online')}</b><span>متصل</span></div>
+        <div class="stat"><b>${count('down')}</b><span>لا يستجيب</span></div>
+        <div class="stat"><b>${count('unpaired')}</b><span>غير مربوط</span></div>
+      </section>
+      <section class="panel">
+        <h2>يحتاج متابعة</h2>
+        <div class="bulk-form">${list}</div>
+      </section>
+      <section class="panel">
+        <h2>الطلبات والاتصالات</h2>
+        <p class="muted">هتظهر هنا بعد ما نحدد مكان تخزين الطلبات (متقن أو الديسك)، ومصادر استقبالها (واتساب، إعلانات، الموقع).</p>
+      </section>`);
+  }
+
   const POST_STATUS = { publish: 'منشورة', draft: 'مسودة', future: 'مجدولة', pending: 'قيد المراجعة', private: 'خاصة' };
 
   /** Articles of one face, picked from the list of paired faces. Each face is read live through its bridge. */
@@ -557,6 +595,7 @@
       if (view === 'settings') return await renderSettings();
       if (view === 'bulk') return await renderBulk();
       if (view === 'articles') return await renderArticles();
+      if (view === 'ops') return await renderOps();
       return await loadDashboard();
     } catch (error) {
       if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
