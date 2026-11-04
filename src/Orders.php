@@ -15,10 +15,11 @@ final class Orders
     /** @return list<array<string,mixed>> */
     public static function list(?string $filter = null): array
     {
-        $sql = 'SELECT o.*, c.name AS customer_name, c.lat, c.lng, p.name AS technician_name, so.code, so.source
+        $sql = 'SELECT o.*, c.name AS customer_name, c.lat, c.lng, p.name AS technician_name, so.code, so.source, ts.share_pct
                 FROM orders o
                 JOIN customers c ON c.id = o.customer_id
                 LEFT JOIN people p ON p.id = o.technician_id
+                LEFT JOIN technician_shares ts ON ts.person_id = o.technician_id
                 LEFT JOIN site_orders so ON so.order_id = o.id';
         $args = [];
         if ($filter === 'active') {
@@ -37,8 +38,9 @@ final class Orders
             throw new OxyHttpError(404, 'not_found');
         }
         $stmt = oxy_pdo()->prepare(
-            'SELECT o.*, c.name AS customer_name, c.lat, c.lng, p.name AS technician_name, so.code, so.source
+            'SELECT o.*, c.name AS customer_name, c.lat, c.lng, p.name AS technician_name, so.code, so.source, ts.share_pct
              FROM orders o JOIN customers c ON c.id = o.customer_id LEFT JOIN people p ON p.id = o.technician_id
+             LEFT JOIN technician_shares ts ON ts.person_id = o.technician_id
              LEFT JOIN site_orders so ON so.order_id = o.id
              WHERE o.id = ?'
         );
@@ -98,6 +100,11 @@ final class Orders
             }
             $sets[] = 'warranty_until = ?';
             $args[] = $days === null ? null : time() + ((int) $days) * 86400;
+        }
+        $finishing = array_key_exists('status', $in) && $in['status'] === 'done' && $order['status'] !== 'done';
+        if ($finishing && !array_key_exists('warranty_days', $in) && $order['warranty_until'] === null && Dispatch::defaultWarrantyDays() > 0) {
+            $sets[] = 'warranty_until = ?';
+            $args[] = time() + Dispatch::defaultWarrantyDays() * 86400;
         }
         if ($sets === []) {
             throw new OxyHttpError(400, 'nothing_to_update');
@@ -193,6 +200,10 @@ final class Orders
             'status_label' => self::STATUSES[$row['status']] ?? $row['status'],
             'active' => in_array($row['status'], self::ACTIVE, true),
             'price' => $row['price'] === null ? null : (int) $row['price'],
+            'technician_share_pct' => $row['technician_id'] === null ? null : (int) ($row['share_pct'] ?? Dispatch::defaultShare()),
+            'technician_amount' => ($row['technician_id'] === null || $row['price'] === null)
+                ? null
+                : (int) round((int) $row['price'] * (int) ($row['share_pct'] ?? Dispatch::defaultShare()) / 100),
             'warranty_until' => $row['warranty_until'] === null ? null : (int) $row['warranty_until'],
             'created' => (int) $row['created'],
             'updated' => (int) $row['updated'],

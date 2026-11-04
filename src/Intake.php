@@ -24,6 +24,9 @@ final class Intake
         if ($row = $existing->fetch()) {
             return ['code' => $code, 'order_id' => $row['order_id'], 'duplicate' => true];
         }
+        if (!Dispatch::intakeOpen()) {
+            throw new OxyHttpError(503, 'intake_paused');
+        }
 
         $customerIn = [
             'name' => self::text($in['name'] ?? null, 120, 'bad_name') ?? 'عميل',
@@ -54,6 +57,14 @@ final class Intake
         ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         oxy_pdo()->prepare('INSERT INTO site_orders (id, site_id, site_ref, code, order_id, source, payload, received) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
             ->execute([oxy_id(), $siteId, $ref, $code, $order['id'], $source, $payload, time()]);
+        if (Dispatch::mode() === 'auto') {
+            // Automatic dispatch: a job nobody can take stays new for the supervisor, and the order is still saved.
+            try {
+                Orders::distribute($order['id'], Dispatch::rule());
+            } catch (OxyHttpError $e) {
+                Audit::log('auto_dispatch_skipped', $order['id'], $e->errCode);
+            }
+        }
         Audit::log('site_order_in', $order['id'], $code);
         return ['code' => $code, 'order_id' => $order['id'], 'duplicate' => false];
     }

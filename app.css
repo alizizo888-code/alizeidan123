@@ -16,7 +16,7 @@
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
+  :root[data-theme="light"] {
     --bg: #f4f7fb;
     --panel: #ffffff;
     --panel-2: #eef3fa;
@@ -201,3 +201,21 @@ select.field { appearance: auto; }
   .nav-title { width: 100%; }
   .side .tab { width: auto; }
 }
+
+/* Dispatch: filter chips above the active orders, and the technician share box in management. */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.share-cell { white-space: nowrap; }
+.share-cell .field { width: 90px; display: inline-block; margin-inline-end: 6px; }
+.lbl.check { display: flex; align-items: center; gap: 8px; }
+
+/* Operations room: status strip (counts with icons) and the distribution card. */
+.ops-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.ops-card { position: relative; background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--idle); border-radius: var(--radius); padding: 12px 14px; display: grid; gap: 2px; }
+.ops-card .ico { position: absolute; inset-inline-end: 12px; top: 10px; font-size: 18px; opacity: .85; }
+.ops-card b { font-size: 26px; font-variant-numeric: tabular-nums; }
+.ops-card span:not(.ico) { color: var(--muted); font-size: 13px; }
+.ops-card.warn { border-top-color: var(--warn); }
+.ops-card.ok { border-top-color: var(--ok); }
+.ops-card.accent { border-top-color: var(--accent); }
+.ops-card.idle { border-top-color: var(--idle); }
+.dispatch .btn:disabled { opacity: .5; cursor: not-allowed; }

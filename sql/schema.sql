@@ -112,3 +112,9 @@ CREATE TABLE IF NOT EXISTS order_messages (
     created INT NOT NULL,
     seq INT NOT NULL DEFAULT 0
 );
+
+-- Technician share of a job's price (schema v7). Missing row means the default share from Dispatch applies.
+CREATE TABLE IF NOT EXISTS technician_shares (
+    person_id VARCHAR(40) PRIMARY KEY,
+    share_pct INT NOT NULL
+);

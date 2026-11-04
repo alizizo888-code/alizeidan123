@@ -140,9 +140,29 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // A technician's own share of the job price. Body: {"share_pct": 0-100} or null to use the default.
+    if ($method === 'POST' && count($parts) === 4 && $parts[0] === 'management' && $parts[1] === 'people' && $parts[3] === 'share') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'share' => Dispatch::setShare($parts[2], oxy_body()['share_pct'] ?? null)]);
+        return;
+    }
+
     if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'management' && $parts[1] === 'people') {
         Auth::requireCsrf();
         oxy_json(['ok' => true, 'person' => People::update($parts[2], oxy_body())]);
+        return;
+    }
+
+    // Dispatch and intake: how new orders get a technician, whether faces may send orders, default share and warranty.
+    if ($method === 'GET' && $route === 'settings/dispatch') {
+        Auth::current();
+        oxy_json(['ok' => true, 'values' => Dispatch::all(), 'shares' => Dispatch::shares()]);
+        return;
+    }
+
+    if ($method === 'POST' && $route === 'settings/dispatch') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'values' => Dispatch::save(oxy_body())]);
         return;
     }
 

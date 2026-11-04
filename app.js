@@ -14,6 +14,7 @@
     ['النظام', [['settings', 'الإعدادات']]],
   ];
   const SETTINGS_SECTIONS = [
+    ['dispatch', 'التوزيع والاستقبال', 'طريقة توزيع الطلبات الجديدة على الفنيين، وإيقاف استقبالها من المواقع، ونسبة الفني الافتراضية، والضمان الافتراضي للطلبات المكتملة.'],
     ['general', 'الإعدادات العامة', 'بيانات الشركة اللي تظهر في الفواتير والرسائل: الاسم، الرقم الضريبي، العنوان، ساعات العمل. بتتحفظ على الخادم فقط.'],
     ['bulk', 'الإعدادات الجماعية', 'تغيير اسم المواقع أو وصفها أو عدد المقالات في الصفحة على عدة مواقع مرة واحدة. بتبدأ بمعاينة، ومتتطبقش إلا بتأكيدك.'],
     ['sites', 'ربط المواقع', 'كل موقع بيتربط مرة واحدة بالمفتاح من لوحة الإضافة على الموقع. الحالة ومتى اتفحص آخر مرة بتظهر في قايمة المواقع.'],
@@ -54,6 +55,10 @@
     nothing_to_update: 'لا يوجد ما يُحفظ',
     not_found: 'العنصر غير موجود',
     unknown_setting: 'هذا الإعداد غير متاح',
+    bad_share: 'النسبة لازم تكون من 0 لـ 100',
+    not_technician: 'النسبة تتحدد للفنيين بس',
+    bad_mode: 'الاختيار غير صحيح',
+    bad_warranty: 'مدة الضمان لازم تكون من 0 لـ 730 يوم',
     unknown_op: 'هذه العملية غير معروفة',
     bad_batch: 'اختر من 1 إلى 5 مواقع في الدفعة',
   };
@@ -184,7 +189,7 @@
 
   /** Common frame for every section: brand, section tabs, then the section body. */
   function shell(body) {
-    const inSettings = ['settings', 'general', 'bulk'].includes(state.view);
+    const inSettings = ['settings', 'general', 'bulk', 'dispatch'].includes(state.view);
     const groups = NAV.map(([title, items]) => `
       <div class="nav-group">
         <div class="nav-title">${title}</div>
@@ -287,13 +292,19 @@
   async function peopleBlock(role) {
     const block = ROLE_BLOCKS[role];
     const { people } = await api(`management/people?role=${encodeURIComponent(role)}`);
+    const isTech = role === 'technician';
+    const dispatch = isTech ? await api('settings/dispatch') : null;
+    const shareCell = (p) => isTech
+      ? `<td class="share-cell"><input class="field" type="number" min="0" max="100" dir="ltr" data-share-for="${esc(p.id)}" value="${esc(dispatch.shares[p.id] ?? '')}" placeholder="${dispatch.values.default_share}"><button class="btn ghost sm" data-act="share-save" data-id="${esc(p.id)}">حفظ</button></td>`
+      : '';
     const rows = people.map((p) => `<tr>
         <td>${esc(p.name)}</td>
         <td class="ltr">${esc(p.phone || '—')}</td>
         <td>${esc(AREAS[p.area] || '—')}</td>
         <td><span class="pill ${p.active ? 'ok' : 'idle'}">${p.active ? 'نشط' : 'موقوف'}</span></td>
+        ${shareCell(p)}
         <td><button class="btn ghost sm" data-act="person-toggle" data-id="${esc(p.id)}" data-next="${p.active ? '0' : '1'}">${p.active ? 'إيقاف' : 'تفعيل'}</button></td>
-      </tr>`).join('') || `<tr><td colspan="5" class="muted">${block.empty}</td></tr>`;
+      </tr>`).join('') || `<tr><td colspan="${isTech ? 6 : 5}" class="muted">${block.empty}</td></tr>`;
 
     return `
       <section class="panel">
@@ -313,7 +324,7 @@
           <p class="err" role="alert"></p>
         </form>
         <div style="overflow-x:auto"><table>
-          <thead><tr><th>الاسم</th><th>الجوال</th><th>المنطقة</th><th>الحالة</th><th></th></tr></thead>
+          <thead><tr><th>الاسم</th><th>الجوال</th><th>المنطقة</th><th>الحالة</th>${isTech ? '<th>نسبته من السعر (%)</th>' : ''}<th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
       </section>`;
@@ -360,7 +371,7 @@
     const activeTechs = techs.people.filter((p) => p.active).length;
     const activeSups = sups.people.filter((p) => p.active).length;
     const modules = OPS_MODULES;
-    const [custs, ords] = await Promise.all([api('customers'), api('orders')]);
+    const [custs, ords, dispatch] = await Promise.all([api('customers'), api('orders'), api('settings/dispatch')]);
     const thread = state.thread ? await api(`orders/${encodeURIComponent(state.thread)}/messages`).catch(() => null) : null;
     const threadOrder = state.thread ? ords.orders.find((o) => o.id === state.thread) : null;
     state.customers = custs.customers;
@@ -377,6 +388,8 @@
       : '<p class="muted">كل المواقع المربوطة شغالة، ومفيش حاجة محتاجة متابعة.</p>';
 
     app.innerHTML = shell(`
+      ${opsStrip()}
+      ${dispatchCard(dispatch)}
       <section class="stats">
         <div class="stat"><b>${sites.length}</b><span>موقع</span></div>
         <div class="stat"><b>${count('online')}</b><span>متصل</span></div>
@@ -510,24 +523,40 @@
   }
 
   /** Orders still open, with status and technician editable in place, and a form for a new one. */
+  const ORDER_FILTERS = [
+    ['all', 'الكل'],
+    ['unassigned', 'بانتظار الإسناد'],
+    ['assigned', 'مُسندة'],
+    ['in_progress', 'جارية'],
+  ];
+
   function ordersPanel() {
     const custOpts = state.customers.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
     const techOpts = (sel) => `<option value="">بدون فني</option>` + state.technicians.map((t) => `<option value="${esc(t.id)}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}</option>`).join('');
     const statusOpts = (sel) => Object.entries(state.statuses).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
-    const open = state.orders.filter((o) => o.active);
+    const filter = state.orderFilter || 'all';
+    const matches = {
+      all: () => true,
+      unassigned: (o) => !o.technician_id,
+      assigned: (o) => o.status === 'assigned',
+      in_progress: (o) => o.status === 'in_progress',
+    };
+    const open = state.orders.filter((o) => o.active && matches[filter](o));
+    const chips = ORDER_FILTERS.map(([k, l]) => `<button class="btn ${k === filter ? 'primary' : 'ghost'} sm" data-act="order-filter" data-id="${k}">${l}</button>`).join(' ');
     const rows = open.map((o) => `<tr>
         <td>${esc(o.customer_name)}</td>
         <td class="ltr" dir="ltr">${esc(o.code || 'يدوي')}<small>${o.source === 'chat' ? 'من الشات' : o.source === 'form' ? 'من النموذج' : ''}</small></td>
         <td>${esc(o.service || '—')}</td>
         <td><select class="field" data-change="order-status" data-id="${esc(o.id)}">${statusOpts(o.status)}</select></td>
         <td><select class="field" data-change="order-tech" data-id="${esc(o.id)}">${techOpts(o.technician_id)}</select></td>
-        <td class="ltr">${o.price ?? '—'}</td>
+        <td class="ltr">${o.price ?? '—'}${o.technician_amount != null ? `<small>نصيب الفني ${o.technician_amount} (${o.technician_share_pct}%)</small>` : ''}</td>
         <td>${o.technician_id ? '' : DISTRIBUTE_MODES.map(([m, l]) => `<button class="btn ghost sm" data-act="distribute" data-id="${esc(o.id)}" data-mode="${m}">${l}</button>`).join(' ')}</td>
         <td><button class="btn ghost sm" data-act="thread" data-id="${esc(o.id)}">المحادثة</button></td>
       </tr>`).join('') || '<tr><td colspan="8" class="muted">لا توجد طلبات نشطة.</td></tr>';
     return `
       <section class="panel">
         <h2>الطلبات النشطة</h2>
+        <div class="chips" style="margin-bottom:10px">${chips}</div>
         <form class="form-row" data-form="order-add">
           <label class="lbl">العميل<select class="field" name="customer_id" required>${custOpts || '<option value="">أضف عميل أولاً</option>'}</select></label>
           <label class="lbl">الخدمة<input class="field" name="service" maxlength="80" autocomplete="off"></label>
@@ -560,6 +589,66 @@
   }
 
   /** Automatic distribution for an open order that has no technician yet. */
+  /** Status counts across the orders, the way the operations room reads them at a glance. */
+  function opsStrip() {
+    const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+    const since = Math.floor(startOfDay.getTime() / 1000);
+    const busy = new Set(state.orders.filter((o) => o.active && o.technician_id).map((o) => o.technician_id));
+    const items = [
+      ['بانتظار الإسناد', state.orders.filter((o) => o.active && !o.technician_id).length, 'warn', '⏳'],
+      ['مُسندة', state.orders.filter((o) => o.status === 'assigned').length, 'accent', '📌'],
+      ['جارية', state.orders.filter((o) => o.status === 'in_progress').length, 'ok', '🛠️'],
+      ['تمت اليوم', state.orders.filter((o) => o.status === 'done' && o.updated >= since).length, 'ok', '✅'],
+      ['فنيون متاحون', state.technicians.filter((t) => !busy.has(t.id)).length, 'accent', '👷'],
+      ['فنيون مشغولون', state.technicians.filter((t) => busy.has(t.id)).length, 'idle', '🔧'],
+    ];
+    return `<section class="ops-strip">${items.map(([label, n, tone, icon]) =>
+      `<div class="ops-card ${tone}"><span class="ico">${icon}</span><b>${n}</b><span>${label}</span></div>`).join('')}</section>`;
+  }
+
+  /** Distribution and intake controls: how new orders get a technician, and whether faces may send orders. */
+  function dispatchCard(d) {
+    const unassigned = state.orders.filter((o) => o.status === 'new' && !o.technician_id).length;
+    const modeBtn = (k, l) => `<button class="btn sm ${d.values.mode === k ? 'primary' : 'ghost'}" data-act="dispatch-mode" data-id="${k}">${l}</button>`;
+    const ruleBtn = (k, l) => `<button class="btn sm ${d.values.rule === k ? 'primary' : 'ghost'}" data-act="dispatch-rule" data-id="${k}">${l}</button>`;
+    return `
+      <section class="panel dispatch">
+        <h2>أسلوب التوزيع واستقبال الطلبات</h2>
+        <div class="chips">${modeBtn('manual', 'يدوي – المشرف يوزع')}${modeBtn('auto', 'آلي – فور الوصول')}</div>
+        <div class="chips" style="margin-top:8px">${DISTRIBUTE_MODES.map(([m, l]) => ruleBtn(m, l)).join('')}</div>
+        <div class="chips" style="margin-top:12px">
+          <button class="btn primary" data-act="dispatch-run" ${unassigned ? '' : 'disabled'}>توزيع الطلبات الجديدة الآن (${unassigned})</button>
+          <label class="lbl check"><input type="checkbox" data-change="intake-open"${d.values.intake_open ? ' checked' : ''}> استقبال الطلبات من المواقع</label>
+        </div>
+        <p class="muted">القاعدة بتنطبق على الطلبات الجديدة. الطلب اللي ما يلاقيش فني بيفضل بانتظار الإسناد.</p>
+      </section>`;
+  }
+
+  /** Saves one dispatch setting, then redraws the room. Failures show their message, never a silent no-op. */
+  async function saveDispatch(body, done) {
+    try {
+      await api('settings/dispatch', { method: 'POST', body });
+      if (done) toast(done);
+      return await renderOps();
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر الحفظ');
+    }
+  }
+
+  /** Distributes every new order that has no technician, one by one, with the current rule. */
+  async function runDispatch() {
+    const rule = (await api('settings/dispatch')).values.rule;
+    const pending = state.orders.filter((o) => o.status === 'new' && !o.technician_id);
+    let ok = 0;
+    for (const o of pending) {
+      try { await api(`orders/${encodeURIComponent(o.id)}/distribute`, { method: 'POST', body: { mode: rule } }); ok += 1; }
+      catch (error) { if (error.code === 'no_session') return renderLogin(ERRORS.no_session); }
+    }
+    toast(`تم توزيع ${ok} من ${pending.length} طلب`);
+    return await renderOps();
+  }
+
   async function distributeOrder(id, mode) {
     try {
       await api(`orders/${encodeURIComponent(id)}/distribute`, { method: 'POST', body: { mode } });
@@ -639,6 +728,35 @@
         <p class="muted">مقالات الموقع المختار: منشورة ومسودات ومجدولة، تُقرأ مباشرة من الموقع.</p>
         <label class="lbl">الموقع <select class="field" id="articles-site">${options}</select></label>
         <div style="margin-top:12px">${body}</div>
+      </section>`);
+  }
+
+  /** Dispatch and intake: how new orders get a technician, pause for faces, default share and warranty. */
+  async function renderDispatch() {
+    app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
+    const { values } = await api('settings/dispatch');
+    const modeOpts = [['manual', 'يدوي: المشرف يوزع بنفسه'], ['auto', 'آلي: الطلب يتوزع فور وصوله']]
+      .map(([k, l]) => `<option value="${k}"${values.mode === k ? ' selected' : ''}>${esc(l)}</option>`).join('');
+    const ruleOpts = [['nearest', 'أقرب فني بموقع مسجّل'], ['available', 'أول فني متاح'], ['idle', 'متفرغ ونشط']]
+      .map(([k, l]) => `<option value="${k}"${values.rule === k ? ' selected' : ''}>${esc(l)}</option>`).join('');
+
+    app.innerHTML = shell(`
+      <section class="panel">
+        <h2>التوزيع والاستقبال</h2>
+        <p class="muted">بيتطبق على الطلبات الجديدة فقط. الطلب اللي ما يلاقيش فني بيفضل "جديد" للمشرف، ومايضيعش.</p>
+        <form class="settings-form" data-form="dispatch" novalidate>
+          <label class="lbl">طريقة التوزيع<select class="field" name="mode">${modeOpts}</select></label>
+          <label class="lbl">قاعدة التوزيع الآلي<select class="field" name="rule">${ruleOpts}</select></label>
+          <label class="lbl">نسبة الفني الافتراضية من سعر الخدمة (%)
+            <input class="field" name="default_share" type="number" min="0" max="100" dir="ltr" value="${esc(values.default_share)}">
+          </label>
+          <label class="lbl">الضمان الافتراضي للطلب المكتمل (يوم، 0 = بدون)
+            <input class="field" name="default_warranty_days" type="number" min="0" max="730" dir="ltr" value="${esc(values.default_warranty_days)}">
+          </label>
+          <label class="lbl check"><input type="checkbox" name="intake_open"${values.intake_open ? ' checked' : ''}> استقبال الطلبات من المواقع مفتوح</label>
+          <div class="row end"><button class="btn primary" type="submit">حفظ</button></div>
+          <p class="err" role="alert"></p>
+        </form>
       </section>`);
   }
 
@@ -870,6 +988,7 @@
       if (view === 'management') return await renderManagement();
       if (view === 'settings') return renderSettingsHub();
       if (view === 'general') return await renderSettings();
+      if (view === 'dispatch') return await renderDispatch();
       if (view === 'bulk') return await renderBulk();
       if (view === 'articles') return await renderArticles();
       if (view === 'ops') return await renderOps();
@@ -891,6 +1010,20 @@
     } catch (error) {
       if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
       toast(ERRORS[error.code] || 'تعذّر التنفيذ');
+    }
+  }
+
+  /** Saves one technician's share. An empty box clears it, so the default from settings applies again. */
+  async function saveShare(id) {
+    const input = app.querySelector(`input[data-share-for="${CSS.escape(id)}"]`);
+    const raw = input ? input.value.trim() : '';
+    try {
+      await api(`management/people/${encodeURIComponent(id)}/share`, { method: 'POST', body: { share_pct: raw === '' ? null : Number(raw) } });
+      toast('تم حفظ النسبة');
+      return await renderManagement();
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر الحفظ');
     }
   }
 
@@ -970,6 +1103,18 @@
       if (form.dataset.form === 'bulkops') {
         return await runBulkOps(form, e.submitter?.dataset.mode !== 'apply');
       }
+      if (form.dataset.form === 'dispatch') {
+        const body = {
+          mode: form.elements.mode.value,
+          rule: form.elements.rule.value,
+          intake_open: form.elements.intake_open.checked,
+          default_share: Number(form.elements.default_share.value),
+          default_warranty_days: Number(form.elements.default_warranty_days.value),
+        };
+        await api('settings/dispatch', { method: 'POST', body });
+        toast('تم حفظ التوزيع والاستقبال');
+        return await renderDispatch();
+      }
       if (form.dataset.form === 'settings') {
         await api('settings/general', { method: 'POST', body: values });
         toast('تم حفظ الإعدادات');
@@ -983,6 +1128,7 @@
 
   app.addEventListener('change', (e) => {
     if (e.target.id === 'articles-site') return renderArticles(e.target.value);
+    if (e.target.dataset.change === 'intake-open') return saveDispatch({ intake_open: e.target.checked }, e.target.checked ? 'الاستقبال مفتوح' : 'تم إيقاف الاستقبال مؤقتاً');
     if (e.target.dataset.change) return changeField(e.target);
   });
 
@@ -1004,6 +1150,11 @@
     if (act === 'edit-site') { state.preselect = id; return show('bulk'); }
     if (act === 'purge') return run('purge', id);
     if (act === 'person-toggle') return togglePerson(id, next === '1');
+    if (act === 'share-save') return saveShare(id);
+    if (act === 'order-filter') { state.orderFilter = id; return renderOps(); }
+    if (act === 'dispatch-mode') return saveDispatch({ mode: id }, 'تم حفظ أسلوب التوزيع');
+    if (act === 'dispatch-rule') return saveDispatch({ rule: id }, 'تم حفظ قاعدة التوزيع');
+    if (act === 'dispatch-run') return runDispatch();
     if (act === 'distribute') return distributeOrder(id, btn.dataset.mode);
     if (act === 'thread') { state.thread = id; return renderOps(); }
     if (act === 'bulk-all' || act === 'bulk-none') {

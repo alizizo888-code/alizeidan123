@@ -246,5 +246,35 @@ check('applying purge to an unpaired face reports it and says who acts', $purgeA
 $healthRun = BulkOps::run('health', ['nasmat'], true);
 check('a health check on an unpaired face reports it', $healthRun[0]['ok'] === false && $healthRun[0]['error'] === 'غير مربوط، أعد الربط من الديسك');
 
+echo "Dispatch and intake settings\n";
+$defaults = Dispatch::all();
+check('dispatch starts manual, nearest, intake open, 90% share, no default warranty', $defaults['mode'] === 'manual' && $defaults['rule'] === 'nearest' && $defaults['intake_open'] === true && $defaults['default_share'] === 90 && $defaults['default_warranty_days'] === 0);
+check('an unknown dispatch mode is refused', throws(static fn () => Dispatch::save(['mode' => 'random']), 'bad_mode'));
+check('an unknown dispatch key is refused', throws(static fn () => Dispatch::save(['secret' => 'x']), 'unknown_setting'));
+check('a share over 100 is refused', throws(static fn () => Dispatch::save(['default_share' => 120]), 'bad_share'));
+$supervisor = People::create(['role' => 'supervisor', 'name' => 'مشرف الاختبار', 'phone' => '0555300300']);
+check('only a technician can have a share', throws(static fn () => Dispatch::setShare($supervisor['id'], 70), 'not_technician'));
+Dispatch::setShare($tech['id'], 70);
+$shared = Orders::find($order['id']);
+check('a technician share of 70% gives 140 of a 200 price', $shared['technician_share_pct'] === 70 && $shared['technician_amount'] === 140);
+Dispatch::setShare($tech['id'], null);
+$byDefault = Orders::find($order['id']);
+check('clearing the share brings back the default, 90% = 180', $byDefault['technician_share_pct'] === 90 && $byDefault['technician_amount'] === 180);
+Dispatch::save(['intake_open' => false]);
+check('a paused intake refuses a new order from a face', throws(static fn () => Intake::receive('oxygen', ['site_ref' => '801', 'phone' => '0555801801', 'service' => 'صيانة']), 'intake_paused'));
+Dispatch::save(['intake_open' => true]);
+$reopened = Intake::receive('oxygen', ['site_ref' => '802', 'phone' => '0555802802', 'service' => 'صيانة']);
+check('reopening intake accepts the order again', $reopened['duplicate'] === false);
+Dispatch::save(['mode' => 'auto', 'rule' => 'nearest']);
+$noLocation = Intake::receive('oxygen', ['site_ref' => '803', 'phone' => '0555803803', 'service' => 'صيانة']);
+check('automatic dispatch that cannot place the order still saves it as new', Orders::find($noLocation['order_id'])['status'] === 'new');
+Dispatch::save(['mode' => 'manual']);
+Dispatch::save(['default_warranty_days' => 30]);
+$finished = Orders::create(['customer_id' => $cust['id'], 'service' => 'فحص']);
+Orders::update($finished['id'], ['status' => 'done']);
+$warranty = Orders::find($finished['id'])['warranty_until'];
+check('a finished job gets the default warranty when none is stated', $warranty !== null && abs($warranty - (time() + 30 * 86400)) < 120);
+Dispatch::save(['default_warranty_days' => 0]);
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);
