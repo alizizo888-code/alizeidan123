@@ -441,6 +441,8 @@
     }
   }
 
+  const DISTRIBUTE_MODES = [['nearest', 'أقرب فني'], ['available', 'متاح'], ['idle', 'متفرغ ونشط']];
+
   /** Customers: flags come from their orders. Tier, rating and last price are the owner's, changed inline. */
   function customersPanel() {
     const tierOpts = (sel) => Object.entries(state.tiers).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
@@ -488,11 +490,13 @@
     const open = state.orders.filter((o) => o.active);
     const rows = open.map((o) => `<tr>
         <td>${esc(o.customer_name)}</td>
+        <td class="ltr" dir="ltr">${esc(o.code || 'يدوي')}<small>${o.source === 'chat' ? 'من الشات' : o.source === 'form' ? 'من النموذج' : ''}</small></td>
         <td>${esc(o.service || '—')}</td>
         <td><select class="field" data-change="order-status" data-id="${esc(o.id)}">${statusOpts(o.status)}</select></td>
         <td><select class="field" data-change="order-tech" data-id="${esc(o.id)}">${techOpts(o.technician_id)}</select></td>
         <td class="ltr">${o.price ?? '—'}</td>
-      </tr>`).join('') || '<tr><td colspan="5" class="muted">لا توجد طلبات نشطة.</td></tr>';
+        <td>${o.technician_id ? '' : DISTRIBUTE_MODES.map(([m, l]) => `<button class="btn ghost sm" data-act="distribute" data-id="${esc(o.id)}" data-mode="${m}">${l}</button>`).join(' ')}</td>
+      </tr>`).join('') || '<tr><td colspan="7" class="muted">لا توجد طلبات نشطة.</td></tr>';
     return `
       <section class="panel">
         <h2>الطلبات النشطة</h2>
@@ -505,10 +509,22 @@
           <p class="err" role="alert"></p>
         </form>
         <div style="overflow-x:auto"><table>
-          <thead><tr><th>العميل</th><th>الخدمة</th><th>الحالة</th><th>الفني</th><th>السعر</th></tr></thead>
+          <thead><tr><th>العميل</th><th>الكود</th><th>الخدمة</th><th>الحالة</th><th>الفني</th><th>السعر</th><th>توزيع تلقائي</th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
       </section>`;
+  }
+
+  /** Automatic distribution for an open order that has no technician yet. */
+  async function distributeOrder(id, mode) {
+    try {
+      await api(`orders/${encodeURIComponent(id)}/distribute`, { method: 'POST', body: { mode } });
+      toast('تم الإسناد');
+      await renderOps();
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر الإسناد');
+    }
   }
 
   /** Inline edits from the lists: tier, rating, order status and technician. */
@@ -938,6 +954,7 @@
     if (act === 'edit-site') { state.preselect = id; return show('bulk'); }
     if (act === 'purge') return run('purge', id);
     if (act === 'person-toggle') return togglePerson(id, next === '1');
+    if (act === 'distribute') return distributeOrder(id, btn.dataset.mode);
     if (act === 'bulk-all' || act === 'bulk-none') {
       const target = btn.dataset.target === 'opsite' ? 'opsite' : 'site';
       app.querySelectorAll(`input[name="${target}"]:not(:disabled)`).forEach((c) => { c.checked = act === 'bulk-all'; });

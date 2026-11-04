@@ -131,6 +131,44 @@ check('finishing a job records its price as the customer last price', Customers:
 check('an unknown order status is refused', throws(static fn () => Orders::update($order['id'], ['status' => 'lost']), 'bad_status'));
 check('a supervisor cannot be assigned an order', throws(static fn () => Orders::create(['customer_id' => $cust['id'], 'technician_id' => $sup['id']]), 'bad_technician'));
 
+echo "Intake: orders from the faces\n";
+$intakeSecret = str_repeat('ab', 32);
+Sites::pair('oxygen', $intakeSecret);
+$sigHeaders = function (string $body, string $ts, string $nonce) use ($intakeSecret): array {
+    return ['X-Oxy-Timestamp' => $ts, 'X-Oxy-Nonce' => $nonce, 'X-Oxy-Signature' => Hmac::sign($intakeSecret, 'POST', '/intake/order', $ts, $nonce, $body)];
+};
+$body = json_encode(['site_ref' => '501', 'name' => 'سلمى', 'phone' => '0555 444 333', 'service' => 'تنظيف مكيف', 'qty' => 2, 'price' => 180, 'address' => 'حي النزهة', 'source' => 'chat'], JSON_UNESCAPED_UNICODE);
+$ts = (string) time();
+$nonce = str_repeat('c', 32);
+Intake::verifySite('oxygen', 'POST', '/intake/order', $body, $sigHeaders($body, $ts, $nonce));
+check('a signed order from a paired face is accepted', true);
+$first = Intake::receive('oxygen', json_decode($body, true));
+check('the order gets a code of site and reference', $first['code'] === 'oxygen-501' && $first['duplicate'] === false);
+$again = Intake::receive('oxygen', json_decode($body, true));
+check('a retry with the same reference returns the same order', $again['order_id'] === $first['order_id'] && $again['duplicate'] === true);
+check('the order carries its code and source on the desk', Orders::find($first['order_id'])['code'] === 'oxygen-501' && Orders::find($first['order_id'])['source'] === 'chat');
+check('the customer is matched by phone, however it was written', Customers::findByPhone('+966555444333') !== null && Orders::find($first['order_id'])['customer_name'] === 'سلمى');
+check('a bad signature is refused', throws(static fn () => Intake::verifySite('oxygen', 'POST', '/intake/order', $body, $sigHeaders($body . ' ', $ts, $nonce)), 'bad_signature'));
+check('a stale timestamp is refused', throws(static fn () => Intake::verifySite('oxygen', 'POST', '/intake/order', $body, $sigHeaders($body, '1000000000', $nonce)), 'bad_signature'));
+check('an unpaired face cannot send orders', throws(static fn () => Intake::verifySite('amaan', 'POST', '/intake/order', $body, $sigHeaders($body, $ts, $nonce)), 'unpaired'));
+check('an order with an unknown reference is refused', throws(static fn () => Intake::receive('oxygen', ['site_ref' => '<b>', 'phone' => '0555111222']), 'bad_ref'));
+
+echo "Automatic distribution\n";
+$near = People::create(['role' => 'technician', 'name' => 'قريب', 'phone' => '0555100100', 'area' => 'makkah']);
+$far = People::create(['role' => 'technician', 'name' => 'بعيد', 'phone' => '0555100200', 'area' => 'jeddah']);
+Locations::record($near['id'], 21.6, 39.3);
+Locations::record($far['id'], 21.3, 39.9);
+Customers::update($cust['id'], ['lat' => 21.6, 'lng' => 39.3]);
+$open = Orders::create(['customer_id' => $cust['id'], 'service' => 'تركيب مكيف']);
+$byNear = Orders::distribute($open['id'], 'nearest');
+check('nearest gives the order to the closest technician with a position', $byNear['technician_id'] === $near['id'] && $byNear['status'] === 'assigned');
+$open2 = Orders::create(['customer_id' => $cust['id'], 'service' => 'صيانة']);
+$idle = Orders::distribute($open2['id'], 'idle');
+check('idle picks a technician with no active order and a recent position', $idle['technician_id'] !== null && $idle['status'] === 'assigned');
+check('an unknown mode is refused', throws(static fn () => Orders::distribute($open2['id'], 'random'), 'bad_mode'));
+Orders::update($open2['id'], ['status' => 'done']);
+check('a finished order cannot be distributed', throws(static fn () => Orders::distribute($open2['id'], 'nearest'), 'not_open'));
+
 echo "Map: technician positions\n";
 $loc = Locations::record($tech['id'], '21.4225', 39.8262);
 check('a technician reports a position (text numbers accepted)', $loc['lat'] === 21.4225 && $loc['lng'] === 39.8262);

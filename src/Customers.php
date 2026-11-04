@@ -47,6 +47,19 @@ final class Customers
         return self::shape($row);
     }
 
+    /** The customer with this phone, or null. The phone is normalised first, so any written form matches. */
+    public static function findByPhone(string $raw): ?array
+    {
+        $phone = self::phone($raw);
+        if ($phone === null) {
+            return null;
+        }
+        $stmt = oxy_pdo()->prepare('SELECT * FROM customers WHERE phone = ? ORDER BY created LIMIT 1');
+        $stmt->execute([$phone]);
+        $row = $stmt->fetch();
+        return $row ? self::shape($row) : null;
+    }
+
     /** @param array<string,mixed> $in */
     public static function create(array $in): array
     {
@@ -152,7 +165,7 @@ final class Customers
     }
 
     /** Saudi mobile numbers, stored as 9665XXXXXXXX so a WhatsApp link can use them directly. */
-    private static function phone(mixed $value): ?string
+    public static function phone(mixed $value): ?string
     {
         if ($value === null || $value === '') {
             return null;

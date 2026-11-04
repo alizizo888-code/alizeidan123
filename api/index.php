@@ -269,6 +269,29 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'orders' && $parts[2] === 'distribute') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'order' => Orders::distribute($parts[1], (string) (oxy_body()['mode'] ?? ''))]);
+        return;
+    }
+
+    // Intake: a face website sends a confirmed order. Signed with the key paired for that face, no owner session.
+    if ($method === 'POST' && $route === 'intake/order') {
+        $raw = (string) file_get_contents('php://input');
+        $host = strtolower(trim((string) ($_SERVER['HTTP_X_OXY_HOST'] ?? '')));
+        if (!preg_match('/^[a-z0-9.-]{3,190}$/', $host)) {
+            throw new OxyHttpError(401, 'bad_signature');
+        }
+        $siteId = (string) Sites::byHost($host)['id'];
+        Intake::verifySite($siteId, 'POST', '/intake/order', $raw, [
+            'X-Oxy-Timestamp' => $_SERVER['HTTP_X_OXY_TIMESTAMP'] ?? '',
+            'X-Oxy-Nonce' => $_SERVER['HTTP_X_OXY_NONCE'] ?? '',
+            'X-Oxy-Signature' => $_SERVER['HTTP_X_OXY_SIGNATURE'] ?? '',
+        ]);
+        oxy_json(['ok' => true] + Intake::receive($siteId, oxy_body()), 201);
+        return;
+    }
+
     throw new OxyHttpError(404, 'not_found');
 }
 

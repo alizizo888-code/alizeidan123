@@ -90,3 +90,15 @@ CREATE TABLE IF NOT EXISTS orders (
     created INT NOT NULL,
     updated INT NOT NULL
 );
+
+-- Orders received from the face websites (schema v5). One row per site order. The code is site id plus site reference.
+CREATE TABLE IF NOT EXISTS site_orders (
+    id VARCHAR(40) PRIMARY KEY,
+    site_id VARCHAR(40) NOT NULL,
+    site_ref VARCHAR(40) NOT NULL,
+    code VARCHAR(80) NOT NULL,
+    order_id VARCHAR(40) NOT NULL,
+    source VARCHAR(16) NOT NULL,
+    payload TEXT NOT NULL,
+    received INT NOT NULL
+);

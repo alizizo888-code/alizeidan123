@@ -33,6 +33,18 @@ final class Sites
         )->fetchAll();
     }
 
+    /** The face with this host name, or a 401 so an unknown host learns nothing. */
+    public static function byHost(string $host): array
+    {
+        $stmt = oxy_pdo()->prepare('SELECT id FROM sites WHERE host = ?');
+        $stmt->execute([$host]);
+        $row = $stmt->fetch();
+        if (!$row) {
+            throw new OxyHttpError(401, 'bad_signature');
+        }
+        return self::find((string) $row['id']);
+    }
+
     public static function find(string $id): array
     {
         $stmt = oxy_pdo()->prepare('SELECT * FROM sites WHERE id = ?');

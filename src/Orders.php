@@ -15,10 +15,11 @@ final class Orders
     /** @return list<array<string,mixed>> */
     public static function list(?string $filter = null): array
     {
-        $sql = 'SELECT o.*, c.name AS customer_name, c.lat, c.lng, p.name AS technician_name
+        $sql = 'SELECT o.*, c.name AS customer_name, c.lat, c.lng, p.name AS technician_name, so.code, so.source
                 FROM orders o
                 JOIN customers c ON c.id = o.customer_id
-                LEFT JOIN people p ON p.id = o.technician_id';
+                LEFT JOIN people p ON p.id = o.technician_id
+                LEFT JOIN site_orders so ON so.order_id = o.id';
         $args = [];
         if ($filter === 'active') {
             $sql .= ' WHERE o.status IN (\'new\',\'assigned\',\'in_progress\')';
@@ -36,8 +37,9 @@ final class Orders
             throw new OxyHttpError(404, 'not_found');
         }
         $stmt = oxy_pdo()->prepare(
-            'SELECT o.*, c.name AS customer_name, c.lat, c.lng, p.name AS technician_name
+            'SELECT o.*, c.name AS customer_name, c.lat, c.lng, p.name AS technician_name, so.code, so.source
              FROM orders o JOIN customers c ON c.id = o.customer_id LEFT JOIN people p ON p.id = o.technician_id
+             LEFT JOIN site_orders so ON so.order_id = o.id
              WHERE o.id = ?'
         );
         $stmt->execute([$id]);
@@ -114,6 +116,65 @@ final class Orders
         return $next;
     }
 
+    /**
+     * Assigns an open order to a technician by rule. The supervisor can always assign by hand; this is for when
+     * no supervisor is on duty. Modes:
+     *  - nearest: the closest active technician with a known position (busy ones count too, as a fallback)
+     *  - available: an active technician with no active order
+     *  - idle: available AND reported a position in the last two hours (free and active)
+     */
+    public static function distribute(string $orderId, string $mode): array
+    {
+        if (!in_array($mode, ['nearest', 'available', 'idle'], true)) {
+            throw new OxyHttpError(400, 'bad_mode');
+        }
+        $order = self::find($orderId);
+        if (!in_array($order['status'], ['new', 'assigned'], true)) {
+            throw new OxyHttpError(409, 'not_open');
+        }
+        $techs = oxy_pdo()->query(
+            "SELECT p.id, p.name, l.lat, l.lng, l.updated,
+                (SELECT COUNT(*) FROM orders o WHERE o.technician_id = p.id AND o.status IN ('new','assigned','in_progress')) AS busy
+             FROM people p LEFT JOIN technician_locations l ON l.person_id = p.id
+             WHERE p.role = 'technician' AND p.active = 1"
+        )->fetchAll();
+
+        $now = time();
+        $candidates = array_values(array_filter($techs, static function (array $t) use ($mode, $now): bool {
+            return match ($mode) {
+                'nearest' => $t['lat'] !== null,
+                'available' => (int) $t['busy'] === 0,
+                'idle' => (int) $t['busy'] === 0 && $t['lat'] !== null && (int) $t['updated'] >= $now - 7200,
+            };
+        }));
+        if ($candidates === []) {
+            throw new OxyHttpError(409, 'no_technician');
+        }
+
+        $pick = $candidates[0];
+        if ($mode === 'nearest') {
+            if ($order['lat'] === null) {
+                throw new OxyHttpError(409, 'no_customer_location');
+            }
+            usort($candidates, static fn (array $a, array $b): int =>
+                self::km((float) $a['lat'], (float) $a['lng'], (float) $order['lat'], (float) $order['lng'])
+                <=> self::km((float) $b['lat'], (float) $b['lng'], (float) $order['lat'], (float) $order['lng']));
+            $pick = $candidates[0];
+        }
+        $updated = self::update($orderId, ['technician_id' => $pick['id'], 'status' => 'assigned']);
+        Audit::log('order_distributed', $orderId, $mode . ':' . $pick['id']);
+        return $updated;
+    }
+
+    private static function km(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $r = 6371.0;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+        return 2 * $r * asin(min(1.0, sqrt($a)));
+    }
+
     /** @return array<string,mixed> */
     private static function shape(array $row): array
     {
@@ -126,6 +187,8 @@ final class Orders
             'technician_id' => $row['technician_id'],
             'technician_name' => $row['technician_name'],
             'service' => $row['service'],
+            'code' => $row['code'] ?? null,
+            'source' => $row['source'] ?? 'desk',
             'status' => $row['status'],
             'status_label' => self::STATUSES[$row['status']] ?? $row['status'],
             'active' => in_array($row['status'], self::ACTIVE, true),
