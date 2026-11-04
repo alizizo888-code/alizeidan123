@@ -88,5 +88,33 @@ check('unpaired faces are skipped, not retried forever', $summary['skipped'] >= 
 check('queue counts reflect the skipped job', Jobs::counts()['skipped'] >= 1);
 check('unknown job types are refused', throws(static fn () => Jobs::enqueue('delete_everything', 'oxygen'), 'bad_job_type'));
 
+echo "Management: supervisors\n";
+$sup = People::create(['role' => 'supervisor', 'name' => '  أحمد   علي ', 'phone' => '+966 55 123 4567', 'area' => 'makkah']);
+check('name is trimmed and spaces are collapsed', $sup['name'] === 'أحمد علي');
+check('phone is normalised to digits with a leading plus', $sup['phone'] === '+966551234567');
+check('Arabic-Indic digits in a phone are accepted', People::create(['role' => 'supervisor', 'name' => 'سارة', 'phone' => '٠٥٥٥١٢٣٤٥٦'])['phone'] === '0555123456');
+check('a new person is active', $sup['active'] === true);
+check('an unknown role is refused', throws(static fn () => People::create(['role' => 'admin', 'name' => 'Test']), 'bad_role'));
+check('a name shorter than two characters is refused', throws(static fn () => People::create(['role' => 'supervisor', 'name' => 'a']), 'bad_name'));
+check('a phone with letters is refused', throws(static fn () => People::create(['role' => 'supervisor', 'name' => 'Sara', 'phone' => '12ab']), 'bad_phone'));
+check('an unknown area is refused', throws(static fn () => People::create(['role' => 'supervisor', 'name' => 'Sara', 'area' => 'riyadh']), 'bad_area'));
+$off = People::update($sup['id'], ['active' => false]);
+check('a supervisor is deactivated, not deleted', $off['active'] === false && People::find($sup['id'])['name'] === 'أحمد علي');
+check('a non-boolean active flag is refused', throws(static fn () => People::update($sup['id'], ['active' => 'no']), 'bad_value'));
+check('changing the role is ignored, so nothing is left to update', throws(static fn () => People::update($sup['id'], ['role' => 'admin']), 'nothing_to_update'));
+check('listing only returns the requested role', array_reduce(People::list('supervisor'), static fn (bool $ok, array $p): bool => $ok && $p['role'] === 'supervisor', true));
+check('an unknown role cannot be listed', throws(static fn () => People::list('admin'), 'bad_role'));
+check('a malformed id is not found', throws(static fn () => People::find('../etc'), 'not_found'));
+
+echo "General settings\n";
+$saved = General::save(['company.name' => ' مجموعة أكسجين ', 'company.tax_number' => '300123456700003']);
+check('general settings save and read back', $saved['company.name'] === 'مجموعة أكسجين' && General::all()['company.tax_number'] === '300123456700003');
+check('a field left out keeps its value', General::save(['company.hours' => '9ص - 9م'])['company.name'] === 'مجموعة أكسجين');
+check('an unknown setting key is refused', throws(static fn () => General::save(['bridge.secret' => 'x']), 'unknown_setting'));
+check('the PIN cannot be written through general settings', throws(static fn () => General::save(['pin_hash' => 'x']), 'unknown_setting'));
+check('markup in a plain field is refused', throws(static fn () => General::save(['company.name' => '<b>x</b>']), 'bad_value'));
+check('a value over its length limit is refused', throws(static fn () => General::save(['company.tax_number' => str_repeat('1', 31)]), 'too_long'));
+check('a non-text value is refused', throws(static fn () => General::save(['company.phone' => 5]), 'bad_value'));
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);

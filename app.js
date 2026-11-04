@@ -4,7 +4,23 @@
   const app = document.getElementById('app');
   const toastEl = document.getElementById('toast');
   const pairDialog = document.getElementById('pair');
-  const state = { csrf: null, timer: null, pairId: null };
+  const state = { csrf: null, timer: null, pairId: null, view: 'sites' };
+
+  // Sections of the panel. A new section is one line here plus its render function.
+  const VIEWS = [
+    ['sites', 'المواقع'],
+    ['management', 'الإدارة'],
+    ['settings', 'الإعدادات العامة'],
+  ];
+  const AREAS = { makkah: 'مكة', jeddah: 'جدة', other: 'أخرى' };
+  // [key, label, max length] for the general settings form. Must match General::FIELDS on the server.
+  const GENERAL_FIELDS = [
+    ['company.name', 'اسم الشركة', 120],
+    ['company.tax_number', 'الرقم الضريبي', 30],
+    ['company.phone', 'رقم التواصل الرئيسي', 20],
+    ['company.service_area', 'نطاق الخدمة', 200],
+    ['company.hours', 'ساعات العمل', 200],
+  ];
 
   const STATUS = {
     online: ['متصل', 'ok'],
@@ -23,6 +39,15 @@
     pin_format: 'الرمز يتكون من 6 أرقام',
     secret_format: 'المفتاح يجب أن يكون 64 حرفاً ورقماً',
     network: 'تعذّر الاتصال بالخادم',
+    bad_role: 'الدور غير معروف',
+    bad_name: 'الاسم يجب أن يكون من حرفين إلى 80 حرفاً',
+    bad_phone: 'رقم الجوال غير صحيح',
+    bad_area: 'المنطقة غير معروفة',
+    bad_value: 'قيمة غير مقبولة',
+    too_long: 'النص أطول من المسموح',
+    nothing_to_update: 'لا يوجد ما يُحفظ',
+    not_found: 'العنصر غير موجود',
+    unknown_setting: 'هذا الإعداد غير متاح',
   };
 
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -72,7 +97,8 @@
   function schedule() {
     stop();
     state.timer = setInterval(() => {
-      if (document.visibilityState === 'visible') loadDashboard().catch(() => {});
+      // Refresh the sites view only. Other sections are not overwritten while the owner is typing.
+      if (document.visibilityState === 'visible' && state.view === 'sites') loadDashboard().catch(() => {});
     }, 20000);
   }
 
@@ -109,6 +135,7 @@
 
   function renderLogin(message = '') {
     stop();
+    state.view = 'sites';
     app.innerHTML = `
       <section class="login">
         <div class="mark" aria-hidden="true">${LOGO}</div>
@@ -142,8 +169,24 @@
   async function loadDashboard() {
     const data = await api('overview');
     state.csrf = data.csrf;
+    if (state.view !== 'sites') return;
     render(data);
     schedule();
+  }
+
+  /** Common frame for every section: brand, section tabs, then the section body. */
+  function shell(body) {
+    const tabs = VIEWS.map(([view, label]) => {
+      const on = state.view === view;
+      return `<button class="tab${on ? ' on' : ''}" data-view="${view}" aria-current="${on ? 'page' : 'false'}">${label}</button>`;
+    }).join('');
+    return `
+      <header class="top">
+        <div class="brand"><span class="logo" aria-hidden="true">${LOGO}</span><span class="label">مركز التحكم</span></div>
+        <button class="btn ghost" data-act="logout" aria-label="خروج">خروج</button>
+      </header>
+      <nav class="tabs" aria-label="الأقسام">${tabs}</nav>
+      ${body}`;
   }
 
   function render(d) {
@@ -182,15 +225,11 @@
         <td class="ltr">${esc(a.target || '')}</td>
       </tr>`).join('') || '<tr><td colspan="3" class="muted">لا يوجد سجل بعد</td></tr>';
 
-    app.innerHTML = `
-      <header class="top">
-        <div class="brand"><span class="logo" aria-hidden="true">${LOGO}</span><span class="label">مركز التحكم</span></div>
-        <div class="actions">
-          <button class="btn primary" data-act="health_all">فحص الكل</button>
-          <button class="btn" data-act="purge_all">تنظيف الكاش للكل</button>
-          <button class="btn ghost" data-act="logout" aria-label="خروج">خروج</button>
-        </div>
-      </header>
+    app.innerHTML = shell(`
+      <div class="toolbar">
+        <button class="btn primary" data-act="health_all">فحص الكل</button>
+        <button class="btn" data-act="purge_all">تنظيف الكاش للكل</button>
+      </div>
       <section class="stats" aria-label="ملخص">
         <div class="stat"><b>${counts.online}</b><span>متصل</span></div>
         <div class="stat"><b>${counts.down}</b><span>لا يستجيب</span></div>
@@ -205,7 +244,78 @@
         <div class="panel"><h2>سجل العمليات</h2>
           <div style="overflow-x:auto"><table><thead><tr><th>الوقت</th><th>العملية</th><th>الهدف</th></tr></thead><tbody>${audit}</tbody></table></div>
         </div>
-      </section>`;
+      </section>`);
+  }
+
+  /** Management: supervisors list, add form, and activate/deactivate. */
+  async function renderManagement() {
+    app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
+    const { people } = await api('management/people?role=supervisor');
+    const rows = people.map((p) => `<tr>
+        <td>${esc(p.name)}</td>
+        <td class="ltr">${esc(p.phone || '—')}</td>
+        <td>${esc(AREAS[p.area] || '—')}</td>
+        <td><span class="pill ${p.active ? 'ok' : 'idle'}">${p.active ? 'نشط' : 'موقوف'}</span></td>
+        <td><button class="btn ghost sm" data-act="person-toggle" data-id="${esc(p.id)}" data-next="${p.active ? '0' : '1'}">${p.active ? 'إيقاف' : 'تفعيل'}</button></td>
+      </tr>`).join('') || '<tr><td colspan="5" class="muted">لا يوجد مشرفون بعد. أضف أول مشرف من النموذج أعلاه.</td></tr>';
+
+    app.innerHTML = shell(`
+      <section class="panel">
+        <h2>مشرفو العمليات</h2>
+        <p class="muted">المشرف يستقبل الطلبات ويوزعها على الفنيين. الإيقاف يخفيه من العمليات، ولا يُحذف سجله.</p>
+        <form class="form-row" data-form="person-add">
+          <input type="hidden" name="role" value="supervisor">
+          <label class="lbl">الاسم<input class="field" name="name" required minlength="2" maxlength="80" autocomplete="off"></label>
+          <label class="lbl">الجوال<input class="field" name="phone" dir="ltr" inputmode="tel" maxlength="20" autocomplete="off" placeholder="05XXXXXXXX"></label>
+          <label class="lbl">المنطقة<select class="field" name="area">
+            <option value="">غير محددة</option>
+            <option value="makkah">مكة</option>
+            <option value="jeddah">جدة</option>
+            <option value="other">أخرى</option>
+          </select></label>
+          <button class="btn primary" type="submit">إضافة المشرف</button>
+          <p class="err" role="alert"></p>
+        </form>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>الاسم</th><th>الجوال</th><th>المنطقة</th><th>الحالة</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </section>`);
+  }
+
+  /** General settings: plain business details, saved on the server. */
+  async function renderSettings() {
+    app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
+    const { values } = await api('settings/general');
+    const fields = GENERAL_FIELDS.map(([key, label, max]) => `
+        <label class="lbl">${esc(label)}
+          <input class="field" name="${esc(key)}" maxlength="${max}" value="${esc(values[key] || '')}" autocomplete="off">
+        </label>`).join('');
+
+    app.innerHTML = shell(`
+      <section class="panel">
+        <h2>الإعدادات العامة</h2>
+        <p class="muted">بيانات الشركة اللي تظهر في الفواتير والرسائل. تُحفظ على الخادم فقط.</p>
+        <form class="settings-form" data-form="settings" novalidate>
+          ${fields}
+          <div class="row end"><button class="btn primary" type="submit">حفظ الإعدادات</button></div>
+          <p class="err" role="alert"></p>
+        </form>
+      </section>`);
+  }
+
+  /** Switches section. The sites view keeps refreshing itself; the others load once when opened. */
+  async function show(view) {
+    state.view = view;
+    stop();
+    try {
+      if (view === 'management') return await renderManagement();
+      if (view === 'settings') return await renderSettings();
+      return await loadDashboard();
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر التحميل');
+    }
   }
 
   async function run(type, siteId) {
@@ -219,6 +329,17 @@
     } catch (error) {
       if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
       toast(ERRORS[error.code] || 'تعذّر التنفيذ');
+    }
+  }
+
+  async function togglePerson(id, active) {
+    try {
+      await api(`management/people/${encodeURIComponent(id)}`, { method: 'POST', body: { active } });
+      toast(active ? 'تم تفعيل المشرف' : 'تم إيقاف المشرف');
+      await renderManagement();
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر الحفظ');
     }
   }
 
@@ -247,10 +368,37 @@
   });
   pairDialog.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) pairDialog.close(); });
 
+  // Forms inside the sections. Delegated, because the sections re-render their own forms.
+  app.addEventListener('submit', async (e) => {
+    const form = e.target.closest('form[data-form]');
+    if (!form) return;
+    e.preventDefault();
+    const errEl = form.querySelector('.err');
+    if (errEl) errEl.textContent = '';
+    const values = Object.fromEntries(new FormData(form).entries());
+    try {
+      if (form.dataset.form === 'person-add') {
+        await api('management/people', { method: 'POST', body: values });
+        toast('تمت إضافة المشرف');
+        return await renderManagement();
+      }
+      if (form.dataset.form === 'settings') {
+        await api('settings/general', { method: 'POST', body: values });
+        toast('تم حفظ الإعدادات');
+        return await renderSettings();
+      }
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      if (errEl) errEl.textContent = ERRORS[error.code] || 'تعذّر الحفظ';
+    }
+  });
+
   app.addEventListener('click', async (e) => {
+    const tab = e.target.closest('[data-view]');
+    if (tab) return show(tab.dataset.view);
     const btn = e.target.closest('[data-act]');
     if (!btn) return;
-    const { act, id, name } = btn.dataset;
+    const { act, id, name, next } = btn.dataset;
     if (act === 'pair') return openPair(id, name);
     if (act === 'logout') {
       try { await api('logout', { method: 'POST' }); } catch { /* session may already be gone */ }
@@ -261,6 +409,7 @@
     if (act === 'purge_all') return run('purge_all');
     if (act === 'health') return run('health', id);
     if (act === 'purge') return run('purge', id);
+    if (act === 'person-toggle') return togglePerson(id, next === '1');
   });
 
   async function boot() {

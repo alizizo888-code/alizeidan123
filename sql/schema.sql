@@ -41,3 +41,15 @@ CREATE TABLE IF NOT EXISTS audit (
     target VARCHAR(64) NULL,
     detail TEXT NULL
 );
+
+-- Management registry (schema v2): supervisors now, technicians later. Deactivate, never delete.
+CREATE TABLE IF NOT EXISTS people (
+    id VARCHAR(40) PRIMARY KEY,
+    role VARCHAR(16) NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    phone VARCHAR(20) NULL,
+    area VARCHAR(16) NULL,
+    active INT NOT NULL DEFAULT 1,
+    created INT NOT NULL,
+    updated INT NOT NULL
+);

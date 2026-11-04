@@ -25,6 +25,7 @@ function oxy_dispatch(string $method, string $route): void
     if ($method === 'POST' && $route === 'install') {
         oxy_require_token('X-Setup-Token', (string) oxy_config()['setup_token']);
         oxy_schema();
+        Settings::set('schema', OXY_SCHEMA_VERSION);
         Settings::set('installed', '1');
         oxy_json(['ok' => true, 'sites_added' => Sites::seed()]);
         return;
@@ -111,7 +112,54 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // Management: supervisors (and technicians when their role is added in People::ROLES).
+    if ($method === 'GET' && $route === 'management/people') {
+        Auth::current();
+        $role = $_GET['role'] ?? 'supervisor';
+        oxy_json(['ok' => true, 'people' => People::list(is_string($role) ? $role : '')]);
+        return;
+    }
+
+    if ($method === 'POST' && $route === 'management/people') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'person' => People::create(oxy_body())], 201);
+        return;
+    }
+
+    if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'management' && $parts[1] === 'people') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'person' => People::update($parts[2], oxy_body())]);
+        return;
+    }
+
+    // General settings: only the keys listed in General::FIELDS.
+    if ($method === 'GET' && $route === 'settings/general') {
+        Auth::current();
+        oxy_json(['ok' => true, 'values' => General::all()]);
+        return;
+    }
+
+    if ($method === 'POST' && $route === 'settings/general') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'values' => General::save(oxy_body())]);
+        return;
+    }
+
     throw new OxyHttpError(404, 'not_found');
+}
+
+/** Creates tables added after the first install. Idempotent, and it runs once per schema version. */
+function oxy_upgrade(): void
+{
+    try {
+        if (Settings::get('installed') !== '1' || Settings::get('schema') === OXY_SCHEMA_VERSION) {
+            return;
+        }
+    } catch (PDOException $e) {
+        return; // Fresh database: the install route creates the tables.
+    }
+    oxy_schema();
+    Settings::set('schema', OXY_SCHEMA_VERSION);
 }
 
 function oxy_require_token(string $header, string $expected): void
@@ -135,6 +183,7 @@ header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 
 try {
+    oxy_upgrade();
     oxy_dispatch($_SERVER['REQUEST_METHOD'] ?? 'GET', trim((string) ($_GET['r'] ?? ''), '/'));
 } catch (OxyHttpError $e) {
     oxy_json(['ok' => false, 'error' => $e->errCode], $e->status);

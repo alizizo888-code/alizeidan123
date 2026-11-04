@@ -1,5 +1,5 @@
 // Shell cache only. API responses are never cached: the owner must always see live state.
-const SHELL = 'oxy-master-shell-v2';
+const SHELL = 'oxy-master-shell-v3';
 const FILES = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', (event) => {
