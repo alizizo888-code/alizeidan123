@@ -121,6 +121,7 @@ $GLOBALS['wp_posts'] = [(object) ['ID' => 7, 'post_title' => 'مقال', 'post_s
 $listed = oxy_bridge_posts(signed($secret, 'GET', '/oxy-bridge/v1/posts', ''));
 check('the posts list returns count, id, status and link', $listed['count'] === 1 && $listed['posts'][0]['id'] === 7 && $listed['posts'][0]['status'] === 'publish' && str_contains($listed['posts'][0]['url'], '7'));
 check('a signed posts read is authorised', oxy_bridge_authorize(signed($secret, 'GET', '/oxy-bridge/v1/posts', '')) === true);
+check('the posts reply says ok, so the desk accepts it', ($listed['ok'] ?? false) === true);
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);

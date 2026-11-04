@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Oxygen Bridge
  * Description: Signed REST endpoints for the Oxygen master control panel. HMAC-SHA256 over method, route, timestamp, nonce and body. No passwords, no cookies.
- * Version: 2.2.1
+ * Version: 2.2.2
  * Requires PHP: 7.4
  */
 
@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('OXY_BRIDGE_VERSION', '2.2.1');
+define('OXY_BRIDGE_VERSION', '2.2.2');
 define('OXY_BRIDGE_OPTION', 'oxy_bridge_secret');
 
 /**
@@ -60,7 +60,7 @@ function oxy_bridge_posts(WP_REST_Request $request)
             'url'    => (string) get_permalink($post->ID),
         );
     }
-    return array('count' => count($items), 'posts' => $items);
+    return array('ok' => true, 'count' => count($items), 'posts' => $items);
 }
 
 function oxy_bridge_routes()
