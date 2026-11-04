@@ -269,6 +269,19 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    if ($method === 'GET' && count($parts) === 3 && $parts[0] === 'orders' && $parts[2] === 'messages') {
+        Auth::current();
+        oxy_json(['ok' => true, 'messages' => Messages::list($parts[1])]);
+        return;
+    }
+
+    if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'orders' && $parts[2] === 'messages') {
+        Auth::requireCsrf();
+        $body = oxy_body();
+        oxy_json(['ok' => true, 'message' => Messages::add($parts[1], $body['body'] ?? null)], 201);
+        return;
+    }
+
     if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'orders' && $parts[2] === 'distribute') {
         Auth::requireCsrf();
         oxy_json(['ok' => true, 'order' => Orders::distribute($parts[1], (string) (oxy_body()['mode'] ?? ''))]);

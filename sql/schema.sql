@@ -102,3 +102,13 @@ CREATE TABLE IF NOT EXISTS site_orders (
     payload TEXT NOT NULL,
     received INT NOT NULL
 );
+
+-- Messages on an order (schema v6): between the customer, the supervisor and the technician. Kept with the order.
+CREATE TABLE IF NOT EXISTS order_messages (
+    id VARCHAR(40) PRIMARY KEY,
+    order_id VARCHAR(40) NOT NULL,
+    sender VARCHAR(16) NOT NULL,
+    body VARCHAR(500) NOT NULL,
+    created INT NOT NULL,
+    seq INT NOT NULL DEFAULT 0
+);

@@ -7,13 +7,16 @@
   const state = { csrf: null, timer: null, pairId: null, view: 'sites', preselect: null };
 
   // Sections of the panel. A new section is one line here plus its render function.
-  const VIEWS = [
-    ['sites', 'المواقع'],
-    ['management', 'الإدارة'],
-    ['settings', 'الإعدادات العامة'],
-    ['bulk', 'الإعدادات الجماعية'],
-    ['articles', 'المقالات'],
-    ['ops', 'غرفة العمليات'],
+  // Side menu: operations first, then sites, then one settings page. Bulk and general settings live inside it.
+  const NAV = [
+    ['العمليات', [['ops', 'غرفة العمليات'], ['management', 'المشرفون والفنيون']]],
+    ['المواقع', [['sites', 'المواقع'], ['articles', 'المقالات']]],
+    ['النظام', [['settings', 'الإعدادات']]],
+  ];
+  const SETTINGS_SECTIONS = [
+    ['general', 'الإعدادات العامة', 'بيانات الشركة اللي تظهر في الفواتير والرسائل: الاسم، الرقم الضريبي، العنوان، ساعات العمل. بتتحفظ على الخادم فقط.'],
+    ['bulk', 'الإعدادات الجماعية', 'تغيير اسم المواقع أو وصفها أو عدد المقالات في الصفحة على عدة مواقع مرة واحدة. بتبدأ بمعاينة، ومتتطبقش إلا بتأكيدك.'],
+    ['sites', 'ربط المواقع', 'كل موقع بيتربط مرة واحدة بالمفتاح من لوحة الإضافة على الموقع. الحالة ومتى اتفحص آخر مرة بتظهر في قايمة المواقع.'],
   ];
   const AREAS = { makkah: 'مكة', jeddah: 'جدة', other: 'أخرى' };
   // [key, label, max length] for the general settings form. Must match General::FIELDS on the server.
@@ -181,17 +184,38 @@
 
   /** Common frame for every section: brand, section tabs, then the section body. */
   function shell(body) {
-    const tabs = VIEWS.map(([view, label]) => {
-      const on = state.view === view;
-      return `<button class="tab${on ? ' on' : ''}" data-view="${view}" aria-current="${on ? 'page' : 'false'}">${label}</button>`;
-    }).join('');
+    const inSettings = ['settings', 'general', 'bulk'].includes(state.view);
+    const groups = NAV.map(([title, items]) => `
+      <div class="nav-group">
+        <div class="nav-title">${title}</div>
+        ${items.map(([view, label]) => {
+          const on = view === 'settings' ? inSettings : state.view === view;
+          return `<button class="tab${on ? ' on' : ''}" data-view="${view}" aria-current="${on ? 'page' : 'false'}">${label}</button>`;
+        }).join('')}
+      </div>`).join('');
     return `
       <header class="top">
         <div class="brand"><span class="logo" aria-hidden="true">${LOGO}</span><span class="label">مركز التحكم</span></div>
         <button class="btn ghost" data-act="logout" aria-label="خروج">خروج</button>
       </header>
-      <nav class="tabs" aria-label="الأقسام">${tabs}</nav>
-      ${body}`;
+      <div class="frame">
+        <nav class="side" aria-label="الأقسام">${groups}</nav>
+        <div class="content">${body}</div>
+      </div>`;
+  }
+
+  /** The settings page: each group is explained, so the owner knows what it changes before opening it. */
+  function renderSettingsHub() {
+    app.innerHTML = shell(`
+      <section class="panel">
+        <h2>الإعدادات</h2>
+        <p class="muted">إعدادات نادراً ما بتتغير. كل قسم بيشرح نفسه، واللي بيغيّر المواقع بيبدأ بمعاينة.</p>
+        ${SETTINGS_SECTIONS.map(([view, title, note]) => `
+          <div class="pick">
+            <button class="btn ghost sm" data-view="${view}">فتح</button>
+            <span><b>${esc(title)}</b><small>${esc(note)}</small></span>
+          </div>`).join('')}
+      </section>`);
   }
 
   function render(d) {
@@ -337,6 +361,8 @@
     const activeSups = sups.people.filter((p) => p.active).length;
     const modules = OPS_MODULES;
     const [custs, ords] = await Promise.all([api('customers'), api('orders')]);
+    const thread = state.thread ? await api(`orders/${encodeURIComponent(state.thread)}/messages`).catch(() => null) : null;
+    const threadOrder = state.thread ? ords.orders.find((o) => o.id === state.thread) : null;
     state.customers = custs.customers;
     state.tiers = custs.tiers;
     state.orders = ords.orders;
@@ -367,6 +393,7 @@
       </section>
       ${customersPanel()}
       ${ordersPanel()}
+      ${threadOrder && thread ? threadPanel(threadOrder, thread.messages) : ''}
       <section class="panel">
         <h2>الخريطة الميدانية والحية</h2>
         <p class="muted">مناطق التغطية (مكة، جدة) والفنيين اللي عندهم موقع مسجّل. الموقع بيتحدّث لما الفني يبعته من تطبيقه، أو لما تدخله يدوياً هنا.</p>
@@ -496,7 +523,8 @@
         <td><select class="field" data-change="order-tech" data-id="${esc(o.id)}">${techOpts(o.technician_id)}</select></td>
         <td class="ltr">${o.price ?? '—'}</td>
         <td>${o.technician_id ? '' : DISTRIBUTE_MODES.map(([m, l]) => `<button class="btn ghost sm" data-act="distribute" data-id="${esc(o.id)}" data-mode="${m}">${l}</button>`).join(' ')}</td>
-      </tr>`).join('') || '<tr><td colspan="7" class="muted">لا توجد طلبات نشطة.</td></tr>';
+        <td><button class="btn ghost sm" data-act="thread" data-id="${esc(o.id)}">المحادثة</button></td>
+      </tr>`).join('') || '<tr><td colspan="8" class="muted">لا توجد طلبات نشطة.</td></tr>';
     return `
       <section class="panel">
         <h2>الطلبات النشطة</h2>
@@ -509,9 +537,25 @@
           <p class="err" role="alert"></p>
         </form>
         <div style="overflow-x:auto"><table>
-          <thead><tr><th>العميل</th><th>الكود</th><th>الخدمة</th><th>الحالة</th><th>الفني</th><th>السعر</th><th>توزيع تلقائي</th></tr></thead>
+          <thead><tr><th>العميل</th><th>الكود</th><th>الخدمة</th><th>الحالة</th><th>الفني</th><th>السعر</th><th>توزيع تلقائي</th><th>المحادثة</th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
+      </section>`;
+  }
+
+  /** The thread of one order: messages between the owner, the supervisor, the technician and the customer. */
+  function threadPanel(order, messages) {
+    const rows = messages.map((m) => `<div class="pick"><span class="pill ${m.sender === 'customer' ? 'idle' : 'ok'}">${esc(m.sender_label)}</span><span>${esc(m.body)}</span><small class="ltr" dir="ltr">${new Date(m.created * 1000).toLocaleString('ar-SA')}</small></div>`).join('') || '<p class="muted">لا توجد رسائل بعد.</p>';
+    return `
+      <section class="panel">
+        <h2>محادثة الطلب: ${esc(order.customer_name)} ${order.code ? `<small class="ltr" dir="ltr">${esc(order.code)}</small>` : ''}</h2>
+        <div class="bulk-form">${rows}</div>
+        <form class="form-row" data-form="order-message">
+          <input type="hidden" name="order_id" value="${esc(order.id)}">
+          <label class="lbl">رسالة<input class="field" name="body" required maxlength="500" autocomplete="off"></label>
+          <button class="btn primary" type="submit">إرسال</button>
+          <p class="err" role="alert"></p>
+        </form>
       </section>`;
   }
 
@@ -824,7 +868,8 @@
     stop();
     try {
       if (view === 'management') return await renderManagement();
-      if (view === 'settings') return await renderSettings();
+      if (view === 'settings') return renderSettingsHub();
+      if (view === 'general') return await renderSettings();
       if (view === 'bulk') return await renderBulk();
       if (view === 'articles') return await renderArticles();
       if (view === 'ops') return await renderOps();
@@ -899,6 +944,11 @@
         toast('تمت الإضافة');
         return await renderManagement();
       }
+      if (form.dataset.form === 'order-message') {
+        await api(`orders/${encodeURIComponent(values.order_id)}/messages`, { method: 'POST', body: { body: values.body } });
+        toast('تم إرسال الرسالة');
+        return await renderOps();
+      }
       if (form.dataset.form === 'customer-add') {
         await api('customers', { method: 'POST', body: values });
         toast('تمت إضافة العميل');
@@ -955,6 +1005,7 @@
     if (act === 'purge') return run('purge', id);
     if (act === 'person-toggle') return togglePerson(id, next === '1');
     if (act === 'distribute') return distributeOrder(id, btn.dataset.mode);
+    if (act === 'thread') { state.thread = id; return renderOps(); }
     if (act === 'bulk-all' || act === 'bulk-none') {
       const target = btn.dataset.target === 'opsite' ? 'opsite' : 'site';
       app.querySelectorAll(`input[name="${target}"]:not(:disabled)`).forEach((c) => { c.checked = act === 'bulk-all'; });

@@ -153,6 +153,18 @@ check('a stale timestamp is refused', throws(static fn () => Intake::verifySite(
 check('an unpaired face cannot send orders', throws(static fn () => Intake::verifySite('amaan', 'POST', '/intake/order', $body, $sigHeaders($body, $ts, $nonce)), 'unpaired'));
 check('an order with an unknown reference is refused', throws(static fn () => Intake::receive('oxygen', ['site_ref' => '<b>', 'phone' => '0555111222']), 'bad_ref'));
 
+echo "Messages on an order\n";
+$thread = Orders::create(['customer_id' => $cust['id'], 'service' => 'فحص']);
+$m1 = Messages::add($thread['id'], 'تم استلام الطلب');
+check('a message is kept on its order', $m1['sender'] === 'owner' && $m1['sender_label'] === 'المالك');
+Messages::add($thread['id'], 'الفني في الطريق', 'technician');
+$msgs = Messages::list($thread['id']);
+check('the thread lists messages in order, with who sent them', count($msgs) === 2 && $msgs[1]['sender_label'] === 'الفني');
+check('an empty message is refused', throws(static fn () => Messages::add($thread['id'], '   '), 'bad_message'));
+check('markup in a message is refused', throws(static fn () => Messages::add($thread['id'], '<b>x</b>'), 'bad_message'));
+check('an unknown sender is refused', throws(static fn () => Messages::add($thread['id'], 'hi', 'admin'), 'bad_sender'));
+check('messages on an unknown order are refused', throws(static fn () => Messages::list('00000000000000000000000000000000'), 'not_found'));
+
 echo "Automatic distribution\n";
 $near = People::create(['role' => 'technician', 'name' => 'قريب', 'phone' => '0555100100', 'area' => 'makkah']);
 $far = People::create(['role' => 'technician', 'name' => 'بعيد', 'phone' => '0555100200', 'area' => 'jeddah']);
