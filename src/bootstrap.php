@@ -104,3 +104,4 @@ require_once OXY_ROOT . '/src/Intake.php';
 require_once OXY_ROOT . '/src/Messages.php';
 require_once OXY_ROOT . '/src/Dispatch.php';
 require_once OXY_ROOT . '/src/Chat.php';
+require_once OXY_ROOT . '/src/Reports.php';

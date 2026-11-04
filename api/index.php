@@ -153,6 +153,19 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // Operations reports: technician accounts and earnings, and warranties on finished jobs.
+    if ($method === 'GET' && $route === 'accounts') {
+        Auth::current();
+        oxy_json(['ok' => true, 'technicians' => Reports::accounts()]);
+        return;
+    }
+
+    if ($method === 'GET' && $route === 'warranties') {
+        Auth::current();
+        oxy_json(['ok' => true, 'warranties' => Reports::warranties()]);
+        return;
+    }
+
     // Chat and WhatsApp: the assistant's business details, instructions and services (no WhatsApp secrets here).
     if ($method === 'GET' && $route === 'settings/chat') {
         Auth::current();

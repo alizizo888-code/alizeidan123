@@ -292,5 +292,15 @@ check('too many services are refused', throws(static fn () => Chat::save(['servi
 check('the WhatsApp secrets never appear in the chat settings', !array_key_exists('phone_id', Chat::all()) && !array_key_exists('wa_token', Chat::all()));
 Chat::save(['enabled' => false]);
 
+echo "Operations reports\n";
+$accounts = Reports::accounts();
+$techAcc = array_values(array_filter($accounts, static fn (array $a): bool => $a['id'] === $tech['id']))[0] ?? null;
+check('the accounts list has every technician once', count(array_unique(array_column($accounts, 'id'))) === count($accounts) && $techAcc !== null);
+check('an account earns the share of finished jobs, not of open ones', $techAcc !== null && $techAcc['earned'] === (int) round($techAcc['done_value'] * $techAcc['share_pct'] / 100));
+$warrantyJob = Orders::create(['customer_id' => $cust['id'], 'service' => 'ضمان تجربة', 'price' => 100, 'technician_id' => $tech['id']]);
+Orders::update($warrantyJob['id'], ['status' => 'done', 'warranty_days' => 30]);
+$warr = array_values(array_filter(Reports::warranties(), static fn (array $w): bool => $w['id'] === $warrantyJob['id']))[0] ?? null;
+check('a finished job with a warranty shows as active with days left', $warr !== null && $warr['active'] === true && $warr['days_left'] >= 29 && $warr['days_left'] <= 30);
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);

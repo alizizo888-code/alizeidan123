@@ -9,7 +9,7 @@
   // Sections of the panel. A new section is one line here plus its render function.
   // Side menu: operations first, then sites, then one settings page. Bulk and general settings live inside it.
   const NAV = [
-    ['العمليات', [['ops', 'غرفة العمليات'], ['management', 'المشرفون والفنيون']]],
+    ['العمليات', [['ops', 'غرفة العمليات'], ['management', 'المشرفون والفنيون'], ['accounts', 'الحسابات والعمولات'], ['warranties', 'الضمانات']]],
     ['المواقع', [['sites', 'المواقع'], ['articles', 'المقالات']]],
     ['النظام', [['settings', 'الإعدادات']]],
   ];
@@ -732,6 +732,61 @@
       </section>`);
   }
 
+  /** Technician accounts: finished jobs, what they earned at their share, and open work. Read-only. */
+  async function renderAccounts() {
+    app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
+    const { technicians } = await api('accounts');
+    const totalEarned = technicians.reduce((sum, t) => sum + t.earned, 0);
+    const totalDone = technicians.reduce((sum, t) => sum + t.done_count, 0);
+    const rows = technicians.map((t) => `<tr>
+        <td>${esc(t.name)}${t.active ? '' : ' <small class="muted">(موقوف)</small>'}</td>
+        <td>${t.done_count}</td>
+        <td class="ltr">${t.done_value}</td>
+        <td>${t.share_pct}%</td>
+        <td class="ltr"><b>${t.earned}</b></td>
+        <td>${t.open_count}</td>
+      </tr>`).join('') || '<tr><td colspan="6" class="muted">لا يوجد فنيون بعد.</td></tr>';
+    app.innerHTML = shell(`
+      <section class="stats">
+        <div class="stat"><b>${totalDone}</b><span>طلب مكتمل</span></div>
+        <div class="stat"><b>${totalEarned}</b><span>إجمالي نصيب الفنيين (ر.س)</span></div>
+      </section>
+      <section class="panel">
+        <h2>الحسابات والعمولات</h2>
+        <p class="muted">النصيب = سعر الطلبات المكتملة × نسبة الفني. النسبة بتتحدد من صفحة المشرفين والفنيين، أو الافتراضية من التوزيع.</p>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>الفني</th><th>مكتمل</th><th>قيمة المكتمل</th><th>النسبة</th><th>نصيبه</th><th>مفتوح</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </section>`);
+  }
+
+  /** Warranties: finished jobs with a warranty end date, active first, soonest end first. Read-only. */
+  async function renderWarranties() {
+    app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
+    const { warranties } = await api('warranties');
+    const active = warranties.filter((w) => w.active).length;
+    const rows = warranties.map((w) => `<tr>
+        <td>${esc(w.customer_name)}</td>
+        <td>${esc(w.service || '—')}</td>
+        <td>${esc(w.technician_name || '—')}</td>
+        <td class="ltr">${new Date(w.warranty_until * 1000).toISOString().slice(0, 10)}</td>
+        <td><span class="pill ${w.active ? 'ok' : 'idle'}">${w.active ? `ساري (${w.days_left} يوم)` : 'منتهي'}</span></td>
+      </tr>`).join('') || '<tr><td colspan="5" class="muted">لا توجد ضمانات مسجلة بعد. الضمان بيتسجل لما الطلب يتقفل بمدة ضمان.</td></tr>';
+    app.innerHTML = shell(`
+      <section class="stats">
+        <div class="stat"><b>${active}</b><span>ضمان ساري</span></div>
+        <div class="stat"><b>${warranties.length - active}</b><span>ضمان منتهي</span></div>
+      </section>
+      <section class="panel">
+        <h2>الضمانات</h2>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>العميل</th><th>الخدمة</th><th>الفني</th><th>ينتهي</th><th>الحالة</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </section>`);
+  }
+
   /** Chat and WhatsApp: the business details, instructions, services and payment methods the site's assistant uses. */
   async function renderChat() {
     app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
@@ -1026,6 +1081,8 @@
       if (view === 'general') return await renderSettings();
       if (view === 'dispatch') return await renderDispatch();
       if (view === 'chat') return await renderChat();
+      if (view === 'accounts') return await renderAccounts();
+      if (view === 'warranties') return await renderWarranties();
       if (view === 'bulk') return await renderBulk();
       if (view === 'articles') return await renderArticles();
       if (view === 'ops') return await renderOps();
