@@ -276,5 +276,21 @@ $warranty = Orders::find($finished['id'])['warranty_until'];
 check('a finished job gets the default warranty when none is stated', $warranty !== null && abs($warranty - (time() + 30 * 86400)) < 120);
 Dispatch::save(['default_warranty_days' => 0]);
 
+echo "Chat and WhatsApp settings\n";
+$chatDefaults = Chat::all();
+check('chat starts off, with no instructions and no services', $chatDefaults['enabled'] === false && $chatDefaults['instructions'] === '' && $chatDefaults['services'] === []);
+$saved = Chat::save(['enabled' => true, 'bot_name' => 'مساعد أكسجين', 'phone' => '0549423050', 'whatsapp' => '966549423050', 'email' => 'owner@example.com', 'services' => "1|صيانة المكيفات\nالكهرباء\n", 'payment_methods' => ['تحويل بنكي', 'مدى'], 'instructions' => "سطر أول\nسطر ثانٍ"]);
+check('chat saves the values it is given', $saved['enabled'] === true && $saved['bot_name'] === 'مساعد أكسجين' && $saved['whatsapp'] === '966549423050');
+check('services keep one item per line, empty lines dropped', $saved['services'] === ['1|صيانة المكيفات', 'الكهرباء']);
+check('payment methods accept a list', $saved['payment_methods'] === ['تحويل بنكي', 'مدى']);
+check('instructions keep their line breaks', $saved['instructions'] === "سطر أول\nسطر ثانٍ");
+check('an unknown chat key is refused', throws(static fn () => Chat::save(['whatsapp_token' => 'x']), 'unknown_setting'));
+check('a bad email is refused', throws(static fn () => Chat::save(['email' => 'not-an-email']), 'bad_email'));
+check('a bad WhatsApp number is refused', throws(static fn () => Chat::save(['whatsapp' => 'abc']), 'bad_phone'));
+check('markup in instructions is refused', throws(static fn () => Chat::save(['instructions' => '<script>x</script>']), 'bad_value'));
+check('too many services are refused', throws(static fn () => Chat::save(['services' => implode("\n", array_fill(0, 61, 'خدمة'))]), 'too_many'));
+check('the WhatsApp secrets never appear in the chat settings', !array_key_exists('phone_id', Chat::all()) && !array_key_exists('wa_token', Chat::all()));
+Chat::save(['enabled' => false]);
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);

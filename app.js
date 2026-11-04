@@ -14,6 +14,7 @@
     ['النظام', [['settings', 'الإعدادات']]],
   ];
   const SETTINGS_SECTIONS = [
+    ['chat', 'الشات والواتساب', 'بيانات الشات اللي بيستخدمها الموقع: الاسم والتعليمات والخدمات وطرق الدفع. أرقام واتساب والتوكنات ما بتتخزنش هنا.'],
     ['dispatch', 'التوزيع والاستقبال', 'طريقة توزيع الطلبات الجديدة على الفنيين، وإيقاف استقبالها من المواقع، ونسبة الفني الافتراضية، والضمان الافتراضي للطلبات المكتملة.'],
     ['general', 'الإعدادات العامة', 'بيانات الشركة اللي تظهر في الفواتير والرسائل: الاسم، الرقم الضريبي، العنوان، ساعات العمل. بتتحفظ على الخادم فقط.'],
     ['bulk', 'الإعدادات الجماعية', 'تغيير اسم المواقع أو وصفها أو عدد المقالات في الصفحة على عدة مواقع مرة واحدة. بتبدأ بمعاينة، ومتتطبقش إلا بتأكيدك.'],
@@ -189,7 +190,7 @@
 
   /** Common frame for every section: brand, section tabs, then the section body. */
   function shell(body) {
-    const inSettings = ['settings', 'general', 'bulk', 'dispatch'].includes(state.view);
+    const inSettings = ['settings', 'general', 'bulk', 'dispatch', 'chat'].includes(state.view);
     const groups = NAV.map(([title, items]) => `
       <div class="nav-group">
         <div class="nav-title">${title}</div>
@@ -731,6 +732,41 @@
       </section>`);
   }
 
+  /** Chat and WhatsApp: the business details, instructions, services and payment methods the site's assistant uses. */
+  async function renderChat() {
+    app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
+    const { values: v } = await api('settings/chat');
+    const single = [
+      ['company_name', 'اسم المؤسسة', 120], ['bot_name', 'اسم المساعد', 40], ['phone', 'الجوال الرئيسي', 20],
+      ['whatsapp', 'رقم واتساب (بالمفتاح الدولي بدون +)', 20], ['email', 'البريد الإلكتروني', 120],
+      ['city', 'نطاق الخدمة', 120], ['banner_text', 'نص البانر', 200],
+    ].map(([key, label, max]) => `
+        <label class="lbl">${esc(label)}
+          <input class="field" name="${key}" maxlength="${max}" value="${esc(v[key] || '')}" autocomplete="off"${key.includes('phone') || key === 'whatsapp' || key === 'email' ? ' dir="ltr"' : ''}>
+        </label>`).join('');
+
+    app.innerHTML = shell(`
+      <section class="panel">
+        <h2>الشات والواتساب</h2>
+        <p class="muted">القيم دي بتتحفظ على الديسك. الموقع بيقراها منه، وأي تعديل هنا بيوصل للمواقع المربوطة.</p>
+        <form class="settings-form" data-form="chat" novalidate>
+          <label class="lbl check"><input type="checkbox" name="enabled"${v.enabled ? ' checked' : ''}> الشات مفعّل على المواقع</label>
+          ${single}
+          <label class="lbl">تعليمات المساعد
+            <textarea class="field" name="instructions" rows="12" maxlength="4000">${esc(v.instructions || '')}</textarea>
+          </label>
+          <label class="lbl">الخدمات (سطر لكل خدمة)
+            <textarea class="field" name="services" rows="8">${esc((v.services || []).join('\n'))}</textarea>
+          </label>
+          <label class="lbl">طرق الدفع (سطر لكل طريقة)
+            <textarea class="field" name="payment_methods" rows="4">${esc((v.payment_methods || []).join('\n'))}</textarea>
+          </label>
+          <div class="row end"><button class="btn primary" type="submit">حفظ الشات والواتساب</button></div>
+          <p class="err" role="alert"></p>
+        </form>
+      </section>`);
+  }
+
   /** Dispatch and intake: how new orders get a technician, pause for faces, default share and warranty. */
   async function renderDispatch() {
     app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
@@ -989,6 +1025,7 @@
       if (view === 'settings') return renderSettingsHub();
       if (view === 'general') return await renderSettings();
       if (view === 'dispatch') return await renderDispatch();
+      if (view === 'chat') return await renderChat();
       if (view === 'bulk') return await renderBulk();
       if (view === 'articles') return await renderArticles();
       if (view === 'ops') return await renderOps();
@@ -1102,6 +1139,18 @@
       }
       if (form.dataset.form === 'bulkops') {
         return await runBulkOps(form, e.submitter?.dataset.mode !== 'apply');
+      }
+      if (form.dataset.form === 'chat') {
+        const body = {
+          enabled: form.elements.enabled.checked,
+          instructions: form.elements.instructions.value,
+          services: form.elements.services.value,
+          payment_methods: form.elements.payment_methods.value,
+        };
+        for (const key of ['company_name', 'bot_name', 'phone', 'whatsapp', 'email', 'city', 'banner_text']) body[key] = form.elements[key].value;
+        await api('settings/chat', { method: 'POST', body });
+        toast('تم حفظ الشات والواتساب');
+        return await renderChat();
       }
       if (form.dataset.form === 'dispatch') {
         const body = {

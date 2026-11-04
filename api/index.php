@@ -153,6 +153,19 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // Chat and WhatsApp: the assistant's business details, instructions and services (no WhatsApp secrets here).
+    if ($method === 'GET' && $route === 'settings/chat') {
+        Auth::current();
+        oxy_json(['ok' => true, 'values' => Chat::all()]);
+        return;
+    }
+
+    if ($method === 'POST' && $route === 'settings/chat') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'values' => Chat::save(oxy_body())]);
+        return;
+    }
+
     // Dispatch and intake: how new orders get a technician, whether faces may send orders, default share and warranty.
     if ($method === 'GET' && $route === 'settings/dispatch') {
         Auth::current();
