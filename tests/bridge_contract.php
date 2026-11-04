@@ -111,6 +111,12 @@ check('unpaired face (no secret) refuses everything', oxy_bridge_authorize(signe
 
 echo "Articles on the face\n";
 $GLOBALS['wp_options']['oxy_bridge_secret'] = $secret; // an earlier check cleared it to test an unpaired face
+
+echo "Fresh reads on the face\n";
+$GLOBALS['wp_options']['posts_per_page'] = 50;
+$fresh = oxy_bridge_settings_read(signed($secret, 'GET', '/oxy-bridge/v1/settings', ''));
+check('the settings read returns what is stored now', $fresh['values']['posts_per_page'] === 50);
+check('the fresh-read helper marks the reply as not cacheable', defined('DONOTCACHEPAGE') && DONOTCACHEPAGE === true);
 $GLOBALS['wp_posts'] = [(object) ['ID' => 7, 'post_title' => 'مقال', 'post_status' => 'publish', 'post_date' => '2026-11-01 10:00:00']];
 $listed = oxy_bridge_posts(signed($secret, 'GET', '/oxy-bridge/v1/posts', ''));
 check('the posts list returns count, id, status and link', $listed['count'] === 1 && $listed['posts'][0]['id'] === 7 && $listed['posts'][0]['status'] === 'publish' && str_contains($listed['posts'][0]['url'], '7'));

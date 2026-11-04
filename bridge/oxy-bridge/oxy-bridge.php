@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Oxygen Bridge
  * Description: Signed REST endpoints for the Oxygen master control panel. HMAC-SHA256 over method, route, timestamp, nonce and body. No passwords, no cookies.
- * Version: 2.2.0
+ * Version: 2.2.1
  * Requires PHP: 7.4
  */
 
@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('OXY_BRIDGE_VERSION', '2.2.0');
+define('OXY_BRIDGE_VERSION', '2.2.1');
 define('OXY_BRIDGE_OPTION', 'oxy_bridge_secret');
 
 /**
@@ -42,6 +42,7 @@ add_action('rest_api_init', 'oxy_bridge_routes');
  */
 function oxy_bridge_posts(WP_REST_Request $request)
 {
+    oxy_bridge_fresh();
     $posts = get_posts(array(
         'post_type'   => 'post',
         'post_status' => array('publish', 'future', 'draft', 'pending', 'private'),
@@ -134,6 +135,7 @@ function oxy_bridge_authorize(WP_REST_Request $request)
 
 function oxy_bridge_status(WP_REST_Request $request)
 {
+    oxy_bridge_fresh();
     $counts = wp_count_posts('post');
     return array(
         'ok'              => true,
@@ -176,8 +178,32 @@ function oxy_bridge_setting_value($key)
     return $fields[$key]['type'] === 'int' ? (int) $value : (string) $value;
 }
 
+/**
+ * Replies to the desk must show what is stored now, never a cached copy: a page or object cache
+ * on the face can keep an old value and make the desk show a change as undone.
+ */
+function oxy_bridge_fresh()
+{
+    if (!defined('DONOTCACHEPAGE')) {
+        define('DONOTCACHEPAGE', true);
+    }
+    if (!defined('DONOTCACHEOBJECT')) {
+        define('DONOTCACHEOBJECT', true);
+    }
+    if (function_exists('nocache_headers')) {
+        nocache_headers();
+    }
+    if (function_exists('wp_cache_delete')) {
+        wp_cache_delete('alloptions', 'options');
+        foreach (array_keys(oxy_bridge_settings_fields()) as $key) {
+            wp_cache_delete($key, 'options');
+        }
+    }
+}
+
 function oxy_bridge_settings_read(WP_REST_Request $request)
 {
+    oxy_bridge_fresh();
     $values = array();
     foreach (array_keys(oxy_bridge_settings_fields()) as $key) {
         $values[$key] = oxy_bridge_setting_value($key);
