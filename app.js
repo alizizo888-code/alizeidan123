@@ -73,7 +73,7 @@
     }
     const data = await res.json().catch(() => ({ ok: false, error: 'bad_response' }));
     if (!res.ok || data.ok === false) {
-      throw Object.assign(new Error(data.error || 'error'), { code: data.error || 'error', status: res.status });
+      throw Object.assign(new Error(data.error || 'error'), { code: data.error || 'error', status: res.status, data });
     }
     return data;
   }
@@ -340,7 +340,8 @@
 
     let body = '<p class="muted">لا توجد مواقع مربوطة بعد.</p>';
     if (chosen) {
-      const r = await api(`sites/${encodeURIComponent(chosen)}/posts`);
+      // api() throws on ok:false, but a failed face still carries error and fix: read them from the thrown reply.
+      const r = await api(`sites/${encodeURIComponent(chosen)}/posts`).catch((e) => e.data || { ok: false, error: e.code || 'error' });
       if (!r.ok) {
         const whoActs = { desk: 'من الديسك', site: 'من الموقع نفسه', retry: 'أعد المحاولة لاحقاً', review: 'يحتاج مراجعة' };
         body = `<p class="err">${esc(r.error)} <small>(${esc(whoActs[r.fix] || r.fix || '')})</small></p>`;
