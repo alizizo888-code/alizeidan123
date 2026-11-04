@@ -37,6 +37,8 @@
     unknown: ['بانتظار الفحص', 'idle'],
   };
   const ERRORS = {
+    not_open: 'الطلب مش مفتوح للإسناد',
+    no_technician: 'مفيش فني مناسب لهذا الطلب',
     bad_pin: 'الرمز غير صحيح',
     locked: 'الدخول مقفل مؤقتاً. حاول بعد 15 دقيقة',
     no_pin: 'لم يتم ضبط الرمز بعد',
@@ -501,6 +503,7 @@
             <span class="legend-dot" style="background:${colourOf(c.status)}"></span>
             <div class="tech-meta"><b>${esc(c.name)}</b><small>${c.km === null ? 'بدون موقع' : c.km + ' كم · ~' + c.minutes + ' دقيقة (تقدير)'}${c.matches ? ' · تخصص مطابق' : ''}</small></div>
             <span class="pill ${c.matches ? 'ok' : ''}">${esc((TECH_STATUS[c.status] || TECH_STATUS.offline)[0])}</span>
+            <button class="btn ghost sm" data-act="assign-candidate" data-id="${esc(cand.order_id)}" data-tech="${esc(c.id)}">إسناد</button>
           </div>`).join('') || '<p class="muted">لا يوجد فنيون.</p>';
         candBlock = `<h3>المرشحون (الأقرب أولاً)</h3>${rows}`;
       }
@@ -732,6 +735,19 @@
   async function distributeOrder(id, mode) {
     try {
       await api(`orders/${encodeURIComponent(id)}/distribute`, { method: 'POST', body: { mode } });
+      toast('تم الإسناد');
+      await renderOps();
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر الإسناد');
+    }
+  }
+
+  /** Assigns the order to one candidate picked from the map side panel. */
+  async function assignCandidate(orderId, techId) {
+    try {
+      await api(`orders/${encodeURIComponent(orderId)}`, { method: 'POST', body: { technician_id: techId, status: 'assigned' } });
+      state.mapOrder = null;
       toast('تم الإسناد');
       await renderOps();
     } catch (error) {
@@ -1406,6 +1422,7 @@
     if (act === 'dispatch-rule') return saveDispatch({ rule: id }, 'تم حفظ قاعدة التوزيع');
     if (act === 'dispatch-run') return runDispatch();
     if (act === 'distribute') return distributeOrder(id, btn.dataset.mode);
+    if (act === 'assign-candidate') return assignCandidate(id, btn.dataset.tech);
     if (act === 'thread') { state.thread = id; return renderOps(); }
     if (act === 'bulk-all' || act === 'bulk-none') {
       const target = btn.dataset.target === 'opsite' ? 'opsite' : 'site';
