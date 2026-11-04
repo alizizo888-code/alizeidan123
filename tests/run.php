@@ -104,6 +104,10 @@ check('a non-boolean active flag is refused', throws(static fn () => People::upd
 check('changing the role is ignored, so nothing is left to update', throws(static fn () => People::update($sup['id'], ['role' => 'admin']), 'nothing_to_update'));
 check('listing only returns the requested role', array_reduce(People::list('supervisor'), static fn (bool $ok, array $p): bool => $ok && $p['role'] === 'supervisor', true));
 check('an unknown role cannot be listed', throws(static fn () => People::list('admin'), 'bad_role'));
+$tech = People::create(['role' => 'technician', 'name' => 'خالد سعيد', 'phone' => '0555000111', 'area' => 'jeddah']);
+check('a technician is created with its own role', $tech['role'] === 'technician' && $tech['area'] === 'jeddah');
+check('technicians are listed apart from supervisors', array_reduce(People::list('technician'), static fn (bool $ok, array $p): bool => $ok && $p['role'] === 'technician', true) && count(People::list('technician')) >= 1);
+check('a supervisor is not listed among technicians', array_reduce(People::list('technician'), static fn (bool $ok, array $p): bool => $ok && $p['id'] !== $sup['id'], true));
 check('a malformed id is not found', throws(static fn () => People::find('../etc'), 'not_found'));
 
 echo "General settings\n";

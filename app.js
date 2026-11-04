@@ -254,23 +254,29 @@
   }
 
   /** Management: supervisors list, add form, and activate/deactivate. */
-  async function renderManagement() {
-    app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
-    const { people } = await api('management/people?role=supervisor');
+  /** Each kind of person has its own block: a short note, an add form, and the list with on/off. */
+  const ROLE_BLOCKS = {
+    supervisor: { title: 'مشرفو العمليات', note: 'المشرف يستقبل الطلبات ويوزعها على الفنيين. الإيقاف يخفيه من العمليات، ولا يُحذف سجله.', add: 'إضافة المشرف', empty: 'لا يوجد مشرفون بعد. أضف أول مشرف من النموذج أعلاه.', done: 'مشرف' },
+    technician: { title: 'الفنيون', note: 'الفني ينفذ الطلبات المسندة له، وتظهر حالته (متاح أو مشغول) في غرفة العمليات. الإيقاف يخفيه من التوزيع.', add: 'إضافة الفني', empty: 'لا يوجد فنيون بعد. أضف أول فني من النموذج أعلاه.', done: 'فني' },
+  };
+
+  async function peopleBlock(role) {
+    const block = ROLE_BLOCKS[role];
+    const { people } = await api(`management/people?role=${encodeURIComponent(role)}`);
     const rows = people.map((p) => `<tr>
         <td>${esc(p.name)}</td>
         <td class="ltr">${esc(p.phone || '—')}</td>
         <td>${esc(AREAS[p.area] || '—')}</td>
         <td><span class="pill ${p.active ? 'ok' : 'idle'}">${p.active ? 'نشط' : 'موقوف'}</span></td>
         <td><button class="btn ghost sm" data-act="person-toggle" data-id="${esc(p.id)}" data-next="${p.active ? '0' : '1'}">${p.active ? 'إيقاف' : 'تفعيل'}</button></td>
-      </tr>`).join('') || '<tr><td colspan="5" class="muted">لا يوجد مشرفون بعد. أضف أول مشرف من النموذج أعلاه.</td></tr>';
+      </tr>`).join('') || `<tr><td colspan="5" class="muted">${block.empty}</td></tr>`;
 
-    app.innerHTML = shell(`
+    return `
       <section class="panel">
-        <h2>مشرفو العمليات</h2>
-        <p class="muted">المشرف يستقبل الطلبات ويوزعها على الفنيين. الإيقاف يخفيه من العمليات، ولا يُحذف سجله.</p>
+        <h2>${block.title}</h2>
+        <p class="muted">${block.note}</p>
         <form class="form-row" data-form="person-add">
-          <input type="hidden" name="role" value="supervisor">
+          <input type="hidden" name="role" value="${role}">
           <label class="lbl">الاسم<input class="field" name="name" required minlength="2" maxlength="80" autocomplete="off"></label>
           <label class="lbl">الجوال<input class="field" name="phone" dir="ltr" inputmode="tel" maxlength="20" autocomplete="off" placeholder="05XXXXXXXX"></label>
           <label class="lbl">المنطقة<select class="field" name="area">
@@ -279,12 +285,36 @@
             <option value="jeddah">جدة</option>
             <option value="other">أخرى</option>
           </select></label>
-          <button class="btn primary" type="submit">إضافة المشرف</button>
+          <button class="btn primary" type="submit">${block.add}</button>
           <p class="err" role="alert"></p>
         </form>
         <div style="overflow-x:auto"><table>
           <thead><tr><th>الاسم</th><th>الجوال</th><th>المنطقة</th><th>الحالة</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
+        </table></div>
+      </section>`;
+  }
+
+  /** Who can do what. Read-only for now: the rules live in the server, this shows them to the owner. */
+  const ROLE_RIGHTS = [
+    ['المالك', 'كل شيء: المواقع، الإعدادات الجماعية، الإدارة، غرفة العمليات'],
+    ['المشرف', 'استقبال الطلبات وإسنادها للفنيين، ومتابعة غرفة العمليات'],
+    ['الفني', 'تنفيذ الطلبات المسندة له وتحديث حالته (متاح أو مشغول)'],
+  ];
+
+  async function renderManagement() {
+    app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
+    const blocks = await Promise.all([peopleBlock('supervisor'), peopleBlock('technician')]);
+    const rights = ROLE_RIGHTS.map(([who, what]) => `<tr><td>${esc(who)}</td><td>${esc(what)}</td></tr>`).join('');
+
+    app.innerHTML = shell(`
+      ${blocks.join('')}
+      <section class="panel">
+        <h2>الأدوار والصلاحيات</h2>
+        <p class="muted">الصلاحيات الفعلية محددة على الخادم. الجدول ده للعرض والمراجعة.</p>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>الدور</th><th>ما يقدر يعمله</th></tr></thead>
+          <tbody>${rights}</tbody>
         </table></div>
       </section>`);
   }
@@ -302,6 +332,10 @@
     const sites = overview.sites;
     const count = (key) => sites.filter((s) => s.status === key).length;
     const attention = sites.filter((s) => s.status === 'down' || s.status === 'unpaired');
+    const [techs, sups] = await Promise.all([api('management/people?role=technician'), api('management/people?role=supervisor')]);
+    const activeTechs = techs.people.filter((p) => p.active).length;
+    const activeSups = sups.people.filter((p) => p.active).length;
+    const modules = OPS_MODULES;
     const list = attention.length
       ? attention.map((s) => {
           const [label, tone] = STATUS[s.status] || ['—', 'idle'];
@@ -321,11 +355,30 @@
         <h2>يحتاج متابعة</h2>
         <div class="bulk-form">${list}</div>
       </section>
+      <section class="stats">
+        <div class="stat"><b>${activeTechs}</b><span>فني نشط</span></div>
+        <div class="stat"><b>${activeSups}</b><span>مشرف نشط</span></div>
+      </section>
       <section class="panel">
-        <h2>الطلبات والاتصالات</h2>
-        <p class="muted">هتظهر هنا بعد ما نحدد مكان تخزين الطلبات (متقن أو الديسك)، ومصادر استقبالها (واتساب، إعلانات، الموقع).</p>
+        <h2>وحدات غرفة العمليات</h2>
+        <p class="muted">كل وحدة تظهر هنا بحالتها. الوحدات اللي "بانتظار قرار" تستنى إجابتك على القرار المحدد فقط.</p>
+        <div class="bulk-form">${modules.map(([label, state, note]) => `<div class="pick"><span class="pill ${state === 'جاهزة' ? 'ok' : 'idle'}">${esc(state)}</span><span>${esc(label)}</span><small>${esc(note)}</small></div>`).join('')}</div>
       </section>`);
   }
+
+  /** Operations modules and where each one stands. The note says what it waits for. */
+  const OPS_MODULES = [
+    ['الإسناد اليدوي والتوزيع', 'جاهزة', 'المشرف يسند الطلب لفني من الوحدات الجاهزة'],
+    ['الخريطة الميدانية وتتبع الفنيين', 'بانتظار قرار', 'مزود الخرائط وموافقة الفني على تتبع الموقع'],
+    ['تتبع خط سير الطلب', 'بانتظار قرار', 'مرتبطة بالخريطة وبمكان تخزين الطلبات'],
+    ['الإسناد التلقائي', 'بانتظار قرار', 'قواعد الإسناد (المنطقة، الحالة، التقييم)'],
+    ['استقبال الطلبات (واتساب، إعلانات، الموقع)', 'بانتظار قرار', 'مكان تخزين الطلبات ومصادر الاستقبال'],
+    ['لوحة توزيع المهام', 'بانتظار قرار', 'بعد استقرار الطلبات والإسناد'],
+    ['تسجيل الدخول برقم الهاتف (OTP)', 'بانتظار قرار', 'مزود رسائل SMS'],
+    ['لوحة الشات بوت', 'جاهزة', 'قواعد بدون ذكاء: التسعير، البيانات، العروض، حد التفاوض'],
+    ['لوحة الذكاء الاصطناعي', 'بانتظار قرار', 'اختيار المزود المجاني أو بوت القواعد فقط'],
+    ['نشر التطبيق وتحديثه', 'جاهزة', 'تحديث الـ PWA وروابط التحميل'],
+  ];
 
   const POST_STATUS = { publish: 'منشورة', draft: 'مسودة', future: 'مجدولة', pending: 'قيد المراجعة', private: 'خاصة' };
 
@@ -621,7 +674,7 @@
   async function togglePerson(id, active) {
     try {
       await api(`management/people/${encodeURIComponent(id)}`, { method: 'POST', body: { active } });
-      toast(active ? 'تم تفعيل المشرف' : 'تم إيقاف المشرف');
+      toast(active ? 'تم التفعيل' : 'تم الإيقاف');
       await renderManagement();
     } catch (error) {
       if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
@@ -665,7 +718,7 @@
     try {
       if (form.dataset.form === 'person-add') {
         await api('management/people', { method: 'POST', body: values });
-        toast('تمت إضافة المشرف');
+        toast('تمت الإضافة');
         return await renderManagement();
       }
       if (form.dataset.form === 'bulk') {

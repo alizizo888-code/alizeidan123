@@ -10,8 +10,8 @@ declare(strict_types=1);
  */
 final class People
 {
-    /** Roles this phase manages. */
-    public const ROLES = ['supervisor'];
+    /** Roles this phase manages: supervisors dispatch, technicians do the work. */
+    public const ROLES = ['supervisor', 'technician'];
     /** Coverage areas. "other" is for work outside Makkah and Jeddah handled by partners. */
     public const AREAS = ['makkah', 'jeddah', 'other'];
 
