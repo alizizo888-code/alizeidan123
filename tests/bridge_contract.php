@@ -89,6 +89,18 @@ check('reused nonce is refused (replay)', (oxy_bridge_authorize($replay) instanc
 $stale = signed($secret, 'GET', '/oxy-bridge/v1/status', '', (string) (time() - 600));
 check('timestamp outside 5 minutes is refused', oxy_bridge_authorize($stale) instanceof WP_Error);
 
+echo "Bulk settings on the face\n";
+check('a signed settings read is authorised', oxy_bridge_authorize(signed($secret, 'GET', '/oxy-bridge/v1/settings', '')) === true);
+check('a signed settings write is authorised', oxy_bridge_authorize(signed($secret, 'POST', '/oxy-bridge/v1/settings', '{"values":{"blogname":"x"}}')) === true);
+check('valid values pass the face check', oxy_bridge_validate_settings(['blogname' => 'متقن', 'posts_per_page' => 10]) === ['blogname' => 'متقن', 'posts_per_page' => 10]);
+check('the face refuses an option it does not list (e.g. default role)', oxy_bridge_validate_settings(['default_role' => 'administrator']) instanceof WP_Error);
+check('the face refuses an admin email change', oxy_bridge_validate_settings(['admin_email' => 'x@y.z']) instanceof WP_Error);
+check('the face refuses a number out of range', oxy_bridge_validate_settings(['posts_per_page' => 500]) instanceof WP_Error);
+check('the face refuses a non-number for a number setting', oxy_bridge_validate_settings(['posts_per_page' => 'ten']) instanceof WP_Error);
+check('the face refuses an empty site name', oxy_bridge_validate_settings(['blogname' => '  ']) instanceof WP_Error);
+check('the face refuses markup', oxy_bridge_validate_settings(['blogdescription' => '<b>x</b>']) instanceof WP_Error);
+check('one bad value refuses the whole request', oxy_bridge_validate_settings(['blogname' => 'ok', 'posts_per_page' => 0]) instanceof WP_Error);
+
 $wrongSecret = signed(bin2hex(random_bytes(32)), 'GET', '/oxy-bridge/v1/status', '');
 check('signature from another site secret is refused', oxy_bridge_authorize($wrongSecret) instanceof WP_Error);
 

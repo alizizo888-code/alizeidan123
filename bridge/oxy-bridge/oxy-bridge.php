@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Oxygen Bridge
  * Description: Signed REST endpoints for the Oxygen master control panel. HMAC-SHA256 over method, route, timestamp, nonce and body. No passwords, no cookies.
- * Version: 2.0.0
+ * Version: 2.1.0
  * Requires PHP: 7.4
  */
 
@@ -10,10 +10,24 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('OXY_BRIDGE_VERSION', '2.0.0');
+define('OXY_BRIDGE_VERSION', '2.1.0');
 define('OXY_BRIDGE_OPTION', 'oxy_bridge_secret');
 
+/**
+ * WordPress settings the master may read and change in bulk. Anything not listed here is refused.
+ * Keep this list in sync with FIELDS in src/Bulk.php on the master.
+ */
+function oxy_bridge_settings_fields()
+{
+    return array(
+        'blogname'        => array('type' => 'text', 'min' => 1, 'max' => 200),
+        'blogdescription' => array('type' => 'text', 'min' => 0, 'max' => 200),
+        'posts_per_page'  => array('type' => 'int', 'min' => 1, 'max' => 50),
+    );
+}
+
 // Generated per site on activation. The owner copies it once into the master (Settings > Oxygen Bridge).
+// Re-activating or replacing the plugin keeps the existing secret, so pairing survives an upgrade.
 register_activation_hook(__FILE__, 'oxy_bridge_activate');
 function oxy_bridge_activate()
 {
@@ -34,6 +48,18 @@ function oxy_bridge_routes()
         'methods'             => 'POST',
         'callback'            => 'oxy_bridge_purge',
         'permission_callback' => 'oxy_bridge_authorize',
+    ));
+    register_rest_route('oxy-bridge/v1', '/settings', array(
+        array(
+            'methods'             => 'GET',
+            'callback'            => 'oxy_bridge_settings_read',
+            'permission_callback' => 'oxy_bridge_authorize',
+        ),
+        array(
+            'methods'             => 'POST',
+            'callback'            => 'oxy_bridge_settings_write',
+            'permission_callback' => 'oxy_bridge_authorize',
+        ),
     ));
 }
 
@@ -111,6 +137,85 @@ function oxy_bridge_purge(WP_REST_Request $request)
         $purged[] = 'litespeed';
     }
     return array('ok' => true, 'purged' => $purged);
+}
+
+function oxy_bridge_setting_value($key)
+{
+    $fields = oxy_bridge_settings_fields();
+    $value = get_option($key);
+    return $fields[$key]['type'] === 'int' ? (int) $value : (string) $value;
+}
+
+function oxy_bridge_settings_read(WP_REST_Request $request)
+{
+    $values = array();
+    foreach (array_keys(oxy_bridge_settings_fields()) as $key) {
+        $values[$key] = oxy_bridge_setting_value($key);
+    }
+    return array('ok' => true, 'values' => $values);
+}
+
+/**
+ * Checks every value before anything is written: an unknown key, a wrong type, a value out of range
+ * or markup refuses the whole request. Returns the clean values, or a WP_Error.
+ */
+function oxy_bridge_validate_settings(array $input)
+{
+    $fields = oxy_bridge_settings_fields();
+    $clean = array();
+    foreach ($input as $key => $value) {
+        $key = (string) $key;
+        if (!isset($fields[$key])) {
+            return new WP_Error('oxy_unknown_setting', 'setting not allowed', array('status' => 400));
+        }
+        $rule = $fields[$key];
+        if ($rule['type'] === 'int') {
+            if (is_string($value) && preg_match('/^\d+$/', $value)) {
+                $value = (int) $value;
+            }
+            if (!is_int($value) || $value < $rule['min'] || $value > $rule['max']) {
+                return new WP_Error('oxy_bad_value', 'value out of range for ' . $key, array('status' => 400));
+            }
+            $clean[$key] = $value;
+            continue;
+        }
+        if (!is_string($value)) {
+            return new WP_Error('oxy_bad_value', 'text expected for ' . $key, array('status' => 400));
+        }
+        $text = trim($value);
+        $length = function_exists('mb_strlen') ? mb_strlen($text) : strlen($text);
+        if ($length < $rule['min'] || $length > $rule['max'] || preg_match('/[<>]/', $text)) {
+            return new WP_Error('oxy_bad_value', 'text rejected for ' . $key, array('status' => 400));
+        }
+        $clean[$key] = $text;
+    }
+    return $clean;
+}
+
+function oxy_bridge_settings_write(WP_REST_Request $request)
+{
+    $body = json_decode((string) $request->get_body(), true);
+    $input = is_array($body) && isset($body['values']) && is_array($body['values']) ? $body['values'] : array();
+    if ($input === array()) {
+        return new WP_Error('oxy_bad_request', 'values missing', array('status' => 400));
+    }
+    $clean = oxy_bridge_validate_settings($input);
+    if ($clean instanceof WP_Error) {
+        return $clean;
+    }
+
+    $before = array();
+    $after = array();
+    $changed = array();
+    foreach ($clean as $key => $value) {
+        $before[$key] = oxy_bridge_setting_value($key);
+        update_option($key, $value);
+        $after[$key] = oxy_bridge_setting_value($key);
+        if ($before[$key] !== $after[$key]) {
+            $changed[] = $key;
+        }
+    }
+    return array('ok' => true, 'changed' => $changed, 'before' => $before, 'after' => $after);
 }
 
 // Admin page: the owner sees the secret here, copies it once, and can rotate it (which invalidates the old one).

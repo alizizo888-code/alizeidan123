@@ -95,3 +95,4 @@ require_once OXY_ROOT . '/src/Sites.php';
 require_once OXY_ROOT . '/src/Jobs.php';
 require_once OXY_ROOT . '/src/People.php';
 require_once OXY_ROOT . '/src/General.php';
+require_once OXY_ROOT . '/src/Bulk.php';

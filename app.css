@@ -169,4 +169,20 @@ select.field { appearance: auto; }
 .settings-form { display: grid; gap: 12px; max-width: 560px; }
 .settings-form .err { margin-top: -4px; }
 
+/* Bulk settings */
+.bulk-form { display: grid; gap: 14px; }
+.bulk-sites { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 0; min-width: 0; display: grid; gap: 10px; }
+.bulk-sites legend { padding: 0 6px; color: var(--muted); font-size: 13px; }
+.pick-grid { display: grid; gap: 8px; grid-template-columns: 1fr; }
+@media (min-width: 720px) { .pick-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); } }
+.pick { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; cursor: pointer; }
+.pick input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.pick small { color: var(--muted); }
+.pick.off { opacity: .55; cursor: default; }
+.pick em { font-style: normal; color: var(--warn); font-size: 12px; }
+.bulk-field { display: grid; gap: 8px; grid-template-columns: 1fr; }
+@media (min-width: 720px) { .bulk-field { grid-template-columns: 1fr 1fr; align-items: center; } }
+.bulk-report { margin-top: 14px; }
+.bulk-report h3 { margin-bottom: 10px; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

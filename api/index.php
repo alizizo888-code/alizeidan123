@@ -145,6 +145,32 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // Bulk settings: fields the faces accept, then preview or apply for up to Bulk::MAX_BATCH faces.
+    if ($method === 'GET' && $route === 'bulk/settings') {
+        Auth::current();
+        oxy_json(['ok' => true, 'fields' => Bulk::FIELDS, 'max_batch' => Bulk::MAX_BATCH]);
+        return;
+    }
+
+    if ($method === 'POST' && $route === 'bulk/settings') {
+        Auth::requireCsrf();
+        // Each face call can take a few seconds; a full batch of faces can run past the default limit.
+        set_time_limit(120);
+        $body = oxy_body();
+        $ids = $body['site_ids'] ?? null;
+        $values = $body['values'] ?? null;
+        if (!is_array($ids) || !is_array($values)) {
+            throw new OxyHttpError(400, 'bad_request');
+        }
+        $ids = array_map(static fn ($id): string => is_string($id) ? $id : '', $ids);
+        // Preview is the default: a change is only applied when the panel sends dry_run=false explicitly.
+        $dryRun = ($body['dry_run'] ?? true) !== false;
+        $results = Bulk::run(array_values($ids), $values, $dryRun);
+        Audit::log($dryRun ? 'bulk_settings_preview' : 'bulk_settings_batch', null, 'faces=' . count($ids));
+        oxy_json(['ok' => true, 'dry_run' => $dryRun, 'results' => $results]);
+        return;
+    }
+
     throw new OxyHttpError(404, 'not_found');
 }
 

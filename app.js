@@ -11,6 +11,7 @@
     ['sites', 'المواقع'],
     ['management', 'الإدارة'],
     ['settings', 'الإعدادات العامة'],
+    ['bulk', 'الإعدادات الجماعية'],
   ];
   const AREAS = { makkah: 'مكة', jeddah: 'جدة', other: 'أخرى' };
   // [key, label, max length] for the general settings form. Must match General::FIELDS on the server.
@@ -304,6 +305,118 @@
       </section>`);
   }
 
+  /**
+   * Bulk settings: pick faces and fields, preview, then apply. Faces are called in batches (the server caps a batch),
+   * and each face reports its own result, so one failing face never hides the rest.
+   */
+  let bulkFields = {};
+  let bulkBatch = 5;
+
+  async function renderBulk() {
+    app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
+    const [meta, overview] = await Promise.all([api('bulk/settings'), api('overview')]);
+    bulkFields = meta.fields;
+    bulkBatch = meta.max_batch;
+    state.csrf = overview.csrf;
+
+    const sites = overview.sites.map((s) => `<label class="pick${s.paired ? '' : ' off'}">
+          <input type="checkbox" name="site" value="${esc(s.id)}"${s.paired ? '' : ' disabled'}>
+          <span>${esc(s.name)}</span><small dir="ltr">${esc(s.host)}</small>
+          ${s.paired ? '' : '<em>غير مربوط</em>'}
+        </label>`).join('');
+    const fields = Object.entries(bulkFields).map(([key, f]) => {
+      const input = f.type === 'int'
+        ? `type="number" inputmode="numeric" min="${f.min}" max="${f.max}"`
+        : `type="text" maxlength="${f.max}"`;
+      return `<div class="bulk-field">
+          <label class="pick"><input type="checkbox" name="use" value="${esc(key)}"><span>${esc(f.label)}</span></label>
+          <input class="field" ${input} name="val:${esc(key)}" autocomplete="off" aria-label="${esc(f.label)}">
+        </div>`;
+    }).join('');
+
+    app.innerHTML = shell(`
+      <section class="panel">
+        <h2>الإعدادات الجماعية</h2>
+        <p class="muted">اختر المواقع والإعدادات، وبعدين اعمل معاينة قبل التطبيق. كل موقع بيتحدّث لوحده، ولو موقع فشل الباقي بيكمل.</p>
+        <form class="bulk-form" data-form="bulk">
+          <fieldset class="bulk-sites">
+            <legend>المواقع (${esc(bulkBatch)} في كل دفعة)</legend>
+            <div class="row">
+              <button type="button" class="btn ghost sm" data-act="bulk-all">تحديد المربوطة</button>
+              <button type="button" class="btn ghost sm" data-act="bulk-none">إلغاء التحديد</button>
+            </div>
+            <div class="pick-grid">${sites}</div>
+          </fieldset>
+          <fieldset class="bulk-sites">
+            <legend>الإعدادات</legend>
+            ${fields}
+          </fieldset>
+          <div class="row end">
+            <button class="btn" type="submit" data-mode="preview">معاينة بدون تغيير</button>
+            <button class="btn primary" type="submit" data-mode="apply">تطبيق</button>
+          </div>
+          <p id="bulk-progress" class="muted" aria-live="polite"></p>
+          <p class="err" role="alert"></p>
+        </form>
+        <div id="bulk-out"></div>
+      </section>`);
+  }
+
+  async function runBulk(form, dryRun) {
+    const err = form.querySelector('.err');
+    const progress = document.getElementById('bulk-progress');
+    const out = document.getElementById('bulk-out');
+    err.textContent = '';
+    out.innerHTML = '';
+
+    const siteIds = [...form.querySelectorAll('input[name="site"]:checked')].map((c) => c.value);
+    const values = {};
+    form.querySelectorAll('input[name="use"]:checked').forEach((c) => {
+      const raw = form.querySelector(`input[name="val:${c.value}"]`).value.trim();
+      values[c.value] = bulkFields[c.value].type === 'int' ? Number(raw) : raw;
+    });
+    if (siteIds.length === 0) { err.textContent = 'اختر موقعاً واحداً على الأقل'; return; }
+    if (Object.keys(values).length === 0) { err.textContent = 'اختر إعداداً واحداً على الأقل'; return; }
+    if (!dryRun && !window.confirm(`سيتم تطبيق التغيير على ${siteIds.length} موقع. متأكد؟`)) return;
+
+    const results = [];
+    try {
+      for (let i = 0; i < siteIds.length; i += bulkBatch) {
+        const batch = siteIds.slice(i, i + bulkBatch);
+        progress.textContent = `جارٍ ${dryRun ? 'المعاينة' : 'التطبيق'}: ${Math.min(i + bulkBatch, siteIds.length)} من ${siteIds.length}`;
+        const r = await api('bulk/settings', { method: 'POST', body: { site_ids: batch, values, dry_run: dryRun } });
+        results.push(...r.results);
+      }
+      progress.textContent = '';
+      out.innerHTML = bulkReport(results, dryRun);
+      toast(dryRun ? 'تمت المعاينة' : 'تم التطبيق على المواقع');
+    } catch (error) {
+      progress.textContent = '';
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      err.textContent = ERRORS[error.code] || 'تعذّر التنفيذ';
+    }
+  }
+
+  function bulkReport(results, dryRun) {
+    const okCount = results.filter((r) => r.ok).length;
+    const label = (key) => esc(bulkFields[key]?.label || key);
+    const rows = results.map((r) => {
+      if (!r.ok) return `<tr><td>${esc(r.name)}</td><td class="status-failed">${esc(r.error)}</td></tr>`;
+      if (dryRun) {
+        const lines = Object.entries(r.changes).map(([key, c]) => (c.same
+          ? `${label(key)}: بدون تغيير`
+          : `${label(key)}: <span class="ltr">${esc(c.from)}</span> ← <span class="ltr">${esc(c.to)}</span>`)).join('<br>');
+        return `<tr><td>${esc(r.name)}</td><td>${lines}</td></tr>`;
+      }
+      const changed = r.changed.length ? r.changed.map(label).join('، ') : 'لا تغيير';
+      return `<tr><td>${esc(r.name)}</td><td class="status-done">تم: ${changed}</td></tr>`;
+    }).join('');
+    return `<div class="panel bulk-report">
+        <h3>${dryRun ? 'نتيجة المعاينة' : 'نتيجة التطبيق'}: نجح ${okCount} من ${results.length}</h3>
+        <div style="overflow-x:auto"><table><thead><tr><th>الموقع</th><th>التفاصيل</th></tr></thead><tbody>${rows}</tbody></table></div>
+      </div>`;
+  }
+
   /** Switches section. The sites view keeps refreshing itself; the others load once when opened. */
   async function show(view) {
     state.view = view;
@@ -311,6 +424,7 @@
     try {
       if (view === 'management') return await renderManagement();
       if (view === 'settings') return await renderSettings();
+      if (view === 'bulk') return await renderBulk();
       return await loadDashboard();
     } catch (error) {
       if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
@@ -382,6 +496,9 @@
         toast('تمت إضافة المشرف');
         return await renderManagement();
       }
+      if (form.dataset.form === 'bulk') {
+        return await runBulk(form, e.submitter?.dataset.mode !== 'apply');
+      }
       if (form.dataset.form === 'settings') {
         await api('settings/general', { method: 'POST', body: values });
         toast('تم حفظ الإعدادات');
@@ -410,6 +527,10 @@
     if (act === 'health') return run('health', id);
     if (act === 'purge') return run('purge', id);
     if (act === 'person-toggle') return togglePerson(id, next === '1');
+    if (act === 'bulk-all' || act === 'bulk-none') {
+      app.querySelectorAll('input[name="site"]:not(:disabled)').forEach((c) => { c.checked = act === 'bulk-all'; });
+      return;
+    }
   });
 
   async function boot() {

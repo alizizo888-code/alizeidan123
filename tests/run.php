@@ -116,5 +116,21 @@ check('markup in a plain field is refused', throws(static fn () => General::save
 check('a value over its length limit is refused', throws(static fn () => General::save(['company.tax_number' => str_repeat('1', 31)]), 'too_long'));
 check('a non-text value is refused', throws(static fn () => General::save(['company.phone' => 5]), 'bad_value'));
 
+echo "Bulk settings\n";
+check('valid values pass the master check', Bulk::validate(['blogname' => 'متقن', 'posts_per_page' => '10']) === ['blogname' => 'متقن', 'posts_per_page' => 10]);
+check('a field outside the list is refused', throws(static fn () => Bulk::validate(['admin_email' => 'a@b.c']), 'unknown_setting'));
+check('an empty change is refused', throws(static fn () => Bulk::validate([]), 'nothing_to_change'));
+check('a site name cannot be empty', throws(static fn () => Bulk::validate(['blogname' => '   ']), 'bad_value'));
+check('a number outside its range is refused', throws(static fn () => Bulk::validate(['posts_per_page' => 500]), 'bad_value'));
+check('markup in a text setting is refused', throws(static fn () => Bulk::validate(['blogdescription' => '<script>']), 'bad_value'));
+check('a batch larger than the limit is refused', throws(static fn () => Bulk::run(['a', 'b', 'c', 'd', 'e', 'f'], ['blogname' => 'x'], true), 'bad_batch'));
+check('an empty batch is refused', throws(static fn () => Bulk::run([], ['blogname' => 'x'], true), 'bad_batch'));
+$preview = Bulk::run(['nasmat'], ['blogname' => 'اختبار'], true);
+check('an unpaired face reports why, and does not stop the batch', $preview[0]['ok'] === false && $preview[0]['error'] === 'غير مربوط');
+$applied = Bulk::run(['nasmat'], ['blogname' => 'اختبار'], false);
+check('applying to an unpaired face changes nothing and reports it', $applied[0]['ok'] === false && $applied[0]['name'] === Sites::find('nasmat')['name']);
+check('an outdated plugin gets a clear message', Bulk::explain('http_404:rest_no_route') === 'الإضافة قديمة، حدّثها على هذا الموقع');
+check('a wrong key gets a clear message', Bulk::explain('http_401:oxy_bad_signature') === 'المفتاح لا يطابق، أعد الربط');
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);
