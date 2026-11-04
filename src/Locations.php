@@ -58,7 +58,7 @@ final class Locations
         }, $stmt->fetchAll());
     }
 
-    private static function coordinate(mixed $value, float $limit): float
+    public static function coordinate(mixed $value, float $limit): float
     {
         if (is_string($value) && is_numeric($value)) {
             $value = (float) $value;

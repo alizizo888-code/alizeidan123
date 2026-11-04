@@ -336,6 +336,12 @@
     const activeTechs = techs.people.filter((p) => p.active).length;
     const activeSups = sups.people.filter((p) => p.active).length;
     const modules = OPS_MODULES;
+    const [custs, ords] = await Promise.all([api('customers'), api('orders')]);
+    state.customers = custs.customers;
+    state.tiers = custs.tiers;
+    state.orders = ords.orders;
+    state.statuses = ords.statuses;
+    state.technicians = techs.people.filter((p) => p.active);
     const list = attention.length
       ? attention.map((s) => {
           const [label, tone] = STATUS[s.status] || ['—', 'idle'];
@@ -359,6 +365,8 @@
         <div class="stat"><b>${activeTechs}</b><span>فني نشط</span></div>
         <div class="stat"><b>${activeSups}</b><span>مشرف نشط</span></div>
       </section>
+      ${customersPanel()}
+      ${ordersPanel()}
       <section class="panel">
         <h2>الخريطة الميدانية والحية</h2>
         <p class="muted">مناطق التغطية (مكة، جدة) والفنيين اللي عندهم موقع مسجّل. الموقع بيتحدّث لما الفني يبعته من تطبيقه، أو لما تدخله يدوياً هنا.</p>
@@ -414,6 +422,13 @@
         L.circle([area.lat, area.lng], { radius: area.radius, color: '#0f6fb5', weight: 1, fillOpacity: 0.06 }).addTo(map).bindTooltip(area.label);
         bounds.push([area.lat, area.lng]);
       }
+      for (const c of data.customers) {
+        const tags = [c.active_orders ? 'طلب نشط' : null, c.under_warranty ? 'ضمان ساري' : null, c.done_orders ? 'تعامل سابق' : null].filter(Boolean).join(' · ') || 'عميل جديد';
+        const wa = c.phone ? `https://wa.me/${c.phone}?text=${encodeURIComponent('موقع العميل ' + c.name + ': https://maps.google.com/?q=' + c.lat + ',' + c.lng)}` : '';
+        const marker = L.circleMarker([c.lat, c.lng], { radius: 8, color: c.active_orders ? '#1f8a4c' : '#6b7280', fillOpacity: 0.85 }).addTo(map);
+        marker.bindPopup(`<b>${esc(c.name)}</b><br>${esc(tags)}<br>الطبقة: ${esc(c.tier_label)}${c.last_price ? '<br>آخر سعر: ' + c.last_price : ''}${c.rating ? '<br>التقييم: ' + c.rating + '/5' : ''}${wa ? `<br><a href="${esc(wa)}" target="_blank" rel="noopener">إرسال الموقع على واتساب</a>` : ''}`);
+        bounds.push([c.lat, c.lng]);
+      }
       for (const t of data.technicians) {
         if (t.lat === null) continue;
         const when = new Date(t.updated * 1000).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
@@ -423,6 +438,93 @@
       if (bounds.length > 1) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12 });
     } catch (error) {
       el.innerHTML = '<p class="muted" style="padding:16px">تعذّر تحميل الخريطة. القائمة والإحصائيات تشتغل بدونها.</p>';
+    }
+  }
+
+  /** Customers: flags come from their orders. Tier, rating and last price are the owner's, changed inline. */
+  function customersPanel() {
+    const tierOpts = (sel) => Object.entries(state.tiers).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
+    const rows = state.customers.map((c) => {
+      const flags = [
+        c.active_orders ? '<span class="pill ok">طلب نشط</span>' : '',
+        c.under_warranty ? '<span class="pill">ضمان ساري</span>' : '',
+        c.done_orders ? `<span class="pill idle">تعامل سابق (${c.done_orders})</span>` : '',
+      ].join(' ') || '<span class="pill idle">عميل جديد</span>';
+      const rating = `<select class="field" data-change="customer-rating" data-id="${esc(c.id)}"><option value="">—</option>${[1, 2, 3, 4, 5].map((n) => `<option value="${n}"${c.rating === n ? ' selected' : ''}>${n}</option>`).join('')}</select>`;
+      return `<tr>
+        <td>${esc(c.name)}<small class="ltr" dir="ltr">${esc(c.phone || '')}</small></td>
+        <td><select class="field" data-change="customer-tier" data-id="${esc(c.id)}">${tierOpts(c.tier)}</select></td>
+        <td>${flags}</td>
+        <td class="ltr">${c.last_price ?? '—'}</td>
+        <td>${rating}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5" class="muted">لا يوجد عملاء بعد. أضف أول عميل من النموذج أعلاه.</td></tr>';
+    return `
+      <section class="panel">
+        <h2>العملاء</h2>
+        <p class="muted">الطبقة توجّه السعر في المرات الجاية. الأعلام بتتحدد من الطلبات تلقائياً.</p>
+        <form class="form-row" data-form="customer-add">
+          <label class="lbl">الاسم<input class="field" name="name" required minlength="2" maxlength="120" autocomplete="off"></label>
+          <label class="lbl">الجوال<input class="field" name="phone" dir="ltr" inputmode="tel" maxlength="20" placeholder="05XXXXXXXX"></label>
+          <label class="lbl">العنوان<input class="field" name="address" maxlength="200" autocomplete="off"></label>
+          <label class="lbl">خط العرض<input class="field" name="lat" dir="ltr" inputmode="decimal" maxlength="12"></label>
+          <label class="lbl">خط الطول<input class="field" name="lng" dir="ltr" inputmode="decimal" maxlength="12"></label>
+          <label class="lbl">الطبقة<select class="field" name="tier">${tierOpts('medium')}</select></label>
+          <button class="btn primary" type="submit">إضافة العميل</button>
+          <p class="err" role="alert"></p>
+        </form>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>العميل</th><th>الطبقة</th><th>الحالة</th><th>آخر سعر</th><th>التقييم</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </section>`;
+  }
+
+  /** Orders still open, with status and technician editable in place, and a form for a new one. */
+  function ordersPanel() {
+    const custOpts = state.customers.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+    const techOpts = (sel) => `<option value="">بدون فني</option>` + state.technicians.map((t) => `<option value="${esc(t.id)}"${t.id === sel ? ' selected' : ''}>${esc(t.name)}</option>`).join('');
+    const statusOpts = (sel) => Object.entries(state.statuses).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
+    const open = state.orders.filter((o) => o.active);
+    const rows = open.map((o) => `<tr>
+        <td>${esc(o.customer_name)}</td>
+        <td>${esc(o.service || '—')}</td>
+        <td><select class="field" data-change="order-status" data-id="${esc(o.id)}">${statusOpts(o.status)}</select></td>
+        <td><select class="field" data-change="order-tech" data-id="${esc(o.id)}">${techOpts(o.technician_id)}</select></td>
+        <td class="ltr">${o.price ?? '—'}</td>
+      </tr>`).join('') || '<tr><td colspan="5" class="muted">لا توجد طلبات نشطة.</td></tr>';
+    return `
+      <section class="panel">
+        <h2>الطلبات النشطة</h2>
+        <form class="form-row" data-form="order-add">
+          <label class="lbl">العميل<select class="field" name="customer_id" required>${custOpts || '<option value="">أضف عميل أولاً</option>'}</select></label>
+          <label class="lbl">الخدمة<input class="field" name="service" maxlength="80" autocomplete="off"></label>
+          <label class="lbl">السعر<input class="field" name="price" dir="ltr" inputmode="numeric" maxlength="7"></label>
+          <label class="lbl">الفني<select class="field" name="technician_id">${techOpts('')}</select></label>
+          <button class="btn primary" type="submit">إنشاء الطلب</button>
+          <p class="err" role="alert"></p>
+        </form>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>العميل</th><th>الخدمة</th><th>الحالة</th><th>الفني</th><th>السعر</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </section>`;
+  }
+
+  /** Inline edits from the lists: tier, rating, order status and technician. */
+  async function changeField(el) {
+    const id = el.dataset.id;
+    const value = el.value === '' ? null : el.value;
+    try {
+      if (el.dataset.change === 'customer-tier') await api(`customers/${encodeURIComponent(id)}`, { method: 'POST', body: { tier: value } });
+      if (el.dataset.change === 'customer-rating') await api(`customers/${encodeURIComponent(id)}`, { method: 'POST', body: { rating: value === null ? null : Number(value) } });
+      if (el.dataset.change === 'order-status') await api(`orders/${encodeURIComponent(id)}`, { method: 'POST', body: { status: value } });
+      if (el.dataset.change === 'order-tech') await api(`orders/${encodeURIComponent(id)}`, { method: 'POST', body: { technician_id: value } });
+      toast('تم الحفظ');
+      await renderOps();
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر الحفظ');
     }
   }
 
@@ -781,6 +883,16 @@
         toast('تمت الإضافة');
         return await renderManagement();
       }
+      if (form.dataset.form === 'customer-add') {
+        await api('customers', { method: 'POST', body: values });
+        toast('تمت إضافة العميل');
+        return await renderOps();
+      }
+      if (form.dataset.form === 'order-add') {
+        await api('orders', { method: 'POST', body: values });
+        toast('تم إنشاء الطلب');
+        return await renderOps();
+      }
       if (form.dataset.form === 'map-location') {
         await api('map/location', { method: 'POST', body: values });
         toast('تم حفظ الموقع');
@@ -805,6 +917,7 @@
 
   app.addEventListener('change', (e) => {
     if (e.target.id === 'articles-site') return renderArticles(e.target.value);
+    if (e.target.dataset.change) return changeField(e.target);
   });
 
   app.addEventListener('click', async (e) => {

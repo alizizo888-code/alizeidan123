@@ -61,3 +61,32 @@ CREATE TABLE IF NOT EXISTS technician_locations (
     lng DECIMAL(9,6) NOT NULL,
     updated INT NOT NULL
 );
+
+-- Customers (schema v4): contact, location, service history flags, tier and last agreed price.
+CREATE TABLE IF NOT EXISTS customers (
+    id VARCHAR(40) PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    phone VARCHAR(20) NULL,
+    address VARCHAR(200) NULL,
+    lat DECIMAL(9,6) NULL,
+    lng DECIMAL(9,6) NULL,
+    tier VARCHAR(16) NOT NULL DEFAULT 'medium',
+    rating INT NULL,
+    rating_note VARCHAR(200) NULL,
+    last_price INT NULL,
+    created INT NOT NULL,
+    updated INT NOT NULL
+);
+
+-- Orders (schema v4): one job for one customer. Active statuses: new, assigned, in_progress.
+CREATE TABLE IF NOT EXISTS orders (
+    id VARCHAR(40) PRIMARY KEY,
+    customer_id VARCHAR(40) NOT NULL,
+    technician_id VARCHAR(40) NULL,
+    service VARCHAR(80) NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'new',
+    price INT NULL,
+    warranty_until INT NULL,
+    created INT NOT NULL,
+    updated INT NOT NULL
+);

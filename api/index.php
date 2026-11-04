@@ -209,10 +209,55 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // Customers: who they are, where they are, their tier, rating and last agreed price.
+    if ($method === 'GET' && $route === 'customers') {
+        Auth::current();
+        oxy_json(['ok' => true, 'customers' => Customers::list(), 'tiers' => Customers::TIERS]);
+        return;
+    }
+
+    if ($method === 'POST' && $route === 'customers') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'customer' => Customers::create(oxy_body())], 201);
+        return;
+    }
+
+    if ($method === 'POST' && count($parts) === 2 && $parts[0] === 'customers') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'customer' => Customers::update($parts[1], oxy_body())]);
+        return;
+    }
+
+    // Orders: active ones for the map and the board, or all of them.
+    if ($method === 'GET' && $route === 'orders') {
+        Auth::current();
+        $filter = $_GET['filter'] ?? null;
+        oxy_json(['ok' => true, 'orders' => Orders::list(is_string($filter) ? $filter : null), 'statuses' => Orders::STATUSES]);
+        return;
+    }
+
+    if ($method === 'POST' && $route === 'orders') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'order' => Orders::create(oxy_body())], 201);
+        return;
+    }
+
+    if ($method === 'POST' && count($parts) === 2 && $parts[0] === 'orders') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'order' => Orders::update($parts[1], oxy_body())]);
+        return;
+    }
+
     // Map: last known position of every active technician, and a position report (from the technician's app or by hand).
     if ($method === 'GET' && $route === 'map/live') {
         Auth::current();
-        oxy_json(['ok' => true, 'areas' => Locations::AREAS, 'technicians' => Locations::live()]);
+        oxy_json([
+            'ok' => true,
+            'areas' => Locations::AREAS,
+            'technicians' => Locations::live(),
+            'customers' => array_values(array_filter(Customers::list(), static fn (array $c): bool => $c['lat'] !== null)),
+            'orders' => array_values(array_filter(Orders::list('active'), static fn (array $o): bool => $o['lat'] !== null)),
+        ]);
         return;
     }
 
