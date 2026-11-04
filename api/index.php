@@ -209,6 +209,21 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // Map: last known position of every active technician, and a position report (from the technician's app or by hand).
+    if ($method === 'GET' && $route === 'map/live') {
+        Auth::current();
+        oxy_json(['ok' => true, 'areas' => Locations::AREAS, 'technicians' => Locations::live()]);
+        return;
+    }
+
+    if ($method === 'POST' && $route === 'map/location') {
+        Auth::requireCsrf();
+        $body = oxy_body();
+        $saved = Locations::record((string) ($body['person_id'] ?? ''), $body['lat'] ?? null, $body['lng'] ?? null);
+        oxy_json(['ok' => true, 'location' => $saved]);
+        return;
+    }
+
     throw new OxyHttpError(404, 'not_found');
 }
 

@@ -360,10 +360,70 @@
         <div class="stat"><b>${activeSups}</b><span>مشرف نشط</span></div>
       </section>
       <section class="panel">
+        <h2>الخريطة الميدانية والحية</h2>
+        <p class="muted">مناطق التغطية (مكة، جدة) والفنيين اللي عندهم موقع مسجّل. الموقع بيتحدّث لما الفني يبعته من تطبيقه، أو لما تدخله يدوياً هنا.</p>
+        <div id="ops-map" style="height:380px;border-radius:12px;margin-bottom:12px"></div>
+        <form class="form-row" data-form="map-location">
+          <label class="lbl">الفني<select class="field" name="person_id">${techs.people.filter((p) => p.active).map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('') || '<option value="">لا يوجد فنيون نشطون</option>'}</select></label>
+          <label class="lbl">خط العرض<input class="field" name="lat" dir="ltr" inputmode="decimal" placeholder="21.4225" maxlength="12"></label>
+          <label class="lbl">خط الطول<input class="field" name="lng" dir="ltr" inputmode="decimal" placeholder="39.8262" maxlength="12"></label>
+          <button class="btn primary" type="submit">حفظ الموقع يدوياً</button>
+          <p class="err" role="alert"></p>
+        </form>
+      </section>
+      <section class="panel">
         <h2>وحدات غرفة العمليات</h2>
         <p class="muted">كل وحدة تظهر هنا بحالتها. الوحدات اللي "بانتظار قرار" تستنى إجابتك على القرار المحدد فقط.</p>
         <div class="bulk-form">${modules.map(([label, state, note]) => `<div class="pick"><span class="pill ${state === 'جاهزة' ? 'ok' : 'idle'}">${esc(state)}</span><span>${esc(label)}</span><small>${esc(note)}</small></div>`).join('')}</div>
       </section>`);
+    drawOpsMap();
+  }
+
+  /** Leaflet on OpenStreetMap tiles, loaded once from unpkg when the map is first needed. */
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve(window.L);
+    if (!loadLeaflet.p) {
+      loadLeaflet.p = new Promise((resolve, reject) => {
+        const css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(css);
+        const js = document.createElement('script');
+        js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        js.onload = () => resolve(window.L);
+        js.onerror = () => reject(new Error('leaflet'));
+        document.head.appendChild(js);
+      });
+    }
+    return loadLeaflet.p;
+  }
+
+  /** Draws the service areas and the technicians' last known positions. A failure leaves the list working. */
+  async function drawOpsMap() {
+    const el = document.getElementById('ops-map');
+    if (!el) return;
+    try {
+      const [L, data] = await Promise.all([loadLeaflet(), api('map/live')]);
+      const map = L.map(el).setView([21.45, 39.6], 9);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '&copy; OpenStreetMap',
+      }).addTo(map);
+      const bounds = [];
+      for (const area of Object.values(data.areas)) {
+        L.circle([area.lat, area.lng], { radius: area.radius, color: '#0f6fb5', weight: 1, fillOpacity: 0.06 }).addTo(map).bindTooltip(area.label);
+        bounds.push([area.lat, area.lng]);
+      }
+      for (const t of data.technicians) {
+        if (t.lat === null) continue;
+        const when = new Date(t.updated * 1000).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+        L.marker([t.lat, t.lng]).addTo(map).bindPopup(`<b>${esc(t.name)}</b><br>آخر موقع: ${esc(when)}`);
+        bounds.push([t.lat, t.lng]);
+      }
+      if (bounds.length > 1) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12 });
+    } catch (error) {
+      el.innerHTML = '<p class="muted" style="padding:16px">تعذّر تحميل الخريطة. القائمة والإحصائيات تشتغل بدونها.</p>';
+    }
   }
 
   /** Operations modules and where each one stands. The note says what it waits for. */
@@ -720,6 +780,11 @@
         await api('management/people', { method: 'POST', body: values });
         toast('تمت الإضافة');
         return await renderManagement();
+      }
+      if (form.dataset.form === 'map-location') {
+        await api('map/location', { method: 'POST', body: values });
+        toast('تم حفظ الموقع');
+        return await renderOps();
       }
       if (form.dataset.form === 'bulk') {
         return await runBulk(form, e.submitter?.dataset.mode !== 'apply');
