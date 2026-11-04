@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Oxygen Bridge
  * Description: Signed REST endpoints for the Oxygen master control panel. HMAC-SHA256 over method, route, timestamp, nonce and body. No passwords, no cookies.
- * Version: 2.1.0
+ * Version: 2.2.0
  * Requires PHP: 7.4
  */
 
@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('OXY_BRIDGE_VERSION', '2.1.0');
+define('OXY_BRIDGE_VERSION', '2.2.0');
 define('OXY_BRIDGE_OPTION', 'oxy_bridge_secret');
 
 /**
@@ -37,8 +37,38 @@ function oxy_bridge_activate()
 }
 
 add_action('rest_api_init', 'oxy_bridge_routes');
+/**
+ * Lists the newest posts of any status so the desk can show this face's articles. Read only.
+ */
+function oxy_bridge_posts(WP_REST_Request $request)
+{
+    $posts = get_posts(array(
+        'post_type'   => 'post',
+        'post_status' => array('publish', 'future', 'draft', 'pending', 'private'),
+        'numberposts' => 100,
+        'orderby'     => 'date',
+        'order'       => 'DESC',
+    ));
+    $items = array();
+    foreach ($posts as $post) {
+        $items[] = array(
+            'id'     => (int) $post->ID,
+            'title'  => (string) $post->post_title,
+            'status' => (string) $post->post_status,
+            'date'   => (string) $post->post_date,
+            'url'    => (string) get_permalink($post->ID),
+        );
+    }
+    return array('count' => count($items), 'posts' => $items);
+}
+
 function oxy_bridge_routes()
 {
+    register_rest_route('oxy-bridge/v1', '/posts', array(
+        'methods'             => 'GET',
+        'callback'            => 'oxy_bridge_posts',
+        'permission_callback' => 'oxy_bridge_authorize',
+    ));
     register_rest_route('oxy-bridge/v1', '/status', array(
         'methods'             => 'GET',
         'callback'            => 'oxy_bridge_status',

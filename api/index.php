@@ -99,6 +99,20 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // Articles of one face, read through its bridge. A failure says who has to act, like bulk results.
+    if ($method === 'GET' && count($parts) === 3 && $parts[0] === 'sites' && $parts[2] === 'posts') {
+        Auth::current();
+        $site = Sites::find($parts[1]);
+        $result = Sites::call($site, 'GET', '/oxy-bridge/v1/posts');
+        if (!$result['ok']) {
+            oxy_json(['ok' => false, 'name' => $site['name'], 'error' => Bulk::explain((string) $result['error']), 'fix' => Bulk::fix((string) $result['error'])]);
+            return;
+        }
+        $posts = $result['data']['posts'] ?? [];
+        oxy_json(['ok' => true, 'name' => $site['name'], 'count' => count($posts), 'posts' => $posts]);
+        return;
+    }
+
     if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'sites' && $parts[2] === 'pair') {
         Auth::requireCsrf();
         Sites::pair($parts[1], (string) (oxy_body()['secret'] ?? ''));

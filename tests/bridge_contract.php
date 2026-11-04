@@ -21,6 +21,8 @@ function add_action($hook, $cb, $prio = 10, $args = 1) {}
 function add_options_page(...$a) {}
 function register_rest_route($ns, $route, $args) {}
 function has_action($h) { return false; }
+function get_posts($args) { return $GLOBALS['wp_posts'] ?? []; }
+function get_permalink($id) { return 'https://example.test/?p=' . $id; }
 
 final class WP_Error
 {
@@ -106,6 +108,13 @@ check('signature from another site secret is refused', oxy_bridge_authorize($wro
 
 $GLOBALS['wp_options']['oxy_bridge_secret'] = '';
 check('unpaired face (no secret) refuses everything', oxy_bridge_authorize(signed($secret, 'GET', '/oxy-bridge/v1/status', '')) instanceof WP_Error);
+
+echo "Articles on the face\n";
+$GLOBALS['wp_options']['oxy_bridge_secret'] = $secret; // an earlier check cleared it to test an unpaired face
+$GLOBALS['wp_posts'] = [(object) ['ID' => 7, 'post_title' => 'مقال', 'post_status' => 'publish', 'post_date' => '2026-11-01 10:00:00']];
+$listed = oxy_bridge_posts(signed($secret, 'GET', '/oxy-bridge/v1/posts', ''));
+check('the posts list returns count, id, status and link', $listed['count'] === 1 && $listed['posts'][0]['id'] === 7 && $listed['posts'][0]['status'] === 'publish' && str_contains($listed['posts'][0]['url'], '7'));
+check('a signed posts read is authorised', oxy_bridge_authorize(signed($secret, 'GET', '/oxy-bridge/v1/posts', '')) === true);
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);

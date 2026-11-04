@@ -12,6 +12,7 @@
     ['management', 'الإدارة'],
     ['settings', 'الإعدادات العامة'],
     ['bulk', 'الإعدادات الجماعية'],
+    ['articles', 'المقالات'],
   ];
   const AREAS = { makkah: 'مكة', jeddah: 'جدة', other: 'أخرى' };
   // [key, label, max length] for the general settings form. Must match General::FIELDS on the server.
@@ -288,6 +289,45 @@
   }
 
   /** General settings: plain business details, saved on the server. */
+  const POST_STATUS = { publish: 'منشورة', draft: 'مسودة', future: 'مجدولة', pending: 'قيد المراجعة', private: 'خاصة' };
+
+  /** Articles of one face, picked from the list of paired faces. Each face is read live through its bridge. */
+  async function renderArticles(siteId) {
+    app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
+    const overview = await api('overview');
+    state.csrf = overview.csrf;
+    const paired = overview.sites.filter((s) => s.paired);
+    const chosen = paired.find((s) => s.id === siteId) ? siteId : paired[0]?.id;
+    const options = paired.map((s) => `<option value="${esc(s.id)}"${s.id === chosen ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+
+    let body = '<p class="muted">لا توجد مواقع مربوطة بعد.</p>';
+    if (chosen) {
+      const r = await api(`sites/${encodeURIComponent(chosen)}/posts`);
+      if (!r.ok) {
+        const whoActs = { desk: 'من الديسك', site: 'من الموقع نفسه', retry: 'أعد المحاولة لاحقاً', review: 'يحتاج مراجعة' };
+        body = `<p class="err">${esc(r.error)} <small>(${esc(whoActs[r.fix] || r.fix || '')})</small></p>`;
+      } else {
+        const rows = r.posts.map((p) => `<tr>
+            <td>${esc(p.title || '(بدون عنوان)')}</td>
+            <td><span class="pill">${esc(POST_STATUS[p.status] || p.status)}</span></td>
+            <td class="ltr">${esc(p.date)}</td>
+            <td><a href="${esc(p.url)}" target="_blank" rel="noopener">فتح</a></td>
+          </tr>`).join('');
+        body = r.posts.length
+          ? `<p class="muted">${esc(r.count)} مقالة</p><div style="overflow-x:auto"><table><thead><tr><th>العنوان</th><th>الحالة</th><th>التاريخ</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+          : '<p class="muted">لا توجد مقالات على هذا الموقع.</p>';
+      }
+    }
+
+    app.innerHTML = shell(`
+      <section class="panel">
+        <h2>المقالات</h2>
+        <p class="muted">مقالات الموقع المختار: منشورة ومسودات ومجدولة، تُقرأ مباشرة من الموقع.</p>
+        <label class="lbl">الموقع <select class="field" id="articles-site">${options}</select></label>
+        <div style="margin-top:12px">${body}</div>
+      </section>`);
+  }
+
   async function renderSettings() {
     app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
     const { values } = await api('settings/general');
@@ -516,6 +556,7 @@
       if (view === 'management') return await renderManagement();
       if (view === 'settings') return await renderSettings();
       if (view === 'bulk') return await renderBulk();
+      if (view === 'articles') return await renderArticles();
       return await loadDashboard();
     } catch (error) {
       if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
@@ -602,6 +643,10 @@
       if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
       if (errEl) errEl.textContent = ERRORS[error.code] || 'تعذّر الحفظ';
     }
+  });
+
+  app.addEventListener('change', (e) => {
+    if (e.target.id === 'articles-site') return renderArticles(e.target.value);
   });
 
   app.addEventListener('click', async (e) => {
