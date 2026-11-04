@@ -171,6 +171,30 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // Bulk operations (health check, cache purge): same preview-first rules as bulk settings.
+    if ($method === 'GET' && $route === 'bulk/operations') {
+        Auth::current();
+        oxy_json(['ok' => true, 'operations' => BulkOps::OPS, 'max_batch' => Bulk::MAX_BATCH]);
+        return;
+    }
+
+    if ($method === 'POST' && $route === 'bulk/operations') {
+        Auth::requireCsrf();
+        set_time_limit(120);
+        $body = oxy_body();
+        $ids = $body['site_ids'] ?? null;
+        $op = $body['op'] ?? null;
+        if (!is_array($ids) || !is_string($op)) {
+            throw new OxyHttpError(400, 'bad_request');
+        }
+        $ids = array_map(static fn ($id): string => is_string($id) ? $id : '', $ids);
+        $dryRun = ($body['dry_run'] ?? true) !== false;
+        $results = BulkOps::run($op, array_values($ids), $dryRun);
+        Audit::log($dryRun ? 'bulk_op_preview' : 'bulk_op_batch', null, $op . ' faces=' . count($ids));
+        oxy_json(['ok' => true, 'op' => $op, 'dry_run' => $dryRun, 'results' => $results]);
+        return;
+    }
+
     throw new OxyHttpError(404, 'not_found');
 }
 

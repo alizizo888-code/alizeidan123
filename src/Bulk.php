@@ -119,7 +119,7 @@ final class Bulk
     }
 
     /** @return array<string,mixed> */
-    private static function failed(array $site, ?string $error): array
+    public static function failed(array $site, ?string $error): array
     {
         $error = (string) $error;
         return [

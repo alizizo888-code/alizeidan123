@@ -141,5 +141,17 @@ check('each failure says who acts: site for an old plugin', Bulk::fix('http_404:
 check('each failure says who acts: retry for a 5xx', Bulk::fix('http_502:x') === 'retry');
 check('an unknown failure goes to review', Bulk::fix('http_418:teapot') === 'review');
 
+echo "Bulk operations\n";
+check('only listed operations can run', throws(static fn () => BulkOps::run('delete_everything', ['nasmat'], true), 'unknown_op'));
+check('an empty operation batch is refused', throws(static fn () => BulkOps::run('health', [], true), 'bad_batch'));
+check('an operation batch over the limit is refused', throws(static fn () => BulkOps::run('purge', ['a', 'b', 'c', 'd', 'e', 'f'], true), 'bad_batch'));
+check('purge is marked as a write, health is not', BulkOps::OPS['purge']['writes'] === true && BulkOps::OPS['health']['writes'] === false);
+$purgePreview = BulkOps::run('purge', ['nasmat'], true);
+check('a purge preview changes nothing and says what would happen', $purgePreview[0]['ok'] === true && ($purgePreview[0]['preview'] ?? false) === true);
+$purgeApply = BulkOps::run('purge', ['nasmat'], false);
+check('applying purge to an unpaired face reports it and says who acts', $purgeApply[0]['ok'] === false && $purgeApply[0]['fix'] === 'desk');
+$healthRun = BulkOps::run('health', ['nasmat'], true);
+check('a health check on an unpaired face reports it', $healthRun[0]['ok'] === false && $healthRun[0]['error'] === 'غير مربوط، أعد الربط من الديسك');
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);
