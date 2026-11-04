@@ -49,6 +49,8 @@
     nothing_to_update: 'لا يوجد ما يُحفظ',
     not_found: 'العنصر غير موجود',
     unknown_setting: 'هذا الإعداد غير متاح',
+    unknown_op: 'هذه العملية غير معروفة',
+    bad_batch: 'اختر من 1 إلى 5 مواقع في الدفعة',
   };
 
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -310,12 +312,14 @@
    * and each face reports its own result, so one failing face never hides the rest.
    */
   let bulkFields = {};
+  let bulkOps = {};
   let bulkBatch = 5;
 
   async function renderBulk() {
     app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
-    const [meta, overview] = await Promise.all([api('bulk/settings'), api('overview')]);
+    const [meta, overview, ops] = await Promise.all([api('bulk/settings'), api('overview'), api('bulk/operations')]);
     bulkFields = meta.fields;
+    bulkOps = ops.operations;
     bulkBatch = meta.max_batch;
     state.csrf = overview.csrf;
 
@@ -333,6 +337,15 @@
           <input class="field" ${input} name="val:${esc(key)}" autocomplete="off" aria-label="${esc(f.label)}">
         </div>`;
     }).join('');
+    const opChoices = Object.entries(bulkOps).map(([key, o]) => `<label class="pick">
+          <input type="radio" name="op" value="${esc(key)}"${key === 'health' ? ' checked' : ''}>
+          <span>${esc(o.label)}</span>${o.writes ? '<em>يغيّر الموقع</em>' : ''}
+        </label>`).join('');
+    const opSites = overview.sites.map((s) => `<label class="pick${s.paired ? '' : ' off'}">
+          <input type="checkbox" name="opsite" value="${esc(s.id)}"${s.paired ? '' : ' disabled'}>
+          <span>${esc(s.name)}</span><small dir="ltr">${esc(s.host)}</small>
+          ${s.paired ? '' : '<em>غير مربوط</em>'}
+        </label>`).join('');
 
     app.innerHTML = shell(`
       <section class="panel">
@@ -342,8 +355,8 @@
           <fieldset class="bulk-sites">
             <legend>المواقع (${esc(bulkBatch)} في كل دفعة)</legend>
             <div class="row">
-              <button type="button" class="btn ghost sm" data-act="bulk-all">تحديد المربوطة</button>
-              <button type="button" class="btn ghost sm" data-act="bulk-none">إلغاء التحديد</button>
+              <button type="button" class="btn ghost sm" data-act="bulk-all" data-target="site">تحديد المربوطة</button>
+              <button type="button" class="btn ghost sm" data-act="bulk-none" data-target="site">إلغاء التحديد</button>
             </div>
             <div class="pick-grid">${sites}</div>
           </fieldset>
@@ -359,7 +372,82 @@
           <p class="err" role="alert"></p>
         </form>
         <div id="bulk-out"></div>
+      </section>
+      <section class="panel">
+        <h2>العمليات الجماعية</h2>
+        <p class="muted">اختر العملية والمواقع، وبعدين اعمل معاينة. العملية اللي بتغيّر الموقع (مسح الكاش) مش بتتنفذ إلا لما تضغط تنفيذ.</p>
+        <form class="bulk-form" data-form="bulkops">
+          <fieldset class="bulk-sites">
+            <legend>العملية</legend>
+            <div class="pick-grid">${opChoices}</div>
+          </fieldset>
+          <fieldset class="bulk-sites">
+            <legend>المواقع (${esc(bulkBatch)} في كل دفعة)</legend>
+            <div class="row">
+              <button type="button" class="btn ghost sm" data-act="bulk-all" data-target="opsite">تحديد المربوطة</button>
+              <button type="button" class="btn ghost sm" data-act="bulk-none" data-target="opsite">إلغاء التحديد</button>
+            </div>
+            <div class="pick-grid">${opSites}</div>
+          </fieldset>
+          <div class="row end">
+            <button class="btn" type="submit" data-mode="preview">معاينة</button>
+            <button class="btn primary" type="submit" data-mode="apply">تنفيذ</button>
+          </div>
+          <p id="bulkops-progress" class="muted" aria-live="polite"></p>
+          <p class="err" role="alert"></p>
+        </form>
+        <div id="bulkops-out"></div>
       </section>`);
+  }
+
+  /** Runs one operation over the selected faces in batches. Same rules as settings: preview first, confirm before writing. */
+  async function runBulkOps(form, dryRun) {
+    const err = form.querySelector('.err');
+    const progress = document.getElementById('bulkops-progress');
+    const out = document.getElementById('bulkops-out');
+    err.textContent = '';
+    out.innerHTML = '';
+
+    const op = form.querySelector('input[name="op"]:checked')?.value;
+    const siteIds = [...form.querySelectorAll('input[name="opsite"]:checked')].map((c) => c.value);
+    if (!op) { err.textContent = 'اختر عملية'; return; }
+    if (siteIds.length === 0) { err.textContent = 'اختر موقعاً واحداً على الأقل'; return; }
+    if (!dryRun && bulkOps[op]?.writes && !window.confirm(`سيتم تنفيذ "${bulkOps[op].label}" على ${siteIds.length} موقع. متأكد؟`)) return;
+
+    const results = [];
+    try {
+      for (let i = 0; i < siteIds.length; i += bulkBatch) {
+        const batch = siteIds.slice(i, i + bulkBatch);
+        progress.textContent = `جارٍ: ${Math.min(i + bulkBatch, siteIds.length)} من ${siteIds.length}`;
+        const r = await api('bulk/operations', { method: 'POST', body: { op, site_ids: batch, dry_run: dryRun } });
+        results.push(...r.results);
+      }
+      progress.textContent = '';
+      out.innerHTML = opsReport(op, results, dryRun);
+      toast(dryRun ? 'تمت المعاينة' : 'تم التنفيذ');
+    } catch (error) {
+      progress.textContent = '';
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      err.textContent = ERRORS[error.code] || 'تعذّر التنفيذ';
+    }
+  }
+
+  /** The owner sees, for each face, the outcome and who has to act if it failed. */
+  function opsReport(op, results, dryRun) {
+    const okCount = results.filter((r) => r.ok).length;
+    const whoActs = { desk: 'من الديسك', site: 'من الموقع نفسه', retry: 'أعد المحاولة لاحقاً', review: 'يحتاج مراجعة' };
+    const rows = results.map((r) => {
+      if (!r.ok) {
+        const who = r.fix ? ` <small>(${esc(whoActs[r.fix] || r.fix)})</small>` : '';
+        return `<tr><td>${esc(r.name)}</td><td class="status-failed">${esc(r.error)}${who}</td></tr>`;
+      }
+      const text = dryRun && r.preview ? esc(r.detail) : esc(r.detail || 'تم');
+      return `<tr><td>${esc(r.name)}</td><td class="status-done">${text}</td></tr>`;
+    }).join('');
+    return `<div class="panel bulk-report">
+        <h3>${dryRun ? 'نتيجة المعاينة' : 'نتيجة التنفيذ'} (${esc(bulkOps[op]?.label || op)}): نجح ${okCount} من ${results.length}</h3>
+        <div style="overflow-x:auto"><table><thead><tr><th>الموقع</th><th>النتيجة</th></tr></thead><tbody>${rows}</tbody></table></div>
+      </div>`;
   }
 
   async function runBulk(form, dryRun) {
@@ -499,6 +587,9 @@
       if (form.dataset.form === 'bulk') {
         return await runBulk(form, e.submitter?.dataset.mode !== 'apply');
       }
+      if (form.dataset.form === 'bulkops') {
+        return await runBulkOps(form, e.submitter?.dataset.mode !== 'apply');
+      }
       if (form.dataset.form === 'settings') {
         await api('settings/general', { method: 'POST', body: values });
         toast('تم حفظ الإعدادات');
@@ -528,7 +619,8 @@
     if (act === 'purge') return run('purge', id);
     if (act === 'person-toggle') return togglePerson(id, next === '1');
     if (act === 'bulk-all' || act === 'bulk-none') {
-      app.querySelectorAll('input[name="site"]:not(:disabled)').forEach((c) => { c.checked = act === 'bulk-all'; });
+      const target = btn.dataset.target === 'opsite' ? 'opsite' : 'site';
+      app.querySelectorAll(`input[name="${target}"]:not(:disabled)`).forEach((c) => { c.checked = act === 'bulk-all'; });
       return;
     }
   });
