@@ -14,7 +14,8 @@ final class Reports
             "SELECT p.id, p.name, p.active, ts.share_pct,
                 COUNT(CASE WHEN o.status = 'done' THEN 1 END) AS done_count,
                 COALESCE(SUM(CASE WHEN o.status = 'done' THEN o.price END), 0) AS done_value,
-                COUNT(CASE WHEN o.status IN ('new','assigned','in_progress') THEN 1 END) AS open_count
+                COUNT(CASE WHEN o.status IN ('new','assigned','in_progress') THEN 1 END) AS open_count,
+                (SELECT COALESCE(SUM(l.amount), 0) FROM ledger l WHERE l.person_id = p.id) AS balance
              FROM people p
              LEFT JOIN orders o ON o.technician_id = p.id
              LEFT JOIN technician_shares ts ON ts.person_id = p.id
@@ -35,6 +36,7 @@ final class Reports
                 'share_pct' => $share,
                 'earned' => (int) round($value * $share / 100),
                 'open_count' => (int) $r['open_count'],
+                'balance' => (int) $r['balance'],
             ];
         }, $rows);
     }

@@ -119,6 +119,10 @@ final class Orders
         if ($next['status'] === 'done' && $next['price'] !== null && $order['status'] !== 'done') {
             Customers::update($next['customer_id'], ['last_price' => $next['price']]);
         }
+        // A finished job with a technician earns him his share, once, in the ledger.
+        if ($next['status'] === 'done') {
+            Ledger::earnOrder($id);
+        }
         Audit::log('order_update', $id, implode(',', array_keys($in)));
         return $next;
     }
@@ -157,6 +161,16 @@ final class Orders
         if ($candidates === []) {
             throw new OxyHttpError(409, 'no_technician');
         }
+        // A technician with the specialty the service needs comes first. If nobody has it, the rule still applies to all.
+        $wanted = Skills::forService((string) ($order['service'] ?? ''));
+        if ($wanted !== []) {
+            $skills = Skills::all();
+            $matching = array_values(array_filter($candidates, static fn (array $t): bool =>
+                array_intersect($skills[$t['id']] ?? [], $wanted) !== []));
+            if ($matching !== []) {
+                $candidates = $matching;
+            }
+        }
 
         $pick = $candidates[0];
         if ($mode === 'nearest') {
@@ -171,6 +185,45 @@ final class Orders
         $updated = self::update($orderId, ['technician_id' => $pick['id'], 'status' => 'assigned']);
         Audit::log('order_distributed', $orderId, $mode . ':' . $pick['id']);
         return $updated;
+    }
+
+    /**
+     * Technicians ranked for one open order: distance in km (straight line) and a rough time in minutes,
+     * assuming 30 km/h plus 5 minutes. Both are estimates for the owner, not a route.
+     */
+    public static function candidates(string $orderId): array
+    {
+        $order = self::find($orderId);
+        if (!in_array($order['status'], ['new', 'assigned'], true)) {
+            throw new OxyHttpError(409, 'not_open');
+        }
+        $wanted = Skills::forService((string) ($order['service'] ?? ''));
+        $rows = [];
+        foreach (Locations::live() as $t) {
+            $km = ($t['lat'] !== null && $order['lat'] !== null)
+                ? round(self::km((float) $t['lat'], (float) $t['lng'], (float) $order['lat'], (float) $order['lng']), 1)
+                : null;
+            $rows[] = [
+                'id' => $t['id'],
+                'name' => $t['name'],
+                'status' => $t['status'],
+                'busy_orders' => $t['busy_orders'],
+                'skills' => $t['skills'],
+                'matches' => array_intersect($t['skills'], $wanted) !== [],
+                'km' => $km,
+                'minutes' => $km === null ? null : (int) round($km / 30 * 60 + 5),
+            ];
+        }
+        usort($rows, static function (array $a, array $b): int {
+            if ($a['matches'] !== $b['matches']) {
+                return $a['matches'] ? -1 : 1;
+            }
+            if ($a['km'] === null || $b['km'] === null) {
+                return ($a['km'] === null ? 1 : 0) <=> ($b['km'] === null ? 1 : 0);
+            }
+            return $a['km'] <=> $b['km'];
+        });
+        return ['order_id' => $orderId, 'needs' => $wanted, 'candidates' => $rows];
     }
 
     private static function km(float $lat1, float $lng1, float $lat2, float $lng2): float

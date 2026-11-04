@@ -38,22 +38,47 @@ final class Locations
     }
 
     /** Active technicians with their last position (null when none reported yet). */
+    /** Freshness window: a position older than this is shown as stale, not as current. */
+    public const FRESH_SECONDS = 7200;
+
+    /**
+     * Technicians with their position, specialties and a status for the map:
+     * busy (has an open order), available (position is fresh), stale (position is old), offline (no position).
+     */
     public static function live(): array
     {
         $stmt = oxy_pdo()->query(
-            'SELECT p.id, p.name, p.area, l.lat, l.lng, l.updated FROM people p
+            "SELECT p.id, p.name, p.area, l.lat, l.lng, l.updated,
+                (SELECT COUNT(*) FROM orders o WHERE o.technician_id = p.id AND o.status IN ('new','assigned','in_progress')) AS busy
+             FROM people p
              LEFT JOIN technician_locations l ON l.person_id = p.id
-             WHERE p.role = \'technician\' AND p.active = 1 ORDER BY p.name'
+             WHERE p.role = 'technician' AND p.active = 1 ORDER BY p.name"
         );
-        return array_map(static function (array $row): array {
+        $skills = Skills::all();
+        $now = time();
+        return array_map(static function (array $row) use ($skills, $now): array {
             $located = $row['lat'] !== null;
+            $updated = $located ? (int) $row['updated'] : null;
+            $busy = (int) $row['busy'] > 0;
+            if ($busy) {
+                $status = 'busy';
+            } elseif (!$located) {
+                $status = 'offline';
+            } elseif ($updated !== null && $now - $updated <= self::FRESH_SECONDS) {
+                $status = 'available';
+            } else {
+                $status = 'stale';
+            }
             return [
                 'id' => $row['id'],
                 'name' => $row['name'],
                 'area' => $row['area'],
                 'lat' => $located ? (float) $row['lat'] : null,
                 'lng' => $located ? (float) $row['lng'] : null,
-                'updated' => $located ? (int) $row['updated'] : null,
+                'updated' => $updated,
+                'busy_orders' => (int) $row['busy'],
+                'status' => $status,
+                'skills' => $skills[$row['id']] ?? [],
             ];
         }, $stmt->fetchAll());
     }

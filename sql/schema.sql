@@ -118,3 +118,23 @@ CREATE TABLE IF NOT EXISTS technician_shares (
     person_id VARCHAR(40) PRIMARY KEY,
     share_pct INT NOT NULL
 );
+
+-- Technician balance ledger (schema v8). Amounts are signed: earnings and adjustments may be either sign,
+-- deductions and payments are negative. The balance of a technician is the sum of his rows.
+CREATE TABLE IF NOT EXISTS ledger (
+    id VARCHAR(40) PRIMARY KEY,
+    person_id VARCHAR(40) NOT NULL,
+    kind VARCHAR(16) NOT NULL,
+    amount INT NOT NULL,
+    order_id VARCHAR(40) NULL,
+    note VARCHAR(200) NOT NULL DEFAULT '',
+    created INT NOT NULL,
+    seq INT NOT NULL DEFAULT 0
+);
+
+-- Specialties of each technician (schema v9). One row per specialty. The list is fixed in Skills::LIST.
+CREATE TABLE IF NOT EXISTS technician_skills (
+    person_id VARCHAR(40) NOT NULL,
+    skill VARCHAR(40) NOT NULL,
+    PRIMARY KEY (person_id, skill)
+);

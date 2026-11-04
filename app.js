@@ -60,6 +60,13 @@
     not_technician: 'النسبة تتحدد للفنيين بس',
     bad_mode: 'الاختيار غير صحيح',
     bad_warranty: 'مدة الضمان لازم تكون من 0 لـ 730 يوم',
+    insufficient_balance: 'المبلغ أكبر من رصيد الفني',
+    note_required: 'اكتب سبب التسوية',
+    bad_kind: 'نوع الحركة غير صحيح',
+    bad_skill: 'تخصص غير معروف',
+    too_many_skills: 'الحد الأقصى 10 تخصصات للفني',
+    bad_amount: 'المبلغ غير صحيح',
+    bad_note: 'السبب غير صالح، ومن غير علامات < أو >',
     unknown_op: 'هذه العملية غير معروفة',
     bad_batch: 'اختر من 1 إلى 5 مواقع في الدفعة',
   };
@@ -292,8 +299,13 @@
 
   async function peopleBlock(role) {
     const block = ROLE_BLOCKS[role];
-    const { people } = await api(`management/people?role=${encodeURIComponent(role)}`);
+    const { people, skill_list: skillList = [] } = await api(`management/people?role=${encodeURIComponent(role)}`);
     const isTech = role === 'technician';
+    const skillsCell = (p) => isTech
+      ? `<td><details><summary>${(p.skills || []).length} تخصص</summary>
+          <div class="chips" style="margin:8px 0">${skillList.map((k) => `<label class="lbl check"><input type="checkbox" data-skill-for="${esc(p.id)}" value="${esc(k)}"${(p.skills || []).includes(k) ? ' checked' : ''}> ${esc(k)}</label>`).join('')}</div>
+          <button class="btn ghost sm" data-act="skills-save" data-id="${esc(p.id)}">حفظ التخصصات</button></details></td>`
+      : '';
     const dispatch = isTech ? await api('settings/dispatch') : null;
     const shareCell = (p) => isTech
       ? `<td class="share-cell"><input class="field" type="number" min="0" max="100" dir="ltr" data-share-for="${esc(p.id)}" value="${esc(dispatch.shares[p.id] ?? '')}" placeholder="${dispatch.values.default_share}"><button class="btn ghost sm" data-act="share-save" data-id="${esc(p.id)}">حفظ</button></td>`
@@ -303,9 +315,10 @@
         <td class="ltr">${esc(p.phone || '—')}</td>
         <td>${esc(AREAS[p.area] || '—')}</td>
         <td><span class="pill ${p.active ? 'ok' : 'idle'}">${p.active ? 'نشط' : 'موقوف'}</span></td>
+        ${skillsCell(p)}
         ${shareCell(p)}
         <td><button class="btn ghost sm" data-act="person-toggle" data-id="${esc(p.id)}" data-next="${p.active ? '0' : '1'}">${p.active ? 'إيقاف' : 'تفعيل'}</button></td>
-      </tr>`).join('') || `<tr><td colspan="${isTech ? 6 : 5}" class="muted">${block.empty}</td></tr>`;
+      </tr>`).join('') || `<tr><td colspan="${isTech ? 7 : 5}" class="muted">${block.empty}</td></tr>`;
 
     return `
       <section class="panel">
@@ -325,7 +338,7 @@
           <p class="err" role="alert"></p>
         </form>
         <div style="overflow-x:auto"><table>
-          <thead><tr><th>الاسم</th><th>الجوال</th><th>المنطقة</th><th>الحالة</th>${isTech ? '<th>نسبته من السعر (%)</th>' : ''}<th></th></tr></thead>
+          <thead><tr><th>الاسم</th><th>الجوال</th><th>المنطقة</th><th>الحالة</th>${isTech ? '<th>التخصصات</th><th>نسبته من السعر (%)</th>' : ''}<th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
       </section>`;
@@ -411,7 +424,17 @@
       <section class="panel">
         <h2>الخريطة الميدانية والحية</h2>
         <p class="muted">مناطق التغطية (مكة، جدة) والفنيين اللي عندهم موقع مسجّل. الموقع بيتحدّث لما الفني يبعته من تطبيقه، أو لما تدخله يدوياً هنا.</p>
-        <div id="ops-map" style="height:380px;border-radius:12px;margin-bottom:12px"></div>
+        <div class="chips" style="margin-bottom:10px">
+          <label class="lbl">التخصص<select class="field" data-change="map-filter" data-key="skill"><option value="">الكل</option>${SKILL_LIST.map((k) => `<option value="${esc(k)}"${mapFilter().skill === k ? ' selected' : ''}>${esc(k)}</option>`).join('')}</select></label>
+          <label class="lbl">الحالة<select class="field" data-change="map-filter" data-key="status">${Object.entries(TECH_STATUS).map(([k, v]) => `<option value="${k}"${mapFilter().status === k ? ' selected' : ''}>${esc(v[0])}</option>`).join('')}</select></label>
+          <label class="lbl check"><input type="checkbox" data-change="map-filter" data-key="technicians"${mapFilter().technicians ? ' checked' : ''}> الفنيون</label>
+          <label class="lbl check"><input type="checkbox" data-change="map-filter" data-key="customers"${mapFilter().customers ? ' checked' : ''}> العملاء</label>
+          <label class="lbl">ترشيح فنيين لطلب<select class="field" data-change="map-order"><option value="">— بدون —</option>${state.orders.filter((o) => o.active && !o.technician_id).map((o) => `<option value="${esc(o.id)}"${state.mapOrder === o.id ? ' selected' : ''}>${esc(o.service || o.id)}</option>`).join('')}</select></label>
+        </div>
+        <div class="map-layout" style="margin-bottom:12px">
+          <div id="ops-map" style="height:420px;border-radius:12px"></div>
+          <aside class="map-side" id="map-side"><p class="muted">جارٍ تحميل الفنيين…</p></aside>
+        </div>
         <form class="form-row" data-form="map-location">
           <label class="lbl">الفني<select class="field" name="person_id">${techs.people.filter((p) => p.active).map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('') || '<option value="">لا يوجد فنيون نشطون</option>'}</select></label>
           <label class="lbl">خط العرض<input class="field" name="lat" dir="ltr" inputmode="decimal" placeholder="21.4225" maxlength="12"></label>
@@ -448,12 +471,63 @@
   }
 
   /** Draws the service areas and the technicians' last known positions. A failure leaves the list working. */
+  /** Must match Skills::LIST on the server. */
+  const SKILL_LIST = ['تكييف', 'كهرباء', 'سباكة', 'أقفال ذكية', 'أجهزة منزلية', 'ساتلايت', 'دهان وديكور', 'تبليط وترميم', 'كاميرات', 'تبريد', 'تنظيف', 'مكافحة حشرات', 'خزانات', 'نقل أثاث', 'طاقة شمسية', 'صيانة عامة', 'مقاولات'];
+  /** Technician status on the map: [label, marker colour]. */
+  const TECH_STATUS = { '': ['الكل', ''], available: ['متاح', '#22c55e'], busy: ['مشغول', '#f59e0b'], stale: ['موقع قديم', '#64748b'], offline: ['بدون موقع', '#ef4444'] };
+  const DEFAULT_MAP_FILTER = { skill: '', status: '', technicians: true, customers: true };
+  function mapFilter() { return { ...DEFAULT_MAP_FILTER, ...(state.mapFilter || {}) }; }
+
+  /** Side panel: status legend, technicians with their specialties, and the ranked candidates for the chosen order. */
+  function renderMapSide(data, filter, cand) {
+    const el = document.getElementById('map-side');
+    if (!el) return;
+    const colourOf = (s) => (TECH_STATUS[s] || TECH_STATUS.offline)[1];
+    const legend = Object.entries(TECH_STATUS).filter(([k]) => k).map(([k, v]) =>
+      `<span class="legend-item"><span class="legend-dot" style="background:${v[1]}"></span>${esc(v[0])}</span>`).join('');
+    const techs = (data.technicians || []).filter((t) =>
+      (!filter.status || t.status === filter.status) && (!filter.skill || (t.skills || []).includes(filter.skill)));
+    const techRows = techs.map((t) => `<div class="tech-row">
+        <span class="legend-dot" style="background:${colourOf(t.status)}"></span>
+        <div class="tech-meta"><b>${esc(t.name)}</b><small>${esc((t.skills || []).join('، ') || 'بدون تخصص')}</small></div>
+        <span class="pill">${esc((TECH_STATUS[t.status] || TECH_STATUS.offline)[0])}</span>
+      </div>`).join('') || '<p class="muted">لا يوجد فنيون بهذا الفلتر.</p>';
+    let candBlock = '';
+    if (state.mapOrder) {
+      if (!cand || cand.error) {
+        candBlock = '<p class="muted">تعذّر تحميل المرشحين لهذا الطلب (ربما لم يعد مفتوحاً).</p>';
+      } else {
+        const rows = cand.candidates.map((c) => `<div class="tech-row">
+            <span class="legend-dot" style="background:${colourOf(c.status)}"></span>
+            <div class="tech-meta"><b>${esc(c.name)}</b><small>${c.km === null ? 'بدون موقع' : c.km + ' كم · ~' + c.minutes + ' دقيقة (تقدير)'}${c.matches ? ' · تخصص مطابق' : ''}</small></div>
+            <span class="pill ${c.matches ? 'ok' : ''}">${esc((TECH_STATUS[c.status] || TECH_STATUS.offline)[0])}</span>
+          </div>`).join('') || '<p class="muted">لا يوجد فنيون.</p>';
+        candBlock = `<h3>المرشحون (الأقرب أولاً)</h3>${rows}`;
+      }
+    }
+    el.innerHTML = `<div class="legend">${legend}</div><h3>الفنيون</h3>${techRows}${candBlock}`;
+  }
+
   async function drawOpsMap() {
     const el = document.getElementById('ops-map');
     if (!el) return;
+    let data;
     try {
-      const [L, data] = await Promise.all([loadLeaflet(), api('map/live')]);
+      data = await api('map/live');
+    } catch (error) {
+      el.innerHTML = '<p class="muted" style="padding:16px">تعذّر تحميل الخريطة. القائمة والإحصائيات تشتغل بدونها.</p>';
+      return;
+    }
+    const filter = mapFilter();
+    const cand = state.mapOrder
+      ? await api(`orders/${encodeURIComponent(state.mapOrder)}/candidates`).catch(() => ({ error: true }))
+      : null;
+    renderMapSide(data, filter, cand);
+    try {
+      const L = await loadLeaflet();
+      if (state.map) { state.map.remove(); state.map = null; }
       const map = L.map(el).setView([21.45, 39.6], 9);
+      state.map = map;
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 18,
         attribution: '&copy; OpenStreetMap',
@@ -463,17 +537,22 @@
         L.circle([area.lat, area.lng], { radius: area.radius, color: '#0f6fb5', weight: 1, fillOpacity: 0.06 }).addTo(map).bindTooltip(area.label);
         bounds.push([area.lat, area.lng]);
       }
-      for (const c of data.customers) {
+      for (const c of (filter.customers ? data.customers : [])) {
         const tags = [c.active_orders ? 'طلب نشط' : null, c.under_warranty ? 'ضمان ساري' : null, c.done_orders ? 'تعامل سابق' : null].filter(Boolean).join(' · ') || 'عميل جديد';
         const wa = c.phone ? `https://wa.me/${c.phone}?text=${encodeURIComponent('موقع العميل ' + c.name + ': https://maps.google.com/?q=' + c.lat + ',' + c.lng)}` : '';
         const marker = L.circleMarker([c.lat, c.lng], { radius: 8, color: c.active_orders ? '#1f8a4c' : '#6b7280', fillOpacity: 0.85 }).addTo(map);
         marker.bindPopup(`<b>${esc(c.name)}</b><br>${esc(tags)}<br>الطبقة: ${esc(c.tier_label)}${c.last_price ? '<br>آخر سعر: ' + c.last_price : ''}${c.rating ? '<br>التقييم: ' + c.rating + '/5' : ''}${wa ? `<br><a href="${esc(wa)}" target="_blank" rel="noopener">إرسال الموقع على واتساب</a>` : ''}`);
         bounds.push([c.lat, c.lng]);
       }
-      for (const t of data.technicians) {
+      for (const t of (filter.technicians ? data.technicians : [])) {
         if (t.lat === null) continue;
-        const when = new Date(t.updated * 1000).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-        L.marker([t.lat, t.lng]).addTo(map).bindPopup(`<b>${esc(t.name)}</b><br>آخر موقع: ${esc(when)}`);
+        if (filter.status && t.status !== filter.status) continue;
+        if (filter.skill && !(t.skills || []).includes(filter.skill)) continue;
+        const when = t.updated ? new Date(t.updated * 1000).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }) : '—';
+        const skills = (t.skills || []).join('، ') || 'بدون تخصص';
+        const colour = (TECH_STATUS[t.status] || TECH_STATUS.offline)[1];
+        L.circleMarker([t.lat, t.lng], { radius: 9, color: colour, weight: 2, fillColor: colour, fillOpacity: 0.7 }).addTo(map)
+          .bindPopup(`<b>${esc(t.name)}</b><br>${esc(TECH_STATUS[t.status][0])} · طلبات مفتوحة: ${t.busy_orders}<br>التخصص: ${esc(skills)}<br>آخر موقع: ${esc(when)}`);
         bounds.push([t.lat, t.lng]);
       }
       if (bounds.length > 1) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12 });
@@ -732,10 +811,23 @@
       </section>`);
   }
 
-  /** Technician accounts: finished jobs, what they earned at their share, and open work. Read-only. */
+  /** Technician accounts: finished jobs, earnings at their share, balance, and the ledger with deductions and payments. */
   async function renderAccounts() {
     app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
     const { technicians } = await api('accounts');
+    const selected = state.ledgerPerson && technicians.some((t) => t.id === state.ledgerPerson)
+      ? state.ledgerPerson : (technicians[0] ? technicians[0].id : '');
+    state.ledgerPerson = selected;
+    const ledger = selected ? await api(`ledger?person=${encodeURIComponent(selected)}`) : { balance: 0, rows: [] };
+    const personOpts = technicians.map((t) => `<option value="${esc(t.id)}"${t.id === selected ? ' selected' : ''}>${esc(t.name)}</option>`).join('');
+    const kindOpts = [['deduction', 'خصم'], ['payment', 'صرف'], ['adjustment', 'تسوية']]
+      .map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
+    const ledgerRows = ledger.rows.map((r) => `<tr>
+        <td>${esc(r.kind_label)}</td>
+        <td class="ltr"><b>${r.amount > 0 ? '+' : ''}${r.amount}</b></td>
+        <td>${esc(r.note || (r.order_id ? 'طلب مكتمل' : '—'))}</td>
+        <td class="ltr">${new Date(r.created * 1000).toISOString().slice(0, 16).replace('T', ' ')}</td>
+      </tr>`).join('') || '<tr><td colspan="4" class="muted">لا توجد حركات لهذا الفني بعد.</td></tr>';
     const totalEarned = technicians.reduce((sum, t) => sum + t.earned, 0);
     const totalDone = technicians.reduce((sum, t) => sum + t.done_count, 0);
     const rows = technicians.map((t) => `<tr>
@@ -744,8 +836,9 @@
         <td class="ltr">${t.done_value}</td>
         <td>${t.share_pct}%</td>
         <td class="ltr"><b>${t.earned}</b></td>
+        <td class="ltr"><b>${t.balance}</b></td>
         <td>${t.open_count}</td>
-      </tr>`).join('') || '<tr><td colspan="6" class="muted">لا يوجد فنيون بعد.</td></tr>';
+      </tr>`).join('') || '<tr><td colspan="7" class="muted">لا يوجد فنيون بعد.</td></tr>';
     app.innerHTML = shell(`
       <section class="stats">
         <div class="stat"><b>${totalDone}</b><span>طلب مكتمل</span></div>
@@ -755,8 +848,26 @@
         <h2>الحسابات والعمولات</h2>
         <p class="muted">النصيب = سعر الطلبات المكتملة × نسبة الفني. النسبة بتتحدد من صفحة المشرفين والفنيين، أو الافتراضية من التوزيع.</p>
         <div style="overflow-x:auto"><table>
-          <thead><tr><th>الفني</th><th>مكتمل</th><th>قيمة المكتمل</th><th>النسبة</th><th>نصيبه</th><th>مفتوح</th></tr></thead>
+          <thead><tr><th>الفني</th><th>مكتمل</th><th>قيمة المكتمل</th><th>النسبة</th><th>نصيبه</th><th>الرصيد</th><th>مفتوح</th></tr></thead>
           <tbody>${rows}</tbody>
+        </table></div>
+      </section>
+      <section class="panel">
+        <h2>حركات الرصيد</h2>
+        <p class="muted">الخصم والصرف والتسوية بتتسجل هنا ومابتتعدلش بعد كده. الصرف مايعديش الرصيد، والتسوية لازم يكون ليها سبب.</p>
+        <label class="lbl">الفني<select class="field" data-change="ledger-person">${personOpts || '<option value="">لا يوجد فنيون</option>'}</select></label>
+        <p class="kpi">الرصيد الحالي: <b class="ltr">${ledger.balance}</b> ر.س</p>
+        <form class="form-row" data-form="ledger">
+          <input type="hidden" name="person_id" value="${esc(selected)}">
+          <label class="lbl">نوع الحركة<select class="field" name="kind">${kindOpts}</select></label>
+          <label class="lbl">المبلغ (ر.س)<input class="field" name="amount" dir="ltr" inputmode="numeric" maxlength="7" required></label>
+          <label class="lbl">السبب<input class="field" name="note" maxlength="200" autocomplete="off"></label>
+          <button class="btn primary" type="submit"${selected ? '' : ' disabled'}>تسجيل الحركة</button>
+          <p class="err" role="alert"></p>
+        </form>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>النوع</th><th>المبلغ</th><th>السبب</th><th>التاريخ</th></tr></thead>
+          <tbody>${ledgerRows}</tbody>
         </table></div>
       </section>`);
   }
@@ -1108,6 +1219,19 @@
   }
 
   /** Saves one technician's share. An empty box clears it, so the default from settings applies again. */
+  /** Saves the specialties ticked for one technician. */
+  async function saveSkills(id) {
+    const picked = [...app.querySelectorAll(`input[data-skill-for="${CSS.escape(id)}"]:checked`)].map((i) => i.value);
+    try {
+      await api(`management/people/${encodeURIComponent(id)}/skills`, { method: 'POST', body: { skills: picked } });
+      toast('تم حفظ التخصصات');
+      return await renderManagement();
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر الحفظ');
+    }
+  }
+
   async function saveShare(id) {
     const input = app.querySelector(`input[data-share-for="${CSS.escape(id)}"]`);
     const raw = input ? input.value.trim() : '';
@@ -1197,6 +1321,18 @@
       if (form.dataset.form === 'bulkops') {
         return await runBulkOps(form, e.submitter?.dataset.mode !== 'apply');
       }
+      if (form.dataset.form === 'ledger') {
+        const body = {
+          person_id: form.elements.person_id.value,
+          kind: form.elements.kind.value,
+          amount: form.elements.amount.value,
+          note: form.elements.note.value,
+        };
+        await api('ledger', { method: 'POST', body });
+        toast('تم تسجيل الحركة');
+        state.ledgerPerson = body.person_id;
+        return await renderAccounts();
+      }
       if (form.dataset.form === 'chat') {
         const body = {
           enabled: form.elements.enabled.checked,
@@ -1234,6 +1370,13 @@
 
   app.addEventListener('change', (e) => {
     if (e.target.id === 'articles-site') return renderArticles(e.target.value);
+    if (e.target.dataset.change === 'map-filter') {
+      const key = e.target.dataset.key;
+      state.mapFilter = { ...mapFilter(), [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value };
+      return drawOpsMap();
+    }
+    if (e.target.dataset.change === 'map-order') { state.mapOrder = e.target.value || null; return drawOpsMap(); }
+    if (e.target.dataset.change === 'ledger-person') { state.ledgerPerson = e.target.value; return renderAccounts(); }
     if (e.target.dataset.change === 'intake-open') return saveDispatch({ intake_open: e.target.checked }, e.target.checked ? 'الاستقبال مفتوح' : 'تم إيقاف الاستقبال مؤقتاً');
     if (e.target.dataset.change) return changeField(e.target);
   });
@@ -1257,6 +1400,7 @@
     if (act === 'purge') return run('purge', id);
     if (act === 'person-toggle') return togglePerson(id, next === '1');
     if (act === 'share-save') return saveShare(id);
+    if (act === 'skills-save') return saveSkills(id);
     if (act === 'order-filter') { state.orderFilter = id; return renderOps(); }
     if (act === 'dispatch-mode') return saveDispatch({ mode: id }, 'تم حفظ أسلوب التوزيع');
     if (act === 'dispatch-rule') return saveDispatch({ rule: id }, 'تم حفظ قاعدة التوزيع');

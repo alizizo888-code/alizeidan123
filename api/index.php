@@ -130,7 +130,10 @@ function oxy_dispatch(string $method, string $route): void
     if ($method === 'GET' && $route === 'management/people') {
         Auth::current();
         $role = $_GET['role'] ?? 'supervisor';
-        oxy_json(['ok' => true, 'people' => People::list(is_string($role) ? $role : '')]);
+        $people = People::list(is_string($role) ? $role : '');
+        $skills = Skills::all();
+        $people = array_map(static fn (array $p): array => $p + ['skills' => $skills[$p['id']] ?? []], $people);
+        oxy_json(['ok' => true, 'people' => $people, 'skill_list' => Skills::LIST]);
         return;
     }
 
@@ -141,6 +144,13 @@ function oxy_dispatch(string $method, string $route): void
     }
 
     // A technician's own share of the job price. Body: {"share_pct": 0-100} or null to use the default.
+    // Specialties of a technician. Body: {"skills": [...]} from the fixed list.
+    if ($method === 'POST' && count($parts) === 4 && $parts[0] === 'management' && $parts[1] === 'people' && $parts[3] === 'skills') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'skills' => Skills::set($parts[2], oxy_body()['skills'] ?? null)]);
+        return;
+    }
+
     if ($method === 'POST' && count($parts) === 4 && $parts[0] === 'management' && $parts[1] === 'people' && $parts[3] === 'share') {
         Auth::requireCsrf();
         oxy_json(['ok' => true, 'share' => Dispatch::setShare($parts[2], oxy_body()['share_pct'] ?? null)]);
@@ -150,6 +160,29 @@ function oxy_dispatch(string $method, string $route): void
     if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'management' && $parts[1] === 'people') {
         Auth::requireCsrf();
         oxy_json(['ok' => true, 'person' => People::update($parts[2], oxy_body())]);
+        return;
+    }
+
+    // Candidates for an open order: technicians ranked by specialty, then distance.
+    if ($method === 'GET' && count($parts) === 3 && $parts[0] === 'orders' && $parts[2] === 'candidates') {
+        Auth::current();
+        oxy_json(['ok' => true] + Orders::candidates($parts[1]));
+        return;
+    }
+
+    // Technician balance: the ledger of one technician, and manual deductions, payments and adjustments.
+    if ($method === 'GET' && $route === 'ledger') {
+        Auth::current();
+        $person = (string) ($_GET['person'] ?? '');
+        People::find($person);
+        oxy_json(['ok' => true, 'balance' => Ledger::balance($person), 'rows' => Ledger::rows($person)]);
+        return;
+    }
+
+    if ($method === 'POST' && $route === 'ledger') {
+        Auth::requireCsrf();
+        $body = oxy_body();
+        oxy_json(['ok' => true] + Ledger::record((string) ($body['person_id'] ?? ''), $body['kind'] ?? null, $body['amount'] ?? null, $body['note'] ?? ''), 201);
         return;
     }
 
@@ -365,6 +398,7 @@ function oxy_upgrade(): void
         return; // Fresh database: the install route creates the tables.
     }
     oxy_schema();
+    Ledger::backfill();
     Settings::set('schema', OXY_SCHEMA_VERSION);
 }
 
