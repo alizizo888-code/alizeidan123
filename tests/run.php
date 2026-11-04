@@ -126,11 +126,20 @@ check('markup in a text setting is refused', throws(static fn () => Bulk::valida
 check('a batch larger than the limit is refused', throws(static fn () => Bulk::run(['a', 'b', 'c', 'd', 'e', 'f'], ['blogname' => 'x'], true), 'bad_batch'));
 check('an empty batch is refused', throws(static fn () => Bulk::run([], ['blogname' => 'x'], true), 'bad_batch'));
 $preview = Bulk::run(['nasmat'], ['blogname' => 'اختبار'], true);
-check('an unpaired face reports why, and does not stop the batch', $preview[0]['ok'] === false && $preview[0]['error'] === 'غير مربوط');
+check('an unpaired face reports why, and does not stop the batch', $preview[0]['ok'] === false && $preview[0]['error'] === 'غير مربوط، أعد الربط من الديسك' && $preview[0]['fix'] === 'desk');
 $applied = Bulk::run(['nasmat'], ['blogname' => 'اختبار'], false);
 check('applying to an unpaired face changes nothing and reports it', $applied[0]['ok'] === false && $applied[0]['name'] === Sites::find('nasmat')['name']);
 check('an outdated plugin gets a clear message', Bulk::explain('http_404:rest_no_route') === 'الإضافة قديمة، حدّثها على هذا الموقع');
 check('a wrong key gets a clear message', Bulk::explain('http_401:oxy_bad_signature') === 'المفتاح لا يطابق، أعد الربط');
+check('an unpaired face on the bridge says to re-pair from the desk', Bulk::explain('http_403:oxy_unpaired') === 'غير مربوط، أعد الربط من الديسك');
+check('a clock mismatch is named, not called a wrong key', Bulk::explain('http_401:oxy_stale') === 'ساعة الموقع أو الديسك غير متزامنة');
+check('an unknown setting on the face is named', Bulk::explain('http_400:oxy_unknown_setting') === 'هذا الإعداد غير مسموح به على الموقع');
+check('a 5xx from the face asks for a retry', Bulk::explain('http_503:x') === 'خطأ داخلي على الموقع، أعد المحاولة لاحقاً');
+check('a network failure tells the owner the face may be down', str_starts_with(Bulk::explain('network:timeout'), 'تعذّر الوصول'));
+check('each failure says who acts: desk for keys', Bulk::fix('http_401:oxy_bad_signature') === 'desk');
+check('each failure says who acts: site for an old plugin', Bulk::fix('http_404:rest_no_route') === 'site');
+check('each failure says who acts: retry for a 5xx', Bulk::fix('http_502:x') === 'retry');
+check('an unknown failure goes to review', Bulk::fix('http_418:teapot') === 'review');
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);

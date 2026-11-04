@@ -121,30 +121,64 @@ final class Bulk
     /** @return array<string,mixed> */
     private static function failed(array $site, ?string $error): array
     {
-        return ['site_id' => $site['id'], 'name' => $site['name'], 'ok' => false, 'error' => self::explain((string) $error)];
+        $error = (string) $error;
+        return [
+            'site_id' => $site['id'],
+            'name' => $site['name'],
+            'ok' => false,
+            'error' => self::explain($error),
+            'fix' => self::fix($error),
+        ];
     }
 
     /** Turns a transport or bridge error into a short Arabic message for the owner. */
     public static function explain(string $error): string
     {
-        if ($error === 'unpaired') {
-            return 'غير مربوط';
+        if ($error === 'unpaired' || $error === 'http_403:oxy_unpaired') {
+            return 'غير مربوط، أعد الربط من الديسك';
         }
         if (str_starts_with($error, 'network')) {
-            return 'تعذّر الوصول للموقع';
+            return 'تعذّر الوصول للموقع (ربما متوقف أو الشبكة)';
         }
         if ($error === 'http_404:rest_no_route') {
             return 'الإضافة قديمة، حدّثها على هذا الموقع';
         }
+        if ($error === 'http_401:oxy_stale') {
+            return 'ساعة الموقع أو الديسك غير متزامنة';
+        }
         if (str_starts_with($error, 'http_401')) {
             return 'المفتاح لا يطابق، أعد الربط';
         }
-        if (str_starts_with($error, 'non_json')) {
-            return 'الموقع أرجع صفحة غير متوقعة (ربما حماية أو صيانة)';
+        if ($error === 'http_400:oxy_unknown_setting') {
+            return 'هذا الإعداد غير مسموح به على الموقع';
         }
         if (str_starts_with($error, 'http_400')) {
             return 'القيمة مرفوضة على الموقع';
         }
+        if (str_starts_with($error, 'http_403')) {
+            return 'الموقع منع الطلب (صلاحية أو حماية)';
+        }
+        if (preg_match('/^http_5\d\d/', $error) === 1) {
+            return 'خطأ داخلي على الموقع، أعد المحاولة لاحقاً';
+        }
+        if (str_starts_with($error, 'non_json')) {
+            return 'الموقع أرجع صفحة غير متوقعة (ربما حماية أو صيانة)';
+        }
         return 'فشل: ' . substr($error, 0, 120);
+    }
+
+    /** Who has to act on a failure: the desk, the face itself, or wait and retry. */
+    public static function fix(string $error): string
+    {
+        if ($error === 'unpaired' || $error === 'http_403:oxy_unpaired' || str_starts_with($error, 'http_401')) {
+            return 'desk';
+        }
+        if ($error === 'http_404:rest_no_route' || str_starts_with($error, 'non_json') || str_starts_with($error, 'http_403')) {
+            return 'site';
+        }
+        if (str_starts_with($error, 'network') || preg_match('/^http_5\d\d/', $error) === 1) {
+            return 'retry';
+        }
+        return 'review';
     }
 }
