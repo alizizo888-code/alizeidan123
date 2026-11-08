@@ -107,3 +107,4 @@ require_once OXY_ROOT . '/src/Chat.php';
 require_once OXY_ROOT . '/src/Reports.php';
 require_once OXY_ROOT . '/src/Ledger.php';
 require_once OXY_ROOT . '/src/Skills.php';
+require_once OXY_ROOT . '/src/Config.php';

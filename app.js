@@ -18,6 +18,7 @@
     ['dispatch', 'التوزيع والاستقبال', 'طريقة توزيع الطلبات الجديدة على الفنيين، وإيقاف استقبالها من المواقع، ونسبة الفني الافتراضية، والضمان الافتراضي للطلبات المكتملة.'],
     ['general', 'الإعدادات العامة', 'بيانات الشركة اللي تظهر في الفواتير والرسائل: الاسم، الرقم الضريبي، العنوان، ساعات العمل. بتتحفظ على الخادم فقط.'],
     ['bulk', 'الإعدادات الجماعية', 'تغيير اسم المواقع أو وصفها أو عدد المقالات في الصفحة على عدة مواقع مرة واحدة. بتبدأ بمعاينة، ومتتطبقش إلا بتأكيدك.'],
+    ['faces', 'إعدادات الواجهات', 'كل أقسام إعدادات الموقع (التسعير، الضمانات، البوت، طرق الدفع…) بتتقرا وتتكتب من هنا عبر الجسر الموقّع. محتاج إضافة متقن 3 على الموقع.'],
     ['sites', 'ربط المواقع', 'كل موقع بيتربط مرة واحدة بالمفتاح من لوحة الإضافة على الموقع. الحالة ومتى اتفحص آخر مرة بتظهر في قايمة المواقع.'],
   ];
   const AREAS = { makkah: 'مكة', jeddah: 'جدة', other: 'أخرى' };
@@ -38,6 +39,16 @@
   };
   const ERRORS = {
     not_open: 'الطلب مش مفتوح للإسناد',
+    bad_email: 'البريد غير صحيح',
+    unknown_section: 'القسم ده مش معروف',
+    config_too_big: 'الإعدادات كبيرة أوي',
+    config_too_deep: 'الإعدادات متداخلة أكتر من اللازم',
+    bad_config_key: 'اسم الحقل فيه رموز مش مسموحة',
+    bad_config_value: 'قيمة غير مسموحة في الإعدادات',
+    face_unpaired: 'الموقع مش مربوط. اربطه الأول من «ربط المواقع».',
+    face_unreachable: 'مفيش وصول للموقع دلوقتي',
+    face_plugin_old: 'الموقع عليه نسخة قديمة من الإضافة. ارفع متقن 3.',
+    face_refused: 'الموقع رفض الطلب',
     no_technician: 'مفيش فني مناسب لهذا الطلب',
     bad_pin: 'الرمز غير صحيح',
     locked: 'الدخول مقفل مؤقتاً. حاول بعد 15 دقيقة',
@@ -199,7 +210,7 @@
 
   /** Common frame for every section: brand, section tabs, then the section body. */
   function shell(body) {
-    const inSettings = ['settings', 'general', 'bulk', 'dispatch', 'chat'].includes(state.view);
+    const inSettings = ['settings', 'general', 'bulk', 'dispatch', 'chat', 'faces'].includes(state.view);
     const groups = NAV.map(([title, items]) => `
       <div class="nav-group">
         <div class="nav-title">${title}</div>
@@ -915,6 +926,130 @@
   }
 
   /** Chat and WhatsApp: the business details, instructions, services and payment methods the site's assistant uses. */
+  /**
+   * A face's settings sections. A section travels as one document, so a new field on the site needs
+   * no release here: the fields are drawn from whatever the face actually holds, by their type.
+   */
+  async function renderFaces() {
+    const [overview, cat] = await Promise.all([api('overview'), api('config/sections')]);
+    const faces = overview.sites.filter((s) => s.paired);
+    const siteId = state.faceSite && faces.some((s) => s.id === state.faceSite) ? state.faceSite : (faces[0] || {}).id;
+    const section = state.faceSection || Object.keys(cat.sections)[0];
+
+    let body = '';
+    if (!siteId) {
+      body = '<p class="muted">مفيش موقع مربوط. اربط موقع من «ربط المواقع» الأول.</p>';
+    } else if (state.faceDoc === undefined) {
+      body = '<p class="muted">اضغط «اقرأ من الموقع» عشان تجيب القسم ده من الموقع.</p>';
+    } else if (state.faceDoc === null) {
+      body = `<p class="err">${esc(state.faceError || 'تعذّر القراءة من الموقع')}</p>`;
+    } else {
+      const entries = Object.entries(state.faceDoc);
+      body = entries.length === 0
+        ? '<p class="muted">القسم ده فاضي على الموقع. ضيف حقل بالأسفل.</p>'
+        : `<table class="rows"><tbody>${entries.map(([key, value]) => `<tr>
+              <td><code dir="ltr">${esc(key)}</code></td>
+              <td>${faceInput(key, value)}</td>
+              <td><button class="btn ghost sm" data-act="face-drop" data-id="${esc(key)}">حذف</button></td>
+            </tr>`).join('')}</tbody></table>`;
+      body += `<form class="form-row" data-form="face-add">
+          <label class="lbl">حقل جديد<input class="field" name="key" dir="ltr" maxlength="64" placeholder="discount_pct" required></label>
+          <label class="lbl">النوع<select class="field" name="type"><option value="text">نص</option><option value="number">رقم</option><option value="bool">مفتاح</option></select></label>
+          <button class="btn" type="submit">إضافة</button>
+          <p class="err" role="alert"></p>
+        </form>
+        <button class="btn primary" data-act="face-save">حفظ على الموقع</button>`;
+    }
+
+    app.innerHTML = shell(`
+      <section class="panel">
+        <h2>إعدادات الواجهات</h2>
+        <p class="muted">الأقسام دي هي نفس أقسام الإعدادات اللي على الموقع. القراءة والكتابة بتمر على الجسر الموقّع، فمفيش تسجيل دخول ومفيش أخطاء صلاحيات.</p>
+        <div class="chips" style="margin-bottom:12px">
+          <label class="lbl">الموقع<select class="field" data-change="face-site">${faces.map((s) => `<option value="${esc(s.id)}"${s.id === siteId ? ' selected' : ''}>${esc(s.name)}</option>`).join('') || '<option value="">لا يوجد</option>'}</select></label>
+          <label class="lbl">القسم<select class="field" data-change="face-section">${Object.entries(cat.sections).map(([k, label]) => `<option value="${esc(k)}"${k === section ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select></label>
+          <button class="btn" data-act="face-read">اقرأ من الموقع</button>
+        </div>
+        ${body}
+      </section>`);
+    state.faceSite = siteId;
+    state.faceSection = section;
+  }
+
+  /** One field, drawn by what its value is rather than by a list written here. */
+  function faceInput(key, value) {
+    const id = `data-face-key="${esc(key)}"`;
+    if (typeof value === 'boolean') return `<label class="lbl check"><input type="checkbox" ${id} ${value ? 'checked' : ''}> مفعّل</label>`;
+    if (typeof value === 'number') return `<input class="field" type="number" ${id} value="${esc(String(value))}" dir="ltr">`;
+    if (Array.isArray(value)) return `<textarea class="field" ${id} data-face-list="1" rows="3">${esc(value.join('\n'))}</textarea>`;
+    if (value && typeof value === 'object') return `<textarea class="field" ${id} data-face-json="1" rows="4" dir="ltr">${esc(JSON.stringify(value, null, 2))}</textarea>`;
+    // A field that holds no value must still hold no value after a save it was not part of:
+    // sending "" instead would quietly change its type on the face.
+    const wasNull = value === null ? ' data-face-null="1"' : '';
+    return `<input class="field" type="text" ${id}${wasNull} value="${esc(value === null ? '' : String(value))}" maxlength="4000">`;
+  }
+
+  async function readFace() {
+    state.faceDoc = undefined;
+    try {
+      const r = await api(`config/${encodeURIComponent(state.faceSite)}/${encodeURIComponent(state.faceSection)}`);
+      state.faceDoc = r.config || {};
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      state.faceDoc = null;
+      state.faceError = ERRORS[error.code] || 'تعذّر القراءة من الموقع';
+    }
+    return redrawFaces();
+  }
+
+  /**
+   * Redraws the screen and never leaves it frozen. Without this, a failure while redrawing (the
+   * catalogue request, say) rejects into nothing and the owner sees the old screen with no word why.
+   */
+  async function redrawFaces() {
+    try {
+      return await renderFaces();
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر تحديث الشاشة');
+    }
+  }
+
+  /** Collects the fields back into a document, keeping each one's type. */
+  function collectFace() {
+    const out = {};
+    document.querySelectorAll('[data-face-key]').forEach((el) => {
+      const key = el.dataset.faceKey;
+      if (el.type === 'checkbox') { out[key] = el.checked; return; }
+      if (el.dataset.faceList) { out[key] = el.value.split('\n').map((l) => l.trim()).filter(Boolean); return; }
+      if (el.dataset.faceJson) {
+        try { out[key] = JSON.parse(el.value); } catch (e) { throw new Error(`الحقل ${key} مش JSON صحيح`); }
+        return;
+      }
+      if (el.type === 'number') {
+        // An empty box is "no value", not zero: writing 0 would set a real price or limit nobody typed.
+        out[key] = el.value.trim() === '' ? null : Number(el.value);
+        return;
+      }
+      out[key] = (el.dataset.faceNull && el.value === '') ? null : el.value;
+    });
+    return out;
+  }
+
+  async function saveFace() {
+    let config;
+    try { config = collectFace(); } catch (error) { toast(error.message); return; }
+    try {
+      const r = await api(`config/${encodeURIComponent(state.faceSite)}/${encodeURIComponent(state.faceSection)}`, { method: 'POST', body: { config } });
+      state.faceDoc = r.config || config;
+      toast(r.changed ? 'تم الحفظ على الموقع' : 'مفيش تغيير');
+      return redrawFaces();
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر الحفظ على الموقع');
+    }
+  }
+
   async function renderChat() {
     app.innerHTML = shell('<p class="boot">جارٍ التحميل…</p>');
     const { values: v } = await api('settings/chat');
@@ -1022,13 +1157,19 @@
           ${s.paired ? '' : '<em>غير مربوط</em>'}
         </label>`).join('');
     const fields = Object.entries(bulkFields).map(([key, f]) => {
-      const input = f.type === 'int'
-        ? `type="number" inputmode="numeric" min="${f.min}" max="${f.max}"`
-        : `type="text" maxlength="${f.max}"`;
-      return `<div class="bulk-field">
-          <label class="pick"><input type="checkbox" name="use" value="${esc(key)}"><span>${esc(f.label)}</span></label>
-          <input class="field" ${input} name="val:${esc(key)}" autocomplete="off" aria-label="${esc(f.label)}">
-        </div>`;
+      const pick = `<label class="pick"><input type="checkbox" name="use" value="${esc(key)}"><span>${esc(f.label)}</span></label>`;
+      let input;
+      if (f.type === 'bool') {
+        input = `<label class="lbl check"><input type="checkbox" name="val:${esc(key)}" aria-label="${esc(f.label)}"> مفعّل</label>`;
+      } else if (f.type === 'list') {
+        input = `<textarea class="field" name="val:${esc(key)}" rows="4" aria-label="${esc(f.label)}" placeholder="خدمة في كل سطر"></textarea>`;
+      } else if (f.type === 'int') {
+        input = `<input class="field" type="number" inputmode="numeric" min="${f.min}" max="${f.max}" name="val:${esc(key)}" autocomplete="off" aria-label="${esc(f.label)}">`;
+      } else {
+        const mode = f.type === 'phone' ? ' inputmode="tel" dir="ltr"' : (f.type === 'email' ? ' inputmode="email" dir="ltr"' : '');
+        input = `<input class="field" type="text" maxlength="${f.max}" name="val:${esc(key)}"${mode} autocomplete="off" aria-label="${esc(f.label)}">`;
+      }
+      return `<div class="bulk-field">${pick}${input}</div>`;
     }).join('');
     const opChoices = Object.entries(bulkOps).map(([key, o]) => `<label class="pick">
           <input type="radio" name="op" value="${esc(key)}"${key === 'health' ? ' checked' : ''}>
@@ -1153,8 +1294,17 @@
     const siteIds = [...form.querySelectorAll('input[name="site"]:checked')].map((c) => c.value);
     const values = {};
     form.querySelectorAll('input[name="use"]:checked').forEach((c) => {
-      const raw = form.querySelector(`input[name="val:${c.value}"]`).value.trim();
-      values[c.value] = bulkFields[c.value].type === 'int' ? Number(raw) : raw;
+      const key = c.value;
+      const type = bulkFields[key].type;
+      const el = form.querySelector(`[name="val:${key}"]`);
+      if (type === 'bool') { values[key] = el.checked; return; }
+      const raw = el.value.trim();
+      if (type === 'list') {
+        // One per line, blanks dropped: that is how the owner types a list.
+        values[key] = raw.split('\n').map((line) => line.trim()).filter(Boolean);
+        return;
+      }
+      values[key] = type === 'int' ? Number(raw) : raw;
     });
     if (siteIds.length === 0) { err.textContent = 'اختر موقعاً واحداً على الأقل'; return; }
     if (Object.keys(values).length === 0) { err.textContent = 'اختر إعداداً واحداً على الأقل'; return; }
@@ -1208,6 +1358,7 @@
       if (view === 'general') return await renderSettings();
       if (view === 'dispatch') return await renderDispatch();
       if (view === 'chat') return await renderChat();
+      if (view === 'faces') return await renderFaces();
       if (view === 'accounts') return await renderAccounts();
       if (view === 'warranties') return await renderWarranties();
       if (view === 'bulk') return await renderBulk();
@@ -1326,6 +1477,14 @@
         toast('تم إنشاء الطلب');
         return await renderOps();
       }
+      if (form.dataset.form === 'face-add') {
+        const key = form.key.value.trim();
+        if (!/^[A-Za-z0-9_.-]{1,64}$/.test(key)) { form.querySelector('.err').textContent = 'اسم الحقل: حروف وأرقام و _ . - فقط'; return; }
+        const blank = { text: '', number: 0, bool: false }[form.type.value];
+        state.faceDoc = { ...collectFace(), [key]: blank };
+        return redrawFaces();
+      }
+
       if (form.dataset.form === 'map-location') {
         await api('map/location', { method: 'POST', body: values });
         toast('تم حفظ الموقع');
@@ -1391,6 +1550,8 @@
       state.mapFilter = { ...mapFilter(), [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value };
       return drawOpsMap();
     }
+    if (e.target.dataset.change === 'face-site') { state.faceSite = e.target.value; state.faceDoc = undefined; return redrawFaces(); }
+    if (e.target.dataset.change === 'face-section') { state.faceSection = e.target.value; state.faceDoc = undefined; return redrawFaces(); }
     if (e.target.dataset.change === 'map-order') { state.mapOrder = e.target.value || null; return drawOpsMap(); }
     if (e.target.dataset.change === 'ledger-person') { state.ledgerPerson = e.target.value; return renderAccounts(); }
     if (e.target.dataset.change === 'intake-open') return saveDispatch({ intake_open: e.target.checked }, e.target.checked ? 'الاستقبال مفتوح' : 'تم إيقاف الاستقبال مؤقتاً');
@@ -1423,6 +1584,16 @@
     if (act === 'dispatch-run') return runDispatch();
     if (act === 'distribute') return distributeOrder(id, btn.dataset.mode);
     if (act === 'assign-candidate') return assignCandidate(id, btn.dataset.tech);
+    if (act === 'face-read') return readFace();
+    if (act === 'face-save') return saveFace();
+    if (act === 'face-drop') {
+      // Collect what we can; a field the owner is still typing must not block removing another one.
+      let current;
+      try { current = collectFace(); } catch (error) { current = { ...state.faceDoc }; }
+      delete current[id];
+      state.faceDoc = current;
+      return redrawFaces();
+    }
     if (act === 'thread') { state.thread = id; return renderOps(); }
     if (act === 'bulk-all' || act === 'bulk-none') {
       const target = btn.dataset.target === 'opsite' ? 'opsite' : 'site';

@@ -216,6 +216,27 @@ check('an empty change is refused', throws(static fn () => Bulk::validate([]), '
 check('a site name cannot be empty', throws(static fn () => Bulk::validate(['blogname' => '   ']), 'bad_value'));
 check('a number outside its range is refused', throws(static fn () => Bulk::validate(['posts_per_page' => 500]), 'bad_value'));
 check('markup in a text setting is refused', throws(static fn () => Bulk::validate(['blogdescription' => '<script>']), 'bad_value'));
+check('a phone number is kept as written', Bulk::validate(['whatsapp' => '+966555000111']) === ['whatsapp' => '+966555000111']);
+check('an empty phone clears it', Bulk::validate(['phone' => '']) === ['phone' => '']);
+check('a phone with letters is refused', throws(static fn () => Bulk::validate(['phone' => '0555abc']), 'bad_phone'));
+check('a too short phone is refused', throws(static fn () => Bulk::validate(['phone' => '12345']), 'bad_phone'));
+check('a bad email is refused', throws(static fn () => Bulk::validate(['email' => 'a@b']), 'bad_email'));
+check('a good email passes', Bulk::validate(['email' => 'info@oxygen11.com']) === ['email' => 'info@oxygen11.com']);
+check('a switch takes only true or false', throws(static fn () => Bulk::validate(['chat_enabled' => 'yes']), 'bad_value'));
+check('a switch passes as a boolean', Bulk::validate(['intake_enabled' => false]) === ['intake_enabled' => false]);
+check('a service list passes and drops repeats', Bulk::validate(['services' => ['صيانة', 'صيانة', 'تنظيف']]) === ['services' => ['صيانة', 'تنظيف']]);
+check('an empty service item is refused', throws(static fn () => Bulk::validate(['services' => ['صيانة', ' ']]), 'bad_value'));
+check('too many services are refused', throws(static fn () => Bulk::validate(['services' => array_fill(0, 61, 'خدمة')]), 'bad_value'));
+check('a list sent as text is refused', throws(static fn () => Bulk::validate(['services' => 'صيانة']), 'bad_value'));
+check('the desk field list matches the plugin field list', (static function (): bool {
+    $plugin = file_get_contents(__DIR__ . '/../bridge/mutqan/inc/settings.php');
+    foreach (array_keys(Bulk::FIELDS) as $key) {
+        if (strpos($plugin, "'" . $key . "'") === false) {
+            return false;
+        }
+    }
+    return true;
+})());
 check('a batch larger than the limit is refused', throws(static fn () => Bulk::run(['a', 'b', 'c', 'd', 'e', 'f'], ['blogname' => 'x'], true), 'bad_batch'));
 check('an empty batch is refused', throws(static fn () => Bulk::run([], ['blogname' => 'x'], true), 'bad_batch'));
 $preview = Bulk::run(['nasmat'], ['blogname' => 'اختبار'], true);
@@ -366,6 +387,34 @@ check('distribution picks the matching technician', $acDist['technician_id'] ===
 $doneOrder = Orders::create(['customer_id' => $cust['id'], 'service' => 'تكييف', 'technician_id' => $acSkill['id']]);
 Orders::update($doneOrder['id'], ['status' => 'done']);
 check('a finished order has no candidates', throws(static fn () => Orders::candidates($doneOrder['id']), 'not_open'));
+
+echo "Face settings sections\n";
+check('the desk and the plugin list the same sections', (static function (): bool {
+    $plugin = file_get_contents(__DIR__ . '/../bridge/mutqan/inc/config.php');
+    foreach (Config::SECTIONS as $key => $label) {
+        if (strpos($plugin, "'" . $key . "'") === false || strpos($plugin, $label) === false) {
+            return false;
+        }
+    }
+    return substr_count($plugin, "=> '") >= count(Config::SECTIONS);
+})());
+check('every section carries an Arabic label', count(array_filter(Config::SECTIONS, static fn (string $l): bool => trim($l) !== '')) === count(Config::SECTIONS));
+check('the sections cover the site menu', count(Config::SECTIONS) >= 24);
+check('a plain document passes the check', (static function (): bool { Config::check(['a' => 1, 'b' => 'نص', 'c' => true, 'd' => null]); return true; })());
+check('a script in a value is refused', throws(static fn () => Config::check(['x' => '<script>alert(1)</script>']), 'bad_config_value'));
+foreach (['<img src=x onerror=alert(1)>', '<svg onload=alert(1)>', '<a href="javascript:x">y</a>'] as $attack) {
+    check('a tag that runs code is refused on the desk too: ' . substr($attack, 0, 14), throws(static fn () => Config::check(['v' => $attack]), 'bad_config_value'));
+}
+foreach (['السعر < 100 ريال', '5 < 7 و 9 > 3'] as $fine) {
+    check('ordinary Arabic with a bracket passes: ' . mb_substr($fine, 0, 10), (static function () use ($fine): bool { Config::check(['v' => $fine]); return true; })());
+}
+check('a document with too many keys is refused', throws(static fn () => Config::check(array_fill_keys(array_map(static fn (int $i): string => 'k' . $i, range(1, 401)), 1)), 'config_too_big'));
+check('a key with odd characters is refused', throws(static fn () => Config::check(['bad key' => 1]), 'bad_config_key'));
+check('a document nested too deeply is refused', throws(static fn () => Config::check(['a' => ['b' => ['c' => ['d' => ['e' => ['f' => ['g' => 1]]]]]]]), 'config_too_deep'));
+check('a document that is too large is refused', throws(static fn () => Config::check(['x' => str_repeat('a', 70000)]), 'config_too_big'));
+check('an unknown section is refused before any face is called', throws(static fn () => Config::write('nasmat', 'not_a_section', []), 'unknown_section'));
+check('an unpaired face says so rather than failing vaguely', throws(static fn () => Config::write('nasmat', 'pricing', ['a' => 1]), 'face_unpaired'));
+check('reading an unpaired face says the same', throws(static fn () => Config::read('nasmat', 'pricing'), 'face_unpaired'));
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);

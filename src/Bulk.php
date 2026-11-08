@@ -7,8 +7,11 @@ declare(strict_types=1);
  * Every change goes through the signed bridge (no WordPress login, so no permission errors),
  * is checked here first, and can be previewed before it is applied.
  *
- * To add a setting: add it to FIELDS here AND to oxy_bridge_settings_fields() in
- * bridge/oxy-bridge/oxy-bridge.php, then ship the new plugin to the faces. The panel reads FIELDS from this class.
+ * To add a setting: add it to FIELDS here AND to mutqan_fields() in bridge/mutqan/inc/settings.php,
+ * then ship the new plugin to the faces. The panel reads FIELDS from this class.
+ *
+ * A face still running the older bridge plugin refuses the keys it does not know, with
+ * http_400:oxy_unknown_setting. That is the safe answer: nothing is half written.
  */
 final class Bulk
 {
@@ -17,6 +20,16 @@ final class Bulk
         'blogname' => ['type' => 'text', 'min' => 1, 'max' => 200, 'label' => 'اسم الموقع'],
         'blogdescription' => ['type' => 'text', 'min' => 0, 'max' => 200, 'label' => 'الوصف المختصر'],
         'posts_per_page' => ['type' => 'int', 'min' => 1, 'max' => 50, 'label' => 'عدد المقالات في الصفحة'],
+        'company_name' => ['type' => 'text', 'min' => 0, 'max' => 120, 'label' => 'اسم النشاط'],
+        'bot_name' => ['type' => 'text', 'min' => 0, 'max' => 40, 'label' => 'اسم المساعد'],
+        'phone' => ['type' => 'phone', 'max' => 20, 'label' => 'رقم الجوال'],
+        'whatsapp' => ['type' => 'phone', 'max' => 20, 'label' => 'رقم الواتساب'],
+        'email' => ['type' => 'email', 'max' => 120, 'label' => 'البريد'],
+        'city' => ['type' => 'text', 'min' => 0, 'max' => 120, 'label' => 'المدينة'],
+        'banner_text' => ['type' => 'text', 'min' => 0, 'max' => 200, 'label' => 'شريط الإعلان'],
+        'services' => ['type' => 'list', 'max_items' => 60, 'max' => 80, 'label' => 'الخدمات (كل خدمة في سطر)'],
+        'chat_enabled' => ['type' => 'bool', 'label' => 'المحادثة مفعّلة على الموقع'],
+        'intake_enabled' => ['type' => 'bool', 'label' => 'استقبال الطلبات من الموقع'],
     ];
 
     /** Faces per request. The panel sends larger selections in several requests. */
@@ -39,6 +52,31 @@ final class Bulk
                 throw new OxyHttpError(400, 'unknown_setting');
             }
             $rule = self::FIELDS[$key];
+            if ($rule['type'] === 'bool') {
+                if (!is_bool($value)) {
+                    throw new OxyHttpError(400, 'bad_value');
+                }
+                $clean[$key] = $value;
+                continue;
+            }
+            if ($rule['type'] === 'list') {
+                if (!is_array($value) || count($value) > $rule['max_items']) {
+                    throw new OxyHttpError(400, 'bad_value');
+                }
+                $items = [];
+                foreach ($value as $item) {
+                    if (!is_string($item)) {
+                        throw new OxyHttpError(400, 'bad_value');
+                    }
+                    $item = trim($item);
+                    if ($item === '' || mb_strlen($item) > $rule['max'] || preg_match('/[<>]/', $item)) {
+                        throw new OxyHttpError(400, 'bad_value');
+                    }
+                    $items[] = $item;
+                }
+                $clean[$key] = array_values(array_unique($items));
+                continue;
+            }
             if ($rule['type'] === 'int') {
                 if (is_string($value) && preg_match('/^\d+$/', $value)) {
                     $value = (int) $value;
@@ -53,6 +91,21 @@ final class Bulk
                 throw new OxyHttpError(400, 'bad_value');
             }
             $text = trim($value);
+            if ($rule['type'] === 'phone') {
+                // Digits with an optional leading +, the one shape every gateway accepts. Empty clears it.
+                if ($text !== '' && !preg_match('/^\+?\d{9,15}$/', $text)) {
+                    throw new OxyHttpError(400, 'bad_phone');
+                }
+                $clean[$key] = $text;
+                continue;
+            }
+            if ($rule['type'] === 'email') {
+                if ($text !== '' && !filter_var($text, FILTER_VALIDATE_EMAIL)) {
+                    throw new OxyHttpError(400, 'bad_email');
+                }
+                $clean[$key] = $text;
+                continue;
+            }
             $length = mb_strlen($text);
             if ($length < $rule['min'] || $length > $rule['max'] || preg_match('/[<>]/', $text)) {
                 throw new OxyHttpError(400, 'bad_value');

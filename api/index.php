@@ -163,6 +163,29 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // A face's settings sections: the catalogue, one section, or a replacement for one section.
+    if ($method === 'GET' && $route === 'config/sections') {
+        Auth::current();
+        oxy_json(['ok' => true, 'sections' => Config::SECTIONS]);
+        return;
+    }
+    // Note: config/sections above is the catalogue, so a face may not be given the id "sections".
+    if ($method === 'GET' && count($parts) >= 2 && $parts[0] === 'config') {
+        Auth::current();
+        oxy_json(['ok' => true] + Config::read($parts[1], $parts[2] ?? null));
+        return;
+    }
+    if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'config') {
+        Auth::requireCsrf();
+        $body = oxy_body();
+        $document = $body['config'] ?? null;
+        if (!is_array($document)) {
+            throw new OxyHttpError(400, 'bad_config_value');
+        }
+        oxy_json(['ok' => true] + Config::write($parts[1], $parts[2], $document));
+        return;
+    }
+
     // Candidates for an open order: technicians ranked by specialty, then distance.
     if ($method === 'GET' && count($parts) === 3 && $parts[0] === 'orders' && $parts[2] === 'candidates') {
         Auth::current();
