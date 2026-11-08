@@ -502,8 +502,22 @@ check('and cancels any link they were sent', (static function () use ($techA): b
     return throws(static fn () => Tech::claim($s), 'bad_invite');
 })());
 
-check('the app the technician opens is served', is_file(__DIR__ . '/../t/index.html') && is_file(__DIR__ . '/../t/manifest.json'));
-check('the app never carries a key of its own', strpos((string) file_get_contents(__DIR__ . '/../t/index.html'), 'secret') === false);
+$techDir = __DIR__ . '/../t/';
+foreach (['index.html', 'app.js', 'app.css', 'manifest.json'] as $f) {
+    check("the app ships $f", is_file($techDir . $f));
+}
+$techHtml = (string) file_get_contents($techDir . 'index.html');
+check('the app never carries a key of its own', strpos($techHtml, 'secret') === false);
+// The site forbids inline script and style on purpose, so an injected string cannot run. A page
+// that broke that rule would load and silently do nothing at all.
+check('the app has no inline script, which the page policy forbids', !preg_match('/<script(?![^>]*\bsrc=)/i', $techHtml));
+check('and no inline style either', !preg_match('/<style[\s>]/i', $techHtml) && !preg_match('/\sstyle="/i', $techHtml));
+check('its script and style are served from this origin', strpos($techHtml, 'src="app.js"') !== false && strpos($techHtml, 'href="app.css"') !== false);
+$ht = (string) file_get_contents(__DIR__ . '/../.htaccess');
+// The app reads the phone's position; a policy of geolocation=() would refuse it without a word.
+check('the phone position is allowed for this origin', strpos($ht, 'geolocation=(self)') !== false);
+check('the camera and microphone stay off', strpos($ht, 'camera=()') !== false && strpos($ht, 'microphone=()') !== false);
+check('the app folder is not blocked like the private ones', !preg_match('#\^/\((?:[a-z|\\.]*\|)?t\|#', $ht));
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);
