@@ -237,6 +237,27 @@ check('the desk field list matches the plugin field list', (static function (): 
     }
     return true;
 })());
+// Each face is a different company to the customer. One batch must never be able to flatten that.
+check('a brand name cannot be written to several faces at once', throws(static fn () => Bulk::run(['oxygen', 'nasmat'], ['company_name' => 'شركة واحدة'], true), 'identity_is_per_face'));
+check('nor the site name', throws(static fn () => Bulk::run(['oxygen', 'nasmat'], ['blogname' => 'اسم واحد'], true), 'identity_is_per_face'));
+check('nor the phone number customers call', throws(static fn () => Bulk::run(['oxygen', 'nasmat'], ['whatsapp' => '966555000111'], true), 'identity_is_per_face'));
+check('nor the banner the customer reads first', throws(static fn () => Bulk::run(['oxygen', 'nasmat'], ['banner_text' => 'عرض'], true), 'identity_is_per_face'));
+check('one identity field among harmless ones still stops the batch', throws(static fn () => Bulk::run(['oxygen', 'nasmat'], ['posts_per_page' => 9, 'company_name' => 'x'], true), 'identity_is_per_face'));
+check('a single face may still have its identity changed', (static function (): bool {
+    try { Bulk::run(['oxygen'], ['company_name' => 'أكسجين'], true); } catch (OxyHttpError $e) { return $e->errCode !== 'identity_is_per_face'; }
+    return true;
+})());
+check('settings that are not identity still batch freely', (static function (): bool {
+    try { Bulk::run(['oxygen', 'nasmat'], ['posts_per_page' => 12, 'intake_enabled' => true], true); } catch (OxyHttpError $e) { return $e->errCode !== 'identity_is_per_face'; }
+    return true;
+})());
+check('every field that reaches the customer is marked as identity', (static function (): bool {
+    foreach (['blogname', 'blogdescription', 'company_name', 'bot_name', 'phone', 'whatsapp', 'email', 'city', 'banner_text'] as $k) {
+        if (empty(Bulk::FIELDS[$k]['identity'])) { return false; }
+    }
+    return true;
+})());
+
 check('a batch larger than the limit is refused', throws(static fn () => Bulk::run(['a', 'b', 'c', 'd', 'e', 'f'], ['blogname' => 'x'], true), 'bad_batch'));
 check('an empty batch is refused', throws(static fn () => Bulk::run([], ['blogname' => 'x'], true), 'bad_batch'));
 $preview = Bulk::run(['nasmat'], ['blogname' => 'اختبار'], true);

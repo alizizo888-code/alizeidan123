@@ -40,6 +40,7 @@
   const ERRORS = {
     not_open: 'الطلب مش مفتوح للإسناد',
     bad_email: 'البريد غير صحيح',
+    identity_is_per_face: 'الاسم والأرقام هوية كل واجهة لوحدها — اختار موقع واحد بس عشان تغيّرها.',
     unknown_section: 'القسم ده مش معروف',
     config_too_big: 'الإعدادات كبيرة أوي',
     config_too_deep: 'الإعدادات متداخلة أكتر من اللازم',
@@ -1157,7 +1158,7 @@
           ${s.paired ? '' : '<em>غير مربوط</em>'}
         </label>`).join('');
     const fields = Object.entries(bulkFields).map(([key, f]) => {
-      const pick = `<label class="pick"><input type="checkbox" name="use" value="${esc(key)}"><span>${esc(f.label)}</span></label>`;
+      const pick = `<label class="pick"><input type="checkbox" name="use" value="${esc(key)}"><span>${esc(f.label)}${f.identity ? ' <em class="muted">— لموقع واحد</em>' : ''}</span></label>`;
       let input;
       if (f.type === 'bool') {
         input = `<label class="lbl check"><input type="checkbox" name="val:${esc(key)}" aria-label="${esc(f.label)}"> مفعّل</label>`;

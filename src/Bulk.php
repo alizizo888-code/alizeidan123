@@ -17,16 +17,16 @@ final class Bulk
 {
     /** key => rule. The label is what the panel shows. */
     public const FIELDS = [
-        'blogname' => ['type' => 'text', 'min' => 1, 'max' => 200, 'label' => 'اسم الموقع'],
-        'blogdescription' => ['type' => 'text', 'min' => 0, 'max' => 200, 'label' => 'الوصف المختصر'],
+        'blogname' => ['type' => 'text', 'min' => 1, 'max' => 200, 'label' => 'اسم الموقع', 'identity' => true],
+        'blogdescription' => ['type' => 'text', 'min' => 0, 'max' => 200, 'label' => 'الوصف المختصر', 'identity' => true],
         'posts_per_page' => ['type' => 'int', 'min' => 1, 'max' => 50, 'label' => 'عدد المقالات في الصفحة'],
-        'company_name' => ['type' => 'text', 'min' => 0, 'max' => 120, 'label' => 'اسم النشاط'],
-        'bot_name' => ['type' => 'text', 'min' => 0, 'max' => 40, 'label' => 'اسم المساعد'],
-        'phone' => ['type' => 'phone', 'max' => 20, 'label' => 'رقم الجوال'],
-        'whatsapp' => ['type' => 'phone', 'max' => 20, 'label' => 'رقم الواتساب'],
-        'email' => ['type' => 'email', 'max' => 120, 'label' => 'البريد'],
-        'city' => ['type' => 'text', 'min' => 0, 'max' => 120, 'label' => 'المدينة'],
-        'banner_text' => ['type' => 'text', 'min' => 0, 'max' => 200, 'label' => 'شريط الإعلان'],
+        'company_name' => ['type' => 'text', 'min' => 0, 'max' => 120, 'label' => 'اسم النشاط', 'identity' => true],
+        'bot_name' => ['type' => 'text', 'min' => 0, 'max' => 40, 'label' => 'اسم المساعد', 'identity' => true],
+        'phone' => ['type' => 'phone', 'max' => 20, 'label' => 'رقم الجوال', 'identity' => true],
+        'whatsapp' => ['type' => 'phone', 'max' => 20, 'label' => 'رقم الواتساب', 'identity' => true],
+        'email' => ['type' => 'email', 'max' => 120, 'label' => 'البريد', 'identity' => true],
+        'city' => ['type' => 'text', 'min' => 0, 'max' => 120, 'label' => 'المدينة', 'identity' => true],
+        'banner_text' => ['type' => 'text', 'min' => 0, 'max' => 200, 'label' => 'شريط الإعلان', 'identity' => true],
         'services' => ['type' => 'list', 'max_items' => 60, 'max' => 80, 'label' => 'الخدمات (كل خدمة في سطر)'],
         'chat_enabled' => ['type' => 'bool', 'label' => 'المحادثة مفعّلة على الموقع'],
         'intake_enabled' => ['type' => 'bool', 'label' => 'استقبال الطلبات من الموقع'],
@@ -122,12 +122,26 @@ final class Bulk
      * @param array<string,mixed> $values
      * @return list<array<string,mixed>>
      */
+    /**
+     * Applies settings to several faces at once.
+     *
+     * Each face is its own brand — its own name, its own number, its own voice — and the customer is
+     * meant to meet a different company at each one. That difference is the point of the network, and
+     * one careless batch would erase it everywhere at once with no way back. So the fields that ARE a
+     * face's identity can only be written to one face at a time; everything else batches freely.
+     */
     public static function run(array $siteIds, array $values, bool $dryRun): array
     {
         if ($siteIds === [] || count($siteIds) > self::MAX_BATCH) {
             throw new OxyHttpError(400, 'bad_batch');
         }
         $clean = self::validate($values);
+        if (count($siteIds) > 1) {
+            $identity = array_values(array_filter(array_keys($clean), static fn (string $k): bool => !empty(self::FIELDS[$k]['identity'])));
+            if ($identity !== []) {
+                throw new OxyHttpError(400, 'identity_is_per_face');
+            }
+        }
         $results = [];
         foreach ($siteIds as $id) {
             $site = Sites::find($id);
