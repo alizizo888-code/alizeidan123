@@ -437,5 +437,73 @@ check('an unknown section is refused before any face is called', throws(static f
 check('an unpaired face says so rather than failing vaguely', throws(static fn () => Config::write('nasmat', 'pricing', ['a' => 1]), 'face_unpaired'));
 check('reading an unpaired face says the same', throws(static fn () => Config::read('nasmat', 'pricing'), 'face_unpaired'));
 
+echo "The technician's own app\n";
+$techA = People::create(['role' => 'technician', 'name' => 'سامي', 'phone' => '0555111222', 'area' => 'makkah']);
+$techB = People::create(['role' => 'technician', 'name' => 'ماجد', 'phone' => '0555333444', 'area' => 'makkah']);
+$sup = People::create(['role' => 'supervisor', 'name' => 'نورة', 'phone' => '0555999888', 'area' => 'makkah']);
+$custT = Customers::create(['name' => 'أم خالد', 'phone' => '0555777666']);
+
+$inv = Tech::invite($techA['id']);
+check('the owner gets a link to send the technician', str_starts_with($inv['path'], '/t/#') && strlen($inv['path']) === 52, $inv['path']);
+check('a supervisor cannot be given a technician link', throws(static fn () => Tech::invite($sup['id']), 'not_technician'));
+
+$secret = substr($inv['path'], 4);
+$claim = Tech::claim($secret);
+check('tapping the link signs that technician in', $claim['technician']['id'] === $techA['id']);
+check('the same link cannot be used twice', throws(static fn () => Tech::claim($secret), 'bad_invite'));
+check('a made-up link is refused', throws(static fn () => Tech::claim(str_repeat('a', 48)), 'bad_invite'));
+check('a malformed link is refused', throws(static fn () => Tech::claim('short'), 'bad_invite'));
+
+// Issuing a second link must cancel the first, which is what pressing the button again means.
+$one = substr(Tech::invite($techA['id'])['path'], 4);
+$two = substr(Tech::invite($techA['id'])['path'], 4);
+check('a new link cancels the one before it', throws(static fn () => Tech::claim($one), 'bad_invite'));
+check('and the newest one works', Tech::claim($two)['technician']['id'] === $techA['id']);
+
+$mine = Orders::create(['customer_id' => $custT['id'], 'service' => 'صيانة مكيف', 'technician_id' => $techA['id'], 'price' => 200]);
+Orders::update($mine['id'], ['status' => 'assigned']);
+$theirs = Orders::create(['customer_id' => $custT['id'], 'service' => 'سباكة', 'technician_id' => $techB['id']]);
+Orders::update($theirs['id'], ['status' => 'assigned']);
+
+$jobs = Tech::myJobs($techA['id']);
+$jobIds = array_column($jobs, 'id');
+check('a technician sees their own job', in_array($mine['id'], $jobIds, true));
+check('and never another technician job', !in_array($theirs['id'], $jobIds, true), $jobIds);
+check('the job carries the customer number to call', $jobs[0]['customer']['phone'] !== '');
+check('and the price agreed', $jobs[0]['price'] === 200);
+
+check('a technician cannot touch a job that is not theirs', throws(static fn () => Tech::step($techA['id'], $theirs['id'], 'done'), 'not_your_job'));
+check('an invented step is refused', throws(static fn () => Tech::step($techA['id'], $mine['id'], 'cancelled'), 'bad_step'));
+
+Tech::step($techA['id'], $mine['id'], 'in_progress');
+check('starting the job is recorded', Orders::find($mine['id'])['status'] === 'in_progress');
+check('a started job is still on their list', in_array($mine['id'], array_column(Tech::myJobs($techA['id']), 'id'), true));
+
+Tech::step($techA['id'], $mine['id'], 'done');
+check('finishing the job is recorded', Orders::find($mine['id'])['status'] === 'done');
+check('a finished job leaves the list', !in_array($mine['id'], array_column(Tech::myJobs($techA['id']), 'id'), true));
+// Reopening from a phone would quietly undo the earning already written against the job.
+check('a finished job cannot be reopened from the phone', throws(static fn () => Tech::step($techA['id'], $mine['id'], 'in_progress'), 'job_closed'));
+
+check('a technician can say where they are', Tech::whereIAm($techA['id'], 21.42, 39.82)['ok'] === true);
+check('a position that is not a position is refused', throws(static fn () => Tech::whereIAm($techA['id'], 999, 39.8), 'bad_location'));
+check('and text instead of a position is refused', throws(static fn () => Tech::whereIAm($techA['id'], 'here', 'there'), 'bad_location'));
+check('the position reaches the live map', (static function () use ($techA): bool {
+    foreach (Locations::live() as $t) {
+        if ($t['id'] === $techA['id']) { return $t['lat'] !== null; }
+    }
+    return false;
+})());
+
+check('taking a technician off the system leaves them no way back', Tech::revoke($techA['id'])['ok'] === true);
+check('and cancels any link they were sent', (static function () use ($techA): bool {
+    $s = substr(Tech::invite($techA['id'])['path'], 4);
+    Tech::revoke($techA['id']);
+    return throws(static fn () => Tech::claim($s), 'bad_invite');
+})());
+
+check('the app the technician opens is served', is_file(__DIR__ . '/../t/index.html') && is_file(__DIR__ . '/../t/manifest.json'));
+check('the app never carries a key of its own', strpos((string) file_get_contents(__DIR__ . '/../t/index.html'), 'secret') === false);
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);

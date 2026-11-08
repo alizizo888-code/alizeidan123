@@ -4,7 +4,7 @@ declare(strict_types=1);
 // Private application code. Never served by the web root (see .htaccess).
 define('OXY_ROOT', dirname(__DIR__));
 // Bump when sql/schema.sql gains tables. Existing installs upgrade themselves once on the next request.
-define('OXY_SCHEMA_VERSION', '9');
+define('OXY_SCHEMA_VERSION', '10');
 
 /** Error that maps directly to an HTTP status and a stable machine-readable code. */
 final class OxyHttpError extends RuntimeException
@@ -108,3 +108,4 @@ require_once OXY_ROOT . '/src/Reports.php';
 require_once OXY_ROOT . '/src/Ledger.php';
 require_once OXY_ROOT . '/src/Skills.php';
 require_once OXY_ROOT . '/src/Config.php';
+require_once OXY_ROOT . '/src/Tech.php';

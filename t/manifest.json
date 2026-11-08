@@ -1,0 +1,12 @@
+{
+  "name": "شغلي — أكسجين",
+  "short_name": "شغلي",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "lang": "ar",
+  "dir": "rtl"
+}

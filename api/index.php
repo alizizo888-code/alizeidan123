@@ -163,6 +163,55 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    /* ---------------------------------------------------------------- the technician's own app
+     * These routes answer a technician's phone, never the owner's desk. Each one takes the person
+     * from their own session and nothing from the request, so one technician cannot ask about
+     * another's work by changing an id.
+     */
+    if ($method === 'POST' && $route === 'tech/claim') {
+        $body = oxy_body();
+        oxy_json(Tech::claim((string) ($body['invite'] ?? '')));
+        return;
+    }
+    if ($method === 'POST' && $route === 'tech/signout') {
+        Tech::signOut();
+        oxy_json(['ok' => true]);
+        return;
+    }
+    if ($method === 'GET' && $route === 'tech/me') {
+        $me = Tech::current();
+        oxy_json(['ok' => true, 'technician' => ['id' => $me['id'], 'name' => $me['name']], 'steps' => Tech::STEPS]);
+        return;
+    }
+    if ($method === 'GET' && $route === 'tech/jobs') {
+        $me = Tech::current();
+        oxy_json(['ok' => true, 'jobs' => Tech::myJobs($me['id'])]);
+        return;
+    }
+    if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'tech' && $parts[1] === 'job') {
+        $me = Tech::current();
+        $body = oxy_body();
+        oxy_json(['ok' => true, 'order' => Tech::step($me['id'], $parts[2], (string) ($body['step'] ?? ''))]);
+        return;
+    }
+    if ($method === 'POST' && $route === 'tech/where') {
+        $me = Tech::current();
+        $body = oxy_body();
+        oxy_json(Tech::whereIAm($me['id'], $body['lat'] ?? null, $body['lng'] ?? null));
+        return;
+    }
+    // Owner side: hand a technician their link, or take every one of their phones off the system.
+    if ($method === 'POST' && count($parts) === 4 && $parts[0] === 'management' && $parts[1] === 'people' && $parts[3] === 'invite') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true] + Tech::invite($parts[2]));
+        return;
+    }
+    if ($method === 'POST' && count($parts) === 4 && $parts[0] === 'management' && $parts[1] === 'people' && $parts[3] === 'revoke') {
+        Auth::requireCsrf();
+        oxy_json(Tech::revoke($parts[2]));
+        return;
+    }
+
     // A face's settings sections: the catalogue, one section, or a replacement for one section.
     if ($method === 'GET' && $route === 'config/sections') {
         Auth::current();
