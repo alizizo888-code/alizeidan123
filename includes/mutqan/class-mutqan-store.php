@@ -375,7 +375,17 @@ final class Mutqan_Store {
         list($new, $json) = self::clean_data($new);
         $wpdb->update(self::table('docs'), ['data' => $json, 'updated_at' => self::now()], ['pk' => $row['pk']]);
         self::bump($coll);
-        return self::row_to_doc(self::fetch_row($coll, $id));
+        $doc = self::row_to_doc(self::fetch_row($coll, $id));
+        // A job becoming someone's is the moment to tell them. Every route into the system — the
+        // operations screen, the agent, a WhatsApp command — ends up here, so the technician is told
+        // once, from one place, and only after the change is actually saved.
+        if ($coll === 'orders' && array_key_exists('technicianId', $patch)
+            && ($patch['technicianId'] ?? null) !== ($old['technicianId'] ?? null) && !empty($patch['technicianId'])
+            && class_exists('Mutqan_WA_Desk')) {
+            try { Mutqan_WA_Desk::on_assigned($doc, (string) $patch['technicianId']); }
+            catch (Throwable $e) { error_log('[mutqan] dispatch ' . $e->getMessage()); }
+        }
+        return $doc;
     }
 
     /**
