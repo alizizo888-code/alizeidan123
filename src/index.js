@@ -10,6 +10,12 @@ const PORT = Number(process.env.PORT || 8787)
 const TOKEN = process.env.GATEWAY_TOKEN || ''          // WordPress -> gateway
 const HOOK_URL = process.env.WEBHOOK_URL || ''          // gateway -> WordPress
 const HOOK_SECRET = process.env.WEBHOOK_SECRET || ''
+// Asking for work instead of waiting to be called. A gateway on a phone has no address anyone can
+// reach, so WordPress cannot dial it; the phone collects what is waiting for it instead. Leave
+// PULL_URL empty on a machine that can be dialled and nothing changes.
+const PULL_URL = process.env.PULL_URL || (HOOK_URL ? HOOK_URL.replace(/\/wa-hook$/, '/wa-pull') : '')
+const PULL_EVERY = Math.max(2000, Number(process.env.PULL_EVERY_MS || 5000))
+const PULL_IDLE = Math.max(PULL_EVERY, Number(process.env.PULL_IDLE_MS || 20000))
 const DATA = path.resolve(process.env.DATA_DIR || './data')
 const DAILY_CAP = Number(process.env.SEND_DAILY_CAP || 200)
 const MAX_SESSIONS = Number(process.env.MAX_SESSIONS || 20)
@@ -179,5 +185,40 @@ app.post('/sessions/:id/send', wrap(async (q) => {
   return enqueueSend(id, to, text)
 }))
 
+// ---- collecting work from WordPress ----
+//
+// One request carries both halves: what was sent since last time, and a request for more. The pace
+// backs off while there is nothing to do, because this runs on a phone battery; it quickens again
+// the moment a batch comes back.
+let pullStop = false
+async function pullLoop() {
+  if (!PULL_URL || !HOOK_SECRET) return
+  let wait = PULL_EVERY
+  let sent = []
+  while (!pullStop) {
+    let got = 0
+    try {
+      const body = JSON.stringify({ sent, limit: 10 })
+      sent = []
+      const r = await fetch(PULL_URL, { method: 'POST', headers: { 'content-type': 'application/json', 'x-mq-signature': sign(HOOK_SECRET, body) }, body, signal: AbortSignal.timeout(20000) })
+      const j = r.ok ? await r.json().catch(() => null) : null
+      const jobs = (j && j.data && Array.isArray(j.data.jobs)) ? j.data.jobs : []
+      got = jobs.length
+      for (const job of jobs) {
+        // The number WordPress names, or the only one connected — a phone usually carries one.
+        const id = (job.acct && S.has(job.acct)) ? job.acct : [...S.keys()].find((k) => S.get(k)?.status === 'open')
+        if (!id) { sent.push({ id: job.id, ok: false }); continue }
+        try { const res = await enqueueSend(id, digits(job.to), String(job.text || '')); sent.push({ id: job.id, ok: true, msgId: res?.msgId || '' }) }
+        catch (e) { log.warn({ err: String(e) }, 'pull send'); sent.push({ id: job.id, ok: false }) }
+      }
+    } catch (e) {
+      log.warn({ err: String(e) }, 'pull')
+    }
+    wait = got ? PULL_EVERY : Math.min(PULL_IDLE, Math.round(wait * 1.5))
+    await new Promise((r) => setTimeout(r, wait))
+  }
+}
+
 app.listen(PORT, () => console.log('mutqan wa-gateway on :' + PORT))
 for (const id of Object.keys(meta)) start(id).catch((e) => log.error(e))
+pullLoop().catch((e) => log.error(e))
