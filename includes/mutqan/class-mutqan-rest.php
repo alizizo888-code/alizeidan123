@@ -591,8 +591,13 @@ final class Mutqan_Rest {
     }
 
     public static function app_dir() { return plugin_dir_path(dirname(dirname(__FILE__))) . 'app/'; }
-    /** Where the browser can fetch the build's own files from. */
-    public static function app_assets_url() { return plugins_url('app/assets/', self::app_dir() . 'x.php'); }
+    /**
+     * Where the browser can fetch the build's own files from.
+     *
+     * plugins_url() takes the folder of the file it is given, and app_dir() is already that folder,
+     * so the path asked for here is relative to app/ and must not name it again.
+     */
+    public static function app_assets_url() { return plugins_url('assets/', self::app_dir() . 'index.php'); }
 
     private static function serve_pwa_file($name) {
         $ops = ($name === 'ops.webmanifest');
