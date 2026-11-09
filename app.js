@@ -40,6 +40,12 @@
   const ERRORS = {
     not_open: 'الطلب مش مفتوح للإسناد',
     bad_email: 'البريد غير صحيح',
+    not_on_the_list: 'الرقم ده مش مسجّل عندنا كفني. كلّم المشرف يضيفك الأول.',
+    already_registered: 'الرقم ده مسجّل على جهاز تاني. كلّم المشرف يفصله عشان تسجّل من جديد.',
+    no_tech_session: 'سجّل دخولك الأول.',
+    bad_step: 'الخطوة دي مش معروفة.',
+    not_your_job: 'الطلب ده مش بتاعك.',
+    job_closed: 'الطلب ده خلص خلاص.',
     identity_is_per_face: 'الاسم والأرقام هوية كل واجهة لوحدها — اختار موقع واحد بس عشان تغيّرها.',
     unknown_section: 'القسم ده مش معروف',
     config_too_big: 'الإعدادات كبيرة أوي',
@@ -321,6 +327,12 @@
           <button class="btn ghost sm" data-act="skills-save" data-id="${esc(p.id)}">حفظ التخصصات</button></details></td>`
       : '';
     const dispatch = isTech ? await api('settings/dispatch') : null;
+    // Whether each technician has registered a phone, so the owner is not guessing who still needs to.
+    const deviceCell = (p) => isTech
+      ? `<td>${p.has_device
+          ? `<span class="pill ok">سجّل جواله</span> <button class="btn ghost sm" data-act="tech-revoke" data-id="${esc(p.id)}">فصل الجوال</button>`
+          : `<span class="pill">لسه ما سجّلش</span> <button class="btn ghost sm" data-act="tech-invite" data-id="${esc(p.id)}">رابط دخول</button>`}</td>`
+      : '';
     const shareCell = (p) => isTech
       ? `<td class="share-cell"><input class="field" type="number" min="0" max="100" dir="ltr" data-share-for="${esc(p.id)}" value="${esc(dispatch.shares[p.id] ?? '')}" placeholder="${dispatch.values.default_share}"><button class="btn ghost sm" data-act="share-save" data-id="${esc(p.id)}">حفظ</button></td>`
       : '';
@@ -331,8 +343,9 @@
         <td><span class="pill ${p.active ? 'ok' : 'idle'}">${p.active ? 'نشط' : 'موقوف'}</span></td>
         ${skillsCell(p)}
         ${shareCell(p)}
+        ${deviceCell(p)}
         <td><button class="btn ghost sm" data-act="person-toggle" data-id="${esc(p.id)}" data-next="${p.active ? '0' : '1'}">${p.active ? 'إيقاف' : 'تفعيل'}</button></td>
-      </tr>`).join('') || `<tr><td colspan="${isTech ? 7 : 5}" class="muted">${block.empty}</td></tr>`;
+      </tr>`).join('') || `<tr><td colspan="${isTech ? 8 : 5}" class="muted">${block.empty}</td></tr>`;
 
     return `
       <section class="panel">
@@ -352,7 +365,7 @@
           <p class="err" role="alert"></p>
         </form>
         <div style="overflow-x:auto"><table>
-          <thead><tr><th>الاسم</th><th>الجوال</th><th>المنطقة</th><th>الحالة</th>${isTech ? '<th>التخصصات</th><th>نسبته من السعر (%)</th>' : ''}<th></th></tr></thead>
+          <thead><tr><th>الاسم</th><th>الجوال</th><th>المنطقة</th><th>الحالة</th>${isTech ? '<th>التخصصات</th><th>نسبته من السعر (%)</th><th>تطبيق الفني</th>' : ''}<th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
       </section>`;
@@ -752,6 +765,35 @@
     } catch (error) {
       if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
       toast(ERRORS[error.code] || 'تعذّر الإسناد');
+    }
+  }
+
+  /**
+   * Hands the owner a one-time link for a technician who cannot register themselves — a different
+   * number on the list, or a phone already registered and now replaced.
+   */
+  async function techInvite(id) {
+    try {
+      const r = await api(`management/people/${encodeURIComponent(id)}/invite`, { method: 'POST', body: {} });
+      const link = location.origin + r.path;
+      try { await navigator.clipboard.writeText(link); toast('اتنسخ الرابط — ابعته للفني'); }
+      catch (e) { window.prompt('ابعت الرابط ده للفني (صالح ' + r.expires_in_hours + ' ساعة):', link); }
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر عمل الرابط');
+    }
+  }
+
+  /** Takes every phone a technician signed in on off the system, and lets them register again. */
+  async function techRevoke(id) {
+    if (!window.confirm('هيتقفل التطبيق على كل أجهزة الفني ده، ويقدر يسجّل من جديد. تمام؟')) return;
+    try {
+      await api(`management/people/${encodeURIComponent(id)}/revoke`, { method: 'POST', body: {} });
+      toast('اتفصل. يقدر يسجّل من جديد برقمه.');
+      return show(state.view);
+    } catch (error) {
+      if (error.code === 'no_session') return renderLogin(ERRORS.no_session);
+      toast(ERRORS[error.code] || 'تعذّر الفصل');
     }
   }
 
@@ -1585,6 +1627,8 @@
     if (act === 'dispatch-run') return runDispatch();
     if (act === 'distribute') return distributeOrder(id, btn.dataset.mode);
     if (act === 'assign-candidate') return assignCandidate(id, btn.dataset.tech);
+    if (act === 'tech-invite') return techInvite(id);
+    if (act === 'tech-revoke') return techRevoke(id);
     if (act === 'face-read') return readFace();
     if (act === 'face-save') return saveFace();
     if (act === 'face-drop') {

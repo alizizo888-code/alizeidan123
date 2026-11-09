@@ -132,7 +132,12 @@ function oxy_dispatch(string $method, string $route): void
         $role = $_GET['role'] ?? 'supervisor';
         $people = People::list(is_string($role) ? $role : '');
         $skills = Skills::all();
-        $people = array_map(static fn (array $p): array => $p + ['skills' => $skills[$p['id']] ?? []], $people);
+        // Whether each technician has a phone on the system, so the owner can see at a glance who
+        // still has to register and who needs their phone taken off.
+        $people = array_map(static fn (array $p): array => $p + [
+            'skills' => $skills[$p['id']] ?? [],
+            'has_device' => $p['role'] === 'technician' && Tech::hasDevice($p['id']),
+        ], $people);
         oxy_json(['ok' => true, 'people' => $people, 'skill_list' => Skills::LIST]);
         return;
     }
@@ -168,6 +173,11 @@ function oxy_dispatch(string $method, string $route): void
      * from their own session and nothing from the request, so one technician cannot ask about
      * another's work by changing an id.
      */
+    if ($method === 'POST' && $route === 'tech/register') {
+        $body = oxy_body();
+        oxy_json(Tech::register((string) ($body['phone'] ?? '')));
+        return;
+    }
     if ($method === 'POST' && $route === 'tech/claim') {
         $body = oxy_body();
         oxy_json(Tech::claim((string) ($body['invite'] ?? '')));

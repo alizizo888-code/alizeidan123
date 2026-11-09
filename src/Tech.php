@@ -31,6 +31,66 @@ final class Tech
     public const OPEN_STATUSES = ['assigned', 'in_progress'];
 
     /**
+     * A technician signing themselves in, the first time, with the number the owner already wrote down.
+     *
+     * The owner adds a technician by name and phone before that person opens anything, so the number
+     * on the list is already the owner saying this person works here. Matching it once, on one phone,
+     * is enough — and asking for more is how every earlier attempt ended with people locked out of
+     * their own work.
+     *
+     * It works ONCE per person. Once a phone is registered the number alone opens nothing, so anyone
+     * who learns it later finds a door already shut. Every registration is in the audit, and the
+     * owner can take a phone off at any time, which opens the door again for a genuine replacement.
+     */
+    public static function register(string $phone): array
+    {
+        $phone = self::normalise($phone);
+        if (!preg_match('/^\d{9,15}$/', $phone)) {
+            throw new OxyHttpError(400, 'bad_phone');
+        }
+        $person = self::findByPhone($phone);
+        if ($person === null) {
+            // Logged without the full number, and answered the same way whoever asks, so this cannot
+            // be used to find out which numbers belong to technicians.
+            Audit::log('tech_register_unknown', substr($phone, -4), '');
+            throw new OxyHttpError(403, 'not_on_the_list');
+        }
+        if (self::hasDevice($person['id'])) {
+            throw new OxyHttpError(409, 'already_registered');
+        }
+        $token = bin2hex(random_bytes(32));
+        oxy_pdo()->prepare('INSERT INTO tech_sessions (token_hash, person_id, created, expires) VALUES (?, ?, ?, ?)')
+            ->execute([hash('sha256', $token), $person['id'], time(), time() + self::SESSION_SECONDS]);
+        self::setCookie($token, time() + self::SESSION_SECONDS);
+        Audit::log('tech_register', $person['id'], $person['name']);
+        return ['ok' => true, 'technician' => ['id' => $person['id'], 'name' => $person['name']]];
+    }
+
+    /** Whether this technician already has a phone on the system, so the owner can see who does not. */
+    public static function hasDevice(string $personId): bool
+    {
+        $stmt = oxy_pdo()->prepare('SELECT COUNT(*) FROM tech_sessions WHERE person_id = ?');
+        $stmt->execute([$personId]);
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /** The technician who owns this number, matched on the last nine digits so the format never matters. */
+    private static function findByPhone(string $phone): ?array
+    {
+        $tail = substr($phone, -9);
+        if (strlen($tail) < 9) {
+            return null;
+        }
+        foreach (People::list('technician') as $p) {
+            $digits = preg_replace('/\D/', '', (string) ($p['phone'] ?? '')) ?? '';
+            if ($digits !== '' && substr($digits, -9) === $tail) {
+                return $p;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Makes a one-time sign-in link for a technician. Owner only.
      *
      * The secret is returned once and never stored: only its hash is kept, so a copy of the database
@@ -194,6 +254,25 @@ final class Tech
         }
         Locations::record($personId, $lat, $lng);
         return ['ok' => true];
+    }
+
+    /**
+     * Digits only, with the Saudi local form folded in, so one person is one number however they
+     * type it: 05xxxxxxxx, 9665xxxxxxxx and +966 5xx xxx xxx are all the same technician.
+     */
+    private static function normalise(string $phone): string
+    {
+        $d = preg_replace('/\D/', '', $phone) ?? '';
+        if (str_starts_with($d, '00')) {
+            $d = substr($d, 2);
+        }
+        if (preg_match('/^05\d{8}$/', $d)) {
+            return '966' . substr($d, 1);
+        }
+        if (preg_match('/^5\d{8}$/', $d)) {
+            return '966' . $d;
+        }
+        return $d;
     }
 
     private static function setCookie(string $value, int $expires): void

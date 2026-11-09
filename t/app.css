@@ -18,6 +18,8 @@ a.btn{display:flex;align-items:center;justify-content:center;text-decoration:non
 .pill{display:inline-block;padding:3px 10px;border-radius:999px;background:#1d2b45;color:var(--muted);font-size:13px}
 .empty{text-align:center;color:var(--muted);padding:48px 16px}
 .out{flex:0 0 auto;min-height:40px;padding:0 14px}
+.field{width:100%;margin-top:12px;padding:14px;font-size:19px;border-radius:12px;border:1px solid var(--line);background:#0e1627;color:var(--ink)}
+.note{margin-top:10px}
 .tags{margin-top:8px}
 .msg{padding:12px 14px;border-radius:10px;margin-bottom:14px;display:none}
 .msg.show{display:block}

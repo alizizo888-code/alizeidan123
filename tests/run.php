@@ -495,6 +495,20 @@ check('the position reaches the live map', (static function () use ($techA): boo
     return false;
 })());
 
+// Registering with the number the owner already wrote down, once, on one phone.
+$techC = People::create(['role' => 'technician', 'name' => 'خالد', 'phone' => '0556001122', 'area' => 'jeddah']);
+check('a technician the owner has not added cannot register', throws(static fn () => Tech::register('0559000000'), 'not_on_the_list'));
+check('a number that is not a number is refused', throws(static fn () => Tech::register('abc'), 'bad_phone'));
+check('nobody has a phone registered before they register one', Tech::hasDevice($techC['id']) === false);
+check('a technician on the list registers with their own number', Tech::register('0556001122')['technician']['id'] === $techC['id']);
+check('and the owner can now see they have a phone', Tech::hasDevice($techC['id']) === true);
+// Once a phone is on, the number alone opens nothing: someone who learns it later finds a shut door.
+check('the same number cannot register a second phone', throws(static fn () => Tech::register('0556001122'), 'already_registered'));
+check('the international form is the same person', throws(static fn () => Tech::register('966556001122'), 'already_registered'));
+check('and so is the spaced form', throws(static fn () => Tech::register('055 600 11 22'), 'already_registered'));
+Tech::revoke($techC['id']);
+check('after the owner takes the phone off, they can register again', Tech::register('0556001122')['technician']['id'] === $techC['id']);
+
 check('taking a technician off the system leaves them no way back', Tech::revoke($techA['id'])['ok'] === true);
 check('and cancels any link they were sent', (static function () use ($techA): bool {
     $s = substr(Tech::invite($techA['id'])['path'], 4);
@@ -512,6 +526,9 @@ check('the app never carries a key of its own', strpos($techHtml, 'secret') === 
 // that broke that rule would load and silently do nothing at all.
 check('the app has no inline script, which the page policy forbids', !preg_match('/<script(?![^>]*\bsrc=)/i', $techHtml));
 check('and no inline style either', !preg_match('/<style[\s>]/i', $techHtml) && !preg_match('/\sstyle="/i', $techHtml));
+$techJs = (string) file_get_contents($techDir . 'app.js');
+check('the app asks for a number instead of waiting for a link nobody can make', strpos($techJs, "tech/register") !== false && strpos($techJs, 'signInScreen') !== false);
+check('it no longer tells the technician to go and find a link', strpos($techJs, 'محتاج الرابط') === false);
 check('its script and style are served from this origin', strpos($techHtml, 'src="app.js"') !== false && strpos($techHtml, 'href="app.css"') !== false);
 $ht = (string) file_get_contents(__DIR__ . '/../.htaccess');
 // The app reads the phone's position; a policy of geolocation=() would refuse it without a word.

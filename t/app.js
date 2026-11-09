@@ -35,9 +35,11 @@
   }
 
   var SAYS = {
-    no_tech_session: 'محتاج الرابط اللي بعتهولك المشرف عشان تدخل.',
-    bad_invite: 'الرابط ده مش شغال أو انتهت مدته. اطلب رابط جديد.',
+    bad_invite: 'الرابط ده مش شغال أو انتهت مدته. اطلب واحد جديد.',
     not_technician: 'الحساب ده مش حساب فني.',
+    bad_phone: 'اكتب رقم جوالك صح.',
+    not_on_the_list: 'رقمك مش مسجّل عندنا كفني. كلّم المشرف يضيفك الأول.',
+    already_registered: 'رقمك مسجّل على جهاز تاني. كلّم المشرف يفصله عشان تسجّل من هنا.',
     not_your_job: 'الطلب ده مش بتاعك.',
     job_closed: 'الطلب ده خلص خلاص.',
     bad_step: 'الخطوة دي مش معروفة.',
@@ -60,6 +62,21 @@
       + '<div class="row">' + next + call + map + '</div></div>';
   }
 
+  /**
+   * The first-time screen. A technician's number is already on the owner's list before they ever
+   * open this, so the number is the whole sign-in: nothing to wait for and nothing to be sent.
+   */
+  function signInScreen() {
+    out.hidden = true;
+    who.textContent = 'شغلي';
+    view.innerHTML = '<div class="job">'
+      + '<h2>سجّل دخولك</h2>'
+      + '<div class="meta">اكتب رقم جوالك اللي عند المشرف. مرة واحدة بس، وبعدها الجهاز ده يفضل داخل.</div>'
+      + '<input class="field" id="phone" type="tel" inputmode="tel" dir="ltr" autocomplete="tel" placeholder="05xxxxxxxx" maxlength="18">'
+      + '<div class="row"><button class="btn" id="go">دخول</button></div>'
+      + '</div>';
+  }
+
   async function show() {
     try {
       var me = await api('tech/me');
@@ -72,11 +89,11 @@
         : '<p class="empty">مفيش شغل مفتوح عندك دلوقتي.<br>هيوصلك هنا أول ما المشرف يسندلك طلب.</p>';
       sendWhereIAm();
     } catch (e) {
-      out.hidden = true;
-      if (e.code === 'no_tech_session' || e.code === 'bad_invite' || e.code === 'not_technician') {
-        view.innerHTML = '<p class="empty">' + esc(SAYS[e.code] || 'محتاج تسجيل دخول.') + '</p>';
+      if (e.code === 'no_tech_session' || e.code === 'not_technician') {
+        signInScreen();
         return;
       }
+      out.hidden = true;
       view.innerHTML = '<p class="empty">تعذّر الاتصال. جرّب تاني.</p>';
     }
   }
@@ -100,6 +117,19 @@
       } catch (e) {
         b.disabled = false;
         say(SAYS[e.code] || 'ما قدرناش نسجل ده. جرّب تاني.');
+      }
+      return;
+    }
+    if (ev.target.id === 'go') {
+      var box = document.getElementById('phone');
+      var phone = ((box && box.value) || '').trim();
+      ev.target.disabled = true;
+      try {
+        await api('tech/register', { phone: phone });
+        await show();
+      } catch (e) {
+        ev.target.disabled = false;
+        say(SAYS[e.code] || 'تعذّر الدخول. جرّب تاني.');
       }
       return;
     }
