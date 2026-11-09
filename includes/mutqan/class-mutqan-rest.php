@@ -591,15 +591,21 @@ final class Mutqan_Rest {
     }
 
     public static function app_dir() { return plugin_dir_path(dirname(dirname(__FILE__))) . 'app/'; }
+    /**
+     * Where the browser can fetch the build's own files from.
+     *
+     * plugins_url() takes the folder of the file it is given, and app_dir() is already that folder,
+     * so the path asked for here is relative to app/ and must not name it again.
+     */
+    public static function app_assets_url() { return plugins_url('assets/', self::app_dir() . 'index.php'); }
 
     private static function serve_pwa_file($name) {
         $ops = ($name === 'ops.webmanifest');
         $file = self::app_dir() . ($ops ? 'manifest.webmanifest' : $name);
         $nb = class_exists('Oxygen_Network') ? Oxygen_Network::brand_config() : null;
-        $sat = $nb && empty($nb['core']);
-        if ($sat && preg_match('/\.png$/', $name)) {
-            $own = plugin_dir_path(dirname(dirname(__FILE__))) . 'assets/network/' . $nb['id'] . '/' . $name;
-            if (is_readable($own)) { $file = $own; }
+        if ($nb) {
+            $own = self::own_icon($nb['id'], $name);
+            if ($own !== '') { $file = $own; }
         }
         if (!is_readable($file)) { status_header(404); exit; }
         $types = ['js' => 'application/javascript; charset=utf-8', 'webmanifest' => 'application/manifest+json; charset=utf-8', 'png' => 'image/png', 'svg' => 'image/svg+xml'];
@@ -608,7 +614,7 @@ final class Mutqan_Rest {
         $app_path = (string) wp_parse_url(home_url('/app/'), PHP_URL_PATH);
         if ($ext === 'js') { $body = str_replace('__BUILD__', (string) (int) @filemtime(self::app_dir() . 'index.html'), $body); }
         if ($ext === 'webmanifest') { $body = str_replace('__APP__', $app_path, $body); }
-        if ($ext === 'webmanifest' && $sat) {
+        if ($ext === 'webmanifest' && $nb) {
             $m = json_decode($body, true);
             if (is_array($m)) {
                 $m['name'] = $nb['full']; $m['short_name'] = $nb['name'];
@@ -620,7 +626,7 @@ final class Mutqan_Rest {
             // Separate installable "operations supervisor" app: own id/name, opens straight on the operations room.
             $m = json_decode($body, true);
             if (is_array($m)) {
-                $b = $sat ? $nb['name'] : (class_exists('Oxygen_SEO_Engine') ? Oxygen_SEO_Engine::brand() : 'متقن');
+                $b = $nb ? $nb['name'] : (class_exists('Oxygen_SEO_Engine') ? Oxygen_SEO_Engine::brand() : 'متقن');
                 $m['id'] = $app_path . 'ops'; $m['name'] = 'مشرف العمليات — ' . $b; $m['short_name'] = 'مشرف العمليات';
                 $m['description'] = 'غرفة العمليات: الطلبات والإشعارات والواتساب والخط الساخن';
                 $m['start_url'] = $app_path . 'ops#/staff/operations';
@@ -637,17 +643,39 @@ final class Mutqan_Rest {
         exit;
     }
 
-    /** A satellite site shows its own name in the title, share card, structured data and splash instead of the stock one. */
+    /**
+     * Puts this site's own face on the app shell: title, share card, structured data, splash wordmark.
+     *
+     * Every face runs the same build, and that build is compiled with one name baked into it. Until
+     * this ran for core sites too, any face sharing the build wore the baked-in name: opening
+     * oxygen11.com showed متقن. The name a visitor reads now always comes from the host.
+     */
     public static function brand_html($html, $nb) {
         $full = esc_attr($nb['full']);
         $html = preg_replace('#<title>.*?</title>#su', '<title>' . esc_html($nb['full'] . ' — صيانة تكييف وغرف تبريد وتجميد وسباكة وكهرباء') . '</title>', $html, 1);
         $html = preg_replace('#(<meta property="og:title" content=")[^"]*(")#u', '${1}' . $full . '${2}', $html, 1);
         $html = preg_replace('#(<meta name="(?:apple-mobile-web-app-title|application-name)" content=")[^"]*(")#u', '${1}' . esc_attr($nb['name']) . '${2}', $html);
         $html = preg_replace('#<script type="application/ld\+json">.*?</script>#su', '', $html, 1);
-        $html = preg_replace('#(<div class="mark">).*?</svg>(</div>)#su', '${1}<img src="' . esc_attr((string) wp_parse_url(home_url('/app/'), PHP_URL_PATH)) . 'icon-192.png" alt="" width="64" height="64" style="border-radius:16px;display:block">${2}', $html, 1);
-        $html = str_replace(['متقن MUTQAN', 'MUTQAN', 'متقن', 'مُتقن'], $nb['name'], $html);
+        // Only swap the splash emblem where this face has an emblem of its own; the stock one is a
+        // plain geometric shield carrying no name, so it is better than another brand's logo.
+        if (self::own_icon($nb['id'], 'icon-192.png') !== '') {
+            $html = preg_replace('#(<div class="mark">).*?</svg>(</div>)#su', '${1}<img src="' . esc_attr((string) wp_parse_url(home_url('/app/'), PHP_URL_PATH)) . 'icon-192.png" alt="" width="64" height="64" style="border-radius:16px;display:block">${2}', $html, 1);
+        }
+        // The wordmark under the emblem on the opening screen. The two original faces have a Latin
+        // wordmark of their own; the rest show their Arabic name there as everywhere else.
+        $latin = !empty($nb['latin']) ? $nb['latin'] : $nb['name'];
+        $html = preg_replace('#(<div class="bt">).*?(</div>)#su', '${1}' . esc_html($latin) . '${2}', $html, 1);
+        $html = str_replace(['مُتقن', 'متقن'], $nb['name'], $html);
+        $html = str_replace('MUTQAN', $latin, $html);
         $html = preg_replace('#(<meta name="theme-color" content=")[^"]*(")#u', '${1}' . esc_attr($nb['color']) . '${2}', $html);
         return $html;
+    }
+
+    /** Path to a face's own copy of an app icon, or '' when it has none and the stock one should stand. */
+    private static function own_icon($id, $name) {
+        if ($id === '' || !preg_match('/^[a-z0-9_-]+\.(png|svg)$/', $name)) { return ''; }
+        $f = plugin_dir_path(dirname(dirname(__FILE__))) . 'assets/network/' . $id . '/' . $name;
+        return is_readable($f) ? $f : '';
     }
 
     public static function serve_app() {
@@ -683,18 +711,33 @@ final class Mutqan_Rest {
         }
         $html = (string) file_get_contents($file);
         $nb = class_exists('Oxygen_Network') ? Oxygen_Network::brand_config() : null;
+        // One answer to "whose site is this" for the shell and the pages alike. The registry answers
+        // for a registered domain; anywhere else the site's own name stands.
+        if ($nb && class_exists('Oxygen_SEO_Engine')) {
+            $name = Oxygen_SEO_Engine::brand();
+            if ($name !== '' && $name !== $nb['name']) {
+                // A name from outside the registry brings no Latin wordmark with it.
+                $nb['name'] = $name; $nb['full'] = $name . ' ' . Oxygen_Network::SUFFIX; $nb['latin'] = '';
+            }
+        }
         $hub = $nb ? Oxygen_Network::api_base($nb['id']) : '';
         $cfg = wp_json_encode(['api' => $hub !== '' ? $hub : esc_url_raw(rest_url(self::NS)), 'app' => home_url('/app/'), 'brand' => $nb], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $inject = '<script>window.__MUTQAN__=' . $cfg . ';</script>';
         if ($is_root) { $inject .= '<link rel="canonical" href="' . esc_url(home_url('/')) . '">'; }
         if ($is_root && class_exists('Oxygen_SEO_Engine')) { $inject .= Oxygen_SEO_Engine::gsc_meta_html(); }
+        // The build's own files are served straight from the plugin folder, so the app travels with
+        // the plugin: install it and the app works, with nothing to copy to the web root by hand.
+        // (It used to load them from /assets/ at the site root, and on a site where that copy was
+        // missing the opening screen was all a visitor ever saw.) The folder name is written into
+        // the build, so point the links at wherever the plugin actually sits.
+        $html = preg_replace('#(src|href)="[^"]*/app/assets/#', '${1}="' . esc_attr(self::app_assets_url()), $html);
         $app_path = (string) wp_parse_url(home_url('/app/'), PHP_URL_PATH);
         $html = str_replace(['href="./manifest.webmanifest"', 'href="./icon.svg"'], ['href="' . esc_attr($app_path) . 'manifest.webmanifest"', 'href="' . esc_attr($app_path) . 'apple-touch-icon.png"'], $html);
         if ($is_root && class_exists('Oxygen_Home_Page')) {
             try { $seo = Oxygen_Home_Page::seo_block(); $html = str_replace('<div id="root"></div>', '<div id="root">' . $seo['html'] . '</div>', $html); $inject .= $seo['ld']; } catch (Throwable $e) { /* optional */ }
         }
         if ($is_ops) { $html = str_replace($app_path . 'manifest.webmanifest', $app_path . 'ops.webmanifest', $html); }
-        if ($nb && empty($nb['core'])) { $html = self::brand_html($html, $nb); }
+        if ($nb) { $html = self::brand_html($html, $nb); }
         $html = preg_replace('/<head>/i', '<head>' . $inject, $html, 1);
         echo $html;
         exit;

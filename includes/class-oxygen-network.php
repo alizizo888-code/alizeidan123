@@ -21,8 +21,10 @@ final class Oxygen_Network {
         static $r = null;
         if ($r !== null) { return $r; }
         $r = [
-            'oxygen'      => ['name' => 'أكسجين',        'label' => '',            'color' => '#38bdf8', 'core' => true],
-            'mutqan'      => ['name' => 'متقن',          'label' => 'mutqan',      'color' => '#12a39a', 'core' => true],
+            // latin: the Latin wordmark the two original faces show beside their Arabic name. The other
+            // faces have none and show their Arabic name in those places.
+            'oxygen'      => ['name' => 'أكسجين',        'label' => '',            'color' => '#38bdf8', 'core' => true, 'latin' => 'OXYGEN'],
+            'mutqan'      => ['name' => 'متقن',          'label' => 'mutqan',      'color' => '#12a39a', 'core' => true, 'latin' => 'MUTQAN'],
             'motakhases'  => ['name' => 'المتخصص',       'label' => 'motakhases-maintenance-general-contracting',  'color' => '#1d4ed8'],
             'muhandis'    => ['name' => 'المهندس',       'label' => 'muhandis-maintenance-general-contracting',    'color' => '#0f766e'],
             'aqsa'        => ['name' => 'الأقصى',        'label' => 'aqsa-maintenance-general-contracting',        'color' => '#b45309'],
@@ -147,6 +149,7 @@ final class Oxygen_Network {
             'full' => $b['name'] . ' ' . self::SUFFIX,
             'color' => $b['color'],
             'core' => !empty($b['core']),
+            'latin' => isset($b['latin']) ? $b['latin'] : '',
             'phone' => $c['phone'],
             'wa' => $c['wa'],
             'wa2' => $c['wa2'],

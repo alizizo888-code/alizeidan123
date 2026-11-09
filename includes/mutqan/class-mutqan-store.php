@@ -368,6 +368,7 @@ final class Mutqan_Store {
         Mutqan_Policy::require_can('update', $coll, $p, $row, $patch);
         $old = json_decode($row['data'], true) ?: [];
         $patch = Mutqan_Policy::sanitize_update($coll, $old, $patch, $p, $row);
+        if ($coll === 'orders') { $patch = self::trace_order($old, $patch, $p); }
         foreach (['id', 'createdAt', 'updatedAt'] as $k) { unset($patch[$k]); }
         $new = array_merge($old, $patch);
         foreach ($patch as $k => $v) { if ($v === null) { $new[$k] = null; } }
@@ -375,6 +376,44 @@ final class Mutqan_Store {
         $wpdb->update(self::table('docs'), ['data' => $json, 'updated_at' => self::now()], ['pk' => $row['pk']]);
         self::bump($coll);
         return self::row_to_doc(self::fetch_row($coll, $id));
+    }
+
+    /**
+     * Writes an order's journey onto the order itself, as it happens.
+     *
+     * Operations and the technician each see only their own screen, so without this nobody can answer
+     * "what happened to this order?" without piecing it together from memory. Every change of hands
+     * or of state adds one line, in the same write as the change, so the two can never disagree.
+     *
+     * The step is merged into the caller's patch rather than written separately: a second write would
+     * come back through this same method and start again.
+     */
+    private static function trace_order($old, $patch, $p) {
+        if (array_key_exists('route', $patch)) { return $patch; }   // the route itself is being written
+        $who = trim((string) ($p['name'] ?? '')) ?: (($p['role'] ?? '') === 'technician' ? 'الفني' : 'النظام');
+        $steps = [];
+
+        if (array_key_exists('technicianId', $patch) && ($patch['technicianId'] ?? null) !== ($old['technicianId'] ?? null)) {
+            $to = trim((string) ($patch['technicianName'] ?? ''));
+            $steps[] = $patch['technicianId'] === null
+                ? ['handoff', 'سُحب الطلب من الفني', $who]
+                : ['assign', 'أُسند إلى ' . ($to !== '' ? $to : 'فني'), $who];
+        }
+        if (array_key_exists('status', $patch) && (string) ($patch['status'] ?? '') !== (string) ($old['status'] ?? '')) {
+            $label = [
+                'new' => 'طلب جديد', 'forced' => 'طلب عاجل', 'assigned' => 'تم الإسناد', 'accepted' => 'الفني قبل الطلب',
+                'completed' => 'تم إنجاز الطلب', 'cancelled' => 'أُلغي الطلب',
+            ];
+            $st = (string) $patch['status'];
+            $steps[] = ['status', $label[$st] ?? ('الحالة: ' . $st), $who];
+        }
+        if ($steps === []) { return $patch; }
+
+        $route = isset($old['route']) && is_array($old['route']) ? $old['route'] : [];
+        foreach ($steps as $st) { $route[] = Mutqan_WA::step($st[0], $st[1], $st[2]); }
+        // One order cannot be allowed to grow without limit; the oldest steps go first.
+        $patch['route'] = count($route) > 60 ? array_slice($route, -60) : $route;
+        return $patch;
     }
 
     public static function upsert($coll, $data, $id, $opts, $p) {

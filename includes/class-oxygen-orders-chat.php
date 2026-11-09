@@ -11,6 +11,7 @@ if (!defined('ABSPATH')) { exit; }
  */
 final class Oxygen_Orders_Chat {
     const OPT = 'oxygen_orders_chat';
+    const DESK_URL = 'https://desk.oxygen11.com/api';
     const CPT = 'oxygen_order';
     const NS  = 'oxygen/v1';
     const API = 'https://api.anthropic.com/v1/messages';
@@ -573,7 +574,40 @@ final class Oxygen_Orders_Chat {
         update_post_meta($id, '_oxc_wa_status', $ok ? 'sent' : 'failed: ' . $msg);
         if (!$ok) { error_log('[oxygen-chat] WhatsApp failed for order ' . $id . ': ' . $msg); }
 
+        // Same order to the desk in real time, so it shows on the orders board and the map.
+        self::push_to_desk([
+            'site_ref' => (string) $id, 'name' => $name, 'phone' => $phone, 'service' => $service, 'issue' => $issue,
+            'qty' => $qty, 'price' => $price > 0 ? (int) round($price) : null, 'address' => $address,
+            'lat' => $loc ? (float) $loc['lat'] : null, 'lng' => $loc ? (float) $loc['lng'] : null,
+            'notes' => $notes, 'source' => 'chat',
+        ]);
+
         return ['ok' => true, 'id' => (int) $id, 'message' => "تم تسجيل طلبك برقم #$id ✅\nراح يتواصل معك فريقنا على الرقم $phone لتأكيد الموعد."];
+    }
+
+    /**
+     * Sends a confirmed order to the desk, signed with this face's bridge key (the same key the desk uses to reach it).
+     * Failure never blocks the customer: the order is already saved here and on WhatsApp, and the status is kept.
+     */
+    private static function push_to_desk($order) {
+        $secret = (string) get_option('oxy_bridge_secret', '');
+        if (strlen($secret) < 32) { error_log('[oxygen-chat] desk intake skipped: no bridge key on this site'); return false; }
+        $body = wp_json_encode($order, JSON_UNESCAPED_UNICODE);
+        $ts = (string) time();
+        $nonce = bin2hex(random_bytes(16));
+        $host = strtolower((string) wp_parse_url(home_url(), PHP_URL_HOST));
+        $canonical = "POST\n/intake/order\n$ts\n$nonce\n" . hash('sha256', $body);
+        $res = wp_remote_post(self::DESK_URL . '/intake/order', [
+            'timeout' => 8,
+            'headers' => [
+                'Content-Type' => 'application/json', 'X-Oxy-Host' => $host, 'X-Oxy-Timestamp' => $ts,
+                'X-Oxy-Nonce' => $nonce, 'X-Oxy-Signature' => hash_hmac('sha256', $canonical, $secret),
+            ],
+            'body' => $body,
+        ]);
+        $ok = !is_wp_error($res) && (int) wp_remote_retrieve_response_code($res) === 201;
+        if (!$ok) { error_log('[oxygen-chat] desk intake failed: ' . (is_wp_error($res) ? $res->get_error_message() : wp_remote_retrieve_response_code($res))); }
+        return $ok;
     }
 
     /** Public helper for other modules (the Mutqan app): send a plain message to the owner on WhatsApp. */

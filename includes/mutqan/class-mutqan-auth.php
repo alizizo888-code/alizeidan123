@@ -34,12 +34,22 @@ final class Mutqan_Auth {
 
     private static $memo = null;
 
+    /**
+     * Whether THIS request carried a session token, whatever became of it.
+     *
+     * Not the same thing as self::$tok, which is only filled when a token resolves to a live session
+     * and then stays filled for the rest of the process. Telling "a token was offered and refused"
+     * apart from "no token was offered" is what lets the server answer 401 only when it means it.
+     */
+    private static $presented = false;
+
     /* ------------------------------------------------------------------ principal */
 
     public static function principal($request = null) {
         if (self::$memo !== null) { return self::$memo; }
         $guest = ['id' => 'guest', 'role' => null, 'kind' => 'guest', 'powers' => [], 'name' => '', 'handle' => ''];
         $token = $request ? (string) $request->get_header('x-mutqan-token') : '';
+        self::$presented = $token !== '';
         if ($token !== '' && preg_match('/^[a-f0-9]{64}$/', $token)) {
             global $wpdb;
             $s = Mutqan_Store::table('sessions'); $u = Mutqan_Store::table('users');
@@ -59,7 +69,10 @@ final class Mutqan_Auth {
         return self::$memo = $guest;
     }
 
-    public static function reset_memo() { self::$memo = null; }
+    public static function reset_memo() { self::$memo = null; self::$tok = ''; self::$presented = false; }
+
+    /** True when this request carried a token, whether or not it turned out to be a live one. */
+    public static function token_presented() { return self::$presented; }
 
     private static function principal_from_user($u) {
         $role = $u['role'] ?: null;
@@ -225,6 +238,43 @@ final class Mutqan_Auth {
         return self::session_result($u);
     }
 
+    /* ------------------------------------------------------------------ used by one-time-code sign-in */
+
+    /**
+     * Any account that owns this number — staff or customer. Matched on the last nine digits, so
+     * 05xxxxxxxx and 9665xxxxxxxx are one person and one account, never two.
+     */
+    public static function find_by_phone_any($phone) {
+        global $wpdb;
+        $k = self::phone_key($phone);
+        if (strlen($k) < 8) { return null; }
+        $staff = self::find_staff_by_phone($phone);
+        if ($staff) { return $staff[0]; }
+        $rows = (array) $wpdb->get_results("SELECT * FROM " . Mutqan_Store::table('users') . " WHERE status='active'", ARRAY_A);
+        foreach ($rows as $r) {
+            if (self::phone_key($r['phone'] ?: $r['handle']) === $k) { return $r; }
+        }
+        return null;
+    }
+
+    /** A session for an account that has already been proven to belong to the caller. */
+    public static function session_for($u) { return self::session_result($u); }
+
+    /**
+     * The account a first-time caller gets after proving their number.
+     *
+     * It is a customer: role null. A one-time code proves someone holds a phone, which is not a
+     * reason to let them see other people's orders, so a staff role is never granted here.
+     */
+    public static function create_customer_by_phone($phone, $name) {
+        $handle = preg_replace('/\D/', '', (string) $phone);
+        $existing = self::find_by_handle($handle);
+        if ($existing) { return self::session_result($existing); }
+        // The password is random and never shown: this account signs in by code, not by password.
+        $u = self::create_user($handle, $name, $handle, bin2hex(random_bytes(24)), null);
+        return self::session_result($u);
+    }
+
     public static function login($in, $staff_only = false) {
         $handle = self::normalize_handle($in['handle'] ?? ($in['phone'] ?? ''));
         $pw = (string) ($in['password'] ?? '');
@@ -253,14 +303,37 @@ final class Mutqan_Auth {
         return ['ok' => true];
     }
 
+    /**
+     * Who the caller is. The answer has to be unambiguous, because the app signs people out by it.
+     *
+     * This used to answer 'user' => null with HTTP 200 for three different situations: a visitor with
+     * no token, a token the server no longer knows, and a token that resolved a moment ago but whose
+     * user row could not be read just now. The app could not tell them apart, so it treated all three
+     * as "signed out" and threw the owner out of the app over a momentary glitch.
+     *
+     * Now each one has its own answer: a visitor gets null, a token the server does not know gets 401,
+     * and a server-side inconsistency gets 500 — which is a fault to retry, never a reason to sign out.
+     */
     public static function me($p) {
-        if (($p['kind'] ?? '') !== 'user') { return ['user' => null]; }
+        if (($p['kind'] ?? '') !== 'user') {
+            if (self::$presented) {
+                // A token was presented and the server does not know it. That is final, and the only
+                // answer that should ever end a session.
+                throw new Mutqan_Error('unauthorized', 'انتهت الجلسة. سجّل الدخول من جديد.', 401);
+            }
+            return ['user' => null];   // an ordinary visitor, not signed in and not claiming to be
+        }
         $u = self::find_by_id($p['id']);
-        if ($u && self::$tok !== '') {   // sliding session: keep people signed in as long as they keep using the app
+        if (!$u) {
+            // The session resolved to this id a moment ago, so the account exists. Failing to read it
+            // now is our problem, not theirs.
+            throw new Mutqan_Error('server_error', 'تعذّر قراءة الحساب. حاول مرة أخرى.', 500);
+        }
+        if (self::$tok !== '') {   // sliding session: keep people signed in as long as they keep using the app
             $keep = gmdate('Y-m-d H:i:s', time() + self::SESSION_DAYS * 86400);
             $GLOBALS['wpdb']->query($GLOBALS['wpdb']->prepare('UPDATE ' . Mutqan_Store::table('sessions') . ' SET expires_at=%s WHERE token_hash=%s AND expires_at < %s', $keep, self::$tok, gmdate('Y-m-d H:i:s', time() + (self::SESSION_DAYS - 15) * 86400)));
         }
-        return ['user' => $u ? self::public_user($u) : null];
+        return ['user' => self::public_user($u)];
     }
 
     public static function update_profile($p, $in) {
@@ -361,6 +434,9 @@ final class Mutqan_Auth {
             }
             case 'acceptInvite': return self::accept_invite($in);
             case 'requestAccess': return self::request_access($in);
+            case 'otpRequest': return Mutqan_OTP::request($in);
+            case 'otpVerify': return Mutqan_OTP::verify($in);
+            case 'joinRequest': return Mutqan_OTP::request_staff($in, $p);
         }
 
         self::require_manage($p);
