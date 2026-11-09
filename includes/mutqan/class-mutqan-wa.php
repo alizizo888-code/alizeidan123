@@ -95,7 +95,9 @@ final class Mutqan_WA {
     /** Id of a connected (status «open») business number, or '' when the gateway is not set up / down. Cached for a minute so an order never waits on it twice. */
     public static function open_account() {
         $c = self::cfg();
-        if ($c['url'] === '' || $c['token'] === '') { return ''; }
+        // A phone gateway cannot be asked which numbers it has; it tells us when it connects.
+        if ($c['url'] === '') { return (string) get_option('mutqan_wa_last_acct', ''); }
+        if ($c['token'] === '') { return ''; }
         $hit = get_transient('mq_wa_open');
         if ($hit !== false) { return (string) $hit; }
         $id = '';
@@ -125,11 +127,81 @@ final class Mutqan_WA {
     }
 
     /** Send through the gateway and record the outgoing message. */
+    /**
+     * Sends a message, by whichever route the gateway can be reached.
+     *
+     * A gateway on a phone has no address of its own: nothing on the internet can call into it. So
+     * when no URL is configured the message is queued and the phone collects it on its next pull.
+     * With a URL (a machine that can be dialled) it is pushed as before. Same call either way —
+     * nothing above this line needs to know where the gateway lives.
+     */
     public static function send($acct, $phone, $text, $via, $by = '') {
+        $c = self::cfg();
+        if ($c['url'] === '') { return self::queue($acct, $phone, $text, $via, $by); }
         $r = self::gw('POST', '/sessions/' . rawurlencode($acct) . '/send', ['to' => $phone, 'text' => $text]);
         $msgId = (string) ($r['msgId'] ?? wp_generate_uuid4());
         self::store_message($acct, $phone, ['msgId' => $msgId, 'dir' => 'out', 'text' => $text, 'kind' => 'text', 'ts' => time(), 'via' => $via, 'by' => $by]);
         return ['ok' => true];
+    }
+
+    /** Puts one message in the queue the phone collects from. */
+    public static function queue($acct, $phone, $text, $via = 'auto', $by = '') {
+        $doc = Mutqan_Store::insert('wa_outbox', [
+            'acct' => (string) $acct, 'to' => self::intl($phone) ?: preg_replace('/\D/', '', (string) $phone),
+            'text' => mb_substr((string) $text, 0, 4000), 'via' => (string) $via, 'by' => (string) $by,
+            'state' => 'pending', 'tries' => 0, 'at' => gmdate('c'),
+        ], null, [], self::sys());
+        return ['ok' => true, 'queued' => true, 'id' => (string) ($doc['id'] ?? '')];
+    }
+
+    /**
+     * The phone asks: anything to send? — and reports what it managed to send last time.
+     *
+     * The queue is what makes a phone gateway possible at all, so the rules here are the ones that
+     * keep it honest: a job handed out is marked taken with the time, so a phone that dies mid-send
+     * does not strand it forever; a job tried too many times is dropped rather than retried into a
+     * number that keeps failing.
+     */
+    const TAKEN_STUCK = 300;        // a job handed out and never acked is offered again after this
+    const MAX_TRIES = 4;
+
+    /** Same signature as the webhook, checked the same way: the body, with the shared secret. */
+    public static function pull_signed($raw, $sig) {
+        $c = self::cfg();
+        if (!is_string($sig) || !hash_equals(hash_hmac('sha256', $raw, $c['secret']), $sig)) { throw new Mutqan_Error('forbidden', 'توقيع غير صحيح.', 403); }
+        $in = json_decode($raw, true);
+        return self::pull(is_array($in) ? $in : []);
+    }
+
+    public static function pull($in) {
+        $now = time();
+        foreach ((array) ($in['sent'] ?? []) as $one) {
+            $id = (string) (is_array($one) ? ($one['id'] ?? '') : $one);
+            if ($id === '') { continue; }
+            $job = Mutqan_Store::get_raw('wa_outbox', $id);
+            if (!$job) { continue; }
+            $okFlag = !is_array($one) || ($one['ok'] ?? true);
+            if ($okFlag) {
+                self::store_message((string) $job['acct'], (string) $job['to'], ['msgId' => (string) ((is_array($one) ? ($one['msgId'] ?? '') : '') ?: wp_generate_uuid4()),
+                    'dir' => 'out', 'text' => (string) $job['text'], 'kind' => 'text', 'ts' => $now, 'via' => (string) ($job['via'] ?? 'auto'), 'by' => (string) ($job['by'] ?? '')]);
+                Mutqan_Store::delete('wa_outbox', $id, self::sys());
+            } else {
+                $tries = (int) ($job['tries'] ?? 0) + 1;
+                if ($tries >= self::MAX_TRIES) { Mutqan_Store::delete('wa_outbox', $id, self::sys()); }
+                else { Mutqan_Store::update('wa_outbox', $id, ['state' => 'pending', 'tries' => $tries], self::sys()); }
+            }
+        }
+        $limit = max(1, min(20, (int) ($in['limit'] ?? 10)));
+        $jobs = [];
+        foreach (Mutqan_Store::select('wa_outbox', [], ['limit' => 100, 'order' => 'asc'], self::sys()) as $job) {
+            if (count($jobs) >= $limit) { break; }
+            $state = (string) ($job['state'] ?? 'pending');
+            $taken = (int) ($job['takenAt'] ?? 0);
+            if ($state === 'taken' && $now - $taken < self::TAKEN_STUCK) { continue; }
+            Mutqan_Store::update('wa_outbox', (string) $job['id'], ['state' => 'taken', 'takenAt' => $now], self::sys());
+            $jobs[] = ['id' => (string) $job['id'], 'acct' => (string) ($job['acct'] ?? ''), 'to' => (string) ($job['to'] ?? ''), 'text' => (string) ($job['text'] ?? '')];
+        }
+        return ['jobs' => $jobs, 'at' => $now];
     }
 
     /* ---------------------------------------------------------------- storage */
@@ -169,6 +241,7 @@ final class Mutqan_WA {
         $acct = self::id($e['accountId'] ?? '');
         if (($e['type'] ?? '') === 'status') {
             set_transient('mq_wa_st_' . $acct, ['status' => (string) ($e['status'] ?? ''), 'at' => time()], DAY_IN_SECONDS);
+            if (($e['status'] ?? '') === 'open') { update_option('mutqan_wa_last_acct', $acct, false); }
             if (in_array($e['status'] ?? '', ['logged_out', 'closed'], true)) { self::notify_admins('تنبيه واتساب', 'الرقم «' . $acct . '» انقطع اتصاله — افتح صندوق الواتساب لإعادة الربط.', 'wa-down-' . $acct); }
             return ['ok' => true];
         }

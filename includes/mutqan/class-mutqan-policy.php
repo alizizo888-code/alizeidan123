@@ -37,6 +37,7 @@ final class Mutqan_Policy {
                 'warranties' => ['read', 'write', 'write', 'write'],
                 'warranty_claims' => ['creator_or_read', 'authed', 'write', 'write'],
                 'wa_threads' => ['read', 'write', 'write', 'write'], 'wa_msgs' => ['read', 'write', 'write', 'write'], 'wa_bot' => ['read', 'write', 'write', 'write'],
+                'wa_outbox' => ['read', 'write', 'write', 'write'],
                 'customer_profiles' => ['read', 'write', 'write', 'write'],
                 'shops' => ['staff', 'write', 'write', 'write'],
                 'wa_leads' => ['read', 'anon_ok', 'write', 'write'],
