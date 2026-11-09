@@ -5,6 +5,8 @@
   var msg = document.getElementById('msg');
   var who = document.getElementById('who');
   var out = document.getElementById('out');
+  var aroundBtn = document.getElementById('around');
+  var showingAround = false;
   var steps = {};
   var replies = [];
   var openChat = null;
@@ -139,6 +141,8 @@
       }
       who.textContent = 'شغل ' + me.technician.name;
       out.hidden = false;
+      aroundBtn.hidden = false;
+      if (showingAround) { return drawAround(); }
       var data = await api('tech/jobs');
       // A job that was not there a minute ago is worth hearing about, not just seeing.
       var ids = data.jobs.map(function (j) { return j.id; });
@@ -167,6 +171,48 @@
     navigator.geolocation.getCurrentPosition(function (p) {
       api('tech/where', { lat: p.coords.latitude, lng: p.coords.longitude }).catch(function () {});
     }, function () {}, { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
+  }
+
+  /**
+   * What is around the technician right now.
+   *
+   * A technician whose compressor has failed should not be ringing the operations room to ask where
+   * to buy one, and one whose job turns out to be somebody else's speciality should be able to see
+   * who is free nearby. Distances are straight-line: enough to choose between two shops, never a
+   * promise about the drive.
+   */
+  async function drawAround() {
+    showingAround = true;
+    try {
+      var d = await api('tech/around');
+      var mine = d.jobs.map(function (j) {
+        return row('🔧', j.service + (j.address ? ' — ' + j.address : ''), j.status_label, j.lat, j.lng);
+      }).join('');
+      var mates = d.mates.map(function (m) {
+        return row('👷', m.name, (m.km === null ? '' : m.km + ' كم · ') + statusWord(m.status), m.lat, m.lng);
+      }).join('');
+      var shops = d.places.map(function (p) {
+        return row('🛠', p.name + (p.phone ? ' · ' + p.phone : ''), (p.km === null ? p.kind_label : p.km + ' كم'), p.lat, p.lng, p.phone);
+      }).join('');
+      view.innerHTML = '<div class="job"><h2>شغلي</h2>' + (mine || '<div class="meta">مفيش شغل مفتوح.</div>') + '</div>'
+        + '<div class="job"><h2>فنيين حواليك</h2>' + (mates || '<div class="meta">مفيش فنيين بموقع محدّث.</div>') + '</div>'
+        + '<div class="job"><h2>أقرب محلات قطع غيار</h2>' + (shops || '<div class="meta">العمليات لسه ما ضافتش محلات.</div>') + '</div>';
+    } catch (e) {
+      view.innerHTML = '<p class="empty">تعذّر تحميل اللي حواليك.</p>';
+    }
+  }
+
+  function statusWord(s) {
+    return { busy: 'مشغول', available: 'فاضي', stale: 'موقعه قديم', offline: 'غير متصل' }[s] || s;
+  }
+
+  /** One line on the around-me screen: what it is, where, and the two things worth tapping. */
+  function row(icon, title, note, lat, lng, phone) {
+    var map = (lat !== null && lat !== undefined)
+      ? '<a class="btn ghost sm" href="https://maps.google.com/?q=' + lat + ',' + lng + '" target="_blank" rel="noopener">الطريق</a>' : '';
+    var call = phone ? '<a class="btn ghost sm" href="tel:' + esc(String(phone).replace(/[^\d+]/g, '')) + '">اتصال</a>' : '';
+    return '<div class="around"><div class="around-what">' + icon + ' <b>' + esc(title) + '</b>'
+      + (note ? '<small>' + esc(note) + '</small>' : '') + '</div>' + map + call + '</div>';
   }
 
   /** The conversation on one job: operations and the technician read and write the same thread. */
@@ -256,6 +302,10 @@
         say(SAYS[e.code] || 'تعذّر الدخول. جرّب تاني.');
       }
       return;
+    }
+    if (ev.target === aroundBtn) {
+      if (showingAround) { showingAround = false; return show(); }
+      return drawAround();
     }
     if (ev.target === out) {
       await api('tech/signout', {}).catch(function () {});

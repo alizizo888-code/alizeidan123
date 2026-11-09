@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS people (
 );
 
 -- Last known position of a technician (schema v3). One row per technician, replaced on each report.
+CREATE TABLE IF NOT EXISTS places (
+    id VARCHAR(40) PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    kind VARCHAR(16) NOT NULL DEFAULT 'parts',
+    lat DECIMAL(9,6) NOT NULL,
+    lng DECIMAL(9,6) NOT NULL,
+    phone VARCHAR(20) NOT NULL DEFAULT '',
+    note VARCHAR(200) NOT NULL DEFAULT '',
+    created INT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS notices (
     id VARCHAR(40) PRIMARY KEY,
     about VARCHAR(16) NOT NULL,

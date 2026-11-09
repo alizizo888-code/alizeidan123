@@ -168,6 +168,31 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // Places on the ground: where to buy a part, where the stores are.
+    if ($method === 'GET' && $route === 'places') {
+        Auth::current();
+        oxy_json(['ok' => true, 'places' => Places::all(), 'kinds' => Places::KINDS]);
+        return;
+    }
+    if ($method === 'POST' && $route === 'places') {
+        Auth::requireCsrf();
+        oxy_json(['ok' => true, 'place' => Places::add(oxy_body())], 201);
+        return;
+    }
+    if ($method === 'DELETE' && count($parts) === 2 && $parts[0] === 'places') {
+        Auth::requireCsrf();
+        oxy_json(Places::remove($parts[1]));
+        return;
+    }
+
+    // Handing a job, or a position, to somebody on WhatsApp. Nothing is sent here: a person sends it.
+    if ($method === 'GET' && count($parts) === 3 && $parts[0] === 'orders' && $parts[2] === 'whatsapp') {
+        Auth::current();
+        $to = $_GET['to'] ?? 'technician';
+        oxy_json(['ok' => true] + ($to === 'customer' ? Share::technicianPlace($parts[1]) : Share::jobToTechnician($parts[1])));
+        return;
+    }
+
     // What needs somebody's attention, and what should make a sound.
     if ($method === 'GET' && $route === 'notices') {
         Auth::current();
@@ -272,6 +297,36 @@ function oxy_dispatch(string $method, string $route): void
             throw new OxyHttpError(403, 'not_your_job');
         }
         oxy_json(['ok' => true, 'message' => Messages::add($parts[1], oxy_body()['body'] ?? null, 'technician')], 201);
+        return;
+    }
+    // What is around the technician right now: their own jobs, the other technicians who are free,
+    // and the nearest places to buy a part.
+    if ($method === 'GET' && $route === 'tech/around') {
+        $me = Tech::current();
+        $loc = Locations::of($me['id']);
+        $lat = $loc === null ? null : $loc['lat'];
+        $lng = $loc === null ? null : $loc['lng'];
+        $mates = [];
+        foreach (Locations::live() as $t) {
+            if ($t['id'] === $me['id'] || $t['lat'] === null) {
+                continue;
+            }
+            $mates[] = [
+                'name' => $t['name'],
+                'status' => $t['status'],
+                'lat' => $t['lat'],
+                'lng' => $t['lng'],
+                'km' => ($lat === null) ? null : round(Locations::km($lat, $lng, (float) $t['lat'], (float) $t['lng']), 1),
+            ];
+        }
+        usort($mates, static fn (array $a, array $b): int => ($a['km'] ?? 1e9) <=> ($b['km'] ?? 1e9));
+        oxy_json([
+            'ok' => true,
+            'me' => ['lat' => $lat, 'lng' => $lng],
+            'jobs' => Tech::myJobs($me['id']),
+            'mates' => array_slice($mates, 0, 10),
+            'places' => Places::near($lat, $lng),
+        ]);
         return;
     }
     if ($method === 'GET' && $route === 'tech/jobs') {

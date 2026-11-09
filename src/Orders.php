@@ -23,7 +23,7 @@ final class Orders
     /** @return list<array<string,mixed>> */
     public static function list(?string $filter = null): array
     {
-        $sql = 'SELECT o.*, c.name AS customer_name, c.lat, c.lng, p.name AS technician_name, so.code, so.source, ts.share_pct
+        $sql = 'SELECT o.*, c.name AS customer_name, c.phone AS customer_phone, c.address AS address, c.lat, c.lng, p.name AS technician_name, so.code, so.source, ts.share_pct
                 FROM orders o
                 JOIN customers c ON c.id = o.customer_id
                 LEFT JOIN people p ON p.id = o.technician_id
@@ -46,7 +46,7 @@ final class Orders
             throw new OxyHttpError(404, 'not_found');
         }
         $stmt = oxy_pdo()->prepare(
-            'SELECT o.*, c.name AS customer_name, c.lat, c.lng, p.name AS technician_name, so.code, so.source, ts.share_pct
+            'SELECT o.*, c.name AS customer_name, c.phone AS customer_phone, c.address AS address, c.lat, c.lng, p.name AS technician_name, so.code, so.source, ts.share_pct
              FROM orders o JOIN customers c ON c.id = o.customer_id LEFT JOIN people p ON p.id = o.technician_id
              LEFT JOIN technician_shares ts ON ts.person_id = o.technician_id
              LEFT JOIN site_orders so ON so.order_id = o.id
@@ -260,6 +260,11 @@ final class Orders
             'id' => $row['id'],
             'customer_id' => $row['customer_id'],
             'customer_name' => $row['customer_name'],
+            // Where the job is and how to reach the customer: on the customer, shown with the order.
+            'customer_phone' => $row['customer_phone'] ?? null,
+            'address' => $row['address'] ?? null,
+            'lat' => $row['lat'] === null ? null : (float) $row['lat'],
+            'lng' => $row['lng'] === null ? null : (float) $row['lng'],
             'lat' => $row['lat'] === null ? null : (float) $row['lat'],
             'lng' => $row['lng'] === null ? null : (float) $row['lng'],
             'technician_id' => $row['technician_id'],

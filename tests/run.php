@@ -691,5 +691,52 @@ check('the sound is made, not downloaded', strpos($tjs, 'createOscillator') !== 
 check('a phone that cannot play a sound still works', strpos($tjs, 'catch (e) { /* a phone that will not make a sound is not a reason to fail */ }') !== false);
 check('it does not ring on the very first load', strpos($tjs, 'Object.keys(lastSeen).length && fresh.length') !== false);
 
+echo "Sending a job to WhatsApp\n";
+// No gateway, no approved template, no provider that can suspend the account on a Friday night:
+// a wa.me link opens WhatsApp with the words ready and a person presses send.
+$techS = People::create(['role' => 'technician', 'name' => 'سعيد', 'phone' => '0559200100', 'area' => 'makkah']);
+$custS = Customers::create(['name' => 'أم سعد', 'phone' => '0559200200', 'address' => 'حي النزهة', 'lat' => 21.43, 'lng' => 39.83]);
+$jobS = Orders::create(['customer_id' => $custS['id'], 'service' => 'غسيل مكيفات', 'technician_id' => $techS['id'], 'price' => 240]);
+Orders::update($jobS['id'], ['status' => 'assigned']);
+
+check('a local number becomes the international form WhatsApp wants', Share::number('0559200100') === '966559200100');
+check('and a number already international is left alone', Share::number('+966 559 200 100') === '966559200100');
+
+$w = Share::jobToTechnician($jobS['id']);
+check('the link opens WhatsApp on the technician number', str_starts_with($w['link'], 'https://wa.me/966559200100?text='));
+check('the message carries the service', str_contains($w['text'], 'غسيل مكيفات'));
+// Customers are stored with the country code, so that is what the technician is given to dial.
+check('and the customer and their number', str_contains($w['text'], 'أم سعد') && str_contains($w['text'], '966559200200'));
+check('and the address', str_contains($w['text'], 'حي النزهة'));
+check('and a map anyone can open', str_contains($w['text'], 'maps.google.com/?q=21.43,39.83'));
+check('and what the technician earns', str_contains($w['text'], 'نصيبك'));
+check('the text is encoded so it survives the link', !str_contains($w['link'], ' ') && !str_contains($w['link'], "\n"));
+
+$noTech = Orders::create(['customer_id' => $custS['id'], 'service' => 'سباكة']);
+check('a job with no technician has nobody to send it to', throws(static fn () => Share::jobToTechnician($noTech['id']), 'no_technician'));
+check('sending the position before there is one is refused', throws(static fn () => Share::technicianPlace($jobS['id']), 'no_location'));
+Locations::record($techS['id'], 21.41, 39.81);
+$wc = Share::technicianPlace($jobS['id']);
+check('the customer gets a link to where the technician is', str_starts_with($wc['link'], 'https://wa.me/966559200200?text=') && str_contains($wc['text'], 'maps.google.com'));
+
+echo "What is around the technician\n";
+$shop = Places::add(['name' => 'قطع غيار النزهة', 'kind' => 'parts', 'lat' => 21.44, 'lng' => 39.84, 'phone' => '0551112223']);
+Places::add(['name' => 'مخزن بعيد', 'kind' => 'store', 'lat' => 24.70, 'lng' => 46.70]);
+check('a place operations added is there', count(Places::all()) === 2);
+check('it carries a phone to ring', $shop['phone'] === '0551112223');
+$near = Places::near(21.41, 39.81);
+check('the nearest place comes first', $near[0]['name'] === 'قطع غيار النزهة');
+check('and the distance is worked out', $near[0]['km'] < 5 && $near[1]['km'] > 500);
+check('a place with no name is refused', throws(static fn () => Places::add(['name' => ' ', 'lat' => 21, 'lng' => 39]), 'bad_name'));
+check('a kind nobody uses is refused', throws(static fn () => Places::add(['name' => 'x', 'kind' => 'spaceport', 'lat' => 21, 'lng' => 39]), 'bad_kind'));
+check('a position that is not one is refused', throws(static fn () => Places::add(['name' => 'x', 'lat' => 999, 'lng' => 39]), 'bad_location'));
+check('markup in a name is refused', throws(static fn () => Places::add(['name' => '<b>x</b>', 'lat' => 21, 'lng' => 39]), 'bad_name'));
+check('removing a place that is not there says so', throws(static fn () => Places::remove('nope'), 'no_place'));
+check('removing one works', Places::remove($shop['id'])['ok'] === true && count(Places::all()) === 1);
+
+check('the phone shows what is around the technician', strpos($tjs, "tech/around") !== false && strpos($tjs, 'drawAround') !== false);
+check('with the nearest parts shops and other technicians', strpos($tjs, 'أقرب محلات قطع غيار') !== false && strpos($tjs, 'فنيين حواليك') !== false);
+check('and a route and a phone to tap', strpos($tjs, 'maps.google.com') !== false && strpos($tjs, "href='tel:") !== false || strpos($tjs, 'href="tel:') !== false || strpos($tjs, "tel:'") !== false);
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);

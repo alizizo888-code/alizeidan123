@@ -27,6 +27,11 @@ summary{cursor:pointer;font-weight:600;padding:6px 0}
 .line{padding:8px 10px;border-radius:10px;background:#0e1627;margin-bottom:6px;font-size:15px}
 .line.mine{background:#163055}
 .line b{color:var(--muted);font-weight:600;font-size:13px;display:block}
+.around{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
+.around:last-child{border-bottom:0}
+.around-what{flex:1;min-width:0}
+.around-what small{display:block;color:var(--muted);font-size:14px}
+.btn.sm{flex:0 0 auto;min-height:40px;padding:0 12px;font-size:15px}
 .tags{margin-top:8px}
 .msg{padding:12px 14px;border-radius:10px;margin-bottom:14px;display:none}
 .msg.show{display:block}
