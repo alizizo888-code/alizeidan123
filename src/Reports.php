@@ -12,8 +12,8 @@ final class Reports
     {
         $rows = oxy_pdo()->query(
             "SELECT p.id, p.name, p.active, ts.share_pct,
-                COUNT(CASE WHEN o.status = 'done' THEN 1 END) AS done_count,
-                COALESCE(SUM(CASE WHEN o.status = 'done' THEN o.price END), 0) AS done_value,
+                COUNT(CASE WHEN o.status = 'completed' THEN 1 END) AS done_count,
+                COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.price END), 0) AS done_value,
                 COUNT(CASE WHEN o.status IN ('new','assigned','in_progress') THEN 1 END) AS open_count,
                 (SELECT COALESCE(SUM(l.amount), 0) FROM ledger l WHERE l.person_id = p.id) AS balance
              FROM people p

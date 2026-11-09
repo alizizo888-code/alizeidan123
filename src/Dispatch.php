@@ -90,6 +90,62 @@ final class Dispatch
         return $value === null ? 0 : (int) $value;
     }
 
+    /**
+     * The technician's cut of a job, per service.
+     *
+     * A wash and a full installation are not the same work and were never meant to pay the same
+     * share, so a single number across every service is the wrong shape — it is right for nothing
+     * and roughly wrong for everything. The business already worked this way: each service carries
+     * its own commission, and what is left is the company's margin.
+     *
+     * Order of precedence, most specific first: a share set on this technician by hand, then the
+     * share set on this service, then the default.
+     */
+    public static function serviceShares(): array
+    {
+        $out = [];
+        foreach (oxy_pdo()->query('SELECT skill, share_pct FROM service_shares')->fetchAll() as $row) {
+            $out[$row['skill']] = (int) $row['share_pct'];
+        }
+        return $out;
+    }
+
+    /** Sets what a service pays a technician, or clears it so the default applies again. */
+    public static function setServiceShare(string $skill, mixed $value): array
+    {
+        if (!in_array($skill, Skills::LIST, true)) {
+            throw new OxyHttpError(400, 'bad_skill');
+        }
+        $pdo = oxy_pdo();
+        $pdo->prepare('DELETE FROM service_shares WHERE skill = ?')->execute([$skill]);
+        if ($value !== null) {
+            $pdo->prepare('INSERT INTO service_shares (skill, share_pct) VALUES (?, ?)')->execute([$skill, self::percent($value)]);
+        }
+        Audit::log('service_share', $skill, $value === null ? 'default' : (string) $value);
+        return ['skill' => $skill, 'share_pct' => $value === null ? self::defaultShare() : (int) $value, 'custom' => $value !== null];
+    }
+
+    /**
+     * What this technician earns on this job, as a percentage.
+     * The margin the company keeps is simply what is left, so the two can never disagree.
+     */
+    public static function shareFor(?string $personId, string $service): int
+    {
+        if ($personId !== null) {
+            $own = self::shares()[$personId] ?? null;
+            if ($own !== null) {
+                return $own;
+            }
+        }
+        $byService = self::serviceShares();
+        foreach (Skills::forService($service) as $skill) {
+            if (isset($byService[$skill])) {
+                return $byService[$skill];
+            }
+        }
+        return self::defaultShare();
+    }
+
     /** Share per technician id, only for those set by hand. @return array<string,int> */
     public static function shares(): array
     {

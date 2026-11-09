@@ -24,11 +24,21 @@ final class Tech
     /** An unused invitation stops working. A link forwarded by mistake should not stay live for ever. */
     public const INVITE_SECONDS = 172800;     // 48 hours
 
-    /** The steps a technician can move a job through, and what each one is called on their screen. */
-    public const STEPS = ['in_progress' => 'بدأت الشغل', 'done' => 'خلصت'];
+    /**
+     * The steps a technician moves a job through, in order, each the next thing they would actually
+     * say out loud. These are the chain's own states, so the customer's screen, the operations room
+     * and the technician's phone always agree on where the job is.
+     */
+    public const STEPS = [
+        'accepted' => 'قبلت الطلب',
+        'en_route' => 'في الطريق',
+        'arrived' => 'وصلت',
+        'in_progress' => 'بدأت الشغل',
+        'completed' => 'خلصت',
+    ];
 
     /** The jobs a technician is shown: the ones still in their hands. */
-    public const OPEN_STATUSES = ['assigned', 'in_progress'];
+    public const OPEN_STATUSES = Workflow::WITH_TECHNICIAN;
 
     /**
      * A technician signing themselves in, the first time, with the number the owner already wrote down.
@@ -233,7 +243,7 @@ final class Tech
         if ((string) ($order['technician_id'] ?? '') !== $personId) {
             throw new OxyHttpError(403, 'not_your_job');
         }
-        if (in_array($order['status'], ['done', 'cancelled'], true)) {
+        if (in_array($order['status'], ['completed', 'cancelled'], true)) {
             throw new OxyHttpError(409, 'job_closed');
         }
         $updated = Orders::update($orderId, ['status' => $step]);

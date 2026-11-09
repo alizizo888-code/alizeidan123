@@ -9,7 +9,15 @@ declare(strict_types=1);
  */
 final class Orders
 {
-    public const STATUSES = ['new' => 'جديد', 'assigned' => 'مُسند', 'in_progress' => 'جاري', 'done' => 'مكتمل', 'cancelled' => 'ملغي'];
+    /**
+     * The states an order moves through. Kept in Workflow, which carries the whole chain, so the
+     * desk and the people using it never disagree about what a stage is called.
+     *
+     * 'done' is still accepted on the way in, because orders written before this change use it, and
+     * a reader should not have to know which week an order was created to understand its status.
+     */
+    public const STATUSES = Workflow::STATUSES;
+    private const LEGACY_STATUS = ['done' => 'completed'];
     public const ACTIVE = ['new', 'assigned', 'in_progress'];
 
     /** @return list<array<string,mixed>> */
@@ -79,11 +87,20 @@ final class Orders
         $args = [];
         if (array_key_exists('status', $in)) {
             $status = $in['status'];
+            $status = is_string($status) ? (self::LEGACY_STATUS[$status] ?? $status) : $status;
             if (!is_string($status) || !array_key_exists($status, self::STATUSES)) {
                 throw new OxyHttpError(400, 'bad_status');
             }
             $sets[] = 'status = ?';
             $args[] = $status;
+        }
+        if (array_key_exists('handler', $in)) {
+            $handler = $in['handler'];
+            if (!is_string($handler) || !array_key_exists($handler, Workflow::HANDLERS)) {
+                throw new OxyHttpError(400, 'bad_handler');
+            }
+            $sets[] = 'handler = ?';
+            $args[] = $handler;
         }
         if (array_key_exists('technician_id', $in)) {
             $sets[] = 'technician_id = ?';
@@ -101,7 +118,8 @@ final class Orders
             $sets[] = 'warranty_until = ?';
             $args[] = $days === null ? null : time() + ((int) $days) * 86400;
         }
-        $finishing = array_key_exists('status', $in) && $in['status'] === 'done' && $order['status'] !== 'done';
+        $wanted = array_key_exists('status', $in) && is_string($in['status']) ? (self::LEGACY_STATUS[$in['status']] ?? $in['status']) : null;
+        $finishing = $wanted === 'completed' && $order['status'] !== 'completed';
         if ($finishing && !array_key_exists('warranty_days', $in) && $order['warranty_until'] === null && Dispatch::defaultWarrantyDays() > 0) {
             $sets[] = 'warranty_until = ?';
             $args[] = time() + Dispatch::defaultWarrantyDays() * 86400;
@@ -116,11 +134,11 @@ final class Orders
 
         // A finished job records its price on the customer, so the next quote starts from it.
         $next = self::find($id);
-        if ($next['status'] === 'done' && $next['price'] !== null && $order['status'] !== 'done') {
+        if ($next['status'] === 'completed' && $next['price'] !== null && $order['status'] !== 'completed') {
             Customers::update($next['customer_id'], ['last_price' => $next['price']]);
         }
         // A finished job with a technician earns him his share, once, in the ledger.
-        if ($next['status'] === 'done') {
+        if ($next['status'] === 'completed') {
             Ledger::earnOrder($id);
         }
         Audit::log('order_update', $id, implode(',', array_keys($in)));
@@ -245,6 +263,9 @@ final class Orders
             'lat' => $row['lat'] === null ? null : (float) $row['lat'],
             'lng' => $row['lng'] === null ? null : (float) $row['lng'],
             'technician_id' => $row['technician_id'],
+            // Who is holding this order right now, read the same way by every screen.
+            'handler' => Workflow::handler($row),
+            'handler_label' => Workflow::HANDLERS[Workflow::handler($row)],
             'technician_name' => $row['technician_name'],
             'service' => $row['service'],
             'code' => $row['code'] ?? null,
@@ -253,10 +274,12 @@ final class Orders
             'status_label' => self::STATUSES[$row['status']] ?? $row['status'],
             'active' => in_array($row['status'], self::ACTIVE, true),
             'price' => $row['price'] === null ? null : (int) $row['price'],
-            'technician_share_pct' => $row['technician_id'] === null ? null : (int) ($row['share_pct'] ?? Dispatch::defaultShare()),
+            // The technician's own share if one was set for them, otherwise what this service pays.
+            'technician_share_pct' => $row['technician_id'] === null ? null
+                : (int) ($row['share_pct'] ?? Dispatch::shareFor($row['technician_id'], (string) $row['service'])),
             'technician_amount' => ($row['technician_id'] === null || $row['price'] === null)
                 ? null
-                : (int) round((int) $row['price'] * (int) ($row['share_pct'] ?? Dispatch::defaultShare()) / 100),
+                : (int) round((int) $row['price'] * (int) ($row['share_pct'] ?? Dispatch::shareFor($row['technician_id'], (string) $row['service'])) / 100),
             'warranty_until' => $row['warranty_until'] === null ? null : (int) $row['warranty_until'],
             'created' => (int) $row['created'],
             'updated' => (int) $row['updated'],

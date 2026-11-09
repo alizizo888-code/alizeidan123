@@ -20,7 +20,7 @@ final class Ledger
     public static function earnOrder(string $orderId): bool
     {
         $order = Orders::find($orderId);
-        if ($order['status'] !== 'done' || $order['technician_id'] === null || $order['technician_amount'] === null) {
+        if ($order['status'] !== 'completed' || $order['technician_id'] === null || $order['technician_amount'] === null) {
             return false;
         }
         $exists = oxy_pdo()->prepare("SELECT 1 FROM ledger WHERE order_id = ? AND kind = 'earning'");
@@ -96,7 +96,7 @@ final class Ledger
     {
         $stmt = oxy_pdo()->query(
             "SELECT o.id FROM orders o
-             WHERE o.status = 'done' AND o.technician_id IS NOT NULL AND o.price IS NOT NULL
+             WHERE o.status = 'completed' AND o.technician_id IS NOT NULL AND o.price IS NOT NULL
                AND NOT EXISTS (SELECT 1 FROM ledger l WHERE l.order_id = o.id AND l.kind = 'earning')"
         );
         $done = 0;

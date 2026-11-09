@@ -472,15 +472,15 @@ check('and never another technician job', !in_array($theirs['id'], $jobIds, true
 check('the job carries the customer number to call', $jobs[0]['customer']['phone'] !== '');
 check('and the price agreed', $jobs[0]['price'] === 200);
 
-check('a technician cannot touch a job that is not theirs', throws(static fn () => Tech::step($techA['id'], $theirs['id'], 'done'), 'not_your_job'));
+check('a technician cannot touch a job that is not theirs', throws(static fn () => Tech::step($techA['id'], $theirs['id'], 'completed'), 'not_your_job'));
 check('an invented step is refused', throws(static fn () => Tech::step($techA['id'], $mine['id'], 'cancelled'), 'bad_step'));
 
 Tech::step($techA['id'], $mine['id'], 'in_progress');
 check('starting the job is recorded', Orders::find($mine['id'])['status'] === 'in_progress');
 check('a started job is still on their list', in_array($mine['id'], array_column(Tech::myJobs($techA['id']), 'id'), true));
 
-Tech::step($techA['id'], $mine['id'], 'done');
-check('finishing the job is recorded', Orders::find($mine['id'])['status'] === 'done');
+Tech::step($techA['id'], $mine['id'], 'completed');
+check('finishing the job is recorded', Orders::find($mine['id'])['status'] === 'completed');
 check('a finished job leaves the list', !in_array($mine['id'], array_column(Tech::myJobs($techA['id']), 'id'), true));
 // Reopening from a phone would quietly undo the earning already written against the job.
 check('a finished job cannot be reopened from the phone', throws(static fn () => Tech::step($techA['id'], $mine['id'], 'in_progress'), 'job_closed'));
@@ -535,6 +535,67 @@ $ht = (string) file_get_contents(__DIR__ . '/../.htaccess');
 check('the phone position is allowed for this origin', strpos($ht, 'geolocation=(self)') !== false);
 check('the camera and microphone stay off', strpos($ht, 'camera=()') !== false && strpos($ht, 'microphone=()') !== false);
 check('the app folder is not blocked like the private ones', !preg_match('#\^/\((?:[a-z|\\.]*\|)?t\|#', $ht));
+
+echo "The chain an order travels\n";
+$opsP = People::create(['role' => 'supervisor', 'name' => 'مشرف', 'phone' => '0557000111', 'area' => 'makkah']);
+$techW = People::create(['role' => 'technician', 'name' => 'وليد', 'phone' => '0557000222', 'area' => 'makkah']);
+$custW = Customers::create(['name' => 'عميل السلسلة', 'phone' => '0557000333']);
+$ord = Orders::create(['customer_id' => $custW['id'], 'service' => 'صيانة مكيف', 'price' => 300]);
+
+check('a new order sits with the operations room', Orders::find($ord['id'])['handler'] === 'operations');
+check('and says so in words', Orders::find($ord['id'])['handler_label'] === 'غرفة العمليات');
+Orders::update($ord['id'], ['technician_id' => $techW['id'], 'status' => 'assigned']);
+check('once assigned it is in the technician hands', Orders::find($ord['id'])['handler'] === 'technician');
+
+// Who may move it where. These are the rules the business already ran on.
+check('the assistant can only hand up to operations', Workflow::allowed('ai', 'ai') === ['operations']);
+check('the assistant cannot hand work straight to a technician', !in_array('technician', Workflow::allowed('ai', 'ai'), true));
+check('operations can pull a job back from a technician', in_array('operations', Workflow::allowed('operations', 'technician'), true));
+check('a technician can hand their job back to operations', in_array('operations', Workflow::allowed('technician', 'technician', true), true));
+check('a technician cannot touch a job that is not theirs', Workflow::allowed('technician', 'technician', false) === []);
+check('a technician cannot hand a job to the owner', !in_array('owner', Workflow::allowed('technician', 'technician', true), true));
+check('operations cannot take a job out of the owner hands', Workflow::allowed('operations', 'owner') === []);
+check('the owner can move it anywhere in the chain', count(Workflow::allowed('owner', 'technician')) === 3);
+
+check('a move the chain forbids is refused', throws(static fn () => Workflow::transfer($ord['id'], 'technician', 'owner'), 'transfer_not_allowed'));
+check('a handler that does not exist is refused', throws(static fn () => Workflow::transfer($ord['id'], 'owner', 'nobody'), 'bad_handler'));
+Workflow::transfer($ord['id'], 'owner', 'supervisor', 'complaint');
+check('an allowed move sticks', Orders::find($ord['id'])['handler'] === 'supervisor');
+check('moving it where it already is is refused', throws(static fn () => Workflow::transfer($ord['id'], 'owner', 'supervisor'), 'already_there'));
+check('an invented reason is refused', throws(static fn () => Workflow::transfer($ord['id'], 'owner', 'operations', 'because'), 'bad_reason'));
+
+// What the customer hears, and only at the moments worth hearing about.
+check('the customer is told the order arrived', Workflow::followUp('new') === 'تم استلام طلبك.');
+check('and who accepted it', str_contains((string) Workflow::followUp('accepted', 'وليد'), 'وليد'));
+check('and when the technician is on the way', Workflow::followUp('en_route') === 'الفني في الطريق.');
+check('and is asked how it went', str_contains((string) Workflow::followUp('completed'), 'بالشكل المطلوب'));
+check('internal steps say nothing to the customer', Workflow::followUp('assigned') === null && Workflow::followUp('nearby') === null);
+
+// Tracking tells the truth about what is known, and never promises a time.
+$tr = Workflow::tracking(Orders::find($ord['id']));
+check('a job not on the move has no live tracking', $tr['available'] === false && $tr['reason'] === 'status');
+Orders::update($ord['id'], ['status' => 'en_route']);
+$tr = Workflow::tracking(Orders::find($ord['id']));
+check('on the move with no position says exactly that', $tr['available'] === false && $tr['reason'] === 'no_location');
+Locations::record($techW['id'], 21.40, 39.80);
+$tr = Workflow::tracking(Orders::find($ord['id']));
+check('with a position it reports distance and how old the reading is', $tr['available'] === true && array_key_exists('km', $tr) && array_key_exists('age_minutes', $tr));
+// An estimated arrival is a promise the business never made; distance is a fact.
+check('it never promises a time of arrival', !preg_match('/دقيقة للوصول|يصل خلال|ETA/u', $tr['text']));
+
+echo "What a job pays\n";
+check('a service with no rule of its own pays the default', Dispatch::shareFor(null, 'صيانة مكيف') === Dispatch::defaultShare());
+Dispatch::setServiceShare('تكييف', 60);
+check('a service can pay its own share', Dispatch::shareFor(null, 'صيانة تكييف') === 60);
+check('a different service is unaffected', Dispatch::shareFor(null, 'سباكة الحمام') === Dispatch::defaultShare());
+Dispatch::setShare($techW['id'], 75);
+check('a share set on the person beats the service', Dispatch::shareFor($techW['id'], 'صيانة تكييف') === 75);
+Dispatch::setShare($techW['id'], null);
+check('and clearing it hands the service rule back', Dispatch::shareFor($techW['id'], 'صيانة تكييف') === 60);
+check('a share outside nought to a hundred is refused', throws(static fn () => Dispatch::setServiceShare('تكييف', 140), 'bad_share'));
+check('a service nobody offers is refused', throws(static fn () => Dispatch::setServiceShare('طيران', 50), 'bad_skill'));
+Dispatch::setServiceShare('تكييف', null);
+check('clearing a service rule hands the default back', Dispatch::shareFor(null, 'صيانة تكييف') === Dispatch::defaultShare());
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);

@@ -18,8 +18,8 @@ final class Customers
         $rows = oxy_pdo()->query(
             'SELECT c.*,
                 (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id AND o.status IN (\'new\',\'assigned\',\'in_progress\')) AS active_orders,
-                (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id AND o.status = \'done\') AS done_orders,
-                (SELECT MAX(o.warranty_until) FROM orders o WHERE o.customer_id = c.id AND o.status = \'done\') AS warranty_until
+                (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id AND o.status = \'completed\') AS done_orders,
+                (SELECT MAX(o.warranty_until) FROM orders o WHERE o.customer_id = c.id AND o.status = \'completed\') AS warranty_until
              FROM customers c ORDER BY c.updated DESC'
         )->fetchAll();
         $now = time();

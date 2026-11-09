@@ -83,6 +83,28 @@ final class Locations
         }, $stmt->fetchAll());
     }
 
+    /** One technician's last known position, or null if they have never sent one. */
+    public static function of(string $personId): ?array
+    {
+        if ($personId === '') {
+            return null;
+        }
+        $stmt = oxy_pdo()->prepare('SELECT lat, lng, updated FROM technician_locations WHERE person_id = ?');
+        $stmt->execute([$personId]);
+        $row = $stmt->fetch();
+        return $row === false ? null : ['lat' => (float) $row['lat'], 'lng' => (float) $row['lng'], 'updated' => (int) $row['updated']];
+    }
+
+    /** Straight-line distance in kilometres. Good enough to say how far, never how long. */
+    public static function km(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $r = 6371.0;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+        return $r * 2 * atan2(sqrt($a), sqrt(1 - $a));
+    }
+
     public static function coordinate(mixed $value, float $limit): float
     {
         if (is_string($value) && is_numeric($value)) {

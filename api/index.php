@@ -168,6 +168,43 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // The chain: where an order sits, where it may go, and the live facts about the technician.
+    if ($method === 'GET' && $route === 'workflow') {
+        Auth::current();
+        oxy_json([
+            'ok' => true,
+            'handlers' => Workflow::HANDLERS,
+            'statuses' => Workflow::STATUSES,
+            'escalations' => Workflow::ESCALATIONS,
+            'urgent' => Workflow::URGENT,
+            'payment_methods' => Workflow::PAYMENT_METHODS,
+        ]);
+        return;
+    }
+    if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'orders' && $parts[2] === 'transfer') {
+        Auth::requireCsrf();
+        $body = oxy_body();
+        // The desk is the owner's screen, so a transfer made here is made as the owner.
+        oxy_json(['ok' => true, 'order' => Workflow::transfer($parts[1], 'owner', (string) ($body['to'] ?? ''), (string) ($body['why'] ?? ''))]);
+        return;
+    }
+    if ($method === 'GET' && count($parts) === 3 && $parts[0] === 'orders' && $parts[2] === 'tracking') {
+        Auth::current();
+        oxy_json(['ok' => true, 'tracking' => Workflow::tracking(Orders::find($parts[1]))]);
+        return;
+    }
+    if ($method === 'POST' && $route === 'settings/service-share') {
+        Auth::requireCsrf();
+        $body = oxy_body();
+        oxy_json(['ok' => true] + Dispatch::setServiceShare((string) ($body['skill'] ?? ''), $body['share_pct'] ?? null));
+        return;
+    }
+    if ($method === 'GET' && $route === 'settings/service-share') {
+        Auth::current();
+        oxy_json(['ok' => true, 'shares' => Dispatch::serviceShares(), 'default' => Dispatch::defaultShare(), 'skills' => Skills::LIST]);
+        return;
+    }
+
     /* ---------------------------------------------------------------- the technician's own app
      * These routes answer a technician's phone, never the owner's desk. Each one takes the person
      * from their own session and nothing from the request, so one technician cannot ask about
