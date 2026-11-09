@@ -597,5 +597,99 @@ check('a service nobody offers is refused', throws(static fn () => Dispatch::set
 Dispatch::setServiceShare('تكييف', null);
 check('clearing a service rule hands the default back', Dispatch::shareFor(null, 'صيانة تكييف') === Dispatch::defaultShare());
 
+echo "What a technician says back, in one tap\n";
+$techR = People::create(['role' => 'technician', 'name' => 'رامي', 'phone' => '0558100200', 'area' => 'makkah']);
+$custR = Customers::create(['name' => 'عميل الردود', 'phone' => '0558100300']);
+$jobR = Orders::create(['customer_id' => $custR['id'], 'service' => 'صيانة مكيف', 'technician_id' => $techR['id'], 'price' => 250]);
+Orders::update($jobR['id'], ['status' => 'assigned']);
+
+check('the phone is offered the replies without any internals', (static function (): bool {
+    foreach (Replies::all() as $r) {
+        if (array_keys($r) !== ['id', 'label', 'needs_note', 'hand_back']) { return false; }
+    }
+    return count(Replies::all()) >= 10;
+})());
+
+$said = Replies::send($techR['id'], $jobR['id'], 'on_my_way');
+check('saying on the way moves the job there', Orders::find($jobR['id'])['status'] === 'en_route');
+$saidLines = Messages::list($jobR['id']);
+check('and the words land in the conversation', str_contains(end($saidLines)['body'], 'في الطريق'));
+check('and it stays in the technician hands', $said['handed_back'] === false && Orders::find($jobR['id'])['handler'] === 'technician');
+
+Replies::send($techR['id'], $jobR['id'], 'arrived');
+check('arriving moves it on again', Orders::find($jobR['id'])['status'] === 'arrived');
+
+// A reply whose whole point is a detail must carry that detail.
+check('being late without saying how long is refused', throws(static fn () => Replies::send($techR['id'], $jobR['id'], 'running_late'), 'note_required'));
+Replies::send($techR['id'], $jobR['id'], 'running_late', 'نص ساعة');
+$lateLines = Messages::list($jobR['id']);
+check('being late with the detail is accepted', str_contains(end($lateLines)['body'], 'نص ساعة'));
+check('and being late does not change the state', Orders::find($jobR['id'])['status'] === 'arrived');
+
+// Stepping away from a job must hand it back: a job nobody holds is a job that gets forgotten.
+$before = Notices::unseen();
+$out = Replies::send($techR['id'], $jobR['id'], 'need_parts', 'كمبروسر');
+check('needing parts hands the job back to operations', $out['handed_back'] === true && Orders::find($jobR['id'])['handler'] === 'operations');
+check('and operations is told, loudly', Notices::unseen() === $before + 1);
+check('the notice says what happened', (static function (): bool {
+    foreach (Notices::list() as $n) { if ($n['title'] === 'ناقص قطع غيار') { return $n['urgent'] === true && $n['ring'] === true; } }
+    return false;
+})());
+
+check('an invented reply is refused', throws(static fn () => Replies::send($techR['id'], $jobR['id'], 'whatever'), 'bad_reply'));
+check('a reply on a job that is not theirs is refused', (static function () use ($custR): bool {
+    $other = People::create(['role' => 'technician', 'name' => 'غيره', 'phone' => '0558100999', 'area' => 'makkah']);
+    $j = Orders::create(['customer_id' => $custR['id'], 'service' => 'سباكة', 'technician_id' => $other['id']]);
+    Orders::update($j['id'], ['status' => 'assigned']);
+    return throws(static fn () => Replies::send('nobody', $j['id'], 'arrived'), 'not_your_job');
+})());
+check('markup in a note is refused', throws(static fn () => Replies::send($techR['id'], $jobR['id'], 'explained', '<b>x</b>'), 'bad_note'));
+
+Orders::update($jobR['id'], ['status' => 'completed']);
+check('a finished job takes no more replies', throws(static fn () => Replies::send($techR['id'], $jobR['id'], 'arrived'), 'job_closed'));
+
+echo "Being told, and hearing it\n";
+Notices::markSeen();
+check('nothing is unseen once everything is read', Notices::unseen() === 0);
+check('and nothing rings', array_filter(Notices::list(), static fn (array $n): bool => $n['ring']) === []);
+
+$n1 = Notices::raise('order', $jobR['id'], 'طلب جديد', 'من واتساب', true);
+check('an urgent notice rings', (static function (): bool {
+    foreach (Notices::list() as $n) { if ($n['title'] === 'طلب جديد') { return $n['ring'] === true; } }
+    return false;
+})());
+Notices::raise('order', $jobR['id'], 'ملاحظة عادية', '', false);
+check('a quiet one does not ring', (static function (): bool {
+    foreach (Notices::list() as $n) { if ($n['title'] === 'ملاحظة عادية') { return $n['ring'] === false; } }
+    return false;
+})());
+check('reading one stops it ringing', (static function () use ($n1): bool {
+    Notices::markSeen([$n1['id']]);
+    foreach (Notices::list() as $n) { if ($n['id'] === $n1['id']) { return $n['ring'] === false && $n['seen'] === true; } }
+    return false;
+})());
+// A screen opened in the morning must not play an hour of alarms from the night.
+check('an old alarm does not ring when a screen opens', (static function (): bool {
+    $old = Notices::raise('order', 'x', 'قديم', '', true);
+    oxy_pdo()->prepare('UPDATE notices SET created = ? WHERE id = ?')->execute([time() - Notices::RING_WINDOW - 60, $old['id']]);
+    foreach (Notices::list() as $n) { if ($n['id'] === $old['id']) { return $n['ring'] === false && $n['seen'] === false; } }
+    return false;
+})());
+check('a notice with no title is refused', throws(static fn () => Notices::raise('order', 'x', '  '), 'bad_notice'));
+check('an over-long notice is refused', throws(static fn () => Notices::raise('order', 'x', str_repeat('ا', 90)), 'bad_notice'));
+
+echo "The technician phone carries all of it\n";
+$tjs = (string) file_get_contents(__DIR__ . '/../t/app.js');
+check('the phone can say the replies', strpos($tjs, 'tech/say/') !== false);
+check('it asks for the detail when one is needed', strpos($tjs, "r.dataset.note") !== false);
+check('it carries the conversation with operations', strpos($tjs, '/chat') !== false && strpos($tjs, 'loadChat') !== false);
+// A technician in a van with the radio on will not see a screen change.
+check('a new job makes a sound', strpos($tjs, 'function ring()') !== false && strpos($tjs, 'AudioContext') !== false);
+check('and buzzes the phone too', strpos($tjs, 'navigator.vibrate') !== false);
+check('the sound is made, not downloaded', strpos($tjs, 'createOscillator') !== false);
+// A phone that refuses to make a sound must still show the job.
+check('a phone that cannot play a sound still works', strpos($tjs, 'catch (e) { /* a phone that will not make a sound is not a reason to fail */ }') !== false);
+check('it does not ring on the very first load', strpos($tjs, 'Object.keys(lastSeen).length && fresh.length') !== false);
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);

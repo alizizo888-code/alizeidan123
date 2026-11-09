@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS people (
 );
 
 -- Last known position of a technician (schema v3). One row per technician, replaced on each report.
+CREATE TABLE IF NOT EXISTS notices (
+    id VARCHAR(40) PRIMARY KEY,
+    about VARCHAR(16) NOT NULL,
+    subject VARCHAR(40) NOT NULL,
+    title VARCHAR(80) NOT NULL,
+    body VARCHAR(300) NOT NULL DEFAULT '',
+    urgent INT NOT NULL DEFAULT 0,
+    seen INT NOT NULL DEFAULT 0,
+    created INT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS service_shares (
     skill VARCHAR(40) PRIMARY KEY,
     share_pct INT NOT NULL

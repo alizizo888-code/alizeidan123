@@ -168,6 +168,20 @@ function oxy_dispatch(string $method, string $route): void
         return;
     }
 
+    // What needs somebody's attention, and what should make a sound.
+    if ($method === 'GET' && $route === 'notices') {
+        Auth::current();
+        oxy_json(['ok' => true, 'notices' => Notices::list(), 'unseen' => Notices::unseen()]);
+        return;
+    }
+    if ($method === 'POST' && $route === 'notices/seen') {
+        Auth::requireCsrf();
+        $body = oxy_body();
+        $ids = $body['ids'] ?? [];
+        oxy_json(Notices::markSeen(is_array($ids) ? $ids : []));
+        return;
+    }
+
     // The chain: where an order sits, where it may go, and the live facts about the technician.
     if ($method === 'GET' && $route === 'workflow') {
         Auth::current();
@@ -228,6 +242,36 @@ function oxy_dispatch(string $method, string $route): void
     if ($method === 'GET' && $route === 'tech/me') {
         $me = Tech::current();
         oxy_json(['ok' => true, 'technician' => ['id' => $me['id'], 'name' => $me['name']], 'steps' => Tech::STEPS]);
+        return;
+    }
+    if ($method === 'GET' && $route === 'tech/replies') {
+        Tech::current();
+        oxy_json(['ok' => true, 'replies' => Replies::all()]);
+        return;
+    }
+    if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'tech' && $parts[1] === 'say') {
+        $me = Tech::current();
+        $body = oxy_body();
+        oxy_json(['ok' => true] + Replies::send($me['id'], $parts[2], (string) ($body['reply'] ?? ''), (string) ($body['note'] ?? '')));
+        return;
+    }
+    // The conversation on a job: operations and the technician read and write the same thread.
+    if ($method === 'GET' && count($parts) === 3 && $parts[0] === 'tech' && $parts[2] === 'chat') {
+        $me = Tech::current();
+        $order = Orders::find($parts[1]);
+        if ((string) ($order['technician_id'] ?? '') !== $me['id']) {
+            throw new OxyHttpError(403, 'not_your_job');
+        }
+        oxy_json(['ok' => true, 'messages' => Messages::list($parts[1])]);
+        return;
+    }
+    if ($method === 'POST' && count($parts) === 3 && $parts[0] === 'tech' && $parts[2] === 'chat') {
+        $me = Tech::current();
+        $order = Orders::find($parts[1]);
+        if ((string) ($order['technician_id'] ?? '') !== $me['id']) {
+            throw new OxyHttpError(403, 'not_your_job');
+        }
+        oxy_json(['ok' => true, 'message' => Messages::add($parts[1], oxy_body()['body'] ?? null, 'technician')], 201);
         return;
     }
     if ($method === 'GET' && $route === 'tech/jobs') {

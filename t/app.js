@@ -6,6 +6,9 @@
   var who = document.getElementById('who');
   var out = document.getElementById('out');
   var steps = {};
+  var replies = [];
+  var openChat = null;
+  var lastSeen = {};
 
   function say(text, good) {
     msg.textContent = text;
@@ -43,8 +46,57 @@
     not_your_job: 'الطلب ده مش بتاعك.',
     job_closed: 'الطلب ده خلص خلاص.',
     bad_step: 'الخطوة دي مش معروفة.',
-    bad_location: 'تعذّر تحديد موقعك.'
+    bad_location: 'تعذّر تحديد موقعك.',
+    bad_reply: 'الرد ده مش معروف.',
+    note_required: 'لازم تكتب التفاصيل.',
+    bad_note: 'التفاصيل فيها رموز مش مسموحة.',
+    bad_message: 'الرسالة فاضية أو طويلة أوي.',
+    job_closed: 'الطلب ده خلص خلاص.',
+    not_your_job: 'الطلب ده مش بتاعك.'
   };
+
+  /**
+   * A short sound, made in the browser rather than fetched, so a new job is heard in a van with the
+   * radio on and nothing has to be downloaded first.
+   */
+  function ring() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) { return; }
+      var ctx = new Ctx();
+      [0, 0.18].forEach(function (at) {
+        var o = ctx.createOscillator();
+        var g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + at);
+        g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + at + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.14);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + 0.16);
+      });
+      if (navigator.vibrate) { navigator.vibrate([120, 60, 120]); }
+    } catch (e) { /* a phone that will not make a sound is not a reason to fail */ }
+  }
+
+  function replyRow(j) {
+    if (!replies.length) { return ''; }
+    return '<details class="replies"><summary>قول حاجة</summary><div class="row">'
+      + replies.map(function (r) {
+          return '<button class="btn ghost" data-reply="' + esc(r.id) + '" data-job="' + esc(j.id) + '"'
+            + (r.needs_note ? ' data-note="1"' : '') + '>' + esc(r.label) + '</button>';
+        }).join('')
+      + '</div></details>';
+  }
+
+  function chatRow(j) {
+    var open = openChat === j.id;
+    return '<details class="chat"' + (open ? ' open' : '') + ' data-chat="' + esc(j.id) + '">'
+      + '<summary>المحادثة مع العمليات</summary>'
+      + '<div class="thread" id="thread-' + esc(j.id) + '">' + (open ? 'جارٍ التحميل…' : '') + '</div>'
+      + '<div class="row"><input class="field" id="say-' + esc(j.id) + '" maxlength="500" placeholder="اكتب رسالة">'
+      + '<button class="btn" data-send="' + esc(j.id) + '">إرسال</button></div></details>';
+  }
 
   function jobCard(j) {
     var phone = j.customer.phone ? String(j.customer.phone).replace(/[^\d+]/g, '') : '';
@@ -59,7 +111,8 @@
       + '<div class="meta">' + esc(j.customer.name) + (j.address ? ' — ' + esc(j.address) : '') + '</div>'
       + '<div class="tags"><span class="pill">' + esc(j.status_label) + '</span>'
       + (j.price !== null ? ' <span class="pill">' + j.price + ' ر.س</span>' : '') + '</div>'
-      + '<div class="row">' + next + call + map + '</div></div>';
+      + '<div class="row">' + next + call + map + '</div>'
+      + replyRow(j) + chatRow(j) + '</div>';
   }
 
   /**
@@ -81,13 +134,23 @@
     try {
       var me = await api('tech/me');
       steps = me.steps || {};
+      if (!replies.length) {
+        try { replies = (await api('tech/replies')).replies || []; } catch (e) { replies = []; }
+      }
       who.textContent = 'شغل ' + me.technician.name;
       out.hidden = false;
       var data = await api('tech/jobs');
+      // A job that was not there a minute ago is worth hearing about, not just seeing.
+      var ids = data.jobs.map(function (j) { return j.id; });
+      var fresh = ids.filter(function (id) { return !lastSeen[id]; });
+      if (Object.keys(lastSeen).length && fresh.length) { ring(); }
+      lastSeen = {};
+      ids.forEach(function (id) { lastSeen[id] = true; });
       view.innerHTML = data.jobs.length
         ? data.jobs.map(jobCard).join('')
         : '<p class="empty">مفيش شغل مفتوح عندك دلوقتي.<br>هيوصلك هنا أول ما المشرف يسندلك طلب.</p>';
       sendWhereIAm();
+      if (openChat) { loadChat(openChat); }
     } catch (e) {
       if (e.code === 'no_tech_session' || e.code === 'not_technician') {
         signInScreen();
@@ -106,7 +169,68 @@
     }, function () {}, { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
   }
 
+  /** The conversation on one job: operations and the technician read and write the same thread. */
+  async function loadChat(jobId) {
+    var box = document.getElementById('thread-' + jobId);
+    if (!box) { return; }
+    try {
+      var data = await api('tech/' + encodeURIComponent(jobId) + '/chat');
+      box.innerHTML = data.messages.length
+        ? data.messages.map(function (m) {
+            return '<div class="line ' + (m.sender === 'technician' ? 'mine' : '') + '">'
+              + '<b>' + esc(m.sender_label) + '</b> ' + esc(m.body) + '</div>';
+          }).join('')
+        : '<p class="meta">مفيش رسائل لسه.</p>';
+      box.scrollTop = box.scrollHeight;
+    } catch (e) {
+      box.innerHTML = '<p class="meta">تعذّر تحميل المحادثة.</p>';
+    }
+  }
+
+  document.addEventListener('toggle', function (ev) {
+    var d = ev.target;
+    if (d && d.tagName === 'DETAILS' && d.dataset.chat) {
+      openChat = d.open ? d.dataset.chat : null;
+      if (d.open) { loadChat(d.dataset.chat); }
+    }
+  }, true);
+
   document.addEventListener('click', async function (ev) {
+    var r = ev.target.closest('[data-reply]');
+    if (r) {
+      var note = '';
+      if (r.dataset.note) {
+        note = (window.prompt('اكتب التفاصيل:') || '').trim();
+        if (!note) { return; }
+      }
+      r.disabled = true;
+      try {
+        var res = await api('tech/say/' + encodeURIComponent(r.dataset.job), { reply: r.dataset.reply, note: note });
+        say(res.handed_back ? 'اتبعت للعمليات.' : 'اتسجل.', true);
+        await show();
+      } catch (e) {
+        r.disabled = false;
+        say(SAYS[e.code] || 'ما قدرناش نبعتها. جرّب تاني.');
+      }
+      return;
+    }
+    var sendBtn = ev.target.closest('[data-send]');
+    if (sendBtn) {
+      var jobId = sendBtn.dataset.send;
+      var box = document.getElementById('say-' + jobId);
+      var text = ((box && box.value) || '').trim();
+      if (!text) { return; }
+      sendBtn.disabled = true;
+      try {
+        await api('tech/' + encodeURIComponent(jobId) + '/chat', { body: text });
+        if (box) { box.value = ''; }
+        await loadChat(jobId);
+      } catch (e) {
+        say(SAYS[e.code] || 'الرسالة ما اتبعتتش.');
+      }
+      sendBtn.disabled = false;
+      return;
+    }
     var b = ev.target.closest('[data-step]');
     if (b) {
       b.disabled = true;

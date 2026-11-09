@@ -20,6 +20,13 @@ a.btn{display:flex;align-items:center;justify-content:center;text-decoration:non
 .out{flex:0 0 auto;min-height:40px;padding:0 14px}
 .field{width:100%;margin-top:12px;padding:14px;font-size:19px;border-radius:12px;border:1px solid var(--line);background:#0e1627;color:var(--ink)}
 .note{margin-top:10px}
+.replies,.chat{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-weight:600;padding:6px 0}
+.replies .btn{flex:1 1 44%;min-height:46px;font-size:15px}
+.thread{max-height:220px;overflow:auto;margin:8px 0}
+.line{padding:8px 10px;border-radius:10px;background:#0e1627;margin-bottom:6px;font-size:15px}
+.line.mine{background:#163055}
+.line b{color:var(--muted);font-weight:600;font-size:13px;display:block}
 .tags{margin-top:8px}
 .msg{padding:12px 14px;border-radius:10px;margin-bottom:14px;display:none}
 .msg.show{display:block}
