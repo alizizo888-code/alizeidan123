@@ -83,13 +83,15 @@ async function start(id) {
           try { st.code = (await sock.requestPairingCode(digits(m.phone))).replace(/(.{4})(.{4})/, '$1-$2'); st.status = 'code' } catch (e) { log.warn(e) }
         }
       } else { st.qr = await QRCode.toDataURL(u.qr, { margin: 1, width: 300 }); st.status = 'qr' }
-      emit({ type: 'status', accountId: id, status: st.status })
+      // The picture travels with the event. On a phone the operations screen is the only place the
+      // code can be scanned from — you cannot hold the handset up to itself.
+      emit({ type: 'status', accountId: id, status: st.status, label: m.label || id, qr: st.qr || null, pairingCode: st.code || null })
     }
     if (u.connection === 'open') {
       st.status = 'open'; st.retry = 0; st.qr = null; st.code = null
       st.phone = jidToPhone(sock.user?.id); st.name = sock.user?.name || ''
       meta[id].phone = st.phone; saveMeta()
-      emit({ type: 'status', accountId: id, status: 'open', phone: st.phone, name: st.name })
+      emit({ type: 'status', accountId: id, status: 'open', phone: st.phone, name: st.name, label: meta[id].label || id })
     }
     if (u.connection === 'close') {
       const code = u.lastDisconnect?.error?.output?.statusCode
@@ -220,5 +222,13 @@ async function pullLoop() {
 }
 
 app.listen(PORT, () => console.log('mutqan wa-gateway on :' + PORT))
+// Nothing can call into a phone to ask it to begin, so when it has no number yet it opens one by
+// itself and its QR goes up to the operations screen to be scanned from there.
+if (!Object.keys(meta).length && (process.env.AUTO_SESSION ?? '1') !== '0') {
+  const id = cleanId(process.env.SESSION_ID || 'main')
+  meta[id] = { label: process.env.SESSION_LABEL || 'رقم الشركة', mode: 'qr', phone: '' }
+  saveMeta()
+  console.log('no number linked yet: opening "' + id + '" — scan its QR from the operations screen')
+}
 for (const id of Object.keys(meta)) start(id).catch((e) => log.error(e))
 pullLoop().catch((e) => log.error(e))
