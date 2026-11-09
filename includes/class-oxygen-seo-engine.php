@@ -26,12 +26,59 @@ class Oxygen_SEO_Engine {
     }
 
     /* ---------- one code base, many sites: every site gets its own brand and its own rotation, so texts never duplicate ---------- */
+    /**
+     * Whose site this is.
+     *
+     * The host decides. Every face in the network is registered against its own domain, so a site
+     * already knows who it is before anyone configures anything, and that answer cannot drift.
+     *
+     * oxygen_seo_brand used to win over the registry. Nothing in this plugin ever writes it and no
+     * screen can edit it, so a value left behind by hand — or copied in with a database — silently
+     * renamed a whole site and there was nowhere to go and put it right. It is now only consulted
+     * for a host the registry does not know.
+     */
     public static function brand() {
+        $id = self::registered_id();
+        if ($id !== '') {
+            $row = Oxygen_Network::brand($id);   // registry or Blogger-only face
+            if (is_array($row) && !empty($row['name'])) { return $row['name']; }
+        }
+        // An unregistered host (a preview, a staging copy, a domain not in the registry yet) answers
+        // with the name its owner gave the site. That is the one name on the site we know is theirs.
+        $bn = trim((string) get_option('blogname'));
+        if ($bn !== '') { return $bn; }
         $o = get_option('oxygen_seo_brand');
         if (is_string($o) && $o !== '') { return $o; }
-        if (class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) { return Oxygen_Network::brand_config()['name']; }
         $h = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
         return strpos($h, 'mutqan') !== false ? 'متقن' : 'أكسجين';
+    }
+
+    /**
+     * The face this host is registered as, or '' when the registry does not know the host.
+     *
+     * Oxygen_Network::id_for_host() answers 'oxygen' for anything it does not recognise, which is a
+     * sensible default for the front end but would hand every preview and staging host the hub's
+     * name. Here we need the difference, so an unknown host gets '' and keeps whatever name it has.
+     */
+    private static function registered_id() {
+        if (!class_exists('Oxygen_Network')) { return ''; }
+        $host = strtolower(preg_replace('/^www\./', '', (string) wp_parse_url(home_url('/'), PHP_URL_HOST)));
+        $host = preg_replace('/:\d+$/', '', $host);
+        foreach (Oxygen_Network::ids() as $id) { if (Oxygen_Network::host_of($id) === $host) { return $id; } }
+        // The Blogger face of a brand (blog.<hub> / blog-<label>.<hub>) belongs to that same brand.
+        if (strpos($host, 'blog.') === 0 || strpos($host, 'blog-') === 0) { return Oxygen_Network::id_for_host($host); }
+        return '';
+    }
+
+    /** Every brand name in the network, used to spot a site wearing somebody else's name. */
+    private static function all_brand_names() {
+        if (!class_exists('Oxygen_Network')) { return []; }
+        $names = [];
+        foreach (array_merge(Oxygen_Network::ids(), array_keys(Oxygen_Network::blog_brands())) as $id) {
+            $row = Oxygen_Network::brand($id);
+            if (is_array($row) && !empty($row['name'])) { $names[] = $row['name']; }
+        }
+        return array_values(array_unique($names));
     }
     /** Offset added to angle / paragraph rotation and to the plan order: the same topic is written from a different angle on each site. */
     public static function salt() {
@@ -356,13 +403,44 @@ class Oxygen_SEO_Engine {
     public static function hide_author_pages() { if (is_author()) { wp_safe_redirect(home_url('/'), 301); exit; } }
     public static function og_title($t) { if (is_singular('post') && get_post_meta(get_queried_object_id(), '_oxy_seo_key', true)) { return html_entity_decode(get_the_title(get_queried_object_id()), ENT_QUOTES, 'UTF-8'); } return $t; }
     public static function no_author_sitemap($providers) { return array_values(array_filter((array) $providers, function ($p) { return stripos(get_class($p), 'Author') === false; })); }
+    /**
+     * Fills in an identity the site never had.
+     *
+     * It used to replace any name written in Latin letters, on the theory that such a name was a
+     * leftover from installation. "OXYGEN" is written in Latin letters and was the site's real
+     * name, so the rule renamed a live business. A name somebody chose is never ours to replace;
+     * only an empty one is ours to fill.
+     */
     public static function clean_identity() {
         if (get_option('oxygen_identity_v1') === '1') { return; }
         $b = self::brand();
-        $bn = (string) get_option('blogname');
-        if ($bn === '' || preg_match('/^[a-z0-9 \-]+$/i', $bn)) { update_option('blogname', $b); }
+        if (trim((string) get_option('blogname')) === '') { update_option('blogname', $b); }
         foreach (get_users(['role' => 'administrator', 'fields' => 'ID']) as $uid) { wp_update_user(['ID' => (int) $uid, 'display_name' => $b, 'nickname' => $b]); }
         update_option('oxygen_identity_v1', '1', false);
+    }
+
+    /**
+     * Puts back a name that was taken by another brand in the network.
+     *
+     * Runs once. It only acts on the one thing that is unambiguous damage: this site is calling
+     * itself by the registered name of a DIFFERENT face. A name nobody else in the network uses is
+     * the owner's own choice and is left exactly as it is, whatever it says.
+     */
+    public static function repair_identity() {
+        if (get_option('oxygen_identity_repair_v1') === '1') { return; }
+        update_option('oxygen_identity_repair_v1', '1', false);
+        $mine = self::brand();
+        $current = trim((string) get_option('blogname'));
+        if ($current === '' || $current === $mine) { return; }
+        // Compare without the Arabic vowel marks: متقن and مُتقن are the same word wearing a hat.
+        $bare = static fn ($s) => preg_replace('/[\x{0617}-\x{061A}\x{064B}-\x{0652}\x{0670}]/u', '', (string) $s);
+        foreach (self::all_brand_names() as $name) {
+            if ($name !== $mine && $bare($name) === $bare($current)) {
+                update_option('blogname', $mine);
+                if (get_option('oxygen_seo_brand') !== false) { delete_option('oxygen_seo_brand'); }
+                return;
+            }
+        }
     }
     private static function trim_desc($d) { return mb_strlen($d) > 158 ? mb_substr($d, 0, 155) . '...' : $d; }
     public static function word_count($text) { return count(preg_split('/\s+/u', trim(strip_tags($text)), -1, PREG_SPLIT_NO_EMPTY)); }
@@ -417,6 +495,7 @@ class Oxygen_SEO_Engine {
         add_filter('get_the_author_display_name', [__CLASS__, 'brand_author'], 30);
         add_action('template_redirect', [__CLASS__, 'hide_author_pages'], 1);
         add_action('init', [__CLASS__, 'clean_identity'], 32);
+        add_action('init', [__CLASS__, 'repair_identity'], 33);
         add_filter('wp_sitemaps_posts_entry', [__CLASS__, 'sitemap_entry'], 10, 2);
         add_action(self::CRON, [__CLASS__, 'tick']);
         add_filter('the_content', [__CLASS__, 'filter_content'], 5);

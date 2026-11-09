@@ -198,11 +198,115 @@ final class Mutqan_WA {
         foreach ($out['replies'] as $txt) {
             try { self::send($acct, $phone, $txt, 'bot'); } catch (Throwable $ex) { error_log('[mutqan] wa bot send: ' . $ex->getMessage()); break; }
         }
-        if ($out['lead']) { Mutqan_Store::insert('wa_leads', $out['lead'] + ['numberId' => $acct, 'phone' => $phone, 'at' => gmdate('c'), 'source' => 'bot'], null, [], self::sys()); }
+        if ($out['lead']) {
+            Mutqan_Store::insert('wa_leads', $out['lead'] + ['numberId' => $acct, 'phone' => $phone, 'at' => gmdate('c'), 'source' => 'bot'], null, [], self::sys());
+            // A customer who finished giving their details has placed an order. Until now that only
+            // landed in wa_leads, which the operations room does not read, so the order was invisible
+            // and somebody had to retype it by hand. Register it as a real order instead.
+            try { self::lead_to_order($acct, $phone, $out['lead'], $tid); }
+            catch (Throwable $ex) { error_log('[mutqan] wa lead_to_order: ' . $ex->getMessage()); }
+        }
         if ($out['notify']) { self::notify_admins('واتساب — يحتاج متابعة', $out['notify'] . ' (' . $label . ')', 'wa-n-' . $tid . '-' . substr(md5($out['notify']), 0, 6), 60); }
         return ['ok' => true];
     }
 
+
+    /* ---------------------------------------------------------------- a WhatsApp conversation becomes an order */
+
+    /** How long a WhatsApp thread's open order stays the same order, so follow-up messages do not pile up duplicates. */
+    const SAME_ORDER_HOURS = 12;
+
+    /** The statuses that mean an order is still being worked on. A new message joins one of these rather than starting another. */
+    const LIVE_STATUSES = ['new', 'forced', 'assigned', 'accepted'];
+
+    /**
+     * Turns a finished WhatsApp conversation into a real order the operations room can see.
+     *
+     * The customer never sees any of this: as far as they are concerned they answered three questions
+     * on WhatsApp. What changes is that the answer now exists where the work is actually done.
+     *
+     * It will not create a second order while the customer already has one open on the same number:
+     * people send "و كمان المطبخ" a minute later, and that is more information about one job, not a
+     * second job. It is added to the open order's route instead.
+     *
+     * @return string|null the order id, or null when an open order was updated instead.
+     */
+    public static function lead_to_order($acct, $phone, $lead, $tid) {
+        $service = trim((string) ($lead['service'] ?? ''));
+        if ($service === '') { return null; }
+
+        $intl = self::intl($phone);
+        $open = self::open_order_for($tid);
+        if ($open !== null) {
+            self::add_step($open['id'], 'wa_more', 'رسالة إضافية من العميل على واتساب: ' . mb_substr($service, 0, 60));
+            return null;
+        }
+
+        $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: [];
+        $bot = (array) ($th['bot'] ?? []);
+        $neg = (array) ($bot['neg'] ?? []);
+        $area = trim((string) ($lead['area'] ?? ''));
+        $name = trim((string) ($lead['name'] ?? '')) ?: (string) ($th['name'] ?? '');
+
+        $order = [
+            'status' => 'new',
+            'source' => 'whatsapp',
+            'clientName' => mb_substr($name, 0, 80),
+            'clientPhone' => $intl,
+            'service' => mb_substr($service, 0, 120),
+            'address' => mb_substr($area, 0, 160),
+            'note' => mb_substr((string) ($lead['note'] ?? ''), 0, 300),
+            'waThread' => $tid,
+            'waAccount' => $acct,
+            'createdAt' => gmdate('c'),
+            // The plan: what was agreed on WhatsApp, so operations is not guessing at a price later.
+            'plan' => array_filter([
+                'service' => mb_substr($service, 0, 120),
+                'area' => $area !== '' ? $area : null,
+                'qty' => isset($neg['qty']) ? (int) $neg['qty'] : null,
+                'unitType' => isset($neg['type']) ? (string) $neg['type'] : null,
+                'agreedPrice' => isset($neg['offer']) ? (int) $neg['offer'] : null,
+                'quotedPrice' => isset($neg['total']) ? (int) $neg['total'] : null,
+            ], static function ($v) { return $v !== null && $v !== ''; }),
+            // The route: every step this order takes, in order, so anyone picking it up can see its history.
+            'route' => [self::step('wa_in', 'وصل الطلب من واتساب' . ($area !== '' ? ' — ' . $area : ''))],
+        ];
+        if (isset($neg['offer'])) { $order['agreedPrice'] = (int) $neg['offer']; }
+
+        $doc = Mutqan_Store::insert('orders', $order, null, [], self::sys());
+        $id = (string) ($doc['id'] ?? '');
+        if ($id === '') { return null; }
+        self::put_thread($tid, ['orderId' => $id]);
+        self::notify_admins('طلب جديد من واتساب', trim(($name !== '' ? $name : $intl) . ' — ' . $service . ($area !== '' ? ' — ' . $area : '')), 'wa-order-' . $id, 0);
+        return $id;
+    }
+
+    /** The order this thread already has open, or null. */
+    private static function open_order_for($tid) {
+        $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: [];
+        $id = (string) ($th['orderId'] ?? '');
+        if ($id === '') { return null; }
+        $o = Mutqan_Store::get_raw('orders', $id);
+        if (!$o || !in_array((string) ($o['status'] ?? ''), self::LIVE_STATUSES, true)) { return null; }
+        $at = strtotime((string) ($o['createdAt'] ?? '')) ?: 0;
+        if ($at && time() - $at > self::SAME_ORDER_HOURS * 3600) { return null; }
+        return ['id' => $id, 'order' => $o];
+    }
+
+    /** One entry on an order's route. */
+    public static function step($kind, $text, $by = 'النظام') {
+        return ['at' => gmdate('c'), 'kind' => (string) $kind, 'text' => mb_substr((string) $text, 0, 200), 'by' => mb_substr((string) $by, 0, 60)];
+    }
+
+    /** Appends a step to an order's route, keeping the list bounded so one chatty order cannot grow without limit. */
+    public static function add_step($orderId, $kind, $text, $by = 'النظام') {
+        $o = Mutqan_Store::get_raw('orders', $orderId);
+        if (!$o) { return; }
+        $route = isset($o['route']) && is_array($o['route']) ? $o['route'] : [];
+        $route[] = self::step($kind, $text, $by);
+        if (count($route) > 60) { $route = array_slice($route, -60); }
+        Mutqan_Store::update('orders', $orderId, ['route' => $route], self::sys());
+    }
 
     /** Free learning: owner's own replies become candidate scenarios (pending owner approval); unanswered questions are counted. */
     public static function learn_from_owner($q, $a) {
