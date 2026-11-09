@@ -20,10 +20,65 @@ final class Mutqan_WA {
         return $c + ['url' => '', 'token' => ''];
     }
     public static function hook_url() { return rest_url(Mutqan_Rest::NS . '/wa-hook'); }
+    public static function pull_url() { return rest_url(Mutqan_Rest::NS . '/wa-pull'); }
+
+    const SEEN = 'mutqan_wa_seen';      // what each number last told us about itself
+    const QR_FRESH = 180;               // a WhatsApp QR is only good for about a minute
+
+    /**
+     * The numbers, and how each one is doing.
+     *
+     * A gateway with an address is asked directly, as before. A gateway on a phone cannot be asked
+     * anything, so the screen shows what the phone last reported — including the QR image itself,
+     * which is the whole point: the code has to appear somewhere other than the handset displaying
+     * it, or there is no second screen to scan it with.
+     */
+    public static function sessions() {
+        if (self::cfg()['url'] !== '') { return self::gw('GET', '/sessions'); }
+        $seen = get_option(self::SEEN, []);
+        $out = [];
+        foreach ((is_array($seen) ? $seen : []) as $id => $r) {
+            $age = time() - (int) ($r['at'] ?? 0);
+            $stale = $age > self::QR_FRESH;
+            $out[] = [
+                'id' => (string) $id, 'label' => (string) ($r['label'] ?? $id), 'mode' => 'qr',
+                'phone' => (string) ($r['phone'] ?? ''), 'name' => (string) ($r['name'] ?? ''),
+                'status' => $stale && ($r['status'] ?? '') !== 'open' ? 'stopped' : (string) ($r['status'] ?? ''),
+                // An expired code is worse than none: it is scanned, it fails, and nobody knows why.
+                'qr' => $stale ? null : ($r['qr'] ?? null),
+                'pairingCode' => $stale ? null : ($r['pairingCode'] ?? null),
+                'sentToday' => 0, 'dailyCap' => 0, 'via' => 'phone', 'seenAgo' => $age,
+            ];
+        }
+        return ['sessions' => $out, 'via' => 'phone'];
+    }
+
+    private static function remember_session($acct, $e) {
+        $seen = get_option(self::SEEN, []);
+        $seen = is_array($seen) ? $seen : [];
+        $row = isset($seen[$acct]) && is_array($seen[$acct]) ? $seen[$acct] : [];
+        $row['status'] = (string) ($e['status'] ?? '');
+        $row['at'] = time();
+        foreach (['label', 'phone', 'name'] as $k) { if (!empty($e[$k])) { $row[$k] = (string) $e[$k]; } }
+        // Only a picture, and only a small one: this goes in an option read on every screen.
+        $qr = (string) ($e['qr'] ?? '');
+        $row['qr'] = (strpos($qr, 'data:image/') === 0 && strlen($qr) < 60000) ? $qr : null;
+        $row['pairingCode'] = !empty($e['pairingCode']) ? mb_substr((string) $e['pairingCode'], 0, 16) : null;
+        if (($e['status'] ?? '') === 'open') { $row['qr'] = null; $row['pairingCode'] = null; }
+        $seen[$acct] = $row;
+        if (count($seen) > 10) { $seen = array_slice($seen, -10, null, true); }
+        update_option(self::SEEN, $seen, false);
+    }
+
+    private static function forget_session($acct) {
+        $seen = get_option(self::SEEN, []);
+        if (is_array($seen) && isset($seen[$acct])) { unset($seen[$acct]); update_option(self::SEEN, $seen, false); }
+    }
 
     public static function config_get() {
         $c = self::cfg();
-        return ['url' => $c['url'], 'hasToken' => $c['token'] !== '', 'secret' => $c['secret'], 'hookUrl' => self::hook_url()];
+        return ['url' => $c['url'], 'hasToken' => $c['token'] !== '', 'secret' => $c['secret'],
+            'hookUrl' => self::hook_url(), 'pullUrl' => self::pull_url(), 'onPhone' => $c['url'] === ''];
     }
     public static function config_set($in) {
         $c = self::cfg();
@@ -58,15 +113,20 @@ final class Mutqan_WA {
         switch ($op) {
             case 'config_get': return self::config_get();
             case 'config_set': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return self::config_set($in);
-            case 'sessions': return self::gw('GET', '/sessions');
+            case 'sessions': return self::sessions();
         }
         if (!$write) { throw new Mutqan_Error('forbidden', 'غير مسموح.', 403); }
         Mutqan_Limiter::hit('wa_ops', 300, 3600);
         switch ($op) {
             case 'connect':
+                if (self::cfg()['url'] === '') { throw new Mutqan_Error('phone_gateway', 'الوسيط شغال على الموبايل: شغّله هناك وهيظهر الـQR هنا خلال ثوانٍ لتمسحه.', 409); }
                 return self::gw('POST', '/sessions', ['id' => (string) ($in['id'] ?? ''), 'label' => (string) ($in['label'] ?? ''), 'mode' => ($in['mode'] ?? '') === 'code' ? 'code' : 'qr', 'phone' => (string) ($in['phone'] ?? '')]);
-            case 'restart': return self::gw('POST', '/sessions/' . rawurlencode(self::id($in['id'] ?? '')) . '/restart', []);
-            case 'logout': return self::gw('DELETE', '/sessions/' . rawurlencode(self::id($in['id'] ?? '')));
+            case 'restart':
+                if (self::cfg()['url'] === '') { throw new Mutqan_Error('phone_gateway', 'الوسيط على الموبايل — أعد تشغيله من هناك.', 409); }
+                return self::gw('POST', '/sessions/' . rawurlencode(self::id($in['id'] ?? '')) . '/restart', []);
+            case 'logout':
+                if (self::cfg()['url'] === '') { self::forget_session(self::id($in['id'] ?? '')); return ['ok' => true]; }
+                return self::gw('DELETE', '/sessions/' . rawurlencode(self::id($in['id'] ?? '')));
             case 'send': return self::staff_send($in, $p);
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
@@ -242,6 +302,7 @@ final class Mutqan_WA {
         if (($e['type'] ?? '') === 'status') {
             set_transient('mq_wa_st_' . $acct, ['status' => (string) ($e['status'] ?? ''), 'at' => time()], DAY_IN_SECONDS);
             if (($e['status'] ?? '') === 'open') { update_option('mutqan_wa_last_acct', $acct, false); }
+            self::remember_session($acct, $e);
             if (in_array($e['status'] ?? '', ['logged_out', 'closed'], true)) { self::notify_admins('تنبيه واتساب', 'الرقم «' . $acct . '» انقطع اتصاله — افتح صندوق الواتساب لإعادة الربط.', 'wa-down-' . $acct); }
             return ['ok' => true];
         }
