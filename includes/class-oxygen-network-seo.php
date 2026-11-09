@@ -62,12 +62,12 @@ final class Oxygen_Network_SEO {
     private static function data($name) { static $c = []; if (!isset($c[$name])) { $c[$name] = include __DIR__ . '/seo/data-' . $name . '.php'; } return $c[$name]; }
     private static function rot($a, $k) { $n = count($a); if (!$n) { return $a; } $k = $k % $n; return array_merge(array_slice($a, $k), array_slice($a, 0, $k)); }
 
-    /** places grouped: [Makkah list (70% of articles), the rest = Jeddah and the other cities (30%)], rotated per site */
+    /** places grouped: [Makkah list (70% of articles), Jeddah (30%)], rotated per site. Owner order 2026-11-09: Makkah and Jeddah only, no other cities. */
     public static function places($slot) {
         $mk = [['مكة المكرمة', ''], ['مكة', '']];
         foreach (self::data('districts') as $d) { $mk[] = ['حي ' . $d . ' بمكة المكرمة', $d]; }
         $jd = [['جدة', '']]; foreach (self::data('districts-jeddah') as $d) { $jd[] = ['حي ' . $d . ' بجدة', $d]; }
-        $cities = []; foreach (self::data('cities') as $c) { if (mb_strpos((string) $c, 'مكة') === false) { $cities[] = [$c, '']; } }
+        $cities = [];   // other Saudi cities are switched off (owner order 2026-11-09: the network works in Makkah and Jeddah only)
         $B = []; $m = max(count($jd), count($cities));
         for ($i = 0; $i < $m; $i++) { if (isset($jd[$i])) { $B[] = $jd[$i]; } if (isset($jd[$i + 1]) && $i % 2) { $B[] = $jd[$i + 1]; } if (isset($cities[$i])) { $B[] = $cities[$i]; } }
         return [self::rot($mk, $slot * 5), self::rot($B, $slot * 3)];
