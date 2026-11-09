@@ -186,6 +186,9 @@ final class Mutqan_WA {
             self::learn_from_owner((string) ($th['lastIn'] ?? ''), (string) ($e['text'] ?? ''));
             return ['ok' => true];
         }
+        // A technician or someone from the team is not a customer, and the reception bot has nothing
+        // useful to say to either of them. The number decides who this is.
+        if (class_exists('Mutqan_WA_Desk') && Mutqan_WA_Desk::inbound($acct, $phone, (string) ($e['text'] ?? ''), $tid, $th)) { return ['ok' => true]; }
         $label = ($th['name'] ?? '') ?: $phone;
         self::notify_admins('رسالة واتساب جديدة', $label . ': ' . mb_substr((string) ($e['text'] ?? ''), 0, 80), 'wa-' . $tid, 120);
         $cfg = Mutqan_Store::get_raw('wa_bot', 'cfg') ?: [];
