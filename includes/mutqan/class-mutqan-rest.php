@@ -42,6 +42,16 @@ final class Mutqan_Rest {
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
             ]);
         }
+        // The phone asks for work instead of being called: a gateway on a handset has no address of
+        // its own. Signed with the same secret as the webhook, so there is nothing extra to set up.
+        register_rest_route(self::NS, '/wa-pull', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                try { $out = Mutqan_WA::pull_signed((string) $req->get_body(), (string) $req->get_header('x-mq-signature')); $res = new WP_REST_Response(['data' => $out], 200); }
+                catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+                catch (Throwable $e) { error_log('[mutqan] wa-pull ' . $e->getMessage()); $res = new WP_REST_Response(['error' => ['code' => 'server_error']], 500); }
+                $res->header('Cache-Control', 'no-store');
+                return $res;
+            }]);
         register_rest_route(self::NS, '/wa-hook', ['methods' => 'POST', 'permission_callback' => '__return_true',
             'callback' => function ($req) {
                 try { $out = Mutqan_WA::webhook((string) $req->get_body(), (string) $req->get_header('x-mq-signature')); $res = new WP_REST_Response(['data' => $out], 200); }
@@ -722,7 +732,11 @@ final class Mutqan_Rest {
         }
         $hub = $nb ? Oxygen_Network::api_base($nb['id']) : '';
         $cfg = wp_json_encode(['api' => $hub !== '' ? $hub : esc_url_raw(rest_url(self::NS)), 'app' => home_url('/app/'), 'brand' => $nb], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $inject = '<script>window.__MUTQAN__=' . $cfg . ';</script>';
+        // Where this plugin's files actually are, for every chunk the app loads later. It has to be
+        // set before the first module runs, which is why it goes in with the config.
+        $assets = trailingslashit(self::app_assets_url());
+        $inject = '<script>window.__MQ_ASSETS__=' . wp_json_encode($assets, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES)
+            . ';window.__MUTQAN__=' . $cfg . ';</script>';
         if ($is_root) { $inject .= '<link rel="canonical" href="' . esc_url(home_url('/')) . '">'; }
         if ($is_root && class_exists('Oxygen_SEO_Engine')) { $inject .= Oxygen_SEO_Engine::gsc_meta_html(); }
         // The build's own files are served straight from the plugin folder, so the app travels with

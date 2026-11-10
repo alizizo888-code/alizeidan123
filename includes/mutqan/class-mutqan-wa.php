@@ -20,10 +20,65 @@ final class Mutqan_WA {
         return $c + ['url' => '', 'token' => ''];
     }
     public static function hook_url() { return rest_url(Mutqan_Rest::NS . '/wa-hook'); }
+    public static function pull_url() { return rest_url(Mutqan_Rest::NS . '/wa-pull'); }
+
+    const SEEN = 'mutqan_wa_seen';      // what each number last told us about itself
+    const QR_FRESH = 180;               // a WhatsApp QR is only good for about a minute
+
+    /**
+     * The numbers, and how each one is doing.
+     *
+     * A gateway with an address is asked directly, as before. A gateway on a phone cannot be asked
+     * anything, so the screen shows what the phone last reported — including the QR image itself,
+     * which is the whole point: the code has to appear somewhere other than the handset displaying
+     * it, or there is no second screen to scan it with.
+     */
+    public static function sessions() {
+        if (self::cfg()['url'] !== '') { return self::gw('GET', '/sessions'); }
+        $seen = get_option(self::SEEN, []);
+        $out = [];
+        foreach ((is_array($seen) ? $seen : []) as $id => $r) {
+            $age = time() - (int) ($r['at'] ?? 0);
+            $stale = $age > self::QR_FRESH;
+            $out[] = [
+                'id' => (string) $id, 'label' => (string) ($r['label'] ?? $id), 'mode' => 'qr',
+                'phone' => (string) ($r['phone'] ?? ''), 'name' => (string) ($r['name'] ?? ''),
+                'status' => $stale && ($r['status'] ?? '') !== 'open' ? 'stopped' : (string) ($r['status'] ?? ''),
+                // An expired code is worse than none: it is scanned, it fails, and nobody knows why.
+                'qr' => $stale ? null : ($r['qr'] ?? null),
+                'pairingCode' => $stale ? null : ($r['pairingCode'] ?? null),
+                'sentToday' => 0, 'dailyCap' => 0, 'via' => 'phone', 'seenAgo' => $age,
+            ];
+        }
+        return ['sessions' => $out, 'via' => 'phone'];
+    }
+
+    private static function remember_session($acct, $e) {
+        $seen = get_option(self::SEEN, []);
+        $seen = is_array($seen) ? $seen : [];
+        $row = isset($seen[$acct]) && is_array($seen[$acct]) ? $seen[$acct] : [];
+        $row['status'] = (string) ($e['status'] ?? '');
+        $row['at'] = time();
+        foreach (['label', 'phone', 'name'] as $k) { if (!empty($e[$k])) { $row[$k] = (string) $e[$k]; } }
+        // Only a picture, and only a small one: this goes in an option read on every screen.
+        $qr = (string) ($e['qr'] ?? '');
+        $row['qr'] = (strpos($qr, 'data:image/') === 0 && strlen($qr) < 60000) ? $qr : null;
+        $row['pairingCode'] = !empty($e['pairingCode']) ? mb_substr((string) $e['pairingCode'], 0, 16) : null;
+        if (($e['status'] ?? '') === 'open') { $row['qr'] = null; $row['pairingCode'] = null; }
+        $seen[$acct] = $row;
+        if (count($seen) > 10) { $seen = array_slice($seen, -10, null, true); }
+        update_option(self::SEEN, $seen, false);
+    }
+
+    private static function forget_session($acct) {
+        $seen = get_option(self::SEEN, []);
+        if (is_array($seen) && isset($seen[$acct])) { unset($seen[$acct]); update_option(self::SEEN, $seen, false); }
+    }
 
     public static function config_get() {
         $c = self::cfg();
-        return ['url' => $c['url'], 'hasToken' => $c['token'] !== '', 'secret' => $c['secret'], 'hookUrl' => self::hook_url()];
+        return ['url' => $c['url'], 'hasToken' => $c['token'] !== '', 'secret' => $c['secret'],
+            'hookUrl' => self::hook_url(), 'pullUrl' => self::pull_url(), 'onPhone' => $c['url'] === ''];
     }
     public static function config_set($in) {
         $c = self::cfg();
@@ -58,15 +113,20 @@ final class Mutqan_WA {
         switch ($op) {
             case 'config_get': return self::config_get();
             case 'config_set': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return self::config_set($in);
-            case 'sessions': return self::gw('GET', '/sessions');
+            case 'sessions': return self::sessions();
         }
         if (!$write) { throw new Mutqan_Error('forbidden', 'غير مسموح.', 403); }
         Mutqan_Limiter::hit('wa_ops', 300, 3600);
         switch ($op) {
             case 'connect':
+                if (self::cfg()['url'] === '') { throw new Mutqan_Error('phone_gateway', 'الوسيط شغال على الموبايل: شغّله هناك وهيظهر الـQR هنا خلال ثوانٍ لتمسحه.', 409); }
                 return self::gw('POST', '/sessions', ['id' => (string) ($in['id'] ?? ''), 'label' => (string) ($in['label'] ?? ''), 'mode' => ($in['mode'] ?? '') === 'code' ? 'code' : 'qr', 'phone' => (string) ($in['phone'] ?? '')]);
-            case 'restart': return self::gw('POST', '/sessions/' . rawurlencode(self::id($in['id'] ?? '')) . '/restart', []);
-            case 'logout': return self::gw('DELETE', '/sessions/' . rawurlencode(self::id($in['id'] ?? '')));
+            case 'restart':
+                if (self::cfg()['url'] === '') { throw new Mutqan_Error('phone_gateway', 'الوسيط على الموبايل — أعد تشغيله من هناك.', 409); }
+                return self::gw('POST', '/sessions/' . rawurlencode(self::id($in['id'] ?? '')) . '/restart', []);
+            case 'logout':
+                if (self::cfg()['url'] === '') { self::forget_session(self::id($in['id'] ?? '')); return ['ok' => true]; }
+                return self::gw('DELETE', '/sessions/' . rawurlencode(self::id($in['id'] ?? '')));
             case 'send': return self::staff_send($in, $p);
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
@@ -95,7 +155,9 @@ final class Mutqan_WA {
     /** Id of a connected (status «open») business number, or '' when the gateway is not set up / down. Cached for a minute so an order never waits on it twice. */
     public static function open_account() {
         $c = self::cfg();
-        if ($c['url'] === '' || $c['token'] === '') { return ''; }
+        // A phone gateway cannot be asked which numbers it has; it tells us when it connects.
+        if ($c['url'] === '') { return (string) get_option('mutqan_wa_last_acct', ''); }
+        if ($c['token'] === '') { return ''; }
         $hit = get_transient('mq_wa_open');
         if ($hit !== false) { return (string) $hit; }
         $id = '';
@@ -125,11 +187,81 @@ final class Mutqan_WA {
     }
 
     /** Send through the gateway and record the outgoing message. */
+    /**
+     * Sends a message, by whichever route the gateway can be reached.
+     *
+     * A gateway on a phone has no address of its own: nothing on the internet can call into it. So
+     * when no URL is configured the message is queued and the phone collects it on its next pull.
+     * With a URL (a machine that can be dialled) it is pushed as before. Same call either way —
+     * nothing above this line needs to know where the gateway lives.
+     */
     public static function send($acct, $phone, $text, $via, $by = '') {
+        $c = self::cfg();
+        if ($c['url'] === '') { return self::queue($acct, $phone, $text, $via, $by); }
         $r = self::gw('POST', '/sessions/' . rawurlencode($acct) . '/send', ['to' => $phone, 'text' => $text]);
         $msgId = (string) ($r['msgId'] ?? wp_generate_uuid4());
         self::store_message($acct, $phone, ['msgId' => $msgId, 'dir' => 'out', 'text' => $text, 'kind' => 'text', 'ts' => time(), 'via' => $via, 'by' => $by]);
         return ['ok' => true];
+    }
+
+    /** Puts one message in the queue the phone collects from. */
+    public static function queue($acct, $phone, $text, $via = 'auto', $by = '') {
+        $doc = Mutqan_Store::insert('wa_outbox', [
+            'acct' => (string) $acct, 'to' => self::intl($phone) ?: preg_replace('/\D/', '', (string) $phone),
+            'text' => mb_substr((string) $text, 0, 4000), 'via' => (string) $via, 'by' => (string) $by,
+            'state' => 'pending', 'tries' => 0, 'at' => gmdate('c'),
+        ], null, [], self::sys());
+        return ['ok' => true, 'queued' => true, 'id' => (string) ($doc['id'] ?? '')];
+    }
+
+    /**
+     * The phone asks: anything to send? — and reports what it managed to send last time.
+     *
+     * The queue is what makes a phone gateway possible at all, so the rules here are the ones that
+     * keep it honest: a job handed out is marked taken with the time, so a phone that dies mid-send
+     * does not strand it forever; a job tried too many times is dropped rather than retried into a
+     * number that keeps failing.
+     */
+    const TAKEN_STUCK = 300;        // a job handed out and never acked is offered again after this
+    const MAX_TRIES = 4;
+
+    /** Same signature as the webhook, checked the same way: the body, with the shared secret. */
+    public static function pull_signed($raw, $sig) {
+        $c = self::cfg();
+        if (!is_string($sig) || !hash_equals(hash_hmac('sha256', $raw, $c['secret']), $sig)) { throw new Mutqan_Error('forbidden', 'توقيع غير صحيح.', 403); }
+        $in = json_decode($raw, true);
+        return self::pull(is_array($in) ? $in : []);
+    }
+
+    public static function pull($in) {
+        $now = time();
+        foreach ((array) ($in['sent'] ?? []) as $one) {
+            $id = (string) (is_array($one) ? ($one['id'] ?? '') : $one);
+            if ($id === '') { continue; }
+            $job = Mutqan_Store::get_raw('wa_outbox', $id);
+            if (!$job) { continue; }
+            $okFlag = !is_array($one) || ($one['ok'] ?? true);
+            if ($okFlag) {
+                self::store_message((string) $job['acct'], (string) $job['to'], ['msgId' => (string) ((is_array($one) ? ($one['msgId'] ?? '') : '') ?: wp_generate_uuid4()),
+                    'dir' => 'out', 'text' => (string) $job['text'], 'kind' => 'text', 'ts' => $now, 'via' => (string) ($job['via'] ?? 'auto'), 'by' => (string) ($job['by'] ?? '')]);
+                Mutqan_Store::delete('wa_outbox', $id, self::sys());
+            } else {
+                $tries = (int) ($job['tries'] ?? 0) + 1;
+                if ($tries >= self::MAX_TRIES) { Mutqan_Store::delete('wa_outbox', $id, self::sys()); }
+                else { Mutqan_Store::update('wa_outbox', $id, ['state' => 'pending', 'tries' => $tries], self::sys()); }
+            }
+        }
+        $limit = max(1, min(20, (int) ($in['limit'] ?? 10)));
+        $jobs = [];
+        foreach (Mutqan_Store::select('wa_outbox', [], ['limit' => 100, 'order' => 'asc'], self::sys()) as $job) {
+            if (count($jobs) >= $limit) { break; }
+            $state = (string) ($job['state'] ?? 'pending');
+            $taken = (int) ($job['takenAt'] ?? 0);
+            if ($state === 'taken' && $now - $taken < self::TAKEN_STUCK) { continue; }
+            Mutqan_Store::update('wa_outbox', (string) $job['id'], ['state' => 'taken', 'takenAt' => $now], self::sys());
+            $jobs[] = ['id' => (string) $job['id'], 'acct' => (string) ($job['acct'] ?? ''), 'to' => (string) ($job['to'] ?? ''), 'text' => (string) ($job['text'] ?? '')];
+        }
+        return ['jobs' => $jobs, 'at' => $now];
     }
 
     /* ---------------------------------------------------------------- storage */
@@ -169,6 +301,8 @@ final class Mutqan_WA {
         $acct = self::id($e['accountId'] ?? '');
         if (($e['type'] ?? '') === 'status') {
             set_transient('mq_wa_st_' . $acct, ['status' => (string) ($e['status'] ?? ''), 'at' => time()], DAY_IN_SECONDS);
+            if (($e['status'] ?? '') === 'open') { update_option('mutqan_wa_last_acct', $acct, false); }
+            self::remember_session($acct, $e);
             if (in_array($e['status'] ?? '', ['logged_out', 'closed'], true)) { self::notify_admins('تنبيه واتساب', 'الرقم «' . $acct . '» انقطع اتصاله — افتح صندوق الواتساب لإعادة الربط.', 'wa-down-' . $acct); }
             return ['ok' => true];
         }
