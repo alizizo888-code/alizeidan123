@@ -1,0 +1,39 @@
+/* Built for one hand, outdoors, on a phone that may be in the sun. Large targets, hard contrast,
+   nothing that needs precision. */
+:root{--bg:#0b1220;--panel:#141d30;--line:#263349;--ink:#eef3fb;--muted:#9fb0c9;--ok:#14b86a;--go:#2d7ef7;--warn:#f0a500}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,"Segoe UI",Tahoma,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+header h1{font-size:17px;margin:0;flex:1}
+main{padding:16px;max-width:620px;margin:0 auto}
+.job{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.job h2{font-size:19px;margin:0 0 4px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btn{flex:1 1 46%;min-height:54px;border:0;border-radius:12px;font:600 17px system-ui;color:#fff;background:var(--go);cursor:pointer}
+.btn.ok{background:var(--ok)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+.btn:disabled{opacity:.5}
+a.btn{display:flex;align-items:center;justify-content:center;text-decoration:none}
+.meta{color:var(--muted);font-size:15px}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;background:#1d2b45;color:var(--muted);font-size:13px}
+.empty{text-align:center;color:var(--muted);padding:48px 16px}
+.out{flex:0 0 auto;min-height:40px;padding:0 14px}
+.field{width:100%;margin-top:12px;padding:14px;font-size:19px;border-radius:12px;border:1px solid var(--line);background:#0e1627;color:var(--ink)}
+.note{margin-top:10px}
+.replies,.chat{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-weight:600;padding:6px 0}
+.replies .btn{flex:1 1 44%;min-height:46px;font-size:15px}
+.thread{max-height:220px;overflow:auto;margin:8px 0}
+.line{padding:8px 10px;border-radius:10px;background:#0e1627;margin-bottom:6px;font-size:15px}
+.line.mine{background:#163055}
+.line b{color:var(--muted);font-weight:600;font-size:13px;display:block}
+.around{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
+.around:last-child{border-bottom:0}
+.around-what{flex:1;min-width:0}
+.around-what small{display:block;color:var(--muted);font-size:14px}
+.btn.sm{flex:0 0 auto;min-height:40px;padding:0 12px;font-size:15px}
+.tags{margin-top:8px}
+.msg{padding:12px 14px;border-radius:10px;margin-bottom:14px;display:none}
+.msg.show{display:block}
+.msg.bad{background:#3a1c22;color:#ffb4bd}
+.msg.good{background:#10351f;color:#9df0c0}

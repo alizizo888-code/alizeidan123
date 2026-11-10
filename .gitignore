@@ -1,0 +1,9 @@
+# Secrets and local state never go into the repository
+oxy-master-config.php
+config.local.php
+*.env
+*.db
+*.sqlite
+*.log
+node_modules/
+.DS_Store

@@ -1,0 +1,112 @@
+[
+  {
+    "id": "oxygen",
+    "name": "أكسجين",
+    "host": "oxygen11.com"
+  },
+  {
+    "id": "mutqan",
+    "name": "متقن",
+    "host": "mutqan.oxygen11.com"
+  },
+  {
+    "id": "motakhases",
+    "name": "المتخصص",
+    "host": "motakhases-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "muhandis",
+    "name": "المهندس",
+    "host": "muhandis-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "aqsa",
+    "name": "الأقصى",
+    "host": "aqsa-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "raad",
+    "name": "رعد السماء",
+    "host": "raad-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "mutamakkin",
+    "name": "المتمكن",
+    "host": "mutamakkin-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "khabeer",
+    "name": "الخبير",
+    "host": "khabeer-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "homeservice",
+    "name": "هوم سيرفيس",
+    "host": "homeservice-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "ibtikar",
+    "name": "ابتكار راحة",
+    "host": "ibtikar-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "mutamad",
+    "name": "المعتمد",
+    "host": "mutamad-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "misriya",
+    "name": "المصرية",
+    "host": "misriya-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "nukhba",
+    "name": "النخبة",
+    "host": "nukhba-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "riyada",
+    "name": "الريادة",
+    "host": "riyada-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "baraa",
+    "name": "البراعة",
+    "host": "baraa-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "safwa",
+    "name": "الصفوة",
+    "host": "safwa-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "tamayuz",
+    "name": "التميز",
+    "host": "tamayuz-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "nasmat",
+    "name": "نسمة الحجاز",
+    "host": "nasmat-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "wahat",
+    "name": "واحة الراحة",
+    "host": "wahat-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "amaan",
+    "name": "الأمان",
+    "host": "amaan-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "kafaa",
+    "name": "الكفاءة",
+    "host": "kafaa-maintenance-general-contracting.oxygen11.com"
+  },
+  {
+    "id": "jawda",
+    "name": "الجودة",
+    "host": "jawda-maintenance-general-contracting.oxygen11.com"
+  }
+]
