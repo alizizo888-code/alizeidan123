@@ -330,6 +330,12 @@ final class Mutqan_WA {
         if ((isset($cfg['enabled']) && !$cfg['enabled']) || (isset($acfg['botEnabled']) && !$acfg['botEnabled'])) { return ['ok' => true]; }
         self::put_thread($tid, ['lastIn' => mb_substr((string) ($e['text'] ?? ''), 0, 300)]);
         $out = Mutqan_WA_Bot::decide($cfg + Mutqan_WA_Bot::defaults(), $th, (string) ($e['text'] ?? ''), (int) ($e['ts'] ?? time()), (string) ($e['kind'] ?? 'text'));
+        // The rules had nothing to say. If the model cannot be reached either, the bot falls back
+        // on what the model has already answered before — which is the whole point of it learning.
+        if (empty($out['replies']) && class_exists('Mutqan_Brain')) {
+            $said = Mutqan_Brain::fallback((string) ($e['text'] ?? ''));
+            if ($said !== '') { $out['replies'] = [$said]; }
+        }
         if ($out['patch']) { self::put_thread($tid, $out['patch']); }
         if (!empty($out['miss'])) { self::learn_miss($out['miss']); }
         foreach ($out['replies'] as $txt) {
