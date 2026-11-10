@@ -113,7 +113,7 @@ final class Mutqan_AI {
             $r = self::call_anthropic(array_merge($s['providers']['anthropic'], ['model' => $model]), $prompt, $wantJson, $temp);
             if ($r['ok']) {
                 $text = trim($r['text']); $json = $wantJson ? self::extract_json($text) : null;
-                if (!$wantJson || $json !== null) { self::note('anthropic', 'ok'); return ['text' => $text, 'json' => $json, 'provider' => 'anthropic', 'tier' => $tier]; }
+                if (!$wantJson || $json !== null) { self::note('anthropic', 'ok'); $out = ['text' => $text, 'json' => $json, 'provider' => 'anthropic', 'tier' => $tier]; self::teach($prompt, $out, $opts, $p); return $out; }
             } else {
                 self::note('anthropic', $r['error']);
                 if ($r['cooldown']) { self::set_cooldown('anthropic', $r['cooldown']); }
@@ -133,13 +133,30 @@ final class Mutqan_AI {
                 $json = $wantJson ? self::extract_json($text) : null;
                 if ($wantJson && $json === null) { $lastText = $text; $lastProvider = $id; self::note($id, 'JSON غير صالح'); continue; }
                 self::note($id, 'ok');
-                return ['text' => $text, 'json' => $json, 'provider' => $id];
+                $out = ['text' => $text, 'json' => $json, 'provider' => $id];
+                self::teach($prompt, $out, $opts, $p);
+                return $out;
             }
             self::note($id, $r['error']);
             if ($r['cooldown']) { self::set_cooldown($id, $r['cooldown']); }
         }
         if ($lastText !== '') { return ['text' => $lastText, 'json' => null, 'provider' => $lastProvider]; }
         throw new Mutqan_Error('ai_unavailable', 'خدمة الذكاء الاصطناعي مشغولة الآن.', 503);
+    }
+
+    /**
+     * Hands a finished answer to the rule bot to learn from.
+     *
+     * Called from the one place every answer passes through, so the bot gathers what the model
+     * knows whichever screen asked — and has something to say on the day no provider answers.
+     * Only plain answers to customers: a JSON reply is machinery, and staff tools are not a
+     * script anybody should repeat to a customer.
+     */
+    private static function teach($prompt, $out, $opts, $p) {
+        if (!class_exists('Mutqan_Brain') || !empty($opts['json'])) { return; }
+        if (class_exists('Mutqan_Policy') && Mutqan_Policy::is_staff($p)) { return; }
+        try { Mutqan_Brain::remember($prompt, (string) ($out['text'] ?? ''), (string) ($opts['feature'] ?? '')); }
+        catch (Throwable $e) { error_log('[mutqan] teach ' . $e->getMessage()); }
     }
 
     /* ------------------------------------------------------------------ cooldown + status */
@@ -153,6 +170,16 @@ final class Mutqan_AI {
         $st[$id] = ['at' => Mutqan_Store::now(), 'msg' => mb_substr((string) $msg, 0, 160)];
         $s['status'] = $st;
         update_option(self::OPT, $s, false);
+    }
+
+    /** The providers that are configured AND not in a cooldown: who could answer this second. */
+    public static function live_providers($s = null) {
+        $s = $s ?: self::settings();
+        $out = [];
+        foreach ((array) ($s['providers'] ?? []) as $id => $c) {
+            if (self::usable($id, $c) && !self::cooling($id)) { $out[] = $id; }
+        }
+        return $out;
     }
 
     public static function cooldowns() {
