@@ -379,6 +379,12 @@ final class Mutqan_Store {
         // A job becoming someone's is the moment to tell them. Every route into the system — the
         // operations screen, the agent, a WhatsApp command — ends up here, so the technician is told
         // once, from one place, and only after the change is actually saved.
+        // Nothing is held past the work: the moment a technician has no open job left, the
+        // position goes.
+        if ($coll === 'orders' && array_key_exists('status', $patch) && class_exists('Mutqan_Track')) {
+            $who = (string) ($old['technicianId'] ?? ($doc['technicianId'] ?? ''));
+            if ($who !== '') { try { Mutqan_Track::clear_if_free($who); } catch (Throwable $e) { error_log('[mutqan] track ' . $e->getMessage()); } }
+        }
         if ($coll === 'orders' && array_key_exists('technicianId', $patch)
             && ($patch['technicianId'] ?? null) !== ($old['technicianId'] ?? null) && !empty($patch['technicianId'])
             && class_exists('Mutqan_WA_Desk')) {
@@ -419,8 +425,14 @@ final class Mutqan_Store {
         }
         if ($steps === []) { return $patch; }
 
+        // Where the technician was when it happened. This is the business's record of its own
+        // job — where it was accepted, reached, finished — and it is the half a live map and any
+        // travel estimate were missing.
+        $pos = null;
+        $techId = (string) ($patch['technicianId'] ?? ($old['technicianId'] ?? ''));
+        if ($techId !== '' && class_exists('Mutqan_Track')) { $pos = Mutqan_Track::where($techId); }
         $route = isset($old['route']) && is_array($old['route']) ? $old['route'] : [];
-        foreach ($steps as $st) { $route[] = Mutqan_WA::step($st[0], $st[1], $st[2]); }
+        foreach ($steps as $st) { $route[] = Mutqan_Track::step($st[0], $st[1], $st[2], $pos['lat'] ?? null, $pos['lng'] ?? null); }
         // One order cannot be allowed to grow without limit; the oldest steps go first.
         $patch['route'] = count($route) > 60 ? array_slice($route, -60) : $route;
         return $patch;
