@@ -16,12 +16,22 @@ final class Mutqan_AI {
 
     public static function defaults() {
         return [
-            'order' => ['groq', 'gemini', 'cloudflare', 'openrouter'],
+            'order' => ['groq', 'cerebras', 'github', 'gemini', 'mistral', 'cloudflare', 'nvidia', 'together', 'cohere', 'openrouter'],
             'providers' => [
                 'groq'       => ['enabled' => 0, 'key' => '', 'model' => 'openai/gpt-oss-120b'],
                 'gemini'     => ['enabled' => 0, 'key' => '', 'model' => 'gemini-3.1-flash-lite'],
                 'cloudflare' => ['enabled' => 0, 'key' => '', 'account' => '', 'model' => '@cf/meta/llama-3.3-70b-instruct-fp8-fast'],
                 'openrouter' => ['enabled' => 0, 'key' => '', 'model' => 'meta-llama/llama-3.3-70b-instruct:free'],
+                // All free tiers, all speaking the OpenAI chat shape, so each one costs a line here and
+                // nothing else. The more of them that are set up, the longer the assistant keeps talking
+                // on a day somebody's daily limit runs out: the chain moves on and the customer never
+                // learns there was a limit. 'github' is a GitHub token, not a paid key.
+                'cerebras'   => ['enabled' => 0, 'key' => '', 'model' => 'llama-3.3-70b'],
+                'github'     => ['enabled' => 0, 'key' => '', 'model' => 'openai/gpt-4.1-mini'],
+                'mistral'    => ['enabled' => 0, 'key' => '', 'model' => 'mistral-small-latest'],
+                'nvidia'     => ['enabled' => 0, 'key' => '', 'model' => 'meta/llama-3.3-70b-instruct'],
+                'together'   => ['enabled' => 0, 'key' => '', 'model' => 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free'],
+                'cohere'     => ['enabled' => 0, 'key' => '', 'model' => 'command-r-08-2024'],
                 // Paid, used only for the higher tiers (see tier_model()); the free providers above keep serving the 'low' tier.
                 'anthropic'  => ['enabled' => 0, 'key' => '', 'model' => 'claude-haiku-5-5'],
             ],
@@ -46,7 +56,9 @@ final class Mutqan_AI {
     }
 
     public static function labels() {
-        return ['groq' => 'Groq', 'gemini' => 'Google Gemini', 'cloudflare' => 'Cloudflare Workers AI', 'openrouter' => 'OpenRouter', 'anthropic' => 'Claude (Anthropic)'];
+        return ['groq' => 'Groq', 'cerebras' => 'Cerebras', 'github' => 'GitHub Models', 'gemini' => 'Google Gemini',
+            'mistral' => 'Mistral AI', 'cloudflare' => 'Cloudflare Workers AI', 'nvidia' => 'NVIDIA NIM',
+            'together' => 'Together AI', 'cohere' => 'Cohere', 'openrouter' => 'OpenRouter', 'anthropic' => 'Claude (Anthropic)'];
     }
 
     public static function any_enabled($s = null) {
@@ -104,6 +116,10 @@ final class Mutqan_AI {
             Mutqan_Limiter::hit('aiday', (int) $s['per_ip_day'], 86400);
         }
         if (!empty($s['mask_pii'])) { $prompt = self::mask($prompt); }
+        // The owner's facts go in after the mask, never before: masking would strike out the company's
+        // own number in its own answer. They go in here, at the one door every feature passes through,
+        // so a fact he writes once reaches the chat, the WhatsApp bot and the agent together.
+        if (class_exists('Mutqan_KB')) { $prompt = Mutqan_KB::inject($prompt, $opts, $p); }
         $wantJson = !empty($opts['json']);
         $temp = isset($opts['temperature']) && is_numeric($opts['temperature']) ? max(0, min(1.2, (float) $opts['temperature'])) : 0.4;
 
@@ -125,7 +141,9 @@ final class Mutqan_AI {
             if ($id === 'anthropic') { continue; }
             $c = $s['providers'][$id] ?? null;
             if (!$c || !self::usable($id, $c) || self::cooling($id)) { continue; }
-            if ($tried >= 3) { break; }
+            // A provider that is out of quota answers 429 at once and is then in a cooldown, so the next
+            // request skips it without paying for it again. Five is the most a customer will wait for.
+            if ($tried >= 5) { break; }
             $tried++;
             $r = self::call($id, $c, $prompt, $wantJson, $temp);
             if ($r['ok']) {
@@ -213,6 +231,12 @@ final class Mutqan_AI {
     private static function call($id, $c, $prompt, $json, $temp) {
         switch ($id) {
             case 'groq': return self::call_openai_compat('https://api.groq.com/openai/v1/chat/completions', $c, $prompt, $json, $temp, []);
+            case 'cerebras': return self::call_openai_compat('https://api.cerebras.ai/v1/chat/completions', $c, $prompt, $json, $temp, []);
+            case 'github': return self::call_openai_compat('https://models.github.ai/inference/chat/completions', $c, $prompt, $json, $temp, []);
+            case 'mistral': return self::call_openai_compat('https://api.mistral.ai/v1/chat/completions', $c, $prompt, $json, $temp, []);
+            case 'nvidia': return self::call_openai_compat('https://integrate.api.nvidia.com/v1/chat/completions', $c, $prompt, $json, $temp, []);
+            case 'together': return self::call_openai_compat('https://api.together.xyz/v1/chat/completions', $c, $prompt, $json, $temp, []);
+            case 'cohere': return self::call_openai_compat('https://api.cohere.ai/compatibility/v1/chat/completions', $c, $prompt, $json, $temp, []);
             case 'openrouter': return self::call_openai_compat('https://openrouter.ai/api/v1/chat/completions', $c, $prompt, $json, $temp, ['X-Title' => 'Mutqan']);
             case 'gemini': return self::call_gemini($c, $prompt, $json, $temp);
             case 'cloudflare': return self::call_cloudflare($c, $prompt, $temp);
