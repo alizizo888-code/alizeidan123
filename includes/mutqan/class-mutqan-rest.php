@@ -70,6 +70,10 @@ final class Mutqan_Rest {
             }]);
         register_rest_route(self::NS, '/upload', ['methods' => 'POST', 'permission_callback' => '__return_true',
             'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_upload']); }]);
+        // A technician's phone says where it is, while they have a job open. Small and frequent, so
+        // it is its own route rather than a document write.
+        register_rest_route(self::NS, '/track', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_track']); }]);
         register_rest_route(self::NS, '/geocode', ['methods' => 'GET', 'permission_callback' => '__return_true',
             'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_geocode']); }]);
         register_rest_route(self::NS, '/config', ['methods' => 'GET', 'permission_callback' => '__return_true',
@@ -548,6 +552,16 @@ final class Mutqan_Rest {
     }
 
     /* ------------------------------------------------------------------ /geocode (OpenStreetMap Nominatim, cached) */
+
+    public static function h_track($req, $p) {
+        // Only the technician themselves, and only about themselves: nobody reports anybody else's
+        // whereabouts, and a customer's app has no business here at all.
+        $id = (string) ($p['id'] ?? '');
+        if (($p['kind'] ?? 'guest') !== 'user' || $id === '') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
+        $b = json_decode((string) $req->get_body(), true);
+        $b = is_array($b) ? $b : [];
+        return Mutqan_Track::ping($id, $b['lat'] ?? null, $b['lng'] ?? null);
+    }
 
     public static function h_geocode($req, $p) {
         if (($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
