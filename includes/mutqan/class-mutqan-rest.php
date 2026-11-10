@@ -70,6 +70,9 @@ final class Mutqan_Rest {
             }]);
         register_rest_route(self::NS, '/upload', ['methods' => 'POST', 'permission_callback' => '__return_true',
             'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_upload']); }]);
+        // The whole operation in one small answer, for any screen that redraws itself.
+        register_rest_route(self::NS, '/live', ['methods' => 'GET', 'permission_callback' => '__return_true',
+            'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_live']); }]);
         // A technician's phone says where it is, while they have a job open. Small and frequent, so
         // it is its own route rather than a document write.
         register_rest_route(self::NS, '/track', ['methods' => 'POST', 'permission_callback' => '__return_true',
@@ -552,6 +555,11 @@ final class Mutqan_Rest {
     }
 
     /* ------------------------------------------------------------------ /geocode (OpenStreetMap Nominatim, cached) */
+
+    public static function h_live($req, $p) {
+        if (!Mutqan_Policy::has_power($p, 'read')) { throw new Mutqan_Error('forbidden', 'للفريق فقط.', 403); }
+        return Mutqan_Live::snapshot((string) $req->get_param('v'));
+    }
 
     public static function h_track($req, $p) {
         // Only the technician themselves, and only about themselves: nobody reports anybody else's
