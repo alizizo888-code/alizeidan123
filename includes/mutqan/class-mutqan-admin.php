@@ -105,12 +105,26 @@ final class Mutqan_Admin {
         $cool = Mutqan_AI::cooldowns();
         $app = home_url('/app/');
         $built = is_readable(Mutqan_Rest::app_dir() . 'index.html');
-        $links = ['groq' => 'https://console.groq.com/keys', 'gemini' => 'https://aistudio.google.com/apikey', 'cloudflare' => 'https://dash.cloudflare.com/profile/api-tokens', 'openrouter' => 'https://openrouter.ai/keys'];
+        $links = [
+            'groq' => 'https://console.groq.com/keys', 'cerebras' => 'https://cloud.cerebras.ai/',
+            'github' => 'https://github.com/settings/personal-access-tokens', 'gemini' => 'https://aistudio.google.com/apikey',
+            'mistral' => 'https://console.mistral.ai/api-keys', 'cloudflare' => 'https://dash.cloudflare.com/profile/api-tokens',
+            'nvidia' => 'https://build.nvidia.com/', 'together' => 'https://api.together.ai/settings/api-keys',
+            'cohere' => 'https://dashboard.cohere.com/api-keys', 'openrouter' => 'https://openrouter.ai/keys',
+            'anthropic' => 'https://console.anthropic.com/settings/keys',
+        ];
         $notes = [
             'groq' => 'حد مجاني يومي بدون رصيد، الأسرع. الأفضل كمزود أول.',
             'gemini' => 'خطة مجانية؛ جوجل قد تراجع محتوى الخطة المجانية بشريًا، لذلك تُحجب الأرقام قبل الإرسال.',
             'cloudflare' => 'حصة يومية مجانية تتوقف عند انتهائها دون فواتير. يلزم Account ID وتوكن Workers AI.',
             'openrouter' => 'نماذج مجانية بحد يومي منخفض بدون شراء رصيد؛ احتياطي أخير.',
+            'cerebras' => 'حد مجاني يومي، سريع جدًا. مزود ثانٍ ممتاز بعد Groq.',
+            'github' => 'مفاتيحك المجانية على GitHub: التوكن الشخصي نفسه يفتح GitHub Models بحد مجاني. لا يحتاج بطاقة.',
+            'mistral' => 'خطة مجانية للتجربة من La Plateforme، حد يومي معقول.',
+            'nvidia' => 'رصيد مجاني من build.nvidia.com يكفي استخدامًا خفيفًا، ثم يتوقف دون فواتير.',
+            'together' => 'نماذج بنهاية ‎:Free‎ بحد يومي بدون رصيد.',
+            'cohere' => 'مفتاح تجريبي مجاني بحد شهري، مناسب كاحتياطي.',
+            'anthropic' => 'مدفوع — يُستخدم للمستويات الأعلى فقط (أوامر المالك والعمليات). اتركه مطفأً للعمل المجاني بالكامل.',
         ];
         ?>
         <div class="wrap" dir="rtl" style="max-width:980px">
@@ -151,7 +165,7 @@ final class Mutqan_Admin {
                     <tbody>
                     <?php foreach (Mutqan_AI::labels() as $id => $label): $c = $ai['providers'][$id]; $st = $ai['status'][$id] ?? null; ?>
                         <tr>
-                            <td><strong><?php echo esc_html($label); ?></strong><br><a href="<?php echo esc_url($links[$id]); ?>" target="_blank" rel="noopener">إنشاء مفتاح مجاني</a><br><span class="description"><?php echo esc_html($notes[$id]); ?></span></td>
+                            <td><strong><?php echo esc_html($label); ?></strong><br><a href="<?php echo esc_url($links[$id] ?? '#'); ?>" target="_blank" rel="noopener">إنشاء مفتاح مجاني</a><br><span class="description"><?php echo esc_html($notes[$id] ?? ''); ?></span></td>
                             <td><input type="checkbox" name="enabled[<?php echo esc_attr($id); ?>]" value="1" <?php checked((int) $c['enabled'], 1); ?>></td>
                             <td>
                                 <input type="password" dir="ltr" name="key[<?php echo esc_attr($id); ?>]" class="regular-text" autocomplete="new-password" placeholder="<?php echo $c['key'] !== '' ? 'محفوظ — اتركه فارغًا للإبقاء عليه' : 'الصق المفتاح هنا'; ?>">
@@ -168,7 +182,7 @@ final class Mutqan_Admin {
                     </tbody>
                 </table>
                 <table class="form-table">
-                    <tr><th><label for="mq_order">ترتيب التجربة</label></th><td><input id="mq_order" name="order" type="text" dir="ltr" class="regular-text" value="<?php echo esc_attr(implode(',', $ai['order'])); ?>"><p class="description">أسماء مفصولة بفاصلة: groq,gemini,cloudflare,openrouter</p></td></tr>
+                    <tr><th><label for="mq_order">ترتيب التجربة</label></th><td><input id="mq_order" name="order" type="text" dir="ltr" class="regular-text" value="<?php echo esc_attr(implode(',', $ai['order'])); ?>"><p class="description">أسماء مفصولة بفاصلة. كل مزود تضيفه يزيد السعة المجانية: لو خلص حد واحد ينتقل النظام للتالي والعميل لا يلاحظ. ما ينقص من القائمة يُضاف آخرها تلقائيًا.</p></td></tr>
                     <tr><th>حماية الخصوصية</th><td><label><input type="checkbox" name="mask_pii" value="1" <?php checked((int) $ai['mask_pii'], 1); ?>> إخفاء أرقام الجوال والبريد من النص قبل إرساله للمزود</label></td></tr>
                     <tr><th>حدود الاستخدام لكل زائر</th><td>كل 10 دقائق: <input name="per_ip_10min" type="number" min="5" max="200" value="<?php echo (int) $ai['per_ip_10min']; ?>" class="small-text"> · في اليوم: <input name="per_ip_day" type="number" min="20" max="2000" value="<?php echo (int) $ai['per_ip_day']; ?>" class="small-text"><p class="description">تحمي حصتك المجانية من إساءة الاستخدام. موظفو الفريق غير خاضعين لها.</p></td></tr>
                 </table>

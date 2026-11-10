@@ -317,6 +317,9 @@ final class Mutqan_Store {
 
     private static function bump($coll) {
         update_option('mutqan_v_' . $coll, (string) round(microtime(true) * 1000), false);
+        // The assistant reads the owner's settings from a five-minute cache; an edit he just made has
+        // to be the one the next answer is built on, or he edits it again thinking it did not take.
+        if ($coll === 'ai_settings' && class_exists('Mutqan_KB')) { Mutqan_KB::flush(); }
     }
 
     /* ------------------------------------------------------------------ writes */
