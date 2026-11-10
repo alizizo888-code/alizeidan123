@@ -14,7 +14,8 @@
 ```bash
 pkg update && pkg install nodejs-lts git
 termux-setup-storage
-git clone https://github.com/alizizo888-code/oxy.git && cd oxy/wa-gateway
+git clone -b wa-gateway https://github.com/alizizo888-code/alizeidan123.git wa-gateway
+cd wa-gateway
 npm ci --omit=dev
 ```
 
@@ -50,7 +51,7 @@ set -a && . ./.env && set +a && node src/index.js
 ## التشغيل على سيرفر (لو حبيت لاحقًا)
 1. ثبّت Docker، ثم:
    ```bash
-   git clone https://github.com/alizizo888-code/oxy.git && cd oxy/wa-gateway
+   git clone -b wa-gateway https://github.com/alizizo888-code/alizeidan123.git wa-gateway && cd wa-gateway
    cp .env.example .env      # عدّل GATEWAY_TOKEN و WEBHOOK_SECRET
    docker build -t mutqan-wa .
    docker run -d --name mutqan-wa --restart always --env-file .env -p 127.0.0.1:8787:8787 -v mutqan-wa-data:/data mutqan-wa
