@@ -283,7 +283,7 @@ final class Mutqan_Rest {
         $urgent = (($doc['priority'] ?? '') === 'urgent');
         $ops = (($doc['routing'] ?? '') === 'operations');
         // The full order, built from what the SERVER stored (the customer cannot change it): everything operations needs to hand it to a technician without opening anything.
-        $price = $doc['agreedPrice'] ?? ($doc['priceQuote']['total'] ?? ($doc['price'] ?? null));
+        $price = (isset($doc['price']) && is_numeric($doc['price']) && $doc['price'] > 0) ? $doc['price'] : (Mutqan_Policy::quoted_total($doc) ?: null);   // the AC quote counts too
         $src = ($doc['source'] ?? '') === 'mutqan_ai' ? 'المساعد الذكي' : (($doc['source'] ?? '') === 'whatsapp_manual' ? 'واتساب (يدوي)' : 'التطبيق / الموقع');
         $high = (($doc['escalation']['reason'] ?? '') === 'high_value');
         $lines = array_filter([
