@@ -295,10 +295,18 @@ final class Mutqan_Policy {
         if ($coll === 'orders' && !self::has_power($p, 'write')) {
             $deny = ['brand', 'price', 'agreedPrice', 'priceQuote', 'estimatedPrice', 'negotiated', 'welcomeDiscountPct', 'welcomeDiscountMax', 'deviceId', 'payLink', 'inhouse', 'inhouseAt', 'clientId', 'clientName', 'clientPhone', 'handler', 'escalation', 'transferLog', 'source', 'aiConversation', 'invoiceItems', 'photosBefore', 'photosAfter', 'technicianLocation', 'technicianDistanceM'];
             $creator = $row['owner_id'] === $me;
+            // The technician is the one standing in front of the unit, so the final price is his to
+            // write — and the form at the end of every job asks him for it. Stripping it with the rest
+            // of the money fields meant the job closed at no price at all: his share read zero, the
+            // accounts read zero, and the owner had nothing to collect. So it is let through, once, in
+            // the same write that closes his own job, never below the owner's floor, and with the
+            // quote it replaced kept next to it so a big jump is visible to whoever checks.
+            $finalPrice = self::technician_final_price($old, $patch, $p);
             if ($creator && ($p['role'] ?? null) !== 'technician') {
                 $deny = array_merge($deny, ['technicianId', 'technicianName', 'paymentStatus', 'paidAt', 'paymentMethod', 'paidRecordedBy']);
             }
             foreach ($deny as $k) { unset($patch[$k]); }
+            if ($finalPrice !== null) { $patch = array_merge($patch, $finalPrice); }
             if (($p['role'] ?? null) === 'technician' && !$creator) {
                 if (array_key_exists('technicianId', $patch) && $patch['technicianId'] !== null && $patch['technicianId'] !== $me && ($old['technicianId'] ?? null) !== $me) { unset($patch['technicianId'], $patch['technicianName']); }   // a technician may hand HIS OWN order to a colleague
                 if (array_key_exists('technicianId', $patch) && $patch['technicianId'] === null && ($old['technicianId'] ?? null) !== $me) { unset($patch['technicianId'], $patch['technicianName']); }
@@ -310,6 +318,46 @@ final class Mutqan_Policy {
         }
         if ($coll === 'tech_applications' && !self::has_power($p, 'write')) { unset($patch['status'], $patch['reviewedAt'], $patch['reviewedBy'], $patch['reviewNote'], $patch['userId']); }
         return $patch;
+    }
+
+    /** What the customer was quoted before the visit, or 0 when the job was priced on site. */
+    public static function quoted_total($o) {
+        foreach ([$o['agreedPrice'] ?? null, $o['priceQuote']['total'] ?? null, $o['acQuote']['total'] ?? null] as $v) {
+            if (is_numeric($v) && (float) $v > 0) { return (float) $v; }
+        }
+        return 0.0;
+    }
+
+    /**
+     * The price a technician may set: on his own job, in the write that completes it, and only if
+     * nobody has priced it yet. Returns the fields to keep, or null when this write is not that.
+     */
+    private static function technician_final_price($old, $patch, $p) {
+        if (($p['role'] ?? null) !== 'technician') { return null; }
+        if (($old['technicianId'] ?? null) !== ($p['id'] ?? '')) { return null; }
+        if (($patch['status'] ?? null) !== 'completed') { return null; }
+        if (!in_array($old['status'] ?? '', ['accepted', 'en_route', 'nearby', 'arrived', 'in_progress'], true)) { return null; }
+        if (isset($old['price']) && is_numeric($old['price']) && (float) $old['price'] > 0) { return null; }   // ops or the owner already priced it
+        $v = $patch['price'] ?? null;
+        if (!is_numeric($v) || (float) $v <= 0) { return null; }
+        $price = round((float) $v, 2);
+        if ($price > 100000) { throw new Mutqan_Error('bad_price', 'السعر غير منطقي — راجع الرقم.', 422); }
+        $floor = 0.0;
+        $spec = $old['specialtyId'] ?? null;
+        if (is_string($spec) && $spec !== '') {
+            $floor = ($spec === 'ac' && isset($old['acQuote']) && is_array($old['acQuote'])) ? self::ac_floor($old['acQuote'])
+                : self::floor_for($spec, $old['qty'] ?? 1, ($old['priority'] ?? '') === 'urgent');
+            $pct = (int) ($old['welcomeDiscountPct'] ?? 0);
+            if ($pct > 0) { $floor -= Mutqan_Promo::off($floor, $pct); }
+        }
+        if ($floor > 0 && $price < $floor - 1) {
+            throw new Mutqan_Error('price_below_floor', 'السعر أقل من الحد الأدنى لهذه الخدمة (' . round($floor) . ' ر.س).', 422);
+        }
+        $quoted = self::quoted_total($old);
+        $out = ['price' => $price, 'priceSetBy' => 'technician', 'priceSetAt' => gmdate('c'), 'quotedTotal' => $quoted];
+        // Half again above what the customer was told is worth a second look before it is collected.
+        if ($quoted > 0 && $price > $quoted * 1.5) { $out['priceReview'] = true; }
+        return $out;
     }
 
     /* ------------------------------------------------------------------ price floor */
