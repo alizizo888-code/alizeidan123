@@ -193,6 +193,8 @@ select.field { appearance: auto; }
 .nav-group { display: grid; gap: 4px; }
 .nav-title { font-size: 12px; color: var(--muted); padding: 4px 10px 2px; }
 .side .tab { display: block; width: 100%; text-align: start; }
+a.tab { text-decoration: none; display: block; }
+a.tab:hover { color: var(--text, #e8eefc); }
 .content { min-width: 0; }
 @media (max-width: 820px) {
   .frame { grid-template-columns: 1fr; }

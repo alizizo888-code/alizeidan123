@@ -8,14 +8,20 @@
 
   // Sections of the panel. A new section is one line here plus its render function.
   // Side menu: operations first, then sites, then one settings page. Bulk and general settings live inside it.
+  // Operations live in ONE system: the app on oxygen11.com, where every face's customers order, where
+  // the technicians work and where the money is counted. This panel used to carry a second copy —
+  // its own orders, technicians, dispatcher and ledger — so the same business had two answers to
+  // "who has this job?". These entries now open the real screens; the panel keeps the 22 websites.
+  // (The old sections' code is still below, unreachable from here, in case anything must be read back.)
+  const HUB = 'https://oxygen11.com/app/#';
   const NAV = [
-    ['العمليات', [['ops', 'غرفة العمليات'], ['management', 'المشرفون والفنيون'], ['accounts', 'الحسابات والعمولات'], ['warranties', 'الضمانات']]],
+    ['العمليات', [['hub:/staff/operations', 'غرفة العمليات ↗'], ['hub:/staff/map', 'الخريطة الميدانية ↗'], ['hub:/staff/accounts', 'الحسابات والعمولات ↗'], ['hub:/staff/whatsapp', 'واتساب ↗'], ['hub:/staff/warranties', 'الضمانات ↗']]],
+    ['الإدارة', [['hub:/staff/admin', 'الفريق والصلاحيات ↗'], ['hub:/staff/ai-settings', 'المساعد الذكي ↗'], ['hub:/staff/pricing', 'التسعير ↗']]],
     ['المواقع', [['sites', 'المواقع'], ['articles', 'المقالات']]],
     ['النظام', [['settings', 'الإعدادات']]],
   ];
   const SETTINGS_SECTIONS = [
     ['chat', 'الشات والواتساب', 'بيانات الشات اللي بيستخدمها الموقع: الاسم والتعليمات والخدمات وطرق الدفع. أرقام واتساب والتوكنات ما بتتخزنش هنا.'],
-    ['dispatch', 'التوزيع والاستقبال', 'طريقة توزيع الطلبات الجديدة على الفنيين، وإيقاف استقبالها من المواقع، ونسبة الفني الافتراضية، والضمان الافتراضي للطلبات المكتملة.'],
     ['general', 'الإعدادات العامة', 'بيانات الشركة اللي تظهر في الفواتير والرسائل: الاسم، الرقم الضريبي، العنوان، ساعات العمل. بتتحفظ على الخادم فقط.'],
     ['bulk', 'الإعدادات الجماعية', 'تغيير اسم المواقع أو وصفها أو عدد المقالات في الصفحة على عدة مواقع مرة واحدة. بتبدأ بمعاينة، ومتتطبقش إلا بتأكيدك.'],
     ['faces', 'إعدادات الواجهات', 'كل أقسام إعدادات الموقع (التسعير، الضمانات، البوت، طرق الدفع…) بتتقرا وتتكتب من هنا عبر الجسر الموقّع. محتاج إضافة متقن 3 على الموقع.'],
@@ -222,6 +228,9 @@
       <div class="nav-group">
         <div class="nav-title">${title}</div>
         ${items.map(([view, label]) => {
+          if (view.startsWith('hub:')) {
+            return `<a class="tab" href="${HUB}${view.slice(4)}" target="_blank" rel="noopener">${label}</a>`;
+          }
           const on = view === 'settings' ? inSettings : state.view === view;
           return `<button class="tab${on ? ' on' : ''}" data-view="${view}" aria-current="${on ? 'page' : 'false'}">${label}</button>`;
         }).join('')}
