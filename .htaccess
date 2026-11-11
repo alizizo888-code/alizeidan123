@@ -39,6 +39,11 @@ Header set X-Robots-Tag "noindex, nofollow, noarchive"
 <FilesMatch "\.(html|webmanifest)$">
 Header set Cache-Control "no-cache"
 </FilesMatch>
+# The panel's own script and style keep one name across releases, so a browser left to guess
+# keeps the old ones — an update reached the server and never reached the owner's screen.
+<FilesMatch "^(app\.js|app\.css|sw\.js|sw-desk\.js)$">
+Header set Cache-Control "no-cache"
+</FilesMatch>
 </IfModule>
 # The two Android builds download rather than open.
 AddType application/vnd.android.package-archive .apk
