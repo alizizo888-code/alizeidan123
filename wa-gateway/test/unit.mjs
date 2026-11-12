@@ -17,3 +17,16 @@ assert.ok(p.canSend()); p.mark(); p.mark(); assert.ok(!p.canSend())
 t += 86400000; assert.ok(p.canSend()); assert.equal(p.used(), 0)
 assert.equal(p.delay(), 3250)
 console.log('wa-gateway unit: OK')
+import { detectSource, parseSessions } from '../src/core.js'
+// Click-to-WhatsApp ad beats everything else
+assert.deepEqual(detectSource({ extendedTextMessage: { text: 'hi', contextInfo: { externalAdReply: { sourceType: 'ad', sourceId: '120', title: 'تنظيف مكيفات', sourceUrl: 'https://www.instagram.com/p/x' } } } }, 'hi #ماب', 'haraj'),
+  { source: 'ads', adNet: 'instagram', adId: '120', adTitle: 'تنظيف مكيفات' })
+assert.deepEqual(detectSource({ conversation: 'السلام عليكم #ماب' }, 'السلام عليكم #ماب', 'haraj'), { source: 'map' })
+assert.deepEqual(detectSource({ conversation: 'x' }, 'Hello #TikTok', ''), { source: 'tiktok' })
+assert.deepEqual(detectSource({ conversation: 'x' }, 'سلام', 'haraj'), { source: 'haraj' })
+assert.deepEqual(detectSource({ conversation: 'x' }, 'سلام', ''), {})
+assert.deepEqual(parseSessions('sim01:حراج:haraj, sim02:ماب:map:0536554731;;SIM 3'), [
+  { id: 'sim01', label: 'حراج', source: 'haraj', phone: '' },
+  { id: 'sim02', label: 'ماب', source: 'map', phone: '0536554731' },
+  { id: 'sim3', label: 'sim3', source: '', phone: '' }])
+console.log('wa-gateway sources: OK')
