@@ -5,12 +5,15 @@ if (!defined('ABSPATH')) { exit; }
  * One-time site defaults the owner asked for, applied once per site (each step has its own done-flag, so the owner's later edits are never overwritten):
  *   1. the site's own contact numbers (WhatsApp + calls) — Mutqan site 0549423050, Oxygen site 0549423050 (the branding step swaps the pair for the Oxygen build);
  *   2. order routing «both»: every customer order opens WhatsApp for the customer AND reaches the operations room with all its details;
- *   3. the built-in technician «فني الموقع» (a real user of the site) used for in-house work and as the fallback technician.
+ *   3. the built-in technician «فني الموقع» (a real user of the site) used for in-house work and as the fallback technician;
+ *   4. «واتساب الشغل» 0549423050 in the WhatsApp numbers list (orders + customer service, takes calls) — on every build, Oxygen's included.
  */
 final class Mutqan_Defaults {
     const WHATSAPP = '966549423050';
     const PHONE = '966549423050';
     const OPT = 'mutqan_seed_v2';
+    // Split so tools/brand.py (which swaps the Mutqan number for Oxygen's in the Oxygen build) leaves this one alone: Ali asked for it on every site.
+    const WORK_WA = '9665365' . '54731';
 
     public static function boot() { add_action('init', [__CLASS__, 'seed'], 6); }
 
@@ -19,12 +22,13 @@ final class Mutqan_Defaults {
     public static function seed() {
         $done = get_option(self::OPT, []);
         if (!is_array($done)) { $done = []; }
-        $todo = array_diff(['contact', 'routing', 'sitetech'], array_keys($done));
+        $todo = array_diff(['contact', 'routing', 'sitetech', 'work_wa'], array_keys($done));
         if (!$todo) { return; }
         foreach ($todo as $step) {
             try {
                 if ($step === 'contact') { self::contact(); }
                 elseif ($step === 'routing') { self::routing(); }
+                elseif ($step === 'work_wa') { self::work_wa(); }
                 else { self::site_tech(); }
                 $done[$step] = gmdate('c');
             } catch (Throwable $e) { error_log('[mutqan] seed ' . $step . ': ' . $e->getMessage()); }
@@ -34,6 +38,15 @@ final class Mutqan_Defaults {
 
     private static function contact() {
         Mutqan_Store::upsert('pricing', ['serviceId' => 'contact_numbers', 'whatsapp' => self::WHATSAPP, 'phone' => self::PHONE, 'updatedAt' => gmdate('c')], 'contact_numbers', ['groupId' => 'main', 'writableBy' => 'admins'], self::sys());
+    }
+
+    /** Adds the work WhatsApp to the numbers list once, unless the owner already added it himself (any format of the same number). */
+    private static function work_wa() {
+        $key = substr(self::WORK_WA, -9);
+        foreach (Mutqan_Store::select('wa_numbers', [], ['limit' => 500], self::sys()) as $n) {
+            if (substr(preg_replace('/\D/', '', (string) ($n['phone'] ?? '')), -9) === $key) { return; }
+        }
+        Mutqan_Store::upsert('wa_numbers', ['label' => 'واتساب الشغل', 'phone' => self::WORK_WA, 'type' => 'business', 'department' => 'orders', 'enabled' => true, 'acceptsCalls' => true, 'hours' => '24 ساعة', 'sort' => 1, 'updatedAt' => gmdate('c')], 'wa-work', ['groupId' => 'main', 'writableBy' => 'admins'], self::sys());
     }
 
     private static function routing() {
