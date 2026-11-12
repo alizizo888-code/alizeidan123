@@ -141,6 +141,17 @@ final class Mutqan_Link {
         return ['code' => substr($bare, 0, 5) . '-' . substr($bare, 5)] + self::status($p, $in);
     }
 
+    /**
+     * The hotline works out of the box: a site with no link code gets one (random, never shown, stored as a hash) with
+     * automatic joining on, so the operations team's devices answer as soon as they open the app. The owner can still
+     * generate a code to see it, or switch automatic joining off.
+     */
+    public static function ensure_default() {
+        if (self::is_set()) { return false; }
+        update_option(self::OPT, ['h' => password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT), 'at' => time(), 'by' => 'system', 'auto' => true, 'gen' => true], false);
+        return true;
+    }
+
     private static function set_auto($p, $in) {
         $c = self::cfg();
         if (empty($c['h'])) { throw new Mutqan_Error('not_set', 'ولّد رمز الربط أولًا.', 409); }

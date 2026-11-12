@@ -36,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'push', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'push', 'webpush', 'relay', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -429,6 +429,15 @@ final class Mutqan_Rest {
     }
 
     /** Hotline link code + Telegram (see Mutqan_Link / Mutqan_Telegram). */
+    /** Background notifications: the VAPID key, and each device's push subscription (see Mutqan_WebPush). */
+    public static function h_webpush($req, $p) {
+        if (!class_exists('Mutqan_WebPush')) { throw new Mutqan_Error('push_unavailable', 'غير متاح.', 503); }
+        return Mutqan_WebPush::handle(self::body($req), $p);
+    }
+
+    /** Hotline voice through the site when the phones cannot reach each other (see Mutqan_Relay). */
+    public static function h_relay($req, $p) { return Mutqan_Relay::handle(self::body($req), $p); }
+
     public static function h_link($req, $p) {
         return Mutqan_Link::handle(self::body($req), $p);
     }
