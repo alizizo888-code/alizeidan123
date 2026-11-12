@@ -10,6 +10,7 @@ final class Mutqan_Admin {
         add_action('admin_post_mutqan_save_owner', [__CLASS__, 'save_owner']);
         add_action('admin_post_mutqan_save_ai', [__CLASS__, 'save_ai']);
         add_action('admin_post_mutqan_save_root', [__CLASS__, 'save_root']);
+        add_action('admin_post_mutqan_save_order_ai', [__CLASS__, 'save_order_ai']);
         add_action('admin_post_mutqan_test_ai', [__CLASS__, 'test_ai']);
         add_action('admin_post_mutqan_save_agent', [__CLASS__, 'save_agent']);
     }
@@ -44,6 +45,13 @@ final class Mutqan_Admin {
         check_admin_referer('mutqan_save_root');
         update_option('mutqan_root_app2', isset($_POST['root_app']) ? '1' : '0', false);
         self::back('تم حفظ إعداد الصفحة الرئيسية.');
+    }
+
+    public static function save_order_ai() {
+        if (!current_user_can('manage_options')) { wp_die('غير مصرح.'); }
+        check_admin_referer('mutqan_save_order_ai');
+        update_option(Mutqan_Order_AI::OPT, ['enabled' => isset($_POST['order_ai']) ? 1 : 0, 'quiet_min' => max(1, min(240, (int) self::post('quiet_min')))], false);
+        self::back('تم حفظ إعداد المساعد الذكي في محادثات الطلبات.');
     }
 
     /** Control assistant: Hostinger API token (DNS of oxygen11.com only) and the Claude models per workload tier. */
@@ -156,6 +164,15 @@ final class Mutqan_Admin {
                 <p><label><input type="checkbox" name="root_app" value="1" <?php checked(get_option('mutqan_root_app2', '1') !== '0'); ?>> فتح التطبيق مباشرة عند زيارة <code><?php echo esc_html(home_url('/')); ?></code> (لعرض قالب ووردبريس بدلًا منه أضف <code>?site=wp</code> للرابط)</label></p>
                 <?php submit_button('حفظ', 'secondary', 'submit', false); ?>
             </form>
+            <?php if (class_exists('Mutqan_Order_AI')): $oai = Mutqan_Order_AI::settings(); ?>
+            <h2>المساعد الذكي في محادثة الطلب</h2>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <input type="hidden" name="action" value="mutqan_save_order_ai"><?php wp_nonce_field('mutqan_save_order_ai'); ?>
+                <p><label><input type="checkbox" name="order_ai" value="1" <?php checked($oai['enabled'], 1); ?>> يرد الذكاء الاصطناعي على العميل في «خدمة العملاء» داخل الطلب، ويعرف الطلب وطلباته السابقة ويتذكر حالته، ويحوّل للموظف عند الشكوى أو ما لا يعرفه.</label></p>
+                <p>يسكت المساعد إذا كتب موظف في نفس الطلب خلال آخر <input name="quiet_min" type="number" min="1" max="240" value="<?php echo (int) $oai['quiet_min']; ?>" class="small-text"> دقيقة.</p>
+                <?php submit_button('حفظ', 'secondary', 'submit', false); ?>
+            </form>
+            <?php endif; ?>
             <h2>٢) مزودو الذكاء الاصطناعي المجانيون</h2>
             <p>يجرّب النظام المزودين بالترتيب، وإذا انتهى الحد المجاني لأحدهم ينتقل للتالي تلقائيًا. لا يوجد مزود مجاني بلا أي حد؛ الجمع بين أكثر من مزود هو ما يعطي سعة أكبر. أسماء النماذج المجانية تتغير، فتأكد منها من لوحة كل مزود.</p>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" autocomplete="off">

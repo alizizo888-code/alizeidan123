@@ -36,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'push', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'push', 'webpush', 'relay', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -143,7 +143,7 @@ final class Mutqan_Rest {
             case 'insert': case 'insertShared': {
                 $doc = Mutqan_Store::insert($coll, $in['data'] ?? [], $in['id'] ?? null, $opts, $p, $private);
                 if ($coll === 'orders' && !$private) { self::after_order_created($doc); if (self::alert_new_order($doc)) { $doc['waSent'] = true; } }
-                if ($coll === 'order_msgs' && !$private) { self::after_order_msg($doc); }
+                if ($coll === 'order_msgs' && !$private) { self::after_order_msg($doc); if (class_exists('Mutqan_Order_AI')) { Mutqan_Order_AI::on_message($doc); } }
                 if ($coll === 'tech_applications' && !$private) { self::alert_tech_application($doc); }
                 if (in_array($coll, ['handoffs', 'warranty_claims', 'calls'], true) && !$private) { self::alert_customer_action($coll, $doc); }
                 return $doc;
@@ -239,7 +239,7 @@ final class Mutqan_Rest {
 
 
     /** A message / request inside an order: delivered to the other side at once (push + the admin alert center), server-side so it arrives even if the sender closes the app. */
-    private static function after_order_msg($m) {
+    public static function after_order_msg($m) {
         $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
         $ord = Mutqan_Store::get_raw('orders', (string) $m['orderId']) ?: [];
         $short = '#' . substr((string) $m['orderId'], -5);
@@ -429,6 +429,15 @@ final class Mutqan_Rest {
     }
 
     /** Hotline link code + Telegram (see Mutqan_Link / Mutqan_Telegram). */
+    /** Background notifications: the VAPID key, and each device's push subscription (see Mutqan_WebPush). */
+    public static function h_webpush($req, $p) {
+        if (!class_exists('Mutqan_WebPush')) { throw new Mutqan_Error('push_unavailable', 'غير متاح.', 503); }
+        return Mutqan_WebPush::handle(self::body($req), $p);
+    }
+
+    /** Hotline voice through the site when the phones cannot reach each other (see Mutqan_Relay). */
+    public static function h_relay($req, $p) { return Mutqan_Relay::handle(self::body($req), $p); }
+
     public static function h_link($req, $p) {
         return Mutqan_Link::handle(self::body($req), $p);
     }
@@ -511,7 +520,9 @@ final class Mutqan_Rest {
             $raw = $in['since'] ?? 0;
             if (is_numeric($raw) && $raw > 100000000000) { $raw = (int) ($raw / 1000); }   // browsers send milliseconds
             $since = Mutqan_Store::to_db_time($raw) ?: gmdate('Y-m-d H:i:s', time() - 3600);
-            $items = Mutqan_Store::select('_push', [], ['limit' => 100, 'order' => 'createdAt'], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'], false);
+            // Only what is newer than this device already has. Reading the OLDEST 100 rows of the week and filtering
+            // afterwards meant that once a busy week passed 100 alerts, no new alert reached any phone: no banner, no sound.
+            $items = Mutqan_Store::select('_push', ['createdAt' => ['gte' => $since]], ['limit' => 200, 'order' => 'createdAt'], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'], false);
             $out = [];
             foreach ($items as $m) {
                 if (Mutqan_Store::to_db_time($m['createdAt']) < $since) { continue; }   // '<' not '<=': the client de-duplicates by id
@@ -772,7 +783,12 @@ final class Mutqan_Rest {
         // It is the APP folder, not its assets/ folder: the build names its files «assets/X.js», so
         // pointing at assets/ asked for «assets/assets/X.js» — every on-demand screen 404'd its
         // preloads, and the app reloaded itself (lost settings, the bell, the sign-in, the boot screen).
-        $assets = preg_replace('#assets/$#', '', trailingslashit(self::app_assets_url()));
+        // Same-host paths, never absolute URLs: the build tags carry crossorigin, so loading them from
+        // home_url()'s host while the visitor is on another name of the site (www.oxygen11.com vs
+        // oxygen11.com) is a cross-origin request with no CORS headers. The browser blocks it and the
+        // app never starts: www sat on the opening screen forever.
+        $assets_path = (string) wp_parse_url(self::app_assets_url(), PHP_URL_PATH);
+        $assets = preg_replace('#assets/$#', '', trailingslashit($assets_path));
         $inject = '<script>window.__MQ_ASSETS__=' . wp_json_encode($assets, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES)
             . ';window.__MUTQAN__=' . $cfg . ';</script>';
         if ($is_root) { $inject .= '<link rel="canonical" href="' . esc_url(home_url('/')) . '">'; }
@@ -782,7 +798,7 @@ final class Mutqan_Rest {
         // (It used to load them from /assets/ at the site root, and on a site where that copy was
         // missing the opening screen was all a visitor ever saw.) The folder name is written into
         // the build, so point the links at wherever the plugin actually sits.
-        $html = preg_replace('#(src|href)="[^"]*/app/assets/#', '${1}="' . esc_attr(self::app_assets_url()), $html);
+        $html = preg_replace('#(src|href)="[^"]*/app/assets/#', '${1}="' . esc_attr($assets_path), $html);
         $app_path = (string) wp_parse_url(home_url('/app/'), PHP_URL_PATH);
         $html = str_replace(['href="./manifest.webmanifest"', 'href="./icon.svg"'], ['href="' . esc_attr($app_path) . 'manifest.webmanifest"', 'href="' . esc_attr($app_path) . 'apple-touch-icon.png"'], $html);
         if ($is_root && class_exists('Oxygen_Home_Page')) {
@@ -791,7 +807,47 @@ final class Mutqan_Rest {
         if ($is_ops) { $html = str_replace($app_path . 'manifest.webmanifest', $app_path . 'ops.webmanifest', $html); }
         if ($nb) { $html = self::brand_html($html, $nb); }
         $html = preg_replace('/<head>/i', '<head>' . $inject, $html, 1);
+        $html = preg_replace('#</head>#i', self::boot_guard() . '</head>', $html, 1);
         echo $html;
         exit;
+    }
+
+    /**
+     * Never leave a visitor stuck on the opening screen, and never show them anything but the app.
+     *
+     * Only the app removes #boot-splash. The shell's own watchdog stood down whenever #root had
+     * children, and on the front page #root always carries the crawlable home content, so there it
+     * never fired and a failed load meant an endless opening screen. This guard keeps the opening
+     * screen up while the app loads (a slow phone just waits a little longer), and if the app's main
+     * script fails to load, or the app has not drawn after 20s, it clears any stale service worker
+     * and cache and reloads the page once, quietly, so the visitor lands on the normal app. Only if
+     * that retry also fails does the repair button appear. The app cancels the timer itself once it
+     * has drawn (clearTimeout(window.__mqWatch)). ES5 only.
+     */
+    private static function boot_guard() {
+        $js = <<<'JS'
+(function(){
+var W=window,D=document,K="mq_boot_retry";
+try{clearTimeout(W.__mqWatch)}catch(e){}
+function booted(){var s=D.getElementById("boot-splash");return !s||(" "+s.className+" ").indexOf(" hide ")>-1}
+function reload(){var p=[];try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){p.push(navigator.serviceWorker.getRegistrations().then(function(g){for(var i=0;i<g.length;i++)g[i].unregister()}))}}catch(e){}try{if(W.caches&&caches.keys){p.push(caches.keys().then(function(k){for(var j=0;j<k.length;j++)caches["delete"](k[j])}))}}catch(e){}var done=0,go=function(){if(done)return;done=1;location.reload()};try{Promise.all(p).then(go,go)}catch(e){go()}setTimeout(go,1500)}
+function retried(){try{var t=+sessionStorage.getItem(K)||0;return Date.now()-t<120000}catch(e){return true}}
+function fail(){
+ if(W.__mqFailed||booted())return;
+ if(D.readyState==="loading"){D.addEventListener("DOMContentLoaded",fail);return}
+ if(!retried()){W.__mqFailed=1;try{sessionStorage.setItem(K,String(Date.now()))}catch(e){}reload();return}
+ W.__mqFailed=1;
+ var d=D.createElement("div");d.dir="rtl";
+ d.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:24px;background:#071a33;color:#fff;font-family:Tahoma,sans-serif;text-align:center";
+ d.innerHTML='<div style="max-width:320px"><h1 style="font-size:19px;margin:8px 0">التطبيق يحتاج إعادة تشغيل سريعة</h1><p style="font-size:13px;opacity:.8;line-height:1.7">اضغط الزر وسيعود كل شيء للعمل — بياناتك محفوظة.</p><button type="button" style="margin-top:14px;width:100%;padding:13px;border:0;border-radius:14px;background:#38bdf8;color:#04121f;font-weight:900;font-size:14px">إصلاح وإعادة التشغيل</button></div>';
+ d.getElementsByTagName("button")[0].onclick=function(){try{sessionStorage.removeItem(K)}catch(e){}reload()};D.body.appendChild(d);
+ var w=setInterval(function(){if(booted()){clearInterval(w);if(d.parentNode)d.parentNode.removeChild(d)}},500);
+}
+W.__mqFail=fail;
+W.addEventListener("error",function(e){var t=e&&e.target;if(t&&t.tagName==="SCRIPT"&&/\/assets\/index-[^\/]*\.js/.test(t.src||""))fail()},true);
+W.__mqWatch=setTimeout(fail,20000);
+})();
+JS;
+        return '<script>' . $js . '</script>';
     }
 }
