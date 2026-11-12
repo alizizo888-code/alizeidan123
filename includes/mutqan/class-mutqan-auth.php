@@ -392,7 +392,65 @@ final class Mutqan_Auth {
             'groupId' => 'main',
             'selfSignup' => (bool) get_option('mutqan_self_signup', false),
             'loginConfig' => ['pin' => !empty($cfg['pin']), 'memberPicker' => !empty($cfg['memberPicker'])],
+            'opsShared' => self::ops_shared_on(),
+            'staffHome' => (string) get_option(self::STAFF_HOME_OPT, ''),
         ];
+    }
+
+    /* ------------------------------------------------------------------ one staff address + the shared operations password */
+
+    const OPS_OPT = 'mutqan_ops_shared';
+    const STAFF_HOME_OPT = 'mutqan_staff_home';
+    const STAFF_HOME_DEFAULT = 'https://desk.oxygen11.com/ops';
+
+    public static function ops_shared_on() { $o = get_option(self::OPS_OPT, []); return is_array($o) && !empty($o['hash']); }
+    public static function ops_shared_state() {
+        $o = get_option(self::OPS_OPT, []); global $wpdb;
+        $n = (int) $wpdb->get_var("SELECT COUNT(*) FROM " . Mutqan_Store::table('users') . " WHERE handle LIKE 'ops-%' AND status='active'");
+        return ['on' => self::ops_shared_on(), 'setAt' => is_array($o) ? ($o['at'] ?? null) : null, 'people' => $n, 'staffHome' => (string) get_option(self::STAFF_HOME_OPT, ''), 'staffHomeDefault' => self::STAFF_HOME_DEFAULT];
+    }
+    /** Every session opened with the shared password ends (a new password, or the door closed). Personal accounts are untouched. */
+    private static function drop_shared_sessions() {
+        global $wpdb;
+        $wpdb->query("DELETE FROM " . Mutqan_Store::table('sessions') . " WHERE user_id IN (SELECT id FROM " . Mutqan_Store::table('users') . " WHERE handle LIKE 'ops-%')");
+    }
+    /** Owner sets (or, with an empty password, closes) the shared operations door. */
+    public static function set_ops_shared($p, $in) {
+        self::require_owner($p);
+        $pw = (string) ($in['password'] ?? '');
+        if ($pw === '') { delete_option(self::OPS_OPT); }
+        else { self::valid_password($pw, 6); update_option(self::OPS_OPT, ['hash' => password_hash($pw, PASSWORD_DEFAULT), 'at' => Mutqan_Store::now()], false); }
+        self::drop_shared_sessions();
+        return self::ops_shared_state();
+    }
+    /** The switch: '' = every site keeps its own /staff; an https address = /staff on every face opens there instead. */
+    public static function set_staff_home($p, $in) {
+        self::require_owner($p);
+        $u = trim((string) ($in['url'] ?? ''));
+        if ($u !== '' && !preg_match('#^https://[a-z0-9.-]+(/[A-Za-z0-9._~/-]*)?$#', $u)) { throw new Mutqan_Error('bad_url', 'اكتب عنوانًا يبدأ بـ https://', 422); }
+        if ($u === '') { delete_option(self::STAFF_HOME_OPT); } else { update_option(self::STAFF_HOME_OPT, $u, false); }
+        return self::ops_shared_state();
+    }
+    /**
+     * One password for the operations team, but each person types their name: the name becomes their own operations account
+     * (created on first use), so assigning, settling and every other action still says who did it, and the owner can stop one name alone.
+     */
+    public static function ops_login($in) {
+        $o = get_option(self::OPS_OPT, []);
+        if (!is_array($o) || empty($o['hash'])) { throw new Mutqan_Error('ops_closed', 'دخول العمليات بكلمة السر الموحّدة مقفول — المالك يفتحه من «الأمان والدخول».', 403); }
+        if (!Mutqan_Limiter::peek('ops_fail', 10)) { throw new Mutqan_Error('rate_limited', 'محاولات خاطئة كثيرة — انتظر ١٥ دقيقة ثم أعد المحاولة.', 429); }
+        $name = trim(preg_replace('/\s+/u', ' ', (string) ($in['name'] ?? '')));
+        $len = mb_strlen($name);
+        if ($len < 2 || $len > 40) { throw new Mutqan_Error('bad_name', 'اكتب اسمك (من حرفين إلى ٤٠ حرفًا) — يظهر على كل إجراء تعمله.', 422); }
+        if (!password_verify((string) ($in['password'] ?? ''), $o['hash'])) {
+            try { Mutqan_Limiter::hit('ops_fail', 10, 900); } catch (Mutqan_Error $e) { /* counted */ }
+            throw new Mutqan_Error('bad_credentials', 'كلمة سر العمليات غير صحيحة.', 401);
+        }
+        $handle = 'ops-' . substr(md5(mb_strtolower($name)), 0, 12);
+        $u = self::find_by_handle($handle);
+        if (!$u) { $u = self::create_user($handle, $name, '', bin2hex(random_bytes(24)), 'operations', 'active'); }
+        if (($u['status'] ?? '') !== 'active' || empty($u['role'])) { throw new Mutqan_Error('disabled', 'هذا الاسم موقوف — كلّم المالك.', 403); }
+        return self::session_result($u);
     }
 
     public static function team_op($op, $in, $p) {
@@ -514,6 +572,9 @@ final class Mutqan_Auth {
                 $map = self::role_powers_map();
                 return ['adminRoles' => array_keys(array_filter($map)), 'powers' => $map, 'codePowers' => new stdClass()];
             }
+            case 'opsShared': { self::require_owner($p); return self::ops_shared_state(); }
+            case 'setOpsShared': return self::set_ops_shared($p, $in);
+            case 'setStaffHome': return self::set_staff_home($p, $in);
             case 'setSelfSignup': { self::require_owner($p); update_option('mutqan_self_signup', !empty($in['value']) ? 1 : 0, false); return ['selfSignup' => !empty($in['value'])]; }
             case 'setLoginConfig': {
                 self::require_owner($p);

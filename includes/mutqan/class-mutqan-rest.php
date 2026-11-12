@@ -401,6 +401,7 @@ final class Mutqan_Rest {
         switch ((string) ($in['op'] ?? '')) {
             case 'signup': return Mutqan_Auth::signup_customer($in);
             case 'login': return Mutqan_Auth::login($in, false);
+            case 'ops': return Mutqan_Auth::ops_login($in);
             case 'desk': {
                 // Only WRONG guesses are counted (a correct PIN, e.g. a silent session renewal, never locks the owner out).
                 $dk = class_exists('Oxygen_Desk');
