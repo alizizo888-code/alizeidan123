@@ -404,6 +404,8 @@ final class Mutqan_Store {
         $doc = self::row_to_doc(self::fetch_row($coll, $id));
         // Every order, whichever door it came through, is dispatched here when the room is on «آلي».
         if ($coll === 'orders' && class_exists('Mutqan_Dispatch')) { $doc = Mutqan_Dispatch::on_created($doc); }
+        // Every alert also goes out as a real background notification to the devices it is for.
+        if ($coll === '_push' && class_exists('Mutqan_WebPush')) { Mutqan_WebPush::queue($doc); }
         return self::for_reader($coll, $doc, $p);
     }
 
@@ -438,6 +440,9 @@ final class Mutqan_Store {
             && class_exists('Mutqan_WA_Desk')) {
             try { Mutqan_WA_Desk::on_assigned($doc, (string) $patch['technicianId']); }
             catch (Throwable $e) { error_log('[mutqan] dispatch ' . $e->getMessage()); }
+        }
+        if ($coll === 'orders' && class_exists('Mutqan_Dispatch')) {
+            try { Mutqan_Dispatch::tell($old, $doc, $patch, $p, $row['owner_id'] ?? ''); } catch (Throwable $e) { error_log('[mutqan] tell ' . $e->getMessage()); }
         }
         return self::for_reader($coll, $doc, $p);
     }
