@@ -1,13 +1,51 @@
-# Private desk apps: never indexed, never cached by shared caches. (A child .htaccess replaces the WordPress rewrite rules of the parent folder.)
+# The control domain: four systems in one folder, and nothing of the business on show.
+#
+#   /        the four doors
+#   /m       management      (built app, talks to the hub on oxygen11.com)
+#   /ops     operations      (built app, same hub)
+#   /t/      technician      (PWA, talks to this folder's own API)
+#   /sites   the 22 faces    (PHP: pairing and bulk settings)
+#   /api/    this folder's API
+#
+# Both halves used to publish here and each deploy deleted the other's files, which is how the
+# management and operations apps disappeared from the server entirely. One branch now carries all
+# of it, so what is here is what was meant to be here.
+#
+# THIS FILE'S SOURCE IS mutqan-app/public-desk/.htaccess — the desk build copies it here. Editing
+# only the copy on this branch is how it was lost once: the next build replaced it with a stub that
+# had no API routing and no blocks on src/ seed/ docs/, and the sites panel went offline.
+Options -Indexes
+<IfModule mod_rewrite.c>
 RewriteEngine On
-RewriteRule ^$ desk.html [L]
+# Route /api/<x> to the PHP router (real files such as api/index.php are left alone)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^api/(.*)$ api/index.php?r=$1 [QSA,L]
+
+# One domain, four systems, one short address each. The management and operations apps are built
+# files with awkward names; these are the addresses people actually type and install from.
+RewriteRule ^(m|idara|edara)/?$ desk.html [L]
+RewriteRule ^(ops|amaliyat)/?$ desk-ops.html [L]
+RewriteRule ^(sites|mawaqi)/?$ sites.html [L]
+</IfModule>
+
+# Private folders and files are never served
+RedirectMatch 403 ^/(src|sql|seed|tests|bridge|docs|\.github|\.git)(/|$)
+RedirectMatch 403 \.(env|md|lock|log|bak|old)$
+
+# The built apps carry their version in the filename; their shells must never be held by a cache,
+# or a phone keeps opening an app that no longer matches the server.
 <IfModule mod_headers.c>
 Header set X-Robots-Tag "noindex, nofollow, noarchive"
-Header set Referrer-Policy "no-referrer"
 <FilesMatch "\.(html|webmanifest)$">
 Header set Cache-Control "no-cache"
 </FilesMatch>
+# The panel's own script and style keep one name across releases, so a browser left to guess
+# keeps the old ones — an update reached the server and never reached the owner's screen.
+<FilesMatch "^(app\.js|app\.css|sw\.js|sw-desk\.js)$">
+Header set Cache-Control "no-cache"
+</FilesMatch>
 </IfModule>
+# The two Android builds download rather than open.
 AddType application/vnd.android.package-archive .apk
 <IfModule mod_headers.c>
 <FilesMatch "\.apk$">
@@ -18,4 +56,22 @@ Header set Cache-Control "no-cache"
 <IfModule mod_deflate.c>
 SetEnvIfNoCase Request_URI \.apk$ no-gzip
 </IfModule>
-DirectoryIndex desk.html
+
+<IfModule mod_headers.c>
+Header set X-Frame-Options "DENY"
+Header set X-Content-Type-Options "nosniff"
+Header set Referrer-Policy "no-referrer"
+# The technician app asks for the phone's position so the live map and nearest-first mean something.
+# Allowed for this origin only; the camera and microphone stay off for everyone.
+Header set Permissions-Policy "camera=(), microphone=(), geolocation=(self)"
+Header set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+</IfModule>
+
+# The two built apps (and the front door) are a different kind of page: they talk to the hub on
+# oxygen11.com and carry their boot script inline, which the strict policy above would block. So
+# the strict policy stays for everything else, and only these three pages get the wider one.
+<IfModule mod_headers.c>
+<FilesMatch "^(desk|desk-ops|index)\.html$">
+Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://oxygen11.com https://*.oxygen11.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://oxygen11.com https://*.oxygen11.com; media-src 'self' blob: data:; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+</FilesMatch>
+</IfModule>
