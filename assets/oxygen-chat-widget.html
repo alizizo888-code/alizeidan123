@@ -53,6 +53,15 @@
   function greet(){add('bot','أهلًا بك في أكسجين للصيانة والتبريد 👋\nتبي غسيل مكيف ولا صيانة؟ قل لي وش تحتاج وأرتب لك الطلب.');
     ['غسيل مكيف سبليت','صيانة مكيف','تركيب أو نقل مكيف'].forEach(function(t){var b=document.createElement('button');b.type='button';b.textContent=t;b.onclick=function(){ask(t);};chips.appendChild(b);});}
 
+  // The order goes to the hub from the customer's own browser — the same way the app files one — so it
+  // reaches the operations room, the technician and tracking, and is limited per customer, not per site.
+  function anonId(){var k='mutqan_anon',v='';try{v=localStorage.getItem(k)||'';if(!v){v=Date.now().toString(36)+Math.random().toString(36).slice(2,12);localStorage.setItem(k,v);}}catch(e){v=Math.random().toString(36).slice(2,14)+'x0';}return v;}
+  function toHub(o,tries){
+    if(!C.hub)return;tries=tries||0;
+    fetch(C.hub+'/db',{method:'POST',headers:{'Content-Type':'application/json','X-Mutqan-Anon':anonId()},body:JSON.stringify({op:'insertShared',coll:'orders',data:o,opts:{}})})
+      .then(function(r){if(!r.ok&&r.status>=500&&tries<2)setTimeout(function(){toHub(o,tries+1);},2000*(tries+1));})
+      .catch(function(){if(tries<2)setTimeout(function(){toHub(o,tries+1);},2000*(tries+1));});
+  }
   function ask(text){
     text=(text||'').trim();if(!text||busy||finished)return;
     chips.style.display='none';
@@ -65,7 +74,7 @@
       .then(function(d){
         typing.textContent=d.reply||'حصل خلل بسيط، جرّب مرة ثانية.';
         if(d.reply){history.push({role:'assistant',content:d.reply});store();}
-        if(d.done){finished=true;try{sessionStorage.removeItem(KEY);}catch(e){}add('note','تم تسجيل الطلب. تقدر تغلق المحادثة.');}
+        if(d.done){finished=true;try{sessionStorage.removeItem(KEY);}catch(e){}add('note','تم تسجيل الطلب. تقدر تغلق المحادثة.');if(d.hubOrder)toHub(d.hubOrder);}
       })
       .catch(function(){typing.textContent='تعذر الاتصال. تأكد من الإنترنت وجرّب مرة ثانية.';})
       .then(function(){setBusy(false);if(!finished)input.focus();msgs.scrollTop=msgs.scrollHeight;});

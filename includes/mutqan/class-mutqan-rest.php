@@ -278,6 +278,17 @@ final class Mutqan_Rest {
         }
     }
 
+    /**
+     * The service's name as the app shows it. The alert operations hears used to read «طلب جديد — ac»:
+     * the internal code, the one thing on the card nobody in the room should have to translate.
+     * Same list as SPECIALTIES in constants.js.
+     */
+    const SPEC_LABELS = ['ac' => 'صيانة وتكييف', 'electric' => 'كهرباء', 'plumbing' => 'سباكة', 'locks' => 'أقفال ذكية', 'appliances' => 'أجهزة منزلية',
+        'satellite' => 'ساتلايت ودش', 'paint' => 'دهان وديكور', 'tiling' => 'تبليط وترميم', 'cameras' => 'كاميرات ومراقبة', 'fridge' => 'التبريد',
+        'cleaning' => 'تنظيف وتعقيم', 'pest' => 'مكافحة الحشرات', 'tanks' => 'خزانات المياه', 'moving' => 'نقل الأثاث', 'solar' => 'طاقة شمسية',
+        'corporate' => 'خدمات الشركات', 'general' => 'الصيانة العامة', 'contracting' => 'مقاولات عامة'];
+    public static function spec_label($id) { $id = (string) $id; return self::SPEC_LABELS[$id] ?? $id; }
+
     /** Top priority: every new order alerts the whole admin team immediately, server-side (cannot be skipped by the client). */
     private static function alert_new_order($doc) {
         $urgent = (($doc['priority'] ?? '') === 'urgent');
@@ -288,7 +299,7 @@ final class Mutqan_Rest {
         $high = (($doc['escalation']['reason'] ?? '') === 'high_value');
         $lines = array_filter([
             'الطلب: #' . substr((string) $doc['id'], -5) . ' · المصدر: ' . $src,
-            !empty($doc['specialtyId']) ? 'الخدمة: ' . $doc['specialtyId'] : '',
+            !empty($doc['specialtyId']) ? 'الخدمة: ' . self::spec_label($doc['specialtyId']) : '',
             $price ? 'السعر: ' . $price . ' ر.س' : '',
             self::kind_label($doc) ? 'نوع الطلب: ' . self::kind_label($doc) : '',
             self::units_text($doc) ? ((($doc['specialtyId'] ?? '') === 'ac' ? 'المكيفات: ' : 'العدد: ') . self::units_text($doc)) : '',
@@ -309,7 +320,7 @@ final class Mutqan_Rest {
             $seal = Mutqan_Shop::seal_for_order($doc, $price);
             if ($seal) { $lines[] = 'توثيق: ' . $seal; }
         } catch (Throwable $e) { error_log('[mutqan] seal_for_order: ' . $e->getMessage()); }
-        self::admin_alert(($high ? '⭐ ' : '') . ($urgent ? '🚨 طلب عاجل جديد' : ($ops ? '📋 طلب بانتظار التوزيع' : '🆕 طلب جديد')) . (!empty($doc['specialtyId']) ? ' — ' . $doc['specialtyId'] : ''), implode("\n", $lines) ?: 'طلب خدمة جديد بانتظار المعالجة', '#/staff/order/' . $doc['id'], 'new_order', 'high', $doc['id']);
+        self::admin_alert(($high ? '⭐ ' : '') . ($urgent ? '🚨 طلب عاجل جديد' : ($ops ? '📋 طلب بانتظار التوزيع' : '🆕 طلب جديد')) . (!empty($doc['specialtyId']) ? ' — ' . self::spec_label($doc['specialtyId']) : ''), implode("\n", $lines) ?: 'طلب خدمة جديد بانتظار المعالجة', '#/staff/order/' . $doc['id'], 'new_order', 'high', $doc['id']);
         // The same order, sent AUTOMATICALLY on WhatsApp by the business number to the customer (his copy + the conversation opens in the WhatsApp inbox). No confirmation step for anyone.
         $sent = false;
         if (!$ops && !empty($doc['clientPhone'])) {
@@ -346,14 +357,14 @@ final class Mutqan_Rest {
     }
 
     private static function alert_tech_application($doc) {
-        self::admin_alert('👷 طلب انضمام فني جديد', trim((string) ($doc['name'] ?? $doc['fullName'] ?? '') . ' ' . (string) ($doc['specialty'] ?? $doc['specialtyId'] ?? '')) ?: 'طلب جديد بانتظار المراجعة', '#/staff/tech-requests', 'tech_application', 'high');
+        self::admin_alert('👷 طلب انضمام فني جديد', trim((string) ($doc['name'] ?? $doc['fullName'] ?? '') . ' ' . (string) ($doc['specialty'] ?? self::spec_label($doc['specialtyId'] ?? ''))) ?: 'طلب جديد بانتظار المراجعة', '#/staff/tech-requests', 'tech_application', 'high');
     }
 
     /** New order -> WhatsApp message to the owner (if Cloud API is configured in "الشات بوت والطلبات"). */
     private static function after_order_created($doc) {
         if (!class_exists('Oxygen_Orders_Chat') || !method_exists('Oxygen_Orders_Chat', 'whatsapp_owner')) { return; }
         $lines = ['طلب جديد من تطبيق متقن #' . substr((string) $doc['id'], -6)];
-        if (!empty($doc['specialtyId'])) { $lines[] = 'الخدمة: ' . $doc['specialtyId']; }
+        if (!empty($doc['specialtyId'])) { $lines[] = 'الخدمة: ' . self::spec_label($doc['specialtyId']); }
         if (!empty($doc['description'])) { $lines[] = 'التفاصيل: ' . mb_substr((string) $doc['description'], 0, 300); }
         $price = $doc['agreedPrice'] ?? ($doc['priceQuote']['total'] ?? null);
         if ($price) { $lines[] = 'السعر: ' . $price; }
