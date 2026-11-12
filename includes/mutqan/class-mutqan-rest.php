@@ -791,7 +791,56 @@ final class Mutqan_Rest {
         if ($is_ops) { $html = str_replace($app_path . 'manifest.webmanifest', $app_path . 'ops.webmanifest', $html); }
         if ($nb) { $html = self::brand_html($html, $nb); }
         $html = preg_replace('/<head>/i', '<head>' . $inject, $html, 1);
+        $html = preg_replace('#</head>#i', self::boot_guard() . '</head>', $html, 1);
         echo $html;
         exit;
+    }
+
+    /**
+     * Never leave a visitor on the opening screen.
+     *
+     * Only the app removes #boot-splash, and the shell's own watchdog stood down whenever #root had
+     * children. On the front page #root always has children (the crawlable home content above), so
+     * there the watchdog never fired: whenever the app's script was slow, blocked, failed to load or
+     * threw before mounting (in-app browsers, older phones, a weak connection, a stale copy) the
+     * domain sat on the loading screen forever. This replaces that timer with one that only the app
+     * mounting cancels (the app already calls clearTimeout(window.__mqWatch) once it has drawn), and
+     * also acts at once when the main script itself fails to load or the browser has no module
+     * support. If the page carries its own content, the splash simply steps aside so the visitor can
+     * read it and use its links, with a slim bar to retry the app; otherwise a repair screen appears.
+     * ES5 only, so it runs in the very browsers it is there for.
+     */
+    private static function boot_guard() {
+        $js = <<<'JS'
+(function(){
+var W=window,D=document;
+try{clearTimeout(W.__mqWatch)}catch(e){}
+function repair(){(function(){var p=[];try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){p.push(navigator.serviceWorker.getRegistrations().then(function(g){for(var i=0;i<g.length;i++)g[i].unregister()}))}}catch(e){}try{if(W.caches&&caches.keys){p.push(caches.keys().then(function(k){for(var j=0;j<k.length;j++)caches["delete"](k[j])}))}}catch(e){}var go=function(){var u=location.pathname+location.hash;location.replace(u+(u.indexOf("?")<0?"?":"&")+"r="+Date.now())};try{Promise.all(p).then(go,go)}catch(e){go()}setTimeout(go,1500)})()}
+function fail(){
+ if(W.__mqFailed)return;
+ if(D.readyState==="loading"){D.addEventListener("DOMContentLoaded",fail);return}
+ var s=D.getElementById("boot-splash");
+ if(!s||(" "+s.className+" ").indexOf(" hide ")>-1)return;
+ W.__mqFailed=1;try{clearTimeout(W.__mqWatch)}catch(e){}
+ var r=D.getElementById("root");
+ if(s.parentNode)s.parentNode.removeChild(s);
+ if(r&&r.getElementsByTagName("main").length){
+  r.style.overflowY="auto";r.style.webkitOverflowScrolling="touch";D.body.style.overflow="auto";
+  var b=D.createElement("div");b.dir="rtl";
+  b.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:100000;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:10px 14px;background:#071a33;color:#fff;font:13px Tahoma,sans-serif";
+  b.innerHTML='<span>تأخّر تحميل التطبيق</span><button type="button" style="border:0;border-radius:999px;padding:8px 16px;background:#38bdf8;color:#04121f;font-weight:800;font-size:13px">إعادة المحاولة</button>';
+  b.getElementsByTagName("button")[0].onclick=repair;D.body.appendChild(b);return;
+ }
+ var d=D.createElement("div");d.dir="rtl";
+ d.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:24px;background:#071a33;color:#fff;font-family:Tahoma,sans-serif;text-align:center";
+ d.innerHTML='<div style="max-width:320px"><h1 style="font-size:19px;margin:8px 0">التطبيق يحتاج إعادة تشغيل سريعة</h1><p style="font-size:13px;opacity:.8;line-height:1.7">اضغط الزر وسيعود كل شيء للعمل — بياناتك محفوظة.</p><button type="button" style="margin-top:14px;width:100%;padding:13px;border:0;border-radius:14px;background:#38bdf8;color:#04121f;font-weight:900;font-size:14px">إصلاح وإعادة التشغيل</button></div>';
+ d.getElementsByTagName("button")[0].onclick=repair;D.body.appendChild(d);
+}
+W.__mqFail=fail;
+W.addEventListener("error",function(e){var t=e&&e.target;if(t&&t.tagName==="SCRIPT"&&/\/assets\/index-[^\/]*\.js/.test(t.src||""))fail()},true);
+W.__mqWatch=setTimeout(fail,8000);
+})();
+JS;
+        return '<script>' . $js . '</script><script nomodule>window.__mqFail&&window.__mqFail()</script>';
     }
 }
