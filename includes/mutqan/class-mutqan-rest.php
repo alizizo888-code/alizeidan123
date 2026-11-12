@@ -511,7 +511,9 @@ final class Mutqan_Rest {
             $raw = $in['since'] ?? 0;
             if (is_numeric($raw) && $raw > 100000000000) { $raw = (int) ($raw / 1000); }   // browsers send milliseconds
             $since = Mutqan_Store::to_db_time($raw) ?: gmdate('Y-m-d H:i:s', time() - 3600);
-            $items = Mutqan_Store::select('_push', [], ['limit' => 100, 'order' => 'createdAt'], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'], false);
+            // Only what is newer than this device already has. Reading the OLDEST 100 rows of the week and filtering
+            // afterwards meant that once a busy week passed 100 alerts, no new alert reached any phone: no banner, no sound.
+            $items = Mutqan_Store::select('_push', ['createdAt' => ['gte' => $since]], ['limit' => 200, 'order' => 'createdAt'], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'], false);
             $out = [];
             foreach ($items as $m) {
                 if (Mutqan_Store::to_db_time($m['createdAt']) < $since) { continue; }   // '<' not '<=': the client de-duplicates by id
