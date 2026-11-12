@@ -197,10 +197,11 @@ final class Mutqan_Rest {
         $days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
         $months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
         $diff = (int) round((strtotime($dt->format('Y-m-d')) - strtotime($now->format('Y-m-d'))) / 86400);
-        $word = [0 => 'اليوم', 1 => 'غدًا', 2 => 'بعد غد', -1 => 'أمس'][$diff] ?? '';
         $h = (int) $dt->format('G');
         $t = (($h % 12) ?: 12) . ':' . $dt->format('i') . ' ' . ($h < 12 ? 'ص' : 'م');
-        return implode(' — ', array_filter([$word, $days[(int) $dt->format('w')] . ' ' . $dt->format('j') . ' ' . $months[(int) $dt->format('n') - 1] . ' ' . $dt->format('Y'), $t]));
+        // Same day: «اليوم». Any other day: the weekday by name with its date next to it (year only when it is not this year).
+        $day = $diff === 0 ? 'اليوم' : $days[(int) $dt->format('w')] . ' ' . $dt->format('j') . ' ' . $months[(int) $dt->format('n') - 1] . ($dt->format('Y') !== $now->format('Y') ? ' ' . $dt->format('Y') : '');
+        return $day . ' — ' . $t;
     }
     private static function when_text($d) {
         if (!empty($d['appointmentAt']) && strtotime((string) $d['appointmentAt'])) { return self::full_when((string) $d['appointmentAt']); }
@@ -227,7 +228,6 @@ final class Mutqan_Rest {
             $units ? ((($d['specialtyId'] ?? '') === 'ac' ? '❄️ المكيفات: ' : '🔢 العدد: ') . $units) : '',
             self::note_text($d) ? '📝 التفاصيل: ' . self::note_text($d) : '',
             '📅 الموعد: ' . self::when_text($d),
-            '🕐 وقت إرسال الطلب: ' . self::full_when(gmdate('c')),
             $price ? '💰 السعر المتفق: ' . $price . ' ر.س' : '',
             !empty($d['address']) ? '🏠 العنوان: ' . mb_substr((string) $d['address'], 0, 160) : '',
             (isset($d['lat'], $d['lng']) && is_numeric($d['lat']) && is_numeric($d['lng'])) ? '📍 الموقع: https://maps.google.com/?q=' . $d['lat'] . ',' . $d['lng'] : '',
@@ -325,8 +325,9 @@ final class Mutqan_Rest {
         $sent = false;
         if (!$ops && !empty($doc['clientPhone'])) {
             try {
-                $sent = Mutqan_WA::auto_send($doc['clientPhone'], self::order_wa_text($doc, $price, $seal), 'order');
-                if ($sent) { Mutqan_Store::update('orders', $doc['id'], ['waSent' => true, 'waSentAt' => gmdate('c')], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user']); }
+                $how = Mutqan_WA::auto_send($doc['clientPhone'], self::order_wa_text($doc, $price, $seal), 'order');
+                $sent = $how !== false;
+                if ($sent) { Mutqan_Store::update('orders', $doc['id'], $how === 'sent' ? ['waSent' => true, 'waSentAt' => gmdate('c')] : ['waQueued' => true, 'waQueuedAt' => gmdate('c')], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user']); }
             } catch (Throwable $e) { error_log('[mutqan] order wa: ' . $e->getMessage()); }
         }
         return $sent;

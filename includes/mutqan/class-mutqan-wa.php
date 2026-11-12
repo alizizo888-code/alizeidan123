@@ -176,13 +176,19 @@ final class Mutqan_WA {
         if (preg_match('/^5\d{8}$/', $d)) { return '966' . $d; }
         return strlen($d) >= 10 ? $d : '';
     }
-    /** The order message, sent by the business number itself — no tap needed from anyone. Returns true when it left. */
+    /** The order message, sent by the business number itself — no tap needed from anyone. */
+    /** Returns 'sent', 'queued' (a phone gateway will send it when it next connects) or false. The customer is never asked to send anything himself. */
     public static function auto_send($phone, $text, $by = 'order') {
         $to = self::intl($phone);
         if ($to === '') { return false; }
         $acct = self::open_account();
-        if ($acct === '') { return false; }
-        try { self::send($acct, $to, $text, 'auto', $by); return true; }
+        if ($acct === '') {
+            // Phone gateway that has not connected yet: queue it — the phone sends it as soon as it pulls (stale ones expire, see pull()).
+            // Only the order copy waits; a login code or a job card must fail now so its caller falls back.
+            if ($by === 'order' && self::cfg()['url'] === '') { try { self::queue('', $to, $text, 'auto', $by); return 'queued'; } catch (Throwable $e) { return false; } }
+            return false;
+        }
+        try { $r = self::send($acct, $to, $text, 'auto', $by); return !empty($r['queued']) ? 'queued' : 'sent'; }
         catch (Throwable $e) { error_log('[mutqan] wa auto_send: ' . $e->getMessage()); delete_transient('mq_wa_open'); return false; }
     }
 
@@ -224,6 +230,7 @@ final class Mutqan_WA {
      */
     const TAKEN_STUCK = 300;        // a job handed out and never acked is offered again after this
     const MAX_TRIES = 4;
+    const AUTO_MAX_AGE = 6 * 3600;  // an automatic message («تم استلام طلبك…») older than this is dropped, not sent late
 
     /** Same signature as the webhook, checked the same way: the body, with the shared secret. */
     public static function pull_signed($raw, $sig) {
@@ -255,6 +262,7 @@ final class Mutqan_WA {
         $jobs = [];
         foreach (Mutqan_Store::select('wa_outbox', [], ['limit' => 100, 'order' => 'asc'], self::sys()) as $job) {
             if (count($jobs) >= $limit) { break; }
+            if (($job['via'] ?? '') === 'auto' && ($t = strtotime((string) ($job['at'] ?? ''))) && $now - $t > self::AUTO_MAX_AGE) { Mutqan_Store::delete('wa_outbox', (string) $job['id'], self::sys()); continue; }
             $state = (string) ($job['state'] ?? 'pending');
             $taken = (int) ($job['takenAt'] ?? 0);
             if ($state === 'taken' && $now - $taken < self::TAKEN_STUCK) { continue; }
