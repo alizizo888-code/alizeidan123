@@ -769,7 +769,10 @@ final class Mutqan_Rest {
         $cfg = wp_json_encode(['api' => $hub !== '' ? $hub : esc_url_raw(rest_url(self::NS)), 'app' => home_url('/app/'), 'brand' => $nb], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         // Where this plugin's files actually are, for every chunk the app loads later. It has to be
         // set before the first module runs, which is why it goes in with the config.
-        $assets = trailingslashit(self::app_assets_url());
+        // It is the APP folder, not its assets/ folder: the build names its files «assets/X.js», so
+        // pointing at assets/ asked for «assets/assets/X.js» — every on-demand screen 404'd its
+        // preloads, and the app reloaded itself (lost settings, the bell, the sign-in, the boot screen).
+        $assets = preg_replace('#assets/$#', '', trailingslashit(self::app_assets_url()));
         $inject = '<script>window.__MQ_ASSETS__=' . wp_json_encode($assets, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES)
             . ';window.__MUTQAN__=' . $cfg . ';</script>';
         if ($is_root) { $inject .= '<link rel="canonical" href="' . esc_url(home_url('/')) . '">'; }
