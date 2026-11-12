@@ -86,10 +86,13 @@ async function start(id) {
       // The picture travels with the event. On a phone the operations screen is the only place the
       // code can be scanned from — you cannot hold the handset up to itself.
       emit({ type: 'status', accountId: id, status: st.status, label: m.label || id, qr: st.qr || null, pairingCode: st.code || null })
+      if (st.code) console.log('\n=====================================\n  كود الربط: ' + st.code + '\n  واتساب ← الأجهزة المرتبطة ← ربط جهاز ← «الربط برقم الهاتف بدلاً من ذلك» واكتب الكود\n=====================================\n')
+      else if (st.status === 'qr') console.log('QR جاهز — امسحه من الديسك ← صندوق الواتساب ← الأرقام (من موبايل تاني)، أو شغّل بـ PAIR_PHONE عشان كود بدل QR')
     }
     if (u.connection === 'open') {
       st.status = 'open'; st.retry = 0; st.qr = null; st.code = null
       st.phone = jidToPhone(sock.user?.id); st.name = sock.user?.name || ''
+      console.log('✅ الرقم اتوصل: ' + st.phone + ' — سيب Termux شغال في الخلفية')
       meta[id].phone = st.phone; saveMeta()
       emit({ type: 'status', accountId: id, status: 'open', phone: st.phone, name: st.name, label: meta[id].label || id })
     }
@@ -226,7 +229,9 @@ app.listen(PORT, () => console.log('mutqan wa-gateway on :' + PORT))
 // itself and its QR goes up to the operations screen to be scanned from there.
 if (!Object.keys(meta).length && (process.env.AUTO_SESSION ?? '1') !== '0') {
   const id = cleanId(process.env.SESSION_ID || 'main')
-  meta[id] = { label: process.env.SESSION_LABEL || 'رقم الشركة', mode: 'qr', phone: '' }
+  // PAIR_PHONE=0536554731 → a pairing code printed right here, typed into WhatsApp on the SAME phone (a QR cannot be scanned by the phone showing it).
+  const pair = digits(process.env.PAIR_PHONE || '').replace(/^0(5\d{8})$/, '966$1').replace(/^(5\d{8})$/, '966$1')
+  meta[id] = { label: process.env.SESSION_LABEL || 'واتساب الشغل', mode: pair ? 'code' : 'qr', phone: pair }
   saveMeta()
   console.log('no number linked yet: opening "' + id + '" — scan its QR from the operations screen')
 }
