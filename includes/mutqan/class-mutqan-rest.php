@@ -39,7 +39,7 @@ final class Mutqan_Rest {
         foreach (['db', 'auth', 'team', 'ai', 'agent', 'push', 'webpush', 'relay', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
-                'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name], $name); },
+                'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
             ]);
         }
         // The phone asks for work instead of being called: a gateway on a handset has no address of
@@ -83,17 +83,10 @@ final class Mutqan_Rest {
             'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_config']); }]);
     }
 
-    private static function guard($req, $fn, $name = '') {
+    private static function guard($req, $fn) {
         try {
             Mutqan_Auth::reset_memo();
             $p = Mutqan_Auth::principal($req);
-            // A session token the server no longer knows (expired, wiped, or issued by another site before sign-in
-            // moved to the hub) used to fall through to «anonymous visitor»: every list came back empty and every save
-            // said «غير مسموح» — and no app could tell its session had died, because only a 401 makes it renew.
-            // Say so plainly, so the desk renews from its PIN and the app signs in again.
-            if (Mutqan_Auth::token_presented() && ($p['kind'] ?? '') !== 'user' && $name !== 'auth') {
-                throw new Mutqan_Error('unauthorized', 'انتهت الجلسة — سجّل الدخول من جديد.', 401);
-            }
             if (class_exists('Mutqan_Block')) { Mutqan_Block::check_request($p); }
             $out = call_user_func($fn, $req, $p);
             $res = new WP_REST_Response(['data' => $out], 200);
