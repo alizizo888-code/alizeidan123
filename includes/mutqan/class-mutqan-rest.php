@@ -143,7 +143,7 @@ final class Mutqan_Rest {
             case 'insert': case 'insertShared': {
                 $doc = Mutqan_Store::insert($coll, $in['data'] ?? [], $in['id'] ?? null, $opts, $p, $private);
                 if ($coll === 'orders' && !$private) { self::after_order_created($doc); if (self::alert_new_order($doc)) { $doc['waSent'] = true; } }
-                if ($coll === 'order_msgs' && !$private) { self::after_order_msg($doc); }
+                if ($coll === 'order_msgs' && !$private) { self::after_order_msg($doc); if (class_exists('Mutqan_Order_AI')) { Mutqan_Order_AI::on_message($doc); } }
                 if ($coll === 'tech_applications' && !$private) { self::alert_tech_application($doc); }
                 if (in_array($coll, ['handoffs', 'warranty_claims', 'calls'], true) && !$private) { self::alert_customer_action($coll, $doc); }
                 return $doc;
@@ -239,7 +239,7 @@ final class Mutqan_Rest {
 
 
     /** A message / request inside an order: delivered to the other side at once (push + the admin alert center), server-side so it arrives even if the sender closes the app. */
-    private static function after_order_msg($m) {
+    public static function after_order_msg($m) {
         $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
         $ord = Mutqan_Store::get_raw('orders', (string) $m['orderId']) ?: [];
         $short = '#' . substr((string) $m['orderId'], -5);
