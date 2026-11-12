@@ -36,8 +36,11 @@ final class Mutqan_Link {
         $c = self::cfg();
         if (empty($c['h'])) { return false; }
         $n = self::norm($code);
-        if ($n === '' || mb_strlen($n) > 64) { return false; }
-        return password_verify($n, (string) $c['h']);
+        if ($n === '' || mb_strlen($n) > 80) { return false; }
+        if (password_verify($n, (string) $c['h'])) { return true; }
+        // A generated code is shown in groups (ABCDE-FGH23) and stored without them: typed either way, it matches.
+        $bare = strtoupper((string) preg_replace('/[\s\-_]+/u', '', $n));
+        return $bare !== $n && $bare !== '' && password_verify($bare, (string) $c['h']);
     }
     public static function online() {
         $from = time() - self::ONLINE_SECS;
@@ -80,6 +83,8 @@ final class Mutqan_Link {
         switch ($op) {
             case 'status': return self::status($p, $in);
             case 'set': Mutqan_Auth::require_owner($p); return self::set_code($p, $in);
+            case 'generate': Mutqan_Auth::require_owner($p); return self::generate($p, $in);
+            case 'auto': Mutqan_Auth::require_owner($p); return self::set_auto($p, $in);
             case 'link': return self::link($p, $in);
             case 'ping': return self::ping($p, $in);
             case 'unlink': return self::unlink($p, $in);
@@ -101,7 +106,7 @@ final class Mutqan_Link {
             $list[] = ['id' => ($owner || $id === $me) ? (string) $id : substr((string) $id, 0, 6), 'label' => (string) ($d['label'] ?? ''), 'role' => (string) ($d['role'] ?? ''), 'seenAt' => gmdate('c', $seen), 'online' => $seen >= $now - self::ONLINE_SECS, 'me' => $id === $me];
         }
         $c = self::cfg();
-        return ['set' => self::is_set(), 'at' => !empty($c['at']) ? gmdate('c', (int) $c['at']) : null, 'linkedHere' => $me !== '' && isset($r[$me]), 'online' => self::online(), 'devices' => $list, 'tg' => class_exists('Mutqan_Telegram') ? Mutqan_Telegram::status($p) : null];
+        return ['set' => self::is_set(), 'auto' => self::auto(), 'at' => !empty($c['at']) ? gmdate('c', (int) $c['at']) : null, 'linkedHere' => $me !== '' && isset($r[$me]), 'online' => self::online(), 'devices' => $list, 'tg' => class_exists('Mutqan_Telegram') ? Mutqan_Telegram::status($p) : null];
     }
 
     private static function set_code($p, $in) {
@@ -109,9 +114,38 @@ final class Mutqan_Link {
         $code = self::norm($in['code'] ?? '');
         $n = mb_strlen($code);
         if ($n < 6 || $n > 64) { throw new Mutqan_Error('bad_request', 'رمز الربط من ٦ إلى ٦٤ خانة.', 400); }
-        update_option(self::OPT, ['h' => password_hash($code, PASSWORD_DEFAULT), 'at' => time(), 'by' => (string) ($p['id'] ?? '')], false);
+        update_option(self::OPT, ['h' => password_hash($code, PASSWORD_DEFAULT), 'at' => time(), 'by' => (string) ($p['id'] ?? ''), 'auto' => isset($in['auto']) ? !empty($in['auto']) : self::auto()], false);
         update_option(self::RECV, [], false);   // a new code unpairs everything…
         self::register($p, $in);                // …and the device that set it is paired at once
+        return self::status($p, $in);
+    }
+
+    /** Whether every operations device that opens the app joins the line by itself (no code to type). On unless the owner turned it off. */
+    public static function auto() { $c = self::cfg(); return !empty($c['h']) && (!array_key_exists('auto', $c) || !empty($c['auto'])); }
+
+    /**
+     * One button for the owner: a strong code is made here, stored as a hash like a typed one, and this device
+     * is paired at once. The code is returned this one time so it can be written down or sent to a colleague
+     * whose device should join by hand; it is never readable again. Automatic joining is switched on with it,
+     * so the operations team's devices start answering the hotline without anybody typing anything, on every
+     * face of the network (the satellites all talk to this hub).
+     */
+    private static function generate($p, $in) {
+        Mutqan_Limiter::hit('link_set', 20, 3600);
+        $abc = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        $bare = '';
+        for ($i = 0; $i < 10; $i++) { $bare .= $abc[random_int(0, strlen($abc) - 1)]; }
+        update_option(self::OPT, ['h' => password_hash($bare, PASSWORD_DEFAULT), 'at' => time(), 'by' => (string) ($p['id'] ?? ''), 'auto' => isset($in['auto']) ? !empty($in['auto']) : true, 'gen' => true], false);
+        update_option(self::RECV, [], false);
+        self::register($p, $in);
+        return ['code' => substr($bare, 0, 5) . '-' . substr($bare, 5)] + self::status($p, $in);
+    }
+
+    private static function set_auto($p, $in) {
+        $c = self::cfg();
+        if (empty($c['h'])) { throw new Mutqan_Error('not_set', 'ولّد رمز الربط أولًا.', 409); }
+        $c['auto'] = !empty($in['on']);
+        update_option(self::OPT, $c, false);
         return self::status($p, $in);
     }
 
@@ -129,6 +163,11 @@ final class Mutqan_Link {
     private static function ping($p, $in) {
         Mutqan_Limiter::hit('link_ping', 400, 3600);
         $id = self::dev($in); $r = self::recv();
+        if ($id !== '' && !isset($r[$id]) && strlen($id) >= 8 && self::auto() && in_array((string) ($p['role'] ?? ''), self::ROLES, true) && ($p['kind'] ?? '') === 'user') {
+            // Automatic joining: an operations device that is signed in and has the app open answers the line.
+            self::register($p, $in);
+            return ['linked' => true, 'online' => true, 'joined' => true];
+        }
         if ($id === '' || !isset($r[$id])) { return ['linked' => false, 'online' => false]; }
         $r[$id]['seen'] = time(); $r[$id]['uid'] = (string) ($p['id'] ?? ''); $r[$id]['role'] = (string) ($p['role'] ?? '');
         update_option(self::RECV, $r, false);
