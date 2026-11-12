@@ -772,7 +772,12 @@ final class Mutqan_Rest {
         // It is the APP folder, not its assets/ folder: the build names its files «assets/X.js», so
         // pointing at assets/ asked for «assets/assets/X.js» — every on-demand screen 404'd its
         // preloads, and the app reloaded itself (lost settings, the bell, the sign-in, the boot screen).
-        $assets = preg_replace('#assets/$#', '', trailingslashit(self::app_assets_url()));
+        // Same-host paths, never absolute URLs: the build tags carry crossorigin, so loading them from
+        // home_url()'s host while the visitor is on another name of the site (www.oxygen11.com vs
+        // oxygen11.com) is a cross-origin request with no CORS headers. The browser blocks it and the
+        // app never starts: www sat on the opening screen forever.
+        $assets_path = (string) wp_parse_url(self::app_assets_url(), PHP_URL_PATH);
+        $assets = preg_replace('#assets/$#', '', trailingslashit($assets_path));
         $inject = '<script>window.__MQ_ASSETS__=' . wp_json_encode($assets, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES)
             . ';window.__MUTQAN__=' . $cfg . ';</script>';
         if ($is_root) { $inject .= '<link rel="canonical" href="' . esc_url(home_url('/')) . '">'; }
@@ -782,7 +787,7 @@ final class Mutqan_Rest {
         // (It used to load them from /assets/ at the site root, and on a site where that copy was
         // missing the opening screen was all a visitor ever saw.) The folder name is written into
         // the build, so point the links at wherever the plugin actually sits.
-        $html = preg_replace('#(src|href)="[^"]*/app/assets/#', '${1}="' . esc_attr(self::app_assets_url()), $html);
+        $html = preg_replace('#(src|href)="[^"]*/app/assets/#', '${1}="' . esc_attr($assets_path), $html);
         $app_path = (string) wp_parse_url(home_url('/app/'), PHP_URL_PATH);
         $html = str_replace(['href="./manifest.webmanifest"', 'href="./icon.svg"'], ['href="' . esc_attr($app_path) . 'manifest.webmanifest"', 'href="' . esc_attr($app_path) . 'apple-touch-icon.png"'], $html);
         if ($is_root && class_exists('Oxygen_Home_Page')) {
