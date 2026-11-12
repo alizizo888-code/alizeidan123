@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # One command on the phone that carries the work WhatsApp:
-#   curl -sL https://raw.githubusercontent.com/alizizo888-code/alizeidan123/wa-gateway/setup-termux.sh | bash
+#   curl -sL https://raw.githubusercontent.com/alizizo888-code/alizeidan123/wa-gateway/setup-termux.sh | SECRET=<from the desk> bash
+# (the desk's «إعداد الوسيط» shows this exact line with the secret filled in, ready to copy)
 # Installs the gateway, asks once for the secret shown in the desk, then starts it and prints a pairing code
 # to type into WhatsApp on this same phone (no second phone needed to scan a QR).
 set -e
@@ -13,8 +14,10 @@ cd wa-gateway
 npm ci --omit=dev --no-audit --no-fund >/dev/null
 if [ ! -f .env ]; then
   echo
-  echo "انسخ «المفتاح السري» من الديسك ← صندوق الواتساب ← الأرقام ← إعداد الوسيط، والصقه هنا:"
-  read -r SECRET < /dev/tty
+  if [ -z "$SECRET" ]; then
+    echo "انسخ «المفتاح السري» من الديسك ← صندوق الواتساب ← الأرقام ← إعداد الوسيط، والصقه هنا:"
+    read -r SECRET < /dev/tty
+  fi
   echo "رقم واتساب الشغل اللي على الموبايل ده (Enter = 0536554731):"
   read -r PHONE < /dev/tty
   PHONE=${PHONE:-0536554731}
