@@ -566,6 +566,8 @@ final class Mutqan_WA_Bot {
     public static function area($text, $extra = []) {
         $n = self::norm($text); $d = self::data('makkah');
         $toMakkah = (bool) preg_match('/(?:الي|الى|ل|لـ)\s*مكه/u', $n);
+        // Same rule as checkMakkahArea() in the app: a city we serve besides Makkah is inside.
+        foreach (($d['served'] ?? []) as $c) { if (self::word_in($n, self::norm($c)) || self::word_in($n, self::strip_al(self::norm($c)))) { return ['inside' => true, 'district' => null, 'city' => $c]; } }
         if (!$toMakkah) {
             foreach (($d['outside'] ?? []) as $c) { if (self::word_in($n, $c) || self::word_in($n, self::strip_al($c))) { return ['inside' => false, 'district' => null, 'city' => $c]; } }
         }
@@ -668,7 +670,7 @@ final class Mutqan_WA_Bot {
         if ($ar && $ar['inside'] === false && !$step) {
             $r[] = self::say('out_cov', $n, ['c' => $ar['city']]);
             $bot['await'] = 'handoff';
-            $out['notify'] = 'طلب من خارج مكة (' . $ar['city'] . ') — يحتاج تنسيق مع فرع شريك';
+            $out['notify'] = 'طلب من خارج مكة وجدة (' . $ar['city'] . ') — يحتاج تنسيق مع فرع شريك';
             return self::finish($out, $bot, $r, $hs, $hc, $ts);
         }
         if (($bot['await'] ?? '') === 'handoff' && $yes && !$step) {
