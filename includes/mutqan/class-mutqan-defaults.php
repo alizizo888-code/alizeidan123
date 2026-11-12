@@ -22,13 +22,15 @@ final class Mutqan_Defaults {
     public static function seed() {
         $done = get_option(self::OPT, []);
         if (!is_array($done)) { $done = []; }
-        $todo = array_diff(['contact', 'routing', 'sitetech', 'work_wa'], array_keys($done));
+        $todo = array_diff(['contact', 'routing', 'sitetech', 'work_wa', 'auto_dispatch', 'hotline_auto'], array_keys($done));
         if (!$todo) { return; }
         foreach ($todo as $step) {
             try {
                 if ($step === 'contact') { self::contact(); }
                 elseif ($step === 'routing') { self::routing(); }
                 elseif ($step === 'work_wa') { self::work_wa(); }
+                elseif ($step === 'auto_dispatch') { self::auto_dispatch(); }
+                elseif ($step === 'hotline_auto') { if (class_exists('Mutqan_Link')) { Mutqan_Link::ensure_default(); } }
                 else { self::site_tech(); }
                 $done[$step] = gmdate('c');
             } catch (Throwable $e) { error_log('[mutqan] seed ' . $step . ': ' . $e->getMessage()); }
@@ -47,6 +49,17 @@ final class Mutqan_Defaults {
             if (substr(preg_replace('/\D/', '', (string) ($n['phone'] ?? '')), -9) === $key) { return; }
         }
         Mutqan_Store::upsert('wa_numbers', ['label' => 'واتساب الشغل', 'phone' => self::WORK_WA, 'type' => 'business', 'department' => 'orders', 'enabled' => true, 'acceptsCalls' => true, 'hours' => '24 ساعة', 'sort' => 1, 'updatedAt' => gmdate('c')], 'wa-work', ['groupId' => 'main', 'writableBy' => 'admins'], self::sys());
+    }
+
+    /**
+     * The owner asked for distribution to be automatic out of the box: every new order goes straight to the best
+     * technician (or the open pool, which rings them all) instead of waiting for someone to assign it. Done once;
+     * the operations room's «يدوي / آلي» switch still changes it any time after.
+     */
+    private static function auto_dispatch() {
+        $cur = Mutqan_Store::peek_doc('assignment_settings', 'default');
+        $cur = is_array($cur) ? $cur : [];
+        Mutqan_Store::upsert('assignment_settings', ['mode' => 'auto', 'strategy' => $cur['strategy'] ?? 'smart', 'siteFallback' => $cur['siteFallback'] ?? true], 'default', ['groupId' => 'main', 'visibleTo' => 'group', 'writableBy' => 'admins'], self::sys());
     }
 
     private static function routing() {

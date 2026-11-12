@@ -45,6 +45,9 @@ final class Mutqan_Policy {
                 '_ai_usage' => ['read', 'anon_ok', 'write', 'write'],
                 '_ai_audit' => ['read', 'anon_ok', 'write', 'write'],
                 '_push' => ['never', 'never', 'never', 'never'],
+                '_ai_memory' => ['never', 'never', 'never', 'never'],
+                '_push_subs' => ['never', 'never', 'never', 'never'],
+                '_relay' => ['never', 'never', 'never', 'never'],   // hotline voice clips in transit (10 minutes): server-only   // each device's Web Push subscription: server-only   // the order assistant's memory of customers and cases: server-only
             ];
         }
         return $R[$coll] ?? ['creator_or_read', 'authed', 'creator_or_write', 'write'];
