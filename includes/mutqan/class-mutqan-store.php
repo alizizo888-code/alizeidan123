@@ -359,7 +359,10 @@ final class Mutqan_Store {
         ]);
         if ($ok === false) { throw new Mutqan_Error('exists', 'المعرّف مستخدم من قبل.', 409); }
         self::bump($coll);
-        return self::row_to_doc(self::fetch_row($coll, $id));
+        $doc = self::row_to_doc(self::fetch_row($coll, $id));
+        // Every order, whichever door it came through, is dispatched here when the room is on «آلي».
+        if ($coll === 'orders' && class_exists('Mutqan_Dispatch')) { $doc = Mutqan_Dispatch::on_created($doc); }
+        return $doc;
     }
 
     public static function update($coll, $id, $patch, $p) {

@@ -382,7 +382,9 @@ final class Oxygen_Orders_Chat {
         }
         if ($reply === '') { $reply = 'ممكن توضح لي أكثر؟'; }
         self::log_turn($sid, $messages, $reply, ['provider' => $provider, 'order' => $order_id]);
-        return new WP_REST_Response(['reply' => $reply, 'done' => $order_id > 0, 'order' => $order_id], 200);
+        $out = ['reply' => $reply, 'done' => $order_id > 0, 'order' => $order_id];
+        if ($order_id > 0 && self::$last_hub) { $out['hubOrder'] = self::$last_hub; }
+        return new WP_REST_Response($out, 200);
     }
 
     /* ------------------------------------------------------------------ Gemini / free providers path */
@@ -514,6 +516,9 @@ final class Oxygen_Orders_Chat {
 
     /* ------------------------------------------------------------------ order creation */
 
+    /** The hub-shaped copy of the order the last handle_submit() saved, for rest_chat to hand back. */
+    private static $last_hub = null;
+
     private static function handle_submit($in, $loc, $s, $services) {
         $service = sanitize_text_field((string) ($in['service'] ?? ''));
         $issue   = sanitize_textarea_field((string) ($in['issue'] ?? ''));
@@ -574,8 +579,30 @@ final class Oxygen_Orders_Chat {
         update_post_meta($id, '_oxc_wa_status', $ok ? 'sent' : 'failed: ' . $msg);
         if (!$ok) { error_log('[oxygen-chat] WhatsApp failed for order ' . $id . ': ' . $msg); }
 
-        // Same order to the desk in real time, so it shows on the orders board and the map.
-        self::push_to_desk([
+        // The same order, shaped for the hub, for the customer's browser to file there (see rest_chat).
+        // Until 2026-11-11 a chat order lived only here, on WhatsApp and on the desk: it never reached the
+        // operations room, the technician app, tracking or the accounts, so a customer who ordered through
+        // this bubble was invisible to the people who would come and do the job.
+        $spec = 'general';
+        if (isset($match) && is_array($match)) { $spec = ($match['kind'] ?? '') === 'ac' ? 'ac' : (string) ($match['id'] ?? 'general'); }
+        self::$last_hub = array_filter([
+            'specialtyId' => $spec,
+            'serviceDetails' => mb_substr($service . ($qty > 1 ? " × $qty" : ''), 0, 160),
+            'description' => mb_substr(trim($issue . ($notes !== '' ? "\n" . $notes : '')), 0, 1000),
+            'qty' => $qty,
+            'address' => $address !== '' ? $address : null,
+            'lat' => $loc ? (float) $loc['lat'] : null, 'lng' => $loc ? (float) $loc['lng'] : null,
+            'clientName' => $name !== '' ? $name : null,
+            'clientPhone' => $digits,
+            'agreedPrice' => $price > 0 ? (int) round($price) : null,
+            'preferredTime' => 'asap',
+            'source' => 'site_chat',
+            'siteRef' => (string) $id,
+        ], static function ($v) { return $v !== null && $v !== ''; });
+
+        // The desk keeps its own orders and its own dispatcher. Mirroring into it made two systems hand
+        // the same job to two different technicians, so it is off unless the owner turns it back on.
+        if (get_option('oxy_desk_mirror')) self::push_to_desk([
             'site_ref' => (string) $id, 'name' => $name, 'phone' => $phone, 'service' => $service, 'issue' => $issue,
             'qty' => $qty, 'price' => $price > 0 ? (int) round($price) : null, 'address' => $address,
             'lat' => $loc ? (float) $loc['lat'] : null, 'lng' => $loc ? (float) $loc['lng'] : null,
@@ -656,6 +683,7 @@ final class Oxygen_Orders_Chat {
         if (!$tpl) { return $html; }
         $config = wp_json_encode([
             'endpoint' => esc_url_raw(rest_url(self::NS . '/chat')),
+            'hub' => (class_exists('Oxygen_Network') ? Oxygen_Network::api_base() : '') ?: esc_url_raw(rest_url('mutqan/v1')),   // a face files to oxygen11.com; the hub to itself
             'botName'  => $s['bot_name'],
             'whatsapp' => preg_replace('/\D/', '', (string) $s['wa_owner']),
         ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE);

@@ -24,7 +24,7 @@ final class Mutqan_Policy {
                 'used_ac' => $pub, 'schedule_cfg' => $pub,
                 'used_ac_private' => ['read', 'write', 'write', 'write'], 'used_offers' => ['read', 'write', 'write', 'write'], 'order_seals' => ['read', 'write', 'write', 'write'], 'pay_links' => ['read', 'write', 'write', 'write'],
                 'assignment_settings' => ['staff', 'write', 'write', 'write'], 'tech_pay' => ['staff', 'write', 'write', 'write'],
-                'pricing_internal' => ['read', 'write', 'write', 'write'], 'settlements' => ['read', 'write', 'write', 'write'], 'order_msgs' => ['chat', 'anon_ok', 'write', 'write'], 'stock_items' => ['read', 'write', 'write', 'write'], 'stock_moves' => ['read', 'write', 'write', 'write'],
+                'pricing_internal' => ['read', 'write', 'write', 'write'], 'settlements' => ['tech_own', 'write', 'write', 'write'], 'order_msgs' => ['chat', 'anon_ok', 'write', 'write'], 'stock_items' => ['read', 'write', 'write', 'write'], 'stock_moves' => ['read', 'write', 'write', 'write'],
                 'tech_profiles' => ['staff', 'authed', 'creator_or_write', 'write'],
                 'tech_applications' => ['creator_or_read', 'authed', 'write', 'write'],
                 'orders' => ['orders', 'anon_ok', 'orders', 'write'],
@@ -80,6 +80,12 @@ final class Mutqan_Policy {
             case 'public': return ['', []];
             case 'staff': return self::is_staff($p) ? ['', []] : ['0', []];
             case 'read': return self::has_power($p, 'read') ? ['', []] : ['0', []];
+            // Money between the company and one technician: the office sees every line, a technician
+            // sees his own and nobody else's — he needs to know what he handed over, not what a
+            // colleague earned.
+            case 'tech_own':
+                if (self::has_power($p, 'read')) { return ['', []]; }
+                return (($p['role'] ?? null) === 'technician' && $isUser) ? [self::jx('techId') . '=%s', [$me]] : ['0', []];
             case 'creator':
                 return $isUser ? ['owner_id=%s', [$me]] : ['0', []];
             case 'creator_or_read':
@@ -116,6 +122,12 @@ final class Mutqan_Policy {
             case 'authed': return $kind === 'user';
             case 'staff': return self::is_staff($p);
             case 'read': return self::has_power($p, 'read');
+            case 'tech_own': {
+                if (self::has_power($p, 'read')) { return true; }
+                if (($p['role'] ?? null) !== 'technician' || !$row) { return false; }
+                $d = json_decode($row['data'], true) ?: [];
+                return ($d['techId'] ?? null) === $me;
+            }
             case 'write': return self::has_power($p, 'write');
             case 'creator_or_read': return $creator || self::has_power($p, 'read');
             case 'creator_or_write': return $creator || self::has_power($p, 'write');
