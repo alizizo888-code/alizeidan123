@@ -233,6 +233,43 @@ final class Mutqan_Store {
 
     /* ------------------------------------------------------------------ queries */
 
+    /**
+     * Fields on a document the team writes for itself and the customer must never read — on his own
+     * order included. The technician's opinion of the customer is the reason this exists: «بيفاصل في
+     * السعر» is useful to the next technician and an insult if the customer sees it. The flag on a
+     * price the office should double-check, and the quote it replaced, are internal for the same reason.
+     */
+    const HIDDEN = ['orders' => ['techOnClient', 'priceReview', 'quotedTotal']];
+
+    private static function is_team($p) {
+        return Mutqan_Policy::has_power($p, 'read') || in_array($p['role'] ?? null, ['owner', 'operations', 'technician'], true);
+    }
+
+    /** Strips the team-only fields from what an outsider is handed. */
+    public static function for_reader($coll, $doc, $p) {
+        if (!is_array($doc) || empty(self::HIDDEN[$coll]) || self::is_team($p)) { return $doc; }
+        foreach (self::HIDDEN[$coll] as $k) { unset($doc[$k]); }
+        return $doc;
+    }
+
+    /**
+     * And refuses to let an outsider ask about them sideways: filtering, grouping, summing or sorting
+     * on a hidden field would answer the question the stripping just refused.
+     */
+    private static function guard_fields($coll, $p, array $fields) {
+        if (empty(self::HIDDEN[$coll]) || self::is_team($p)) { return; }
+        foreach ($fields as $f) {
+            $root = explode('.', ltrim((string) $f, '-'))[0];
+            if (in_array($root, self::HIDDEN[$coll], true)) { throw new Mutqan_Error('bad_field', 'حقل غير متاح.', 403); }
+        }
+    }
+
+    private static function filter_fields($filters) {
+        $out = [];
+        foreach ((array) $filters as $k => $v) { $out[] = is_array($v) && isset($v['field']) ? $v['field'] : $k; }
+        return $out;
+    }
+
     public static function select($coll, $filters, $opts, $p, $private = false) {
         global $wpdb;
         $coll = self::valid_coll($coll);
@@ -246,9 +283,11 @@ final class Mutqan_Store {
         if ($fs !== '') { $where[] = $fs; $params = array_merge($params, $fp); }
         $limit = min(self::MAX_LIMIT, max(1, (int) ($opts['limit'] ?? 100)));
         $offset = max(0, (int) ($opts['offset'] ?? 0));
+        self::guard_fields($coll, $p, array_merge(self::filter_fields($filters), [(string) ($opts['order'] ?? '')]));
         $sql = "SELECT * FROM $t WHERE " . implode(' AND ', $where) . ' ORDER BY ' . self::order_sql($opts['order'] ?? '') . " LIMIT $limit OFFSET $offset";
         $rows = $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A) ?: [];
-        return array_map([__CLASS__, 'row_to_doc'], $rows);
+        $docs = array_map([__CLASS__, 'row_to_doc'], $rows);
+        return empty(self::HIDDEN[$coll]) ? $docs : array_map(function ($d) use ($coll, $p) { return self::for_reader($coll, $d, $p); }, $docs);
     }
 
     public static function count($coll, $filters, $p, $private = false) {
@@ -262,6 +301,7 @@ final class Mutqan_Store {
         if ($vis !== '') { $where[] = $vis; $params = array_merge($params, $vp); }
         list($fs, $fp) = self::where_filters($filters);
         if ($fs !== '') { $where[] = $fs; $params = array_merge($params, $fp); }
+        self::guard_fields($coll, $p, self::filter_fields($filters));
         return (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $t WHERE " . implode(' AND ', $where), ...$params));
     }
 
@@ -270,6 +310,7 @@ final class Mutqan_Store {
         $coll = self::valid_coll($coll);
         $t = self::table('docs');
         $col = self::jx(self::valid_field($field));
+        self::guard_fields($coll, $p, array_merge([$field], self::filter_fields($filters)));
         $params = [$coll, self::now()];
         $where = ["coll=%s", "(expires_at IS NULL OR expires_at > %s)"];
         list($vis, $vp) = Mutqan_Policy::read_clause($coll, $p);
@@ -288,6 +329,7 @@ final class Mutqan_Store {
         $coll = self::valid_coll($coll);
         $t = self::table('docs');
         $col = self::jx(self::valid_field($field));
+        self::guard_fields($coll, $p, array_merge([$field], self::filter_fields($filters)));
         $cast = self::is_sqlite() ? "CAST($col AS REAL)" : "CAST($col AS DECIMAL(24,6))";
         $params = [$coll, self::now()];
         $where = ["coll=%s", "(expires_at IS NULL OR expires_at > %s)"];
@@ -362,7 +404,7 @@ final class Mutqan_Store {
         $doc = self::row_to_doc(self::fetch_row($coll, $id));
         // Every order, whichever door it came through, is dispatched here when the room is on «آلي».
         if ($coll === 'orders' && class_exists('Mutqan_Dispatch')) { $doc = Mutqan_Dispatch::on_created($doc); }
-        return $doc;
+        return self::for_reader($coll, $doc, $p);
     }
 
     public static function update($coll, $id, $patch, $p) {
@@ -397,7 +439,7 @@ final class Mutqan_Store {
             try { Mutqan_WA_Desk::on_assigned($doc, (string) $patch['technicianId']); }
             catch (Throwable $e) { error_log('[mutqan] dispatch ' . $e->getMessage()); }
         }
-        return $doc;
+        return self::for_reader($coll, $doc, $p);
     }
 
     /**
