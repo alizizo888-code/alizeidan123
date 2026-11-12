@@ -4,12 +4,19 @@ import express from 'express'
 import pino from 'pino'
 import QRCode from 'qrcode'
 import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys'
-import { sign, safeEq, cleanId, digits, jidToPhone, phoneToJid, isUserJid, extract, Pacer } from './core.js'
+import { sign, safeEq, cleanId, digits, jidToPhone, phoneToJid, isUserJid, extract, Pacer, detectSource, parseSessions } from './core.js'
 
 const PORT = Number(process.env.PORT || 8787)
+const HOST = process.env.HOST || '0.0.0.0'   // 127.0.0.1 on a VPS in pull mode: nothing needs to reach it
 const TOKEN = process.env.GATEWAY_TOKEN || ''          // WordPress -> gateway
 const HOOK_URL = process.env.WEBHOOK_URL || ''          // gateway -> WordPress
 const HOOK_SECRET = process.env.WEBHOOK_SECRET || ''
+// Asking for work instead of waiting to be called. A gateway on a phone has no address anyone can
+// reach, so WordPress cannot dial it; the phone collects what is waiting for it instead. Leave
+// PULL_URL empty on a machine that can be dialled and nothing changes.
+const PULL_URL = process.env.PULL_URL || (HOOK_URL ? HOOK_URL.replace(/\/wa-hook$/, '/wa-pull') : '')
+const PULL_EVERY = Math.max(2000, Number(process.env.PULL_EVERY_MS || 5000))
+const PULL_IDLE = Math.max(PULL_EVERY, Number(process.env.PULL_IDLE_MS || 20000))
 const DATA = path.resolve(process.env.DATA_DIR || './data')
 const DAILY_CAP = Number(process.env.SEND_DAILY_CAP || 200)
 const MAX_SESSIONS = Number(process.env.MAX_SESSIONS || 20)
@@ -54,7 +61,7 @@ async function flush() {
 // ---- sessions ----
 function view(id) {
   const s = S.get(id); const m = meta[id] || {}
-  return { id, label: m.label || id, mode: m.mode || 'qr', phone: s?.phone || m.phone || '', status: s?.status || 'stopped', qr: s?.status === 'qr' ? s.qr : null, pairingCode: s?.status === 'code' ? s.code : null, sentToday: s?.pacer.used() || 0, dailyCap: DAILY_CAP, name: s?.name || '' }
+  return { id, label: m.label || id, source: m.source || '', mode: m.mode || 'qr', phone: s?.phone || m.phone || '', status: s?.status || 'stopped', qr: s?.status === 'qr' ? s.qr : null, pairingCode: s?.status === 'code' ? s.code : null, sentToday: s?.pacer.used() || 0, dailyCap: DAILY_CAP, name: s?.name || '' }
 }
 
 async function start(id) {
@@ -77,13 +84,18 @@ async function start(id) {
           try { st.code = (await sock.requestPairingCode(digits(m.phone))).replace(/(.{4})(.{4})/, '$1-$2'); st.status = 'code' } catch (e) { log.warn(e) }
         }
       } else { st.qr = await QRCode.toDataURL(u.qr, { margin: 1, width: 300 }); st.status = 'qr' }
-      emit({ type: 'status', accountId: id, status: st.status })
+      // The picture travels with the event. On a phone the operations screen is the only place the
+      // code can be scanned from — you cannot hold the handset up to itself.
+      emit({ type: 'status', accountId: id, status: st.status, label: m.label || id, qr: st.qr || null, pairingCode: st.code || null })
+      if (st.code) console.log('\n=====================================\n  كود الربط: ' + st.code + '\n  واتساب ← الأجهزة المرتبطة ← ربط جهاز ← «الربط برقم الهاتف بدلاً من ذلك» واكتب الكود\n=====================================\n')
+      else if (st.status === 'qr') console.log('QR جاهز — امسحه من الديسك ← صندوق الواتساب ← الأرقام (من موبايل تاني)، أو شغّل بـ PAIR_PHONE عشان كود بدل QR')
     }
     if (u.connection === 'open') {
       st.status = 'open'; st.retry = 0; st.qr = null; st.code = null
       st.phone = jidToPhone(sock.user?.id); st.name = sock.user?.name || ''
+      console.log('✅ الرقم اتوصل: ' + st.phone + ' — سيب Termux شغال في الخلفية')
       meta[id].phone = st.phone; saveMeta()
-      emit({ type: 'status', accountId: id, status: 'open', phone: st.phone, name: st.name })
+      emit({ type: 'status', accountId: id, status: 'open', phone: st.phone, name: st.name, label: meta[id].label || id })
     }
     if (u.connection === 'close') {
       const code = u.lastDisconnect?.error?.output?.statusCode
@@ -105,7 +117,8 @@ async function start(id) {
       if (!isUserJid(jid) || !msg.message) continue
       const x = extract(msg.message)
       if (x.kind === 'reaction') continue
-      emit({ type: 'message', accountId: id, msgId: msg.key.id, direction: msg.key.fromMe ? 'out' : 'in', phone: jidToPhone(jid), name: msg.pushName || '', text: x.text, kind: x.kind, ts: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000), fromPhone: !!msg.key.fromMe })
+      const src = msg.key.fromMe ? {} : detectSource(msg.message, x.text, m.source || '')
+      emit({ type: 'message', accountId: id, ...src, msgId: msg.key.id, direction: msg.key.fromMe ? 'out' : 'in', phone: jidToPhone(jid), name: msg.pushName || '', text: x.text, kind: x.kind, ts: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000), fromPhone: !!msg.key.fromMe })
     }
   })
   return st
@@ -179,5 +192,58 @@ app.post('/sessions/:id/send', wrap(async (q) => {
   return enqueueSend(id, to, text)
 }))
 
-app.listen(PORT, () => console.log('mutqan wa-gateway on :' + PORT))
+// ---- collecting work from WordPress ----
+//
+// One request carries both halves: what was sent since last time, and a request for more. The pace
+// backs off while there is nothing to do, because this runs on a phone battery; it quickens again
+// the moment a batch comes back.
+let pullStop = false
+async function pullLoop() {
+  if (!PULL_URL || !HOOK_SECRET) return
+  let wait = PULL_EVERY
+  let sent = []
+  while (!pullStop) {
+    let got = 0
+    try {
+      const body = JSON.stringify({ sent, limit: 10 })
+      sent = []
+      const r = await fetch(PULL_URL, { method: 'POST', headers: { 'content-type': 'application/json', 'x-mq-signature': sign(HOOK_SECRET, body) }, body, signal: AbortSignal.timeout(20000) })
+      const j = r.ok ? await r.json().catch(() => null) : null
+      const jobs = (j && j.data && Array.isArray(j.data.jobs)) ? j.data.jobs : []
+      got = jobs.length
+      for (const job of jobs) {
+        // The number WordPress names, or the only one connected — a phone usually carries one.
+        const id = (job.acct && S.has(job.acct)) ? job.acct : [...S.keys()].find((k) => S.get(k)?.status === 'open')
+        if (!id) { sent.push({ id: job.id, ok: false }); continue }
+        try { const res = await enqueueSend(id, digits(job.to), String(job.text || '')); sent.push({ id: job.id, ok: true, msgId: res?.msgId || '' }) }
+        catch (e) { log.warn({ err: String(e) }, 'pull send'); sent.push({ id: job.id, ok: false }) }
+      }
+    } catch (e) {
+      log.warn({ err: String(e) }, 'pull')
+    }
+    wait = got ? PULL_EVERY : Math.min(PULL_IDLE, Math.round(wait * 1.5))
+    await new Promise((r) => setTimeout(r, wait))
+  }
+}
+
+app.listen(PORT, HOST, () => console.log('mutqan wa-gateway on :' + PORT))
+// Nothing can call into a phone to ask it to begin, so when it has no number yet it opens one by
+// itself and its QR goes up to the operations screen to be scanned from there.
+if (!Object.keys(meta).length && !process.env.SESSIONS && (process.env.AUTO_SESSION ?? '1') !== '0') {
+  const id = cleanId(process.env.SESSION_ID || 'main')
+  // PAIR_PHONE=0536554731 → a pairing code printed right here, typed into WhatsApp on the SAME phone (a QR cannot be scanned by the phone showing it).
+  const pair = digits(process.env.PAIR_PHONE || '').replace(/^0(5\d{8})$/, '966$1').replace(/^(5\d{8})$/, '966$1')
+  meta[id] = { label: process.env.SESSION_LABEL || 'واتساب الشغل', mode: pair ? 'code' : 'qr', phone: pair }
+  saveMeta()
+  console.log('no number linked yet: opening "' + id + '" — scan its QR from the operations screen')
+}
+// Many SIMs on one always-on machine: SESSIONS lists them all, each opens by itself and its QR (or
+// pairing code) goes up to the desk. Re-listing an existing one only refreshes its label/channel.
+const sa = (p) => digits(p).replace(/^0(5\d{8})$/, '966$1').replace(/^(5\d{8})$/, '966$1')
+for (const x of parseSessions(process.env.SESSIONS).slice(0, MAX_SESSIONS)) {
+  const was = meta[x.id]
+  meta[x.id] = { ...(was || {}), label: x.label, source: x.source, mode: was?.mode || (x.phone ? 'code' : 'qr'), phone: was?.phone || sa(x.phone) }
+}
+saveMeta()
 for (const id of Object.keys(meta)) start(id).catch((e) => log.error(e))
+pullLoop().catch((e) => log.error(e))

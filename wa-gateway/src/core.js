@@ -51,3 +51,42 @@ export class Pacer {
   mark() { this._roll(); this.count++ }
   delay() { return Math.round(this.minMs + this.rand() * (this.maxMs - this.minMs)) }
 }
+
+// Where a customer came from. Order of trust:
+//  1. A Click-to-WhatsApp ad (Meta/Instagram) stamps the first message with externalAdReply.
+//  2. A tag the business put in the pre-filled text of its own link, e.g. wa.me/9665…?text=…%20%23ماب
+//  3. The number itself: each SIM is advertised on one channel (SESSIONS=sim01:ماب:map,…).
+export const SOURCES = {
+  ads: ['#اعلان', '#إعلان', '#ممول', '#ad', '#ads', '#snap', '#سناب'],
+  map: ['#ماب', '#خرائط', '#جوجل', '#map', '#maps', '#gmb'],
+  tiktok: ['#تيك', '#تيكتوك', '#tiktok', '#tt'],
+  haraj: ['#حراج', '#haraj'],
+  site: ['#موقع', '#site', '#web'],
+}
+function ctxOf(msg) {
+  let m = msg || {}
+  if (m.ephemeralMessage) m = m.ephemeralMessage.message || {}
+  for (const k of Object.keys(m)) { const c = m[k]?.contextInfo; if (c) return c }
+  return null
+}
+export function detectSource(msg, text, fallback = '') {
+  const c = ctxOf(msg)
+  const ad = c?.externalAdReply
+  if (ad && (ad.sourceType === 'ad' || ad.sourceId || ad.ctwaClid || c.conversionSource)) {
+    const host = String(ad.sourceUrl || '').toLowerCase()
+    const net = /instagram/.test(host) ? 'instagram' : /tiktok/.test(host) ? 'tiktok' : 'facebook'
+    return { source: 'ads', adNet: net, adId: String(ad.sourceId || ''), adTitle: String(ad.title || ad.body || '').slice(0, 120) }
+  }
+  const t = String(text || '').toLowerCase()
+  for (const [k, tags] of Object.entries(SOURCES)) if (tags.some((g) => t.includes(g.toLowerCase()))) return { source: k }
+  return fallback ? { source: fallback } : {}
+}
+
+// SESSIONS="sim01:حراج:haraj, sim02:ماب:map:9665xxxxxxxx" → [{id,label,source,phone}]
+// A phone in the 4th field means "pair by code" (typed on that same phone) instead of a QR.
+export function parseSessions(s) {
+  return String(s || '').split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean).map((x) => {
+    const [id, label, source, phone] = x.split(':').map((y) => (y || '').trim())
+    return { id: cleanId(id), label: label || cleanId(id), source: (source || '').toLowerCase().replace(/[^a-z]/g, ''), phone: digits(phone) }
+  }).filter((x) => x.id)
+}
