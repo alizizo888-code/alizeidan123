@@ -30,20 +30,3 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(caches.match(r).then((hit) => hit || fetch(r).then((res) => { if (res.ok) { const c = res.clone(); caches.open(V).then((ca) => ca.put(r, c)) } return res })))
   }
 })
-
-// Background notifications (Web Push from the site's own server): a new order, a message or a hotline call
-// rings with the app closed and the screen off. When the app is open and in front, it shows the alert itself.
-self.addEventListener('push', (e) => {
-  let d = {}
-  try { d = e.data ? e.data.json() : {} } catch { d = { body: e.data ? e.data.text() : '' } }
-  e.waitUntil((async () => {
-    const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true })
-    if (wins.some((w) => w.visibilityState === 'visible' && w.focused)) return
-    const hi = d.priority === 'high'
-    const icon = new URL('icon-192.png', self.registration.scope).href
-    await self.registration.showNotification(d.title || 'تنبيه جديد', {
-      body: d.body || '', tag: d.id || undefined, renotify: true, requireInteraction: hi,
-      vibrate: hi ? [500, 150, 500, 150, 900] : [200, 100, 200], icon, badge: icon, dir: 'rtl', lang: 'ar', data: { url: d.url || '' },
-    })
-  })())
-})

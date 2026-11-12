@@ -215,53 +215,6 @@ final class Mutqan_Dispatch {
         return Mutqan_Store::update('orders', $order['id'], $patch, self::sys());
     }
 
-    const CLIENT_STATUS = [
-        'assigned' => ['🧑‍🔧 تم إسناد طلبك لفني', 'سيتواصل معك الفني قريبًا.'],
-        'accepted' => ['✅ الفني قبل طلبك', 'يجهز الفني للتوجه إليك.'],
-        'en_route' => ['🚗 الفني في الطريق إليك', 'تابع موقعه من صفحة الطلب.'],
-        'nearby' => ['📍 الفني قريب منك', 'استعد لاستقباله.'],
-        'arrived' => ['🔔 وصل الفني إلى موقعك', 'افتح الباب — الفني عندك.'],
-        'in_progress' => ['🛠️ بدأ العمل على طلبك', ''],
-        'completed' => ['🎉 اكتملت خدمتك', 'شاركنا تقييمك من صفحة الطلب.'],
-        'cancelled' => ['تم إلغاء الطلب', 'للمساعدة تواصل مع خدمة العملاء.'],
-    ];
-
-    /**
-     * Tells the people an order change is about, from the one place every change passes through.
-     *
-     *  - A technician the SERVER gave the order to (automatic distribution) is told at once. Until now only an
-     *    assignment made by hand on the operations screen sent the technician anything, so an automatically
-     *    distributed order sat unseen on the technician's list.
-     *  - An order sent to the open pool rings every technician.
-     *  - A customer who ordered without an account (most of them) has no client id, so the app's own status
-     *    messages never reached him; the server now tells him each step (the alert also reaches his phone in
-     *    the background). Customers with an account keep getting the app's own messages, not two of each.
-     */
-    public static function tell($old, $doc, $patch, $p, $ownerId) {
-        $id = (string) ($doc['id'] ?? '');
-        if ($id === '') { return; }
-        $short = '#' . substr($id, -5);
-        $byServer = ($p['id'] ?? '') === 'system';
-        $sys = self::sys();
-        $put = function ($target, $title, $body, $url, $event, $prio = 'high', $sound = 'bell') use ($sys) {
-            Mutqan_Store::insert('_push', ['target' => $target, 'title' => mb_substr($title, 0, 120), 'body' => mb_substr($body, 0, 300), 'url' => $url, 'sound' => $sound, 'priority' => $prio, 'event' => $event, 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 7 * 86400)], $sys);
-        };
-        $spec = class_exists('Mutqan_Rest') && defined('Mutqan_Rest::SPEC_LABELS') ? (Mutqan_Rest::SPEC_LABELS[$doc['specialtyId'] ?? ''] ?? '') : '';
-        $newTech = (string) ($patch['technicianId'] ?? '');
-        if ($byServer && $newTech !== '' && $newTech !== (string) ($old['technicianId'] ?? '') && ($doc['dispatch'] ?? '') !== 'site') {
-            $put(['user' => $newTech], '🛠️ طلب جديد مسند لك ' . $short, trim($spec . ' · ' . mb_substr((string) ($doc['address'] ?? ''), 0, 80), ' ·'), '#/staff/order/' . $id, 'order_assigned');
-        }
-        $st = (string) ($patch['status'] ?? '');
-        if ($st === '' || $st === (string) ($old['status'] ?? '')) { return; }
-        if ($byServer && $st === 'forced') {
-            $put(['role' => 'technician'], '📣 طلب متاح الآن ' . $short, trim($spec . ' · أول فني يقبله يأخذه', ' ·'), '#/staff/order/' . $id, 'order_pool');
-        }
-        if (empty($doc['clientId']) && strpos((string) $ownerId, 'anon-') === 0 && isset(self::CLIENT_STATUS[$st])) {
-            list($title, $body) = self::CLIENT_STATUS[$st];
-            $put(['user' => (string) $ownerId], $title . ' ' . $short, $body, '#/order/' . $id, 'order_status', in_array($st, ['arrived', 'en_route', 'nearby'], true) ? 'high' : 'normal', 'chime');
-        }
-    }
-
     /** forceOrder() — nobody fits: the order goes to the open pool every technician can see. */
     private static function force($order) {
         $at = gmdate('c');
