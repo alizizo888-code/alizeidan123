@@ -215,9 +215,21 @@ final class Mutqan_Auth {
         $found = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $S WHERE token_hash=%s AND expires_at > %s", $h, Mutqan_Store::now()));
         $wpdb->delete($S, ['token_hash' => $h]);
         $owner = $wpdb->get_row("SELECT status, role FROM $U WHERE role='owner' ORDER BY created_at LIMIT 1", ARRAY_A);
+        // The exact lookup a request makes, for a session of the owner the desk PIN signs in as.
+        $ow = self::owner_row(); $join = null; $ownerSessions = null; $recent = null;
+        if ($ow) {
+            $h2 = hash('sha256', 'probe2-' . bin2hex(random_bytes(8)));
+            $wpdb->insert($S, ['token_hash' => $h2, 'user_id' => $ow['id'], 'expires_at' => gmdate('Y-m-d H:i:s', time() + 60), 'created_at' => Mutqan_Store::now()]);
+            $join = (bool) $wpdb->get_row($wpdb->prepare("SELECT u.id FROM $S s JOIN $U u ON u.id = s.user_id WHERE s.token_hash=%s AND s.expires_at > %s AND u.status='active'", $h2, Mutqan_Store::now()), ARRAY_A);
+            $wpdb->delete($S, ['token_hash' => $h2]);
+            $ownerSessions = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $S WHERE user_id=%s", $ow['id']));
+            $recent = $wpdb->get_col($wpdb->prepare("SELECT created_at FROM $S WHERE user_id=%s ORDER BY created_at DESC LIMIT 5", $ow['id']));
+        }
         return ['insert' => $ins !== false, 'found' => $found === 1, 'error' => substr($err, 0, 160), 'sessions' => (int) $wpdb->get_var("SELECT COUNT(*) FROM $S"),
             'owners' => (int) $wpdb->get_var("SELECT COUNT(*) FROM $U WHERE role='owner'"), 'ownerActive' => $owner ? $owner['status'] === 'active' : null,
-            'dbNow' => (string) $wpdb->get_var('SELECT UTC_TIMESTAMP()'), 'phpNow' => Mutqan_Store::now(), 'table' => $S];
+            'dbNow' => (string) $wpdb->get_var('SELECT UTC_TIMESTAMP()'), 'phpNow' => Mutqan_Store::now(), 'table' => $S,
+            'ownerJoin' => $join, 'ownerSessions' => $ownerSessions, 'ownerRecent' => $recent,
+            'deskLog' => array_map(function ($r) { return [gmdate('m-d H:i', (int) ($r['t'] ?? 0)), $r['k'] ?? '', $r['app'] ?? '', (int) ($r['n'] ?? 1), mb_substr((string) ($r['info'] ?? ''), 0, 60)]; }, array_slice((array) get_option('oxygen_desk_log', []), -15))];
     }
 
     private static function session_result($u) {
