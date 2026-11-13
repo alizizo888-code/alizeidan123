@@ -36,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'push', 'webpush', 'relay', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'ops', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -438,6 +438,8 @@ final class Mutqan_Rest {
 
     /** Hotline voice through the site when the phones cannot reach each other (see Mutqan_Relay). */
     public static function h_relay($req, $p) { return Mutqan_Relay::handle(self::body($req), $p); }
+    /** Calls between customer, technician and operations: who may ring whom (see Mutqan_Callnet). */
+    public static function h_callnet($req, $p) { return Mutqan_Callnet::handle(self::body($req), $p); }
 
     public static function h_link($req, $p) {
         return Mutqan_Link::handle(self::body($req), $p);
@@ -483,6 +485,7 @@ final class Mutqan_Rest {
 
     /** Owner/operations control assistant (Claude with business-only tools). */
     public static function h_agent($req, $p) { return Mutqan_Agent::handle(self::body($req), $p); }
+    public static function h_ops($req, $p) { return Mutqan_Ops::handle(self::body($req), $p); }
 
     /* ------------------------------------------------------------------ /push (in-app notifications) */
 

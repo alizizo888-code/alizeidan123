@@ -30,7 +30,8 @@ final class Mutqan_Policy {
                 'orders' => ['orders', 'anon_ok', 'orders', 'write'],
                 'customers' => ['creator_or_read', 'authed', 'creator_or_write', 'write'],
                 'handoffs' => ['creator_or_read', 'anon_ok', 'staff_or_creator', 'write'],
-                'calls' => ['creator_or_read', 'anon_ok', 'staff_or_creator', 'write'],
+                // A call is seen and answered by its caller, operations, and the one person it rings (`toUser`, set by Mutqan_Callnet).
+                'calls' => ['call', 'anon_ok', 'call', 'write'],
                 // Hotline register (written by operations): who called, the code given to the caller, and what he was linked to.
                 'call_log' => ['read', 'write', 'write', 'write'], 'call_contacts' => ['read', 'write', 'write', 'write'],
                 'notifications' => ['creator_or_read', 'authed', 'target_or_write', 'write'],
@@ -94,6 +95,9 @@ final class Mutqan_Policy {
             case 'creator_or_read':
                 if (self::has_power($p, 'read')) { return ['', []]; }
                 return $isUser ? ['(owner_id=%s OR visible_to=%s)', [$me, 'user:' . $me]] : ['0', []];
+            case 'call':
+                if (self::has_power($p, 'read')) { return ['', []]; }
+                return $isUser ? ['(owner_id=%s OR ' . self::jx('toUser') . '=%s)', [$me, $me]] : ['0', []];
             case 'chat':
                 // An order's conversation: its customer sees everything; its technician sees the technician channel; staff with read power see all.
                 if (self::has_power($p, 'read')) { return ['', []]; }
@@ -135,6 +139,12 @@ final class Mutqan_Policy {
             case 'creator_or_read': return $creator || self::has_power($p, 'read');
             case 'creator_or_write': return $creator || self::has_power($p, 'write');
             case 'staff_or_creator': return $creator || self::is_staff($p);
+            case 'call': {
+                if ($creator || (self::is_staff($p) && ($p['role'] ?? '') !== 'technician')) { return true; }
+                if (!$row || $kind === 'guest') { return false; }
+                $d = json_decode($row['data'], true) ?: [];
+                return ($d['toUser'] ?? null) === $me;
+            }
             case 'chat': {
                 if (self::has_power($p, 'read') || $creator) { return true; }
                 if (!$row) { return false; }
@@ -296,6 +306,7 @@ final class Mutqan_Policy {
         if ($coll === 'handoffs' && !self::is_staff($p)) { Mutqan_Limiter::hit('handoff_insert', 10, 3600); }
         if (in_array($coll, ['orders', 'calls', 'handoffs'], true) && class_exists('Mutqan_Block')) { Mutqan_Block::check_row($data, $p); }
         if ($coll === 'calls' && !self::is_staff($p)) { Mutqan_Limiter::hit('call_insert', 8, 3600); }
+        if ($coll === 'calls') { unset($data['toUser'], $data['orderId']); $data['to'] = 'ops'; $data['from'] = ['role' => Mutqan_Callnet::side_of($p), 'name' => mb_substr((string) ($data['name'] ?? ''), 0, 60), 'id' => (string) ($p['id'] ?? '')]; }
         return $data;
     }
 
@@ -332,6 +343,15 @@ final class Mutqan_Policy {
             }
         }
         if ($coll === 'tech_applications' && !self::has_power($p, 'write')) { unset($patch['status'], $patch['reviewedAt'], $patch['reviewedBy'], $patch['reviewNote'], $patch['userId']); }
+        if ($coll === 'orders' && !self::is_system($p)) { unset($patch['techCall']); }   // only Mutqan_Callnet (request / decide) writes it
+        if ($coll === 'calls' && !self::is_system($p)) {
+            unset($patch['to'], $patch['toUser'], $patch['from'], $patch['orderId']);
+            // The person being rung may only answer, decline, hang up and send his half of the connection.
+            if ($row['owner_id'] !== $me && !(self::is_staff($p) && ($p['role'] ?? '') !== 'technician')) {
+                $patch = array_intersect_key($patch, array_flip(['sSig', 'cSig', 'status', 'answeredBy', 'answeredAt', 'endedAt']));
+                if (isset($patch['status']) && !in_array($patch['status'], ['active', 'declined', 'ended'], true)) { unset($patch['status']); }
+            }
+        }
         return $patch;
     }
 
