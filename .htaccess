@@ -72,6 +72,9 @@ Header set Content-Security-Policy "default-src 'self'; img-src 'self' data:; st
 # the strict policy stays for everything else, and only these three pages get the wider one.
 <IfModule mod_headers.c>
 <FilesMatch "^(desk|desk-ops|index)\.html$">
+# These pages answer hotline calls (and use voice input), so the microphone is allowed for this origin only.
+# With microphone=() the browser refused the mic the moment operations pressed "answer": the call rang, then failed.
+Header set Permissions-Policy "camera=(), microphone=(self), geolocation=(self)"
 Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://oxygen11.com https://*.oxygen11.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://oxygen11.com https://*.oxygen11.com; media-src 'self' blob: data:; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 </FilesMatch>
 </IfModule>
