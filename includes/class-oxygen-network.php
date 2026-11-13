@@ -17,9 +17,13 @@ final class Oxygen_Network {
     const OPT_CONTACTS = 'oxygen_network_contacts';
 
     /** id => [name, sub-domain label, colour, SEO focus: share of A/C + cold rooms, share of Makkah/Jeddah] */
+    const OPT_EXTRA = 'oxygen_network_extra';      // sites the owner linked from the app (hub only)
+    const TR_REMOTE = 'oxygen_network_remote';     // the hub's list of linked sites, cached on every other site
+    private static $reg = null;
+    public static function reset() { self::$reg = null; }
+
     public static function registry() {
-        static $r = null;
-        if ($r !== null) { return $r; }
+        if (self::$reg !== null) { return self::$reg; }
         $r = [
             // latin: the Latin wordmark the two original faces show beside their Arabic name. The other
             // faces have none and show their Arabic name in those places.
@@ -47,7 +51,61 @@ final class Oxygen_Network {
             'kafaa'       => ['name' => 'الكفاءة',       'label' => 'kafaa-maintenance-general-contracting',       'color' => '#0891b2', 'twin' => 'mutamad'],
             'jawda'       => ['name' => 'الجودة',        'label' => 'jawda-maintenance-general-contracting',       'color' => '#9a3412', 'twin' => 'misriya'],
         ];
+        self::$reg = $r;                                   // the built-in 22 first: extras() may ask current_id() on the way
+        foreach (self::extras() as $id => $x) { if (!isset($r[$id])) { $r[$id] = $x + ['label' => '', 'extra' => true]; } }
+        self::$reg = $r;
         return $r;
+    }
+
+    /* ------------------------------------------------------------------ sites linked later, from the owner's app */
+
+    private static function own_host() {
+        $h = function_exists('wp_parse_url') && function_exists('home_url') ? (string) wp_parse_url(home_url('/'), PHP_URL_HOST) : (string) ($_SERVER['HTTP_HOST'] ?? '');
+        return strtolower(preg_replace('/^www\./', '', $h));
+    }
+    public static function is_hub() { return self::own_host() === self::HUB_HOST; }
+
+    /** Linked sites: the hub keeps them; every other site reads the hub's list (cached six hours) so a new site knows who it is. */
+    public static function extras() {
+        if (!function_exists('get_option')) { return []; }
+        if (self::is_hub()) { $o = get_option(self::OPT_EXTRA, []); return is_array($o) ? $o : []; }
+        $c = function_exists('get_transient') ? get_transient(self::TR_REMOTE) : false;
+        if (is_array($c)) { return $c; }
+        $list = [];
+        if (function_exists('wp_remote_get')) {
+            $res = wp_remote_get('https://' . self::HUB_HOST . '/wp-json/oxygen/v1/net-registry', ['timeout' => 4]);
+            $d = !is_wp_error($res) ? json_decode((string) wp_remote_retrieve_body($res), true) : null;
+            if (is_array($d) && isset($d['sites']) && is_array($d['sites'])) { foreach ($d['sites'] as $id => $x) { if (self::valid_new_id($id) && is_array($x) && !empty($x['host'])) { $list[$id] = ['name' => (string) ($x['name'] ?? $id), 'host' => (string) $x['host'], 'color' => (string) ($x['color'] ?? '#64748b')]; } } }
+        }
+        if (function_exists('set_transient')) { set_transient(self::TR_REMOTE, $list, $list ? 21600 : 1800); }
+        return $list;
+    }
+    private static function valid_new_id($id) { return is_string($id) && preg_match('/^[a-z][a-z0-9]{1,23}$/', $id); }
+    public static function clean_host($h) {
+        $h = strtolower(trim((string) $h));
+        $h = preg_replace('#^https?://#', '', $h); $h = preg_replace('#[/?\#].*$#', '', $h); $h = preg_replace('/^www\./', '', $h);
+        return preg_match('/^(?=.{4,190}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/', $h) ? $h : '';
+    }
+
+    /** Owner links a new site (hub only). Returns the new entry. */
+    public static function add_extra($name, $host, $color = '') {
+        $name = trim(wp_strip_all_tags((string) $name)); $host = self::clean_host($host);
+        if (mb_strlen($name) < 2 || mb_strlen($name) > 40) { throw new InvalidArgumentException('اكتب اسم الموقع.'); }
+        if ($host === '') { throw new InvalidArgumentException('الدومين غير صحيح — مثال: example.com'); }
+        foreach (array_keys(self::registry()) as $id) { if (self::host_of($id) === $host) { throw new InvalidArgumentException('الدومين ده مربوط بالفعل.'); } }
+        $base = preg_replace('/[^a-z0-9]/', '', explode('.', $host)[0]); $base = preg_match('/^[a-z]/', $base) ? substr($base, 0, 20) : 's' . substr($base, 0, 19);
+        if (strlen($base) < 2) { $base = 'site'; }
+        $id = $base; $i = 1; while (isset(self::registry()[$id]) || isset(self::blog_brands()[$id])) { $id = $base . (++$i); }
+        $color = preg_match('/^#[0-9a-f]{6}$/i', (string) $color) ? strtolower($color) : '#64748b';
+        $o = get_option(self::OPT_EXTRA, []); if (!is_array($o)) { $o = []; }
+        $o[$id] = ['name' => $name, 'host' => $host, 'color' => $color, 'at' => gmdate('c')];
+        update_option(self::OPT_EXTRA, $o, false); self::reset();
+        return ['id' => $id] + $o[$id];
+    }
+    public static function remove_extra($id) {
+        $o = get_option(self::OPT_EXTRA, []); if (!is_array($o) || !isset($o[$id])) { return false; }
+        unset($o[$id]); update_option(self::OPT_EXTRA, $o, false); self::reset();
+        return true;
     }
 
     public static function is_satellite() { $id = self::current_id(); return !empty($id) && empty(self::registry()[$id]['core']); }
@@ -91,6 +149,7 @@ final class Oxygen_Network {
     public static function host_of($id) {
         $r = self::registry();
         if (!isset($r[$id])) { return ''; }
+        if (!empty($r[$id]['host'])) { return $r[$id]['host']; }
         return $id === 'oxygen' ? self::HUB_HOST : $r[$id]['label'] . '.' . self::HUB_HOST;
     }
 
@@ -156,14 +215,30 @@ final class Oxygen_Network {
         ];
     }
 
-    /** Satellites talk to the hub's REST API; the two original sites keep their own. */
+    /**
+     * Every site talks to the hub's REST API, so all 22 (and any site linked later) share ONE operations room,
+     * one owner, one team and one customer list. Only the hub itself answers locally.
+     * (Mutqan used to keep its own API and database: its orders never reached the operations room.)
+     */
     public static function api_base($id = null) {
         $id = $id ?: self::current_id();
         $r = self::registry();
-        if (!isset($r[$id]) || !empty($r[$id]['core'])) { return ''; }
+        if (!isset($r[$id]) || $id === 'oxygen') { return ''; }
         return 'https://' . self::HUB_HOST . '/wp-json/mutqan/v1';
     }
 
     /** Brand id to stamp on a new order: only registry ids are accepted, anything else becomes the hub brand. */
     public static function clean_brand($v) { return self::valid($v) ? $v : 'oxygen'; }
+}
+
+// The hub publishes the sites linked from the owner's app (names, domains, colours only), so a newly linked
+// site finds out who it is and sends its orders to the shared operations room.
+if (function_exists('add_action')) {
+    add_action('rest_api_init', function () {
+        register_rest_route('oxygen/v1', '/net-registry', ['methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function () {
+            $out = [];
+            if (Oxygen_Network::is_hub()) { foreach (Oxygen_Network::extras() as $id => $x) { $out[$id] = ['name' => $x['name'], 'host' => $x['host'], 'color' => $x['color']]; } }
+            return rest_ensure_response(['sites' => (object) $out]);
+        }]);
+    });
 }
