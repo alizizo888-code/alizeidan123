@@ -79,6 +79,7 @@ final class Mutqan_Agent {
         $who = ($p['role'] ?? '') === 'owner' ? 'المالك' : 'مشرف العمليات';
         return "أنت مساعد التحكم الداخلي لشركة أكسجين/أكسجين للصيانة والمقاولات العامة (مكة وجدة). تتكلم مع {$who} بالعربية المصرية المختصرة.\n"
             . "شغلك فقط على أنظمة الشركة عبر الأدوات المتاحة: الطلبات، الواتساب، موقع ووردبريس، DNS نطاق oxygen11.com على هوستنجر، ومدونات الشبكة على بلوجر (قراءة).\n"
+            . "وأنت كمان مدرّب «العقل التجاري» اللي بيفاصل العملاء: لما المالك يشرح أسعار أو قواعد مواعيد (مثلاً: جدة أيام الأحد والثلاثاء، بعد 3 طلبات قرّب المواعيد، أقصى خصم 10%) حوّل كلامه لـ sales_brain_set، ولما يدّي توجيه في أسلوب الكلام استخدم sales_teach. اقرأ sales_brain_get قبل أي تعديل، وجرّب بـ sales_simulate لو طلب يشوف البوت هيرد إزاي.\n"
             . "لا تعد بتنفيذ شيء خارج هذه الأدوات، وارفض أي طلب لا يخص الشركة. قبل أي تعديل اقرأ الحالة الحالية بأداة قراءة.\n"
             . "الأدوات المعلَّمة (تحتاج تأكيد) لا تُنفَّذ فورًا: تُعرض على المستخدم ليضغط تنفيذ؛ لا تقل إنها تمت.\n"
             . 'التاريخ الآن ' . wp_date('Y-m-d H:i') . ' بتوقيت السعودية.';
@@ -117,12 +118,20 @@ final class Mutqan_Agent {
             ['name' => 'ops_query', 'description' => 'اسأل مدير العمليات (قراءة فقط): what = ops_overview | alerts | orders_archive | order_story | where_techs | where_supervisors | money_report | activity_log، و input حسب الأداة (from/to/days/status/tech/q/id/number/name/hours).', 'input_schema' => $s(['what' => ['type' => 'string', 'enum' => ['ops_overview', 'alerts', 'orders_archive', 'order_story', 'where_techs', 'where_supervisors', 'money_report', 'activity_log']], 'input' => ['type' => 'object']], ['what'])],
             ['name' => 'expense_add', 'description' => 'تسجيل مصروف على الشركة: amount بالريال، category (بنزين/قطع غيار/فريون/مواصلات/رواتب/إيجار/أخرى)، note، واختياري orderId لو المصروف تابع لطلب. (تحتاج تأكيد)', 'input_schema' => $s(['amount' => ['type' => 'number'], 'category' => $str, 'note' => $str, 'orderId' => $str, 'at' => $str], ['amount', 'category'])],
             ['name' => 'blogger_posts', 'description' => 'آخر المقالات المنشورة على مدونة من الشبكة (من الخلاصة العامة).', 'input_schema' => $s(['brand' => $str, 'limit' => $int], ['brand'])],
+            // «العقل التجاري»: the owner teaches the sales brain by talking to it.
+            ['name' => 'sales_brain_get', 'description' => 'قراءة سياسة العقل التجاري (أقصى خصم، خصم الصباح، الولاء، أيام وساعات مكة وجدة، قواعد التجميع بعد 3/5/8 طلبات، الإشعارات، تعليمات المالك) مع خطة اليوم وتحليل الأسعار.', 'input_schema' => $s([])],
+            ['name' => 'sales_brain_set', 'description' => 'تعديل سياسة العقل التجاري. patch يدمج مع الموجود: pricing{maxDiscountPct,offPeakPct,loyalPct,loyalAfter,vipTicket,noPeakDiscount}, cities{makkah|jeddah:{enabled,days[0-6 الأحد=0],from,to,dailyCap,minBatch}}, batching[{after,mode:cluster|windows|next_day,clusterHours,windows[{from,to}]}], notify{morningHour,eveningHour,thresholds,bigDeal,bigDealSar}. (تحتاج تأكيد)', 'input_schema' => $s(['patch' => ['type' => 'object']], ['patch'])],
+            ['name' => 'sales_teach', 'description' => 'إضافة تعليمة دائمة للبوت في الفصال والكلام مع العملاء (مثال: «ركّز على الضمان قبل أي خصم»، «عملاء العمارات حوّلهم لي»). التعليمات لا تكسر الحد الأدنى للسعر أبدًا.', 'input_schema' => $s(['note' => $str], ['note'])],
+            ['name' => 'customer_profile', 'description' => 'ملف عميل من طلباته: عدد الطلبات، متوسط السعر، نسبة الفصال، تصنيفه (جديد/دائم/مميز/فصّال/شركة) وحساسيته للسعر.', 'input_schema' => $s(['phone' => $str], ['phone'])],
+            ['name' => 'day_plan', 'description' => 'خطة يوم (مكة وجدة): عدد الطلبات وأوقاتها والذروة والقاعدة الشغالة وأول المواعيد المتاحة. date بصيغة YYYY-MM-DD (افتراضي اليوم).', 'input_schema' => $s(['date' => $str])],
+            ['name' => 'sales_simulate', 'description' => 'جرّب البوت: رسالة عميل + السعر الرسمي (list) والحد الأدنى (floor) → السيناريو المختار، السعر اللي هيقوله، المواعيد اللي هيعرضها، ومثال رد.', 'input_schema' => $s(['text' => $str, 'list' => ['type' => 'number'], 'floor' => ['type' => 'number'], 'phone' => $str, 'city' => ['type' => 'string', 'enum' => ['makkah', 'jeddah', 'out']]], ['text'])],
+            ['name' => 'sales_scenarios', 'description' => 'بحث في مكتبة سيناريوهات الفصال والاتفاق (أكثر من 700 سيناريو: موقف × نوع عميل × ذروة/هدوء).', 'input_schema' => $s(['q' => $str, 'limit' => $int])],
         ];
     }
 
     /** Which calls wait for the owner's "تنفيذ" (policy: confirm what matters only). */
     public static function needs_confirm($name, $input) {
-        if (in_array($name, ['wa_send', 'dns_set', 'settings_set', 'ai_engine_set', 'tech_create', 'tech_update', 'expense_add'], true)) { return true; }
+        if (in_array($name, ['wa_send', 'dns_set', 'settings_set', 'ai_engine_set', 'tech_create', 'tech_update', 'expense_add', 'sales_brain_set'], true)) { return true; }
         if ($name === 'wp_update') {
             $post = get_post((int) ($input['id'] ?? 0));
             return ($input['status'] ?? '') === 'publish' || ($post && $post->post_status === 'publish');
@@ -188,6 +197,7 @@ final class Mutqan_Agent {
             case 'dns_set': return 'سجل DNS ' . ($in['type'] ?? '') . ' ' . ($in['name'] ?? '') . '.' . self::ZONE . ' ← ' . ($in['content'] ?? '');
             case 'ai_engine_set': return 'تعديل إعدادات محرك الذكاء في الموقع: ' . mb_substr(wp_json_encode($in, JSON_UNESCAPED_UNICODE), 0, 200);
             case 'settings_set': return 'تعديل إعدادات «' . (self::SETTINGS[$in['key'] ?? ''] ?? '') . '»: ' . mb_substr(wp_json_encode($in['patch'] ?? [], JSON_UNESCAPED_UNICODE), 0, 200);
+            case 'sales_brain_set': return 'تعديل سياسة العقل التجاري: ' . mb_substr(wp_json_encode($in['patch'] ?? [], JSON_UNESCAPED_UNICODE), 0, 220);
             case 'wp_update': return 'تعديل المحتوى رقم ' . ($in['id'] ?? '') . (isset($in['status']) ? ' (الحالة: ' . $in['status'] . ')' : '') . (isset($in['title']) ? ' — العنوان: ' . $in['title'] : '');
         }
         return $name;
@@ -217,6 +227,24 @@ final class Mutqan_Agent {
 
     public static function run_tool($name, $in, $p) {
         switch ($name) {
+            case 'sales_brain_get':
+                return ['settings' => Mutqan_Sales::settings(), 'today' => Mutqan_Sales::day_plan(), 'insights' => Mutqan_Sales::insights(30), 'playbook' => Mutqan_Playbook::stats()];
+            case 'sales_brain_set':
+                if (($p['role'] ?? '') !== 'owner') { throw new Exception('تعديل سياسة الأسعار للمالك فقط.'); }
+                return Mutqan_Sales::save((array) ($in['patch'] ?? []));
+            case 'sales_teach':
+                $note = trim((string) ($in['note'] ?? ''));
+                if ($note === '') { throw new Exception('اكتب التعليمة.'); }
+                $st = Mutqan_Sales::save(['note' => $note]);
+                return ['ok' => true, 'notes' => count($st['notes'])];
+            case 'customer_profile': return Mutqan_Sales::profile((string) ($in['phone'] ?? ''));
+            case 'day_plan':
+                $d = preg_match('/^\d{4}-\d\d-\d\d$/', (string) ($in['date'] ?? '')) ? $in['date'] : null;
+                return ['plan' => Mutqan_Sales::day_plan($d), 'makkah' => Mutqan_Sales::slots('makkah'), 'jeddah' => Mutqan_Sales::slots('jeddah')];
+            case 'sales_simulate':
+                $r = Mutqan_Sales::simulate($in); unset($r['prompt']); return $r;
+            case 'sales_scenarios':
+                return ['stats' => Mutqan_Playbook::stats(), 'items' => Mutqan_Playbook::search((string) ($in['q'] ?? ''), max(1, min(30, (int) ($in['limit'] ?? 10))))];
             case 'orders_list':
                 $f = [];
                 if (!empty($in['status'])) { $f['status'] = (string) $in['status']; }

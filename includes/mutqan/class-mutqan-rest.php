@@ -36,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -269,7 +269,8 @@ final class Mutqan_Rest {
                 if (!$techId) { self::admin_alert('💬 رسالة من عميل — ' . $short, $txt, $urlStaff, 'order_msg', 'normal', $m['orderId']); }
             }
         } elseif ($from === 'tech') {
-            $titles = ['eta' => '🚗 الفني سيصل خلال 10 دقائق', 'arrived' => '📍 وصل الفني إلى موقعك', 'postponed' => '⏳ تم تأجيل طلبك'];
+            $titles = ['eta' => '🚗 الفني سيصل خلال ' . (!empty($m['minutes']) ? (int) $m['minutes'] . ' دقيقة' : '10 دقائق'), 'arrived' => '📍 وصل الفني إلى موقعك', 'postponed' => '⏳ تم تأجيل طلبك'];
+            if ($kind === 'eta' && class_exists('Mutqan_OrderBot')) { Mutqan_OrderBot::on_tech_eta(array_merge($m, ['minutes' => $m['minutes'] ?? 10])); }
             $title = ($titles[$kind] ?? '💬 رسالة من الفني') . ' ' . $short;
             $ring = in_array($kind, ['eta', 'arrived', 'postponed'], true);
             $push($clientId, $title, $txt ?: ($kind === 'arrived' ? 'افتح الباب — الفني عند موقعك.' : ''), $urlClient, $ring ? 'bell' : 'chime', $ring ? 'high' : 'normal');
@@ -495,6 +496,12 @@ final class Mutqan_Rest {
     }
     public static function h_network($req, $p) { return Mutqan_Network::handle(self::body($req), $p); }
     public static function h_devices($req, $p) { return Mutqan_Devices::handle(self::body($req), $p); }
+
+    /** «العقل التجاري»: the sales brain's policy, today's plan, the playbook and the simulator (owner/operations). */
+    public static function h_sales($req, $p) { return Mutqan_Sales::handle(self::body($req), $p); }
+
+    /** «مساعد الطلب»: answers the customer inside his order's conversation and relays to the technician / the room. */
+    public static function h_orderbot($req, $p) { return Mutqan_OrderBot::handle(self::body($req), $p); }
 
     /* ------------------------------------------------------------------ /push (in-app notifications) */
 

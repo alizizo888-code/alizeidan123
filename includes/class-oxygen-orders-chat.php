@@ -358,6 +358,15 @@ final class Oxygen_Orders_Chat {
             else { $reply = $r['reply']; $order_id = $r['order']; $provider = $r['provider']; }
         }
         if ($engine === 'claude') {
+            // The free path gets the sales brain at the gateway; Claude is called directly here, so it gets it here.
+            if (class_exists('Mutqan_Sales')) {
+                try {
+                    $lines = []; foreach ($messages as $m) { if ($m['role'] === 'user' && is_string($m['content'])) { $lines[] = $m['content']; } }
+                    $plan = Mutqan_Sales::plan(['lines' => $lines, 'phone' => self::customer_phone($messages)]);
+                    $block = Mutqan_Sales::prompt_block($plan);
+                    if ($block !== '' && !empty(Mutqan_Sales::settings()['enabled'])) { $system .= "\n\n" . $block; }
+                } catch (Throwable $e) { error_log('[oxygen-chat] sales brain: ' . $e->getMessage()); }
+            }
             $tools = [self::order_tool($services)];
             $convo = $messages;
             for ($i = 0; $i < 3; $i++) {
@@ -409,7 +418,7 @@ final class Oxygen_Orders_Chat {
         $extra = '';
         for ($i = 0; $i < 3; $i++) {
             try {
-                $res = Mutqan_AI::run($system . "\n\n## المحادثة\n" . $convo . $extra . $contract, ['json' => true, 'tier' => 'low', 'temperature' => 0.4], ['role' => null]);
+                $res = Mutqan_AI::run($system . "\n\n## المحادثة\n" . $convo . $extra . $contract, ['json' => true, 'tier' => 'low', 'temperature' => 0.4, 'feature' => 'site_chat', 'sales' => ['phone' => $phone]], ['role' => null]);
             } catch (Throwable $e) { error_log('[oxygen-chat] free AI: ' . $e->getMessage()); return null; }
             $j = is_array($res['json'] ?? null) ? $res['json'] : null;
             $reply = trim((string) ($j['reply'] ?? ($j === null ? ($res['text'] ?? '') : '')));
