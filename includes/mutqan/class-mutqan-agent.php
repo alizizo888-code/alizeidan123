@@ -114,13 +114,15 @@ final class Mutqan_Agent {
             ['name' => 'ai_engine', 'description' => 'حالة الذكاء الاصطناعي اللي جوه الموقع (البوت): المزودين المفعّلين والموديلات ونتيجة الاختبار.', 'input_schema' => $s(['test' => ['type' => 'boolean']])],
             ['name' => 'ai_engine_set', 'description' => 'تعديل إعدادات محرك الذكاء اللي جوه الموقع (ترتيب المزودين، تفعيل/إيقاف، الموديل، الحدود). المفاتيح بيدخلها المالك بنفسه من التطبيق. (تحتاج تأكيد)', 'input_schema' => $s(['order' => ['type' => 'array', 'items' => $str], 'providers' => ['type' => 'object'], 'per_ip_10min' => $int, 'per_ip_day' => $int, 'mask_pii' => ['type' => 'boolean']])],
             ['name' => 'ai_ask', 'description' => 'اسأل الذكاء الاصطناعي اللي جوه الموقع نفسه (نفس محرك البوت) وخد رده.', 'input_schema' => $s(['prompt' => $str], ['prompt'])],
+            ['name' => 'ops_query', 'description' => 'اسأل مدير العمليات (قراءة فقط): what = ops_overview | alerts | orders_archive | order_story | where_techs | where_supervisors | money_report | activity_log، و input حسب الأداة (from/to/days/status/tech/q/id/number/name/hours).', 'input_schema' => $s(['what' => ['type' => 'string', 'enum' => ['ops_overview', 'alerts', 'orders_archive', 'order_story', 'where_techs', 'where_supervisors', 'money_report', 'activity_log']], 'input' => ['type' => 'object']], ['what'])],
+            ['name' => 'expense_add', 'description' => 'تسجيل مصروف على الشركة: amount بالريال، category (بنزين/قطع غيار/فريون/مواصلات/رواتب/إيجار/أخرى)، note، واختياري orderId لو المصروف تابع لطلب. (تحتاج تأكيد)', 'input_schema' => $s(['amount' => ['type' => 'number'], 'category' => $str, 'note' => $str, 'orderId' => $str, 'at' => $str], ['amount', 'category'])],
             ['name' => 'blogger_posts', 'description' => 'آخر المقالات المنشورة على مدونة من الشبكة (من الخلاصة العامة).', 'input_schema' => $s(['brand' => $str, 'limit' => $int], ['brand'])],
         ];
     }
 
     /** Which calls wait for the owner's "تنفيذ" (policy: confirm what matters only). */
     public static function needs_confirm($name, $input) {
-        if (in_array($name, ['wa_send', 'dns_set', 'settings_set', 'ai_engine_set', 'tech_create', 'tech_update'], true)) { return true; }
+        if (in_array($name, ['wa_send', 'dns_set', 'settings_set', 'ai_engine_set', 'tech_create', 'tech_update', 'expense_add'], true)) { return true; }
         if ($name === 'wp_update') {
             $post = get_post((int) ($input['id'] ?? 0));
             return ($input['status'] ?? '') === 'publish' || ($post && $post->post_status === 'publish');
@@ -181,6 +183,7 @@ final class Mutqan_Agent {
 
     public static function summary($name, $in) {
         switch ($name) {
+            case 'expense_add': return 'تسجيل مصروف ' . ($in['amount'] ?? '') . ' ر.س — ' . ($in['category'] ?? '') . (!empty($in['note']) ? ' (' . mb_substr((string) $in['note'], 0, 80) . ')' : '') . (!empty($in['orderId']) ? ' على الطلب ' . $in['orderId'] : '');
             case 'wa_send': return 'إرسال واتساب إلى ' . ($in['phone'] ?? '') . ': «' . mb_substr((string) ($in['text'] ?? ''), 0, 160) . '»';
             case 'dns_set': return 'سجل DNS ' . ($in['type'] ?? '') . ' ' . ($in['name'] ?? '') . '.' . self::ZONE . ' ← ' . ($in['content'] ?? '');
             case 'ai_engine_set': return 'تعديل إعدادات محرك الذكاء في الموقع: ' . mb_substr(wp_json_encode($in, JSON_UNESCAPED_UNICODE), 0, 200);
@@ -399,6 +402,17 @@ final class Mutqan_Agent {
                 $res = wp_remote_get('https://www.blogger.com/feeds/' . rawurlencode($b['blog_id']) . '/posts/default?alt=json&max-results=' . max(1, min(50, (int) ($in['limit'] ?? 10))), ['timeout' => 15]);
                 $d = json_decode(wp_remote_retrieve_body($res), true);
                 return array_map(function ($e) { $u = ''; foreach ($e['link'] as $l) { if ($l['rel'] === 'alternate') { $u = $l['href']; } } return ['title' => $e['title']['$t'] ?? '', 'url' => $u, 'published' => $e['published']['$t'] ?? '']; }, (array) ($d['feed']['entry'] ?? []));
+            case 'ops_query':
+                if (!class_exists('Mutqan_Ops')) { throw new Exception('مدير العمليات مش متاح.'); }
+                return Mutqan_Ops::run_tool((string) ($in['what'] ?? 'ops_overview'), (array) ($in['input'] ?? []));
+            case 'expense_add': {
+                $amt = (float) ($in['amount'] ?? 0);
+                if ($amt <= 0 || $amt > 1000000) { throw new Exception('المبلغ غير صحيح.'); }
+                $doc = ['amount' => round($amt, 2), 'category' => mb_substr(trim((string) ($in['category'] ?? 'أخرى')) ?: 'أخرى', 0, 40), 'note' => mb_substr((string) ($in['note'] ?? ''), 0, 300),
+                    'orderId' => (string) ($in['orderId'] ?? ''), 'at' => !empty($in['at']) && strtotime((string) $in['at']) ? gmdate('c', strtotime((string) $in['at'])) : gmdate('c'), 'by' => (string) ($p['name'] ?? $p['role'] ?? '')];
+                $r = Mutqan_Store::insert('expenses', $doc, null, ['groupId' => 'main', 'visibleTo' => 'group', 'writableBy' => 'admins'], $p);
+                return ['saved' => true, 'id' => $r['id'] ?? ''] + $doc;
+            }
             case 'blogger_publish':
                 return Mutqan_Blogger::publish((string) ($in['brand'] ?? ''), (string) ($in['title'] ?? ''), (string) ($in['html'] ?? ''), $in['labels'] ?? []);
             case 'blogger_title':
@@ -459,7 +473,7 @@ final class Mutqan_Agent {
     /** GET ?tool=orders_list|order_get|stats_summary|wa_recent|wp_search|network_list&...args (read tools only). */
     public static function control_get($req) {
         $tool = (string) $req->get_param('tool');
-        if (!in_array($tool, ['orders_list', 'order_get', 'stats_summary', 'wa_recent', 'wp_search', 'wp_get', 'network_list', 'blogger_list', 'techs_list', 'customers_list', 'shops_list', 'settings_get', 'dns_list', 'ai_engine', 'hotline_status', 'calls_list', 'block_list'], true)) { return new WP_REST_Response(['error' => 'unknown tool'], 400); }
+        if (!in_array($tool, ['orders_list', 'order_get', 'stats_summary', 'wa_recent', 'wp_search', 'wp_get', 'network_list', 'blogger_list', 'techs_list', 'customers_list', 'shops_list', 'settings_get', 'dns_list', 'ai_engine', 'hotline_status', 'calls_list', 'block_list', 'ops_query'], true)) { return new WP_REST_Response(['error' => 'unknown tool'], 400); }
         try { return new WP_REST_Response(['data' => self::run_tool($tool, (array) $req->get_params(), self::admin_principal())], 200); }
         catch (Throwable $e) { return new WP_REST_Response(['error' => $e->getMessage()], 422); }
     }
@@ -468,7 +482,7 @@ final class Mutqan_Agent {
     public static function control_post($req) {
         $b = (array) $req->get_json_params();
         $tool = (string) ($b['tool'] ?? '');
-        if (!in_array($tool, ['order_update', 'order_assign', 'settings_set', 'ai_engine_set', 'ai_ask', 'wa_send', 'wp_draft', 'wp_update', 'blogger_publish', 'blogger_title', 'tech_create', 'tech_update', 'call_followup', 'tg_notify', 'block_add', 'block_remove'], true)) { return new WP_REST_Response(['error' => 'unknown tool'], 400); }
+        if (!in_array($tool, ['order_update', 'order_assign', 'settings_set', 'ai_engine_set', 'ai_ask', 'wa_send', 'wp_draft', 'wp_update', 'blogger_publish', 'blogger_title', 'tech_create', 'tech_update', 'call_followup', 'tg_notify', 'block_add', 'block_remove', 'expense_add'], true)) { return new WP_REST_Response(['error' => 'unknown tool'], 400); }
         $p = self::admin_principal(); $in = (array) ($b['input'] ?? []);
         try { $out = self::run_tool($tool, $in, $p); self::audit($tool, $in, true, $p, true); return new WP_REST_Response(['data' => $out], 200); }
         catch (Throwable $e) { self::audit($tool, $in, false, $p, true); return new WP_REST_Response(['error' => $e->getMessage()], 422); }
