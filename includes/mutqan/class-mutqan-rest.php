@@ -36,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'ops', 'push', 'webpush', 'relay', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'ops', 'devices', 'push', 'webpush', 'relay', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -484,6 +484,7 @@ final class Mutqan_Rest {
     /** Owner/operations control assistant (Claude with business-only tools). */
     public static function h_agent($req, $p) { return Mutqan_Agent::handle(self::body($req), $p); }
     public static function h_ops($req, $p) { return Mutqan_Ops::handle(self::body($req), $p); }
+    public static function h_devices($req, $p) { return Mutqan_Devices::handle(self::body($req), $p); }
 
     /* ------------------------------------------------------------------ /push (in-app notifications) */
 
