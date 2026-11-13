@@ -195,7 +195,7 @@ final class Mutqan_Auth {
         $ok = $wpdb->insert(Mutqan_Store::table('sessions'), [
             'token_hash' => hash('sha256', $token), 'user_id' => $uid,
             'expires_at' => gmdate('Y-m-d H:i:s', time() + self::SESSION_DAYS * 86400), 'created_at' => Mutqan_Store::now(),
-        ]);
+        ], ['%s', '%s', '%s', '%s']);   // formats are required: WordPress treats any «user_id» column as a number, and «u-1e7a…» became 0
         // A session that was never stored used to be handed out anyway: the app «signed in», then every request
         // came back «انتهت الجلسة» / «غير مسموح». Say so at sign-in instead.
         if ($ok === false) {
@@ -210,7 +210,7 @@ final class Mutqan_Auth {
         global $wpdb;
         $S = Mutqan_Store::table('sessions'); $U = Mutqan_Store::table('users');
         $h = hash('sha256', 'probe-' . bin2hex(random_bytes(8)));
-        $ins = $wpdb->insert($S, ['token_hash' => $h, 'user_id' => 'probe', 'expires_at' => gmdate('Y-m-d H:i:s', time() + 60), 'created_at' => Mutqan_Store::now()]);
+        $ins = $wpdb->insert($S, ['token_hash' => $h, 'user_id' => 'probe', 'expires_at' => gmdate('Y-m-d H:i:s', time() + 60), 'created_at' => Mutqan_Store::now()], ['%s', '%s', '%s', '%s']);
         $err = (string) ($wpdb->last_error ?? "");
         $found = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $S WHERE token_hash=%s AND expires_at > %s", $h, Mutqan_Store::now()));
         $wpdb->delete($S, ['token_hash' => $h]);
@@ -219,7 +219,7 @@ final class Mutqan_Auth {
         $ow = self::owner_row(); $join = null; $ownerSessions = null; $recent = null;
         if ($ow) {
             $h2 = hash('sha256', 'probe2-' . bin2hex(random_bytes(8)));
-            $ins2 = $wpdb->insert($S, ['token_hash' => $h2, 'user_id' => $ow['id'], 'expires_at' => gmdate('Y-m-d H:i:s', time() + 60), 'created_at' => Mutqan_Store::now()]);
+            $ins2 = $wpdb->insert($S, ['token_hash' => $h2, 'user_id' => $ow['id'], 'expires_at' => gmdate('Y-m-d H:i:s', time() + 60), 'created_at' => Mutqan_Store::now()], ['%s', '%s', '%s', '%s']);
             $err2 = (string) ($wpdb->last_error ?? '');
             $stored = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $S WHERE token_hash=%s", $h2));
             $join = (bool) $wpdb->get_row($wpdb->prepare("SELECT u.id FROM $S s JOIN $U u ON u.id = s.user_id WHERE s.token_hash=%s AND s.expires_at > %s AND u.status='active'", $h2, Mutqan_Store::now()), ARRAY_A);
@@ -259,7 +259,7 @@ final class Mutqan_Auth {
     public static function login_as($u) { return self::session_result($u); }
 
     private static function drop_sessions($uid) {
-        $GLOBALS['wpdb']->delete(Mutqan_Store::table('sessions'), ['user_id' => $uid]);
+        $GLOBALS['wpdb']->delete(Mutqan_Store::table('sessions'), ['user_id' => $uid], ['%s']);   // as a string — see issue_session
     }
 
     /* ------------------------------------------------------------------ customers + login */
