@@ -219,7 +219,9 @@ final class Mutqan_Auth {
         $ow = self::owner_row(); $join = null; $ownerSessions = null; $recent = null;
         if ($ow) {
             $h2 = hash('sha256', 'probe2-' . bin2hex(random_bytes(8)));
-            $wpdb->insert($S, ['token_hash' => $h2, 'user_id' => $ow['id'], 'expires_at' => gmdate('Y-m-d H:i:s', time() + 60), 'created_at' => Mutqan_Store::now()]);
+            $ins2 = $wpdb->insert($S, ['token_hash' => $h2, 'user_id' => $ow['id'], 'expires_at' => gmdate('Y-m-d H:i:s', time() + 60), 'created_at' => Mutqan_Store::now()]);
+            $err2 = (string) ($wpdb->last_error ?? '');
+            $stored = $wpdb->get_var($wpdb->prepare("SELECT user_id FROM $S WHERE token_hash=%s", $h2));
             $join = (bool) $wpdb->get_row($wpdb->prepare("SELECT u.id FROM $S s JOIN $U u ON u.id = s.user_id WHERE s.token_hash=%s AND s.expires_at > %s AND u.status='active'", $h2, Mutqan_Store::now()), ARRAY_A);
             $wpdb->delete($S, ['token_hash' => $h2]);
             $ownerSessions = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $S WHERE user_id=%s", $ow['id']));
@@ -229,6 +231,9 @@ final class Mutqan_Auth {
             'owners' => (int) $wpdb->get_var("SELECT COUNT(*) FROM $U WHERE role='owner'"), 'ownerActive' => $owner ? $owner['status'] === 'active' : null,
             'dbNow' => (string) $wpdb->get_var('SELECT UTC_TIMESTAMP()'), 'phpNow' => Mutqan_Store::now(), 'table' => $S,
             'ownerJoin' => $join, 'ownerSessions' => $ownerSessions, 'ownerRecent' => $recent,
+            'ownerId' => $ow ? $ow['id'] : null, 'ownerIdLen' => $ow ? strlen((string) $ow['id']) : null, 'probe2Insert' => isset($ins2) ? $ins2 !== false : null, 'probe2Error' => isset($err2) ? substr($err2, 0, 160) : null, 'probe2Stored' => $stored ?? null,
+            'sessCols' => method_exists($wpdb, 'get_results') ? array_map(function ($c) { return ($c->Field ?? '') . ' ' . ($c->Type ?? ''); }, (array) $wpdb->get_results("SHOW COLUMNS FROM $S")) : null,
+            'userIdCol' => method_exists($wpdb, 'get_results') ? array_map(function ($c) { return ($c->Field ?? '') . ' ' . ($c->Type ?? ''); }, array_slice((array) $wpdb->get_results("SHOW COLUMNS FROM $U"), 0, 1)) : null,
             'deskLog' => array_map(function ($r) { return [gmdate('m-d H:i', (int) ($r['t'] ?? 0)), $r['k'] ?? '', $r['app'] ?? '', (int) ($r['n'] ?? 1), mb_substr((string) ($r['info'] ?? ''), 0, 60)]; }, array_slice((array) get_option('oxygen_desk_log', []), -15))];
     }
 
