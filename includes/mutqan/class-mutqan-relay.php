@@ -21,22 +21,31 @@ final class Mutqan_Relay {
     private static function sys() { return ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user']; }
 
     /** 'c' for the caller (customer), 's' for staff; throws for anybody else. */
-    private static function side($callId, $p) {
+    private static function side($callId, $p, $want = '') {
         if (($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
         if (!preg_match('/^[A-Za-z0-9_.:@-]{1,64}$/', $callId)) { throw new Mutqan_Error('bad_request', 'مكالمة غير صالحة.', 400); }
         $call = Mutqan_Store::get_raw('calls', $callId);
         if (!$call) { throw new Mutqan_Error('not_found', 'المكالمة غير موجودة.', 404); }
         if (in_array($call['status'] ?? '', ['ended', 'missed', 'declined'], true)) { throw new Mutqan_Error('ended', 'انتهت المكالمة.', 410); }
-        if (Mutqan_Policy::is_staff($p) && ($p['role'] ?? '') !== 'technician') { return 's'; }
-        if (Mutqan_Store::owner_of('calls', $callId) === ($p['id'] ?? '#')) { return 'c'; }
+        $creator = Mutqan_Store::owner_of('calls', $callId) === ($p['id'] ?? '#');
+        // The answering end: the one person a targeted call rings, or operations on the hotline.
+        $target = (string) ($call['toUser'] ?? '');
+        $staff = $target !== '' ? $target === ($p['id'] ?? '#') : (Mutqan_Policy::is_staff($p) && ($p['role'] ?? '') !== 'technician');
+        // The app says which end it is; it is only believed when true. Without it a staff member who placed the call
+        // (the owner testing the line) was filed as staff on BOTH ends: each side waited for the other's clips forever.
+        if ($want === 'c' && $creator) { return 'c'; }
+        if ($want === 's' && $staff) { return 's'; }
+        if ($staff) { return 's'; }
+        if ($creator) { return 'c'; }
         throw new Mutqan_Error('forbidden', 'غير مسموح.', 403);
     }
 
     public static function handle($in, $p) {
         $op = (string) ($in['op'] ?? '');
         $id = (string) ($in['id'] ?? '');
-        $me = self::side($id, $p);
-        Mutqan_Limiter::hit('relay', 4000, 3600);
+        $me = self::side($id, $p, (string) ($in['side'] ?? ''));
+        // Each end asks about 2.5 times a second (a clip up every 1.2 s, a check every 0.6 s): 4000 an hour cut a call at ~25 minutes.
+        Mutqan_Limiter::hit('relay', 20000, 3600);
         if ($op === 'put') {
             $seq = (int) ($in['seq'] ?? -1);
             $b = (string) ($in['b'] ?? '');
