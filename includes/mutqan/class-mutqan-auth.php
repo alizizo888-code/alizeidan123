@@ -192,11 +192,32 @@ final class Mutqan_Auth {
     public static function issue_session($uid) {
         global $wpdb;
         $token = bin2hex(random_bytes(32));
-        $wpdb->insert(Mutqan_Store::table('sessions'), [
+        $ok = $wpdb->insert(Mutqan_Store::table('sessions'), [
             'token_hash' => hash('sha256', $token), 'user_id' => $uid,
             'expires_at' => gmdate('Y-m-d H:i:s', time() + self::SESSION_DAYS * 86400), 'created_at' => Mutqan_Store::now(),
         ]);
+        // A session that was never stored used to be handed out anyway: the app «signed in», then every request
+        // came back «انتهت الجلسة» / «غير مسموح». Say so at sign-in instead.
+        if ($ok === false) {
+            if (class_exists('Oxygen_Desk')) { Oxygen_Desk::log('session_not_saved', ['info' => substr((string) ($wpdb->last_error ?? ""), 0, 200)]); }
+            throw new Mutqan_Error('session_not_saved', 'تعذّر حفظ جلسة الدخول على الموقع (' . substr((string) ($wpdb->last_error ?? ""), 0, 120) . ').', 500);
+        }
         return $token;
+    }
+
+    /** Public, harmless: can this site store and find a session right now? (no token, no user data) */
+    public static function session_health() {
+        global $wpdb;
+        $S = Mutqan_Store::table('sessions'); $U = Mutqan_Store::table('users');
+        $h = hash('sha256', 'probe-' . bin2hex(random_bytes(8)));
+        $ins = $wpdb->insert($S, ['token_hash' => $h, 'user_id' => 'probe', 'expires_at' => gmdate('Y-m-d H:i:s', time() + 60), 'created_at' => Mutqan_Store::now()]);
+        $err = (string) ($wpdb->last_error ?? "");
+        $found = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $S WHERE token_hash=%s AND expires_at > %s", $h, Mutqan_Store::now()));
+        $wpdb->delete($S, ['token_hash' => $h]);
+        $owner = $wpdb->get_row("SELECT status, role FROM $U WHERE role='owner' ORDER BY created_at LIMIT 1", ARRAY_A);
+        return ['insert' => $ins !== false, 'found' => $found === 1, 'error' => substr($err, 0, 160), 'sessions' => (int) $wpdb->get_var("SELECT COUNT(*) FROM $S"),
+            'owners' => (int) $wpdb->get_var("SELECT COUNT(*) FROM $U WHERE role='owner'"), 'ownerActive' => $owner ? $owner['status'] === 'active' : null,
+            'dbNow' => (string) $wpdb->get_var('SELECT UTC_TIMESTAMP()'), 'phpNow' => Mutqan_Store::now(), 'table' => $S];
     }
 
     private static function session_result($u) {
