@@ -13,6 +13,7 @@ final class Mutqan_Admin {
         add_action('admin_post_mutqan_save_order_ai', [__CLASS__, 'save_order_ai']);
         add_action('admin_post_mutqan_test_ai', [__CLASS__, 'test_ai']);
         add_action('admin_post_mutqan_save_agent', [__CLASS__, 'save_agent']);
+			add_action('admin_post_mutqan_save_maps', [__CLASS__, 'save_maps']);
     }
 
     public static function menu() {
@@ -69,6 +70,16 @@ final class Mutqan_Admin {
         update_option(Mutqan_AI::OPT, $s, false);
         self::back('اتحفظت إعدادات مساعد التحكم.');
     }
+
+	/** Google Places key for the field map: search by name or GPS point when adding a shop or client pin. */
+	public static function save_maps() {
+		if (!current_user_can('manage_options')) { wp_die('غير مصرح.'); }
+		check_admin_referer('mutqan_save_maps');
+		$key = trim((string) wp_unslash($_POST['places_key'] ?? ''));
+		if ($key !== '') { update_option(Mutqan_Places::OPT_KEY, sanitize_text_field($key), false); }
+		if (!empty($_POST['places_clear'])) { delete_option(Mutqan_Places::OPT_KEY); }
+		self::back('اتحفظ مفتاح خرائط جوجل.');
+	}
 
     public static function save_ai() {
         if (!current_user_can('manage_options')) { wp_die('غير مصرح.'); }
@@ -227,6 +238,20 @@ final class Mutqan_Admin {
                 </table>
                 <?php submit_button('حفظ إعدادات المساعد'); ?>
             </form>
+
+<h2>خرائط جوجل للخريطة الميدانية</h2>
+<p>مفتاح Google Places يُستخدم فقط من السيرفر للبحث عن محل أو موقع بالاسم عند إضافة محل صيانة أو موقع عميل جديد على الخريطة الميدانية (Places API - Text Search). الخريطة نفسها تبقى مجانية بخرائط OpenStreetMap.</p>
+<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" autocomplete="off">
+<input type="hidden" name="action" value="mutqan_save_maps"><?php wp_nonce_field('mutqan_save_maps'); ?>
+<table class="form-table">
+<tr><th><label for="mq_places_key">مفتاح Google Places API</label></th><td>
+<input type="password" id="mq_places_key" name="places_key" dir="ltr" class="regular-text" autocomplete="new-password" placeholder="<?php echo class_exists('Mutqan_Places') && Mutqan_Places::has_key() ? 'محفوظ — اتركه فارغًا للإبقاء عليه' : 'الصق مفتاح Google Cloud هنا'; ?>">
+<label><input type="checkbox" name="places_clear" value="1"> مسح المفتاح</label>
+<p class="description">فعّل Places API (New أو Legacy Text Search) في Google Cloud لنفس المفتاح. بدون مفتاح يبقى البحث عن طريق الاسم متوقفًا، ويظل تحديد الموقع بالـ GPS ومركز الخريطة يدويًا شغالين كالمعتاد.</p>
+</td></tr>
+</table>
+<?php submit_button('حفظ مفتاح الخرائط'); ?>
+</form>
 
             <h2>٣) واتساب</h2>
             <p>إشعار المالك بكل طلب جديد على واتساب يُضبط من <a href="<?php echo esc_url(admin_url('admin.php?page=oxygen-chat-orders')); ?>">الشات بوت والطلبات</a> (WhatsApp Cloud API).</p>

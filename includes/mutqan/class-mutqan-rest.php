@@ -36,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'ops', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'ops', 'devices', 'push', 'webpush', 'relay', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -79,6 +79,8 @@ final class Mutqan_Rest {
             'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_track']); }]);
         register_rest_route(self::NS, '/geocode', ['methods' => 'GET', 'permission_callback' => '__return_true',
             'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_geocode']); }]);
+		register_rest_route(self::NS, '/places', ['methods' => 'GET', 'permission_callback' => '__return_true',
+			'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_places']); }]);
         register_rest_route(self::NS, '/config', ['methods' => 'GET', 'permission_callback' => '__return_true',
             'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_config']); }]);
     }
@@ -438,8 +440,6 @@ final class Mutqan_Rest {
 
     /** Hotline voice through the site when the phones cannot reach each other (see Mutqan_Relay). */
     public static function h_relay($req, $p) { return Mutqan_Relay::handle(self::body($req), $p); }
-    /** Calls between customer, technician and operations: who may ring whom (see Mutqan_Callnet). */
-    public static function h_callnet($req, $p) { return Mutqan_Callnet::handle(self::body($req), $p); }
 
     public static function h_link($req, $p) {
         return Mutqan_Link::handle(self::body($req), $p);
@@ -486,6 +486,7 @@ final class Mutqan_Rest {
     /** Owner/operations control assistant (Claude with business-only tools). */
     public static function h_agent($req, $p) { return Mutqan_Agent::handle(self::body($req), $p); }
     public static function h_ops($req, $p) { return Mutqan_Ops::handle(self::body($req), $p); }
+    public static function h_devices($req, $p) { return Mutqan_Devices::handle(self::body($req), $p); }
 
     /* ------------------------------------------------------------------ /push (in-app notifications) */
 
@@ -623,6 +624,14 @@ final class Mutqan_Rest {
         if ($addr !== '') { set_transient($key, $out, 30 * DAY_IN_SECONDS); }
         return $out;
     }
+
+	public static function h_places($req, $p) {
+		if (!class_exists('Mutqan_Places')) { return ['items' => []]; }
+		if (!Mutqan_Policy::is_staff($p)) { throw new Mutqan_Error('forbidden', 'للفريق فقط.', 403); }
+		$q = (string) $req->get_param('q');
+		$lat = $req->get_param('lat'); $lng = $req->get_param('lng');
+		return ['items' => Mutqan_Places::search($q, is_numeric($lat) ? (float) $lat : null, is_numeric($lng) ? (float) $lng : null)];
+	}
 
     /* ------------------------------------------------------------------ /config */
 

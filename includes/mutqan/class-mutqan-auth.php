@@ -295,6 +295,27 @@ final class Mutqan_Auth {
         return null;
     }
 
+    /** For the one-device activation links (Mutqan_Devices). */
+    public static function user_row($id) { return self::find_by_id((string) $id); }
+    public static function revoke_sessions($uid) { self::drop_sessions((string) $uid); }
+    public static function staff_members($role = '') {
+        global $wpdb;
+        $rows = (array) $wpdb->get_results("SELECT * FROM " . Mutqan_Store::table('users') . " WHERE role IN ('operations','supervisor','technician') AND status='active' ORDER BY display_name ASC LIMIT 500", ARRAY_A);
+        if ($role !== '') { $rows = array_values(array_filter($rows, function ($r) use ($role) { return $r['role'] === $role; })); }
+        return array_map(function ($u) { return ['id' => $u['id'], 'name' => $u['display_name'] !== '' ? $u['display_name'] : $u['handle'], 'role' => $u['role'], 'phone' => $u['phone'], 'handle' => $u['handle']]; }, $rows);
+    }
+    /** A new team member made by the owner for an activation link: they never need the (random, never shown) password. */
+    public static function make_member($name, $phone, $role) {
+        $role = self::assignable_role($role);
+        $name = trim((string) $name);
+        if (mb_strlen($name) < 2) { throw new Mutqan_Error('bad_name', 'اكتب الاسم.', 422); }
+        $digits = preg_replace('/\D/', '', self::fold_digits((string) $phone));
+        $base = strlen($digits) >= 8 ? substr($role, 0, 1) . substr($digits, -9) : substr($role, 0, 1) . substr(bin2hex(random_bytes(4)), 0, 8);
+        $h = $base; $i = 1;
+        while (self::find_by_handle($h)) { $h = $base . '-' . (++$i); }
+        return self::create_user($h, $name, $digits, bin2hex(random_bytes(16)), $role);
+    }
+
     /** A session for an account that has already been proven to belong to the caller. */
     public static function session_for($u) { return self::session_result($u); }
 
