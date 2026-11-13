@@ -79,6 +79,8 @@ final class Mutqan_Rest {
             'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_track']); }]);
         register_rest_route(self::NS, '/geocode', ['methods' => 'GET', 'permission_callback' => '__return_true',
             'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_geocode']); }]);
+		register_rest_route(self::NS, '/places', ['methods' => 'GET', 'permission_callback' => '__return_true',
+			'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_places']); }]);
         register_rest_route(self::NS, '/config', ['methods' => 'GET', 'permission_callback' => '__return_true',
             'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_config']); }]);
     }
@@ -622,6 +624,14 @@ final class Mutqan_Rest {
         if ($addr !== '') { set_transient($key, $out, 30 * DAY_IN_SECONDS); }
         return $out;
     }
+
+	public static function h_places($req, $p) {
+		if (!class_exists('Mutqan_Places')) { return ['items' => []]; }
+		if (!Mutqan_Policy::is_staff($p)) { throw new Mutqan_Error('forbidden', 'للفريق فقط.', 403); }
+		$q = (string) $req->get_param('q');
+		$lat = $req->get_param('lat'); $lng = $req->get_param('lng');
+		return ['items' => Mutqan_Places::search($q, is_numeric($lat) ? (float) $lat : null, is_numeric($lng) ? (float) $lng : null)];
+	}
 
     /* ------------------------------------------------------------------ /config */
 
