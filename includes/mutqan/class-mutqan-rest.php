@@ -17,7 +17,7 @@ final class Mutqan_Rest {
         add_action('rest_api_init', function () {
             add_filter('rest_pre_serve_request', function ($served) {
                 $o = isset($_SERVER['HTTP_ORIGIN']) ? (string) $_SERVER['HTTP_ORIGIN'] : '';
-                if ($o !== '' && preg_match('#^(https://([a-z0-9-]+\.)?oxygen11\.com|https://localhost|capacitor://localhost|http://localhost)$#i', $o)) { // + the native app shell origins
+                if ($o !== '' && (preg_match('#^(https://([a-z0-9-]+\.)?oxygen11\.com|https://localhost|capacitor://localhost|http://localhost)$#i', $o) || self::linked_origin($o))) { // + the native app shell origins, + sites the owner linked on their own domains
                     header('Access-Control-Allow-Origin: ' . $o);
                     header('Vary: Origin');
                     header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Mutqan-Token, X-Mutqan-Anon, X-WP-Nonce');
@@ -36,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'ops', 'devices', 'push', 'webpush', 'relay', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -486,6 +486,14 @@ final class Mutqan_Rest {
     /** Owner/operations control assistant (Claude with business-only tools). */
     public static function h_agent($req, $p) { return Mutqan_Agent::handle(self::body($req), $p); }
     public static function h_ops($req, $p) { return Mutqan_Ops::handle(self::body($req), $p); }
+    /** A site the owner linked from the app, on its own domain (https only, exact host or its www). */
+    public static function linked_origin($o) {
+        if (!class_exists('Oxygen_Network') || !preg_match('#^https://(www\.)?([a-z0-9.-]+)$#i', (string) $o, $m)) { return false; }
+        $h = strtolower($m[2]);
+        foreach (Oxygen_Network::extras() as $x) { if (strtolower((string) ($x['host'] ?? '')) === $h) { return true; } }
+        return false;
+    }
+    public static function h_network($req, $p) { return Mutqan_Network::handle(self::body($req), $p); }
     public static function h_devices($req, $p) { return Mutqan_Devices::handle(self::body($req), $p); }
 
     /* ------------------------------------------------------------------ /push (in-app notifications) */
