@@ -16,7 +16,8 @@ final class Mutqan_AI {
 
     public static function defaults() {
         return [
-            'order' => ['groq', 'cerebras', 'github', 'gemini', 'mistral', 'cloudflare', 'nvidia', 'together', 'cohere', 'openrouter'],
+            'order' => ['groq', 'cerebras', 'github', 'gemini', 'mistral', 'sambanova', 'cloudflare', 'nvidia', 'together', 'cohere', 'openrouter',
+                'deepseek', 'zhipu', 'huggingface', 'deepinfra', 'fireworks', 'hyperbolic', 'novita', 'qwen', 'moonshot', 'xai', 'openai', 'custom', 'custom2'],
             'providers' => [
                 'groq'       => ['enabled' => 0, 'key' => '', 'model' => 'openai/gpt-oss-120b'],
                 'gemini'     => ['enabled' => 0, 'key' => '', 'model' => 'gemini-3.1-flash-lite'],
@@ -32,12 +33,33 @@ final class Mutqan_AI {
                 'nvidia'     => ['enabled' => 0, 'key' => '', 'model' => 'meta/llama-3.3-70b-instruct'],
                 'together'   => ['enabled' => 0, 'key' => '', 'model' => 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free'],
                 'cohere'     => ['enabled' => 0, 'key' => '', 'model' => 'command-r-08-2024'],
+                // More doors to the same OpenAI chat shape. Free tiers first (SambaNova, Zhipu GLM-Flash, Hugging Face
+                // router), then low-cost pay-as-you-go ones that keep the chat alive on a day every free quota is spent.
+                // 'custom' / 'custom2' take any OpenAI-compatible URL the owner pastes (a self-hosted model, a reseller…).
+                'sambanova'  => ['enabled' => 0, 'key' => '', 'model' => 'Meta-Llama-3.3-70B-Instruct'],
+                'deepseek'   => ['enabled' => 0, 'key' => '', 'model' => 'deepseek-chat'],
+                'zhipu'      => ['enabled' => 0, 'key' => '', 'model' => 'glm-4-flash'],
+                'huggingface' => ['enabled' => 0, 'key' => '', 'model' => 'meta-llama/Llama-3.3-70B-Instruct'],
+                'deepinfra'  => ['enabled' => 0, 'key' => '', 'model' => 'meta-llama/Llama-3.3-70B-Instruct'],
+                'fireworks'  => ['enabled' => 0, 'key' => '', 'model' => 'accounts/fireworks/models/llama-v3p3-70b-instruct'],
+                'hyperbolic' => ['enabled' => 0, 'key' => '', 'model' => 'meta-llama/Llama-3.3-70B-Instruct'],
+                'novita'     => ['enabled' => 0, 'key' => '', 'model' => 'meta-llama/llama-3.3-70b-instruct'],
+                'qwen'       => ['enabled' => 0, 'key' => '', 'model' => 'qwen-plus'],
+                'moonshot'   => ['enabled' => 0, 'key' => '', 'model' => 'moonshot-v1-8k'],
+                'xai'        => ['enabled' => 0, 'key' => '', 'model' => 'grok-3-mini'],
+                'openai'     => ['enabled' => 0, 'key' => '', 'model' => 'gpt-4.1-mini'],
+                'custom'     => ['enabled' => 0, 'key' => '', 'model' => '', 'url' => ''],
+                'custom2'    => ['enabled' => 0, 'key' => '', 'model' => '', 'url' => ''],
                 // Paid, used only for the higher tiers (see tier_model()); the free providers above keep serving the 'low' tier.
                 'anthropic'  => ['enabled' => 0, 'key' => '', 'model' => 'claude-haiku-5-5'],
             ],
             // Workload tiers (owner's policy): low = customer chat on the free providers; mid = customer service, orders,
             // transfers; routine = daily articles, tracking, routine jobs; high = owner/operations commands, edits, design.
             'tiers' => ['mid' => 'claude-haiku-5-5', 'routine' => 'claude-sonnet-5-5', 'high' => 'claude-opus-5-5'],
+            // Scenario routing: a feature can ask for a stronger tier than the caller passed (still capped by role in
+            // allowed_tier). Empty by default = everything stays on the free chain unless the owner opts in, e.g.
+            // ['negotiate' => 'mid'] sends price talks to Claude Haiku when it is configured.
+            'feature_tiers' => [],
             'per_ip_10min' => 30,
             'per_ip_day' => 250,
             'mask_pii' => 1,
@@ -52,13 +74,45 @@ final class Mutqan_AI {
         foreach ($d['providers'] as $id => $def) {
             $out['providers'][$id] = array_merge($def, (array) ($s['providers'][$id] ?? []));
         }
+        // An order saved before a provider existed must not hide it: anything missing goes to the end of the chain.
+        $out['order'] = array_values(array_intersect((array) $out['order'], array_keys($d['providers'])));
+        foreach (array_keys($d['providers']) as $id) { if ($id !== 'anthropic' && !in_array($id, $out['order'], true)) { $out['order'][] = $id; } }
+        $out['feature_tiers'] = array_filter((array) ($out['feature_tiers'] ?? []), function ($t) { return in_array($t, self::TIERS, true); });
         return $out;
     }
 
     public static function labels() {
         return ['groq' => 'Groq', 'cerebras' => 'Cerebras', 'github' => 'GitHub Models', 'gemini' => 'Google Gemini',
             'mistral' => 'Mistral AI', 'cloudflare' => 'Cloudflare Workers AI', 'nvidia' => 'NVIDIA NIM',
-            'together' => 'Together AI', 'cohere' => 'Cohere', 'openrouter' => 'OpenRouter', 'anthropic' => 'Claude (Anthropic)'];
+            'together' => 'Together AI', 'cohere' => 'Cohere', 'openrouter' => 'OpenRouter', 'sambanova' => 'SambaNova', 'deepseek' => 'DeepSeek',
+            'zhipu' => 'Zhipu GLM', 'huggingface' => 'Hugging Face', 'deepinfra' => 'DeepInfra', 'fireworks' => 'Fireworks AI', 'hyperbolic' => 'Hyperbolic',
+            'novita' => 'Novita AI', 'qwen' => 'Qwen (Alibaba)', 'moonshot' => 'Moonshot Kimi', 'xai' => 'xAI Grok', 'openai' => 'OpenAI',
+            'custom' => 'مزود مخصص 1 (OpenAI-compatible)', 'custom2' => 'مزود مخصص 2 (OpenAI-compatible)', 'anthropic' => 'Claude (Anthropic)'];
+    }
+
+    /** Endpoints of every provider that speaks the OpenAI chat shape (one line each — adding a door costs nothing). */
+    public static function endpoints() {
+        return [
+            'groq' => 'https://api.groq.com/openai/v1/chat/completions', 'cerebras' => 'https://api.cerebras.ai/v1/chat/completions',
+            'github' => 'https://models.github.ai/inference/chat/completions', 'mistral' => 'https://api.mistral.ai/v1/chat/completions',
+            'nvidia' => 'https://integrate.api.nvidia.com/v1/chat/completions', 'together' => 'https://api.together.xyz/v1/chat/completions',
+            'cohere' => 'https://api.cohere.ai/compatibility/v1/chat/completions', 'openrouter' => 'https://openrouter.ai/api/v1/chat/completions',
+            'sambanova' => 'https://api.sambanova.ai/v1/chat/completions', 'deepseek' => 'https://api.deepseek.com/chat/completions',
+            'zhipu' => 'https://open.bigmodel.cn/api/paas/v4/chat/completions', 'huggingface' => 'https://router.huggingface.co/v1/chat/completions',
+            'deepinfra' => 'https://api.deepinfra.com/v1/openai/chat/completions', 'fireworks' => 'https://api.fireworks.ai/inference/v1/chat/completions',
+            'hyperbolic' => 'https://api.hyperbolic.xyz/v1/chat/completions', 'novita' => 'https://api.novita.ai/v3/openai/chat/completions',
+            'qwen' => 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', 'moonshot' => 'https://api.moonshot.ai/v1/chat/completions',
+            'xai' => 'https://api.x.ai/v1/chat/completions', 'openai' => 'https://api.openai.com/v1/chat/completions',
+        ];
+    }
+
+    /** A custom endpoint must be https and a public host name — never an address inside the server's own network. */
+    public static function custom_url_ok($url) {
+        $u = wp_parse_url((string) $url);
+        if (!$u || ($u['scheme'] ?? '') !== 'https' || empty($u['host'])) { return false; }
+        $h = strtolower($u['host']);
+        if (filter_var($h, FILTER_VALIDATE_IP) || $h === 'localhost' || substr($h, -6) === '.local' || strpos($h, '.') === false) { return false; }
+        return true;
     }
 
     public static function any_enabled($s = null) {
@@ -69,6 +123,7 @@ final class Mutqan_AI {
 
     private static function usable($id, $c) {
         if (empty($c['enabled']) || $c['key'] === '') { return false; }
+        if ($id === 'custom' || $id === 'custom2') { return ($c['model'] ?? '') !== '' && self::custom_url_ok($c['url'] ?? ''); }
         return $id !== 'cloudflare' || $c['account'] !== '';
     }
 
@@ -120,10 +175,17 @@ final class Mutqan_AI {
         // own number in its own answer. They go in here, at the one door every feature passes through,
         // so a fact he writes once reaches the chat, the WhatsApp bot and the agent together.
         if (class_exists('Mutqan_KB')) { $prompt = Mutqan_KB::inject($prompt, $opts, $p); }
+        // The sales brain goes in at the same door: who the customer is, what the day looks like, the plan for
+        // this reply. Only customer conversations get one (see Mutqan_Sales::inject).
+        if (class_exists('Mutqan_Sales')) { $prompt = Mutqan_Sales::inject($prompt, $opts, $p); }
         $wantJson = !empty($opts['json']);
         $temp = isset($opts['temperature']) && is_numeric($opts['temperature']) ? max(0, min(1.2, (float) $opts['temperature'])) : 0.4;
 
-        $tier = self::allowed_tier($opts['tier'] ?? 'low', $p);
+        $want = $opts['tier'] ?? 'low';
+        $ft = (array) ($s['feature_tiers'] ?? []);
+        $f = (string) ($opts['feature'] ?? '');
+        if ($f !== '' && isset($ft[$f]) && array_search($ft[$f], self::TIERS, true) > array_search(in_array($want, self::TIERS, true) ? $want : 'low', self::TIERS, true)) { $want = $ft[$f]; }
+        $tier = self::allowed_tier($want, $p);
         $model = self::tier_model($tier, $s);
         if ($model !== '' && !self::cooling('anthropic')) {
             $r = self::call_anthropic(array_merge($s['providers']['anthropic'], ['model' => $model]), $prompt, $wantJson, $temp);
@@ -229,15 +291,13 @@ final class Mutqan_AI {
     }
 
     private static function call($id, $c, $prompt, $json, $temp) {
+        $eps = self::endpoints();
+        if ($id === 'custom' || $id === 'custom2') {
+            if (!self::custom_url_ok($c['url'] ?? '')) { return ['ok' => false, 'error' => 'رابط المزود المخصص غير صالح (https وعنوان عام فقط)', 'cooldown' => 600]; }
+            return self::call_openai_compat($c['url'], $c, $prompt, $json, $temp, []);
+        }
+        if (isset($eps[$id])) { return self::call_openai_compat($eps[$id], $c, $prompt, $json, $temp, $id === 'openrouter' ? ['X-Title' => 'Mutqan'] : []); }
         switch ($id) {
-            case 'groq': return self::call_openai_compat('https://api.groq.com/openai/v1/chat/completions', $c, $prompt, $json, $temp, []);
-            case 'cerebras': return self::call_openai_compat('https://api.cerebras.ai/v1/chat/completions', $c, $prompt, $json, $temp, []);
-            case 'github': return self::call_openai_compat('https://models.github.ai/inference/chat/completions', $c, $prompt, $json, $temp, []);
-            case 'mistral': return self::call_openai_compat('https://api.mistral.ai/v1/chat/completions', $c, $prompt, $json, $temp, []);
-            case 'nvidia': return self::call_openai_compat('https://integrate.api.nvidia.com/v1/chat/completions', $c, $prompt, $json, $temp, []);
-            case 'together': return self::call_openai_compat('https://api.together.xyz/v1/chat/completions', $c, $prompt, $json, $temp, []);
-            case 'cohere': return self::call_openai_compat('https://api.cohere.ai/compatibility/v1/chat/completions', $c, $prompt, $json, $temp, []);
-            case 'openrouter': return self::call_openai_compat('https://openrouter.ai/api/v1/chat/completions', $c, $prompt, $json, $temp, ['X-Title' => 'Mutqan']);
             case 'gemini': return self::call_gemini($c, $prompt, $json, $temp);
             case 'cloudflare': return self::call_cloudflare($c, $prompt, $temp);
             case 'anthropic': return self::call_anthropic($c, $prompt, $json, $temp);

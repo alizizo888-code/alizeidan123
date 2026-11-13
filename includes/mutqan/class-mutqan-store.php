@@ -406,6 +406,7 @@ final class Mutqan_Store {
         if ($coll === 'orders' && class_exists('Mutqan_Dispatch')) { $doc = Mutqan_Dispatch::on_created($doc); }
         // Every alert also goes out as a real background notification to the devices it is for.
         if ($coll === '_push' && class_exists('Mutqan_WebPush')) { Mutqan_WebPush::queue($doc); }
+        if ($coll === 'orders' && class_exists('Mutqan_Sales')) { Mutqan_Sales::on_order($doc); }
         return self::for_reader($coll, $doc, $p);
     }
 
@@ -435,6 +436,8 @@ final class Mutqan_Store {
             $who = (string) ($old['technicianId'] ?? ($doc['technicianId'] ?? ''));
             if ($who !== '') { try { Mutqan_Track::clear_if_free($who); } catch (Throwable $e) { error_log('[mutqan] track ' . $e->getMessage()); } }
         }
+        // The customer hears every move of his order on WhatsApp, with the facts and the link back to it.
+        if ($coll === 'orders' && array_key_exists('status', $patch) && class_exists('Mutqan_OrderBot')) { Mutqan_OrderBot::on_status($doc, $old); }
         if ($coll === 'orders' && array_key_exists('technicianId', $patch)
             && ($patch['technicianId'] ?? null) !== ($old['technicianId'] ?? null) && !empty($patch['technicianId'])
             && class_exists('Mutqan_WA_Desk')) {

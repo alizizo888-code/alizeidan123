@@ -273,7 +273,9 @@ final class Mutqan_Policy {
             if (!$isClient && !$isMyTech && !$priv) { throw new Mutqan_Error('forbidden', 'غير مسموح لك بهذه المحادثة.', 403); }
             if (!self::is_staff($p)) { Mutqan_Limiter::hit('order_msg', 40, 600); }
             $from = $isClient && !self::is_staff($p) ? 'client' : (($p['role'] ?? '') === 'technician' ? 'tech' : 'ops');
-            $kinds = $from === 'client' ? ['text', 'nudge', 'postpone_req'] : ['text', 'eta', 'arrived', 'postponed', 'system'];
+            // The order assistant writes as itself, from the server only (no client can hold this principal).
+            if (($p['id'] ?? '') === 'system:orderbot') { $from = 'ai'; }
+            $kinds = $from === 'client' ? ['text', 'nudge', 'postpone_req'] : ($from === 'ai' ? ['text', 'system', 'eta_ask', 'postpone_req'] : ['text', 'eta', 'arrived', 'postponed', 'system']);
             $kind = in_array($data['kind'] ?? 'text', $kinds, true) ? $data['kind'] : 'text';
             $chan = ($data['channel'] ?? 'tech') === 'ops' ? 'ops' : 'tech';
             if ($from === 'tech') { $chan = 'tech'; }
@@ -282,6 +284,9 @@ final class Mutqan_Policy {
                 'text' => mb_substr(trim((string) ($data['text'] ?? '')), 0, 600), 'at' => gmdate('c'),
                 'clientId' => $owner !== '' ? $owner : ($ord['clientId'] ?? null), 'techId' => $ord['technicianId'] ?? null,
                 'reason' => isset($data['reason']) ? mb_substr((string) $data['reason'], 0, 80) : null, 'newTime' => isset($data['newTime']) ? mb_substr((string) $data['newTime'], 0, 80) : null,
+                // A technician's estimate in minutes («فاضل لي 20 دقيقة»).
+                'minutes' => $kind === 'eta' && isset($data['minutes']) && is_numeric($data['minutes']) ? max(1, min(240, (int) $data['minutes'])) : null,
+                'intent' => $from === 'ai' && isset($data['intent']) ? mb_substr((string) $data['intent'], 0, 20) : null,
             ];
             if ($data['text'] === '' && !in_array($kind, ['nudge', 'eta', 'arrived'], true)) { throw new Mutqan_Error('empty', 'اكتب رسالة.', 400); }
         }

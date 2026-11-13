@@ -94,6 +94,10 @@ final class Mutqan_Admin {
             $model = trim(sanitize_text_field(wp_unslash($_POST['model'][$id] ?? '')));
             if ($model !== '' && preg_match('/^[A-Za-z0-9@_.\/:-]{2,100}$/', $model)) { $c['model'] = $model; }
             if ($id === 'cloudflare') { $c['account'] = preg_replace('/[^a-zA-Z0-9]/', '', (string) ($_POST['account'] ?? $c['account'])); }
+            if ($id === 'custom' || $id === 'custom2') {
+                $url = trim(esc_url_raw(wp_unslash($_POST['url'][$id] ?? ''), ['https']));
+                if ($url === '' || Mutqan_AI::custom_url_ok($url)) { $c['url'] = $url; }
+            }
             $new['providers'][$id] = $c;
         }
         $order = array_values(array_intersect(array_map('trim', explode(',', (string) self::post('order'))), array_keys(Mutqan_AI::labels())));
@@ -131,6 +135,12 @@ final class Mutqan_Admin {
             'nvidia' => 'https://build.nvidia.com/', 'together' => 'https://api.together.ai/settings/api-keys',
             'cohere' => 'https://dashboard.cohere.com/api-keys', 'openrouter' => 'https://openrouter.ai/keys',
             'anthropic' => 'https://console.anthropic.com/settings/keys',
+            'sambanova' => 'https://cloud.sambanova.ai/apis', 'deepseek' => 'https://platform.deepseek.com/api_keys',
+            'zhipu' => 'https://open.bigmodel.cn/usercenter/apikeys', 'huggingface' => 'https://huggingface.co/settings/tokens',
+            'deepinfra' => 'https://deepinfra.com/dash/api_keys', 'fireworks' => 'https://fireworks.ai/account/api-keys',
+            'hyperbolic' => 'https://app.hyperbolic.xyz/settings', 'novita' => 'https://novita.ai/settings/key-management',
+            'qwen' => 'https://bailian.console.alibabacloud.com/', 'moonshot' => 'https://platform.moonshot.ai/console/api-keys',
+            'xai' => 'https://console.x.ai/', 'openai' => 'https://platform.openai.com/api-keys',
         ];
         $notes = [
             'groq' => 'حد مجاني يومي بدون رصيد، الأسرع. الأفضل كمزود أول.',
@@ -143,6 +153,20 @@ final class Mutqan_Admin {
             'nvidia' => 'رصيد مجاني من build.nvidia.com يكفي استخدامًا خفيفًا، ثم يتوقف دون فواتير.',
             'together' => 'نماذج بنهاية ‎:Free‎ بحد يومي بدون رصيد.',
             'cohere' => 'مفتاح تجريبي مجاني بحد شهري، مناسب كاحتياطي.',
+            'sambanova' => 'حد مجاني يومي على Llama 3.3 70B، سريع. احتياطي ممتاز.',
+            'deepseek' => 'مدفوع بسعر منخفض جدًا وعربي جيد — يُبقي الشات شغالًا لو خلصت كل الحصص المجانية.',
+            'zhipu' => 'نموذج glm-4-flash مجاني بالكامل من Zhipu.',
+            'huggingface' => 'توكن Hugging Face يفتح Inference Providers برصيد شهري مجاني صغير.',
+            'deepinfra' => 'مدفوع منخفض التكلفة، بلا اشتراك.',
+            'fireworks' => 'رصيد تجريبي ثم دفع حسب الاستخدام.',
+            'hyperbolic' => 'رصيد تجريبي ثم دفع حسب الاستخدام.',
+            'novita' => 'رصيد تجريبي ثم دفع حسب الاستخدام.',
+            'qwen' => 'Alibaba Model Studio (دولي): حصة مجانية للحسابات الجديدة، Qwen قوي في العربية.',
+            'moonshot' => 'Kimi — دفع حسب الاستخدام.',
+            'xai' => 'Grok — مدفوع.',
+            'openai' => 'مدفوع — نموذج صغير رخيص كاحتياطي أخير.',
+            'custom' => 'أي خدمة متوافقة مع OpenAI: الصق رابط chat/completions الكامل (https) واسم النموذج.',
+            'custom2' => 'مزود مخصص ثانٍ بنفس الطريقة.',
             'anthropic' => 'مدفوع — يُستخدم للمستويات الأعلى فقط (أوامر المالك والعمليات). اتركه مطفأً للعمل المجاني بالكامل.',
         ];
         ?>
@@ -193,12 +217,13 @@ final class Mutqan_Admin {
                     <tbody>
                     <?php foreach (Mutqan_AI::labels() as $id => $label): $c = $ai['providers'][$id]; $st = $ai['status'][$id] ?? null; ?>
                         <tr>
-                            <td><strong><?php echo esc_html($label); ?></strong><br><a href="<?php echo esc_url($links[$id] ?? '#'); ?>" target="_blank" rel="noopener">إنشاء مفتاح مجاني</a><br><span class="description"><?php echo esc_html($notes[$id] ?? ''); ?></span></td>
+                            <td><strong><?php echo esc_html($label); ?></strong><br><?php if (!empty($links[$id])): ?><a href="<?php echo esc_url($links[$id]); ?>" target="_blank" rel="noopener">إنشاء مفتاح</a><?php endif; ?><br><span class="description"><?php echo esc_html($notes[$id] ?? ''); ?></span></td>
                             <td><input type="checkbox" name="enabled[<?php echo esc_attr($id); ?>]" value="1" <?php checked((int) $c['enabled'], 1); ?>></td>
                             <td>
                                 <input type="password" dir="ltr" name="key[<?php echo esc_attr($id); ?>]" class="regular-text" autocomplete="new-password" placeholder="<?php echo $c['key'] !== '' ? 'محفوظ — اتركه فارغًا للإبقاء عليه' : 'الصق المفتاح هنا'; ?>">
                                 <label><input type="checkbox" name="clear[<?php echo esc_attr($id); ?>]" value="1"> حذف المحفوظ</label>
                                 <?php if ($id === 'cloudflare'): ?><br><input type="text" dir="ltr" name="account" class="regular-text" placeholder="Account ID" value="<?php echo esc_attr($c['account']); ?>"><?php endif; ?>
+                                <?php if ($id === 'custom' || $id === 'custom2'): ?><br><input type="url" dir="ltr" name="url[<?php echo esc_attr($id); ?>]" class="regular-text" placeholder="https://…/v1/chat/completions" value="<?php echo esc_attr($c['url'] ?? ''); ?>"><?php endif; ?>
                             </td>
                             <td><input type="text" dir="ltr" name="model[<?php echo esc_attr($id); ?>]" class="regular-text" value="<?php echo esc_attr($c['model']); ?>"></td>
                             <td><?php

@@ -53,20 +53,21 @@ final class Mutqan_WA {
         return ['sessions' => $out, 'via' => 'phone'];
     }
 
-    private static function remember_session($acct, $e) {
+    private static function remember_session($acct, $e, $dev = null) {
         $seen = get_option(self::SEEN, []);
         $seen = is_array($seen) ? $seen : [];
         $row = isset($seen[$acct]) && is_array($seen[$acct]) ? $seen[$acct] : [];
         $row['status'] = (string) ($e['status'] ?? '');
         $row['at'] = time();
         foreach (['label', 'phone', 'name'] as $k) { if (!empty($e[$k])) { $row[$k] = (string) $e[$k]; } }
+        if ($dev !== null && $dev !== 'legacy') { $row['dev'] = (string) $dev; }
         // Only a picture, and only a small one: this goes in an option read on every screen.
         $qr = (string) ($e['qr'] ?? '');
         $row['qr'] = (strpos($qr, 'data:image/') === 0 && strlen($qr) < 60000) ? $qr : null;
         $row['pairingCode'] = !empty($e['pairingCode']) ? mb_substr((string) $e['pairingCode'], 0, 16) : null;
         if (($e['status'] ?? '') === 'open') { $row['qr'] = null; $row['pairingCode'] = null; }
         $seen[$acct] = $row;
-        if (count($seen) > 10) { $seen = array_slice($seen, -10, null, true); }
+        if (count($seen) > 40) { $seen = array_slice($seen, -40, null, true); }
         update_option(self::SEEN, $seen, false);
     }
 
@@ -115,6 +116,8 @@ final class Mutqan_WA {
             case 'config_set': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return self::config_set($in);
             case 'sessions': return self::sessions();
         }
+        // «أجهزة الواتساب»: devices, numbers and their roles (Mutqan_WA_Fleet).
+        if (strpos($op, 'fleet') === 0 && class_exists('Mutqan_WA_Fleet')) { if ($op !== 'fleet') { Mutqan_Limiter::hit('wa_ops', 300, 3600); } return Mutqan_WA_Fleet::handle($op, $in, $p); }
         if (!$write) { throw new Mutqan_Error('forbidden', 'غير مسموح.', 403); }
         Mutqan_Limiter::hit('wa_ops', 300, 3600);
         switch ($op) {
@@ -181,7 +184,13 @@ final class Mutqan_WA {
     public static function auto_send($phone, $text, $by = 'order') {
         $to = self::intl($phone);
         if ($to === '') { return false; }
-        $acct = self::open_account();
+        // A message leaves from the number whose job it is (orders from the customers' line, job cards from the
+        // technicians' line, reports from the reports line), through the device that carries that number.
+        $fleet = class_exists('Mutqan_WA_Fleet') ? Mutqan_WA_Fleet::account_for($by) : '';
+        if ($fleet !== '' && Mutqan_WA_Fleet::device_of($fleet) !== '') {
+            try { self::queue($fleet, $to, $text, 'auto', $by); return 'queued'; } catch (Throwable $e) { error_log('[mutqan] wa fleet send: ' . $e->getMessage()); }
+        }
+        $acct = $fleet !== '' ? $fleet : self::open_account();
         if ($acct === '') {
             // Phone gateway that has not connected yet: queue it — the phone sends it as soon as it pulls (stale ones expire, see pull()).
             // Only the order copy waits; a login code or a job card must fail now so its caller falls back.
@@ -234,14 +243,20 @@ final class Mutqan_WA {
 
     /** Same signature as the webhook, checked the same way: the body, with the shared secret. */
     public static function pull_signed($raw, $sig) {
-        $c = self::cfg();
-        if (!is_string($sig) || !hash_equals(hash_hmac('sha256', $raw, $c['secret']), $sig)) { throw new Mutqan_Error('forbidden', 'توقيع غير صحيح.', 403); }
+        $dev = class_exists('Mutqan_WA_Fleet') ? Mutqan_WA_Fleet::signer($raw, $sig) : null;
+        if ($dev === null) {
+            $c = self::cfg();
+            if (!is_string($sig) || !hash_equals(hash_hmac('sha256', $raw, $c['secret']), $sig)) { throw new Mutqan_Error('forbidden', 'توقيع غير صحيح.', 403); }
+            $dev = 'legacy';
+        }
         $in = json_decode($raw, true);
-        return self::pull(is_array($in) ? $in : []);
+        return self::pull(is_array($in) ? $in : [], $dev);
     }
 
-    public static function pull($in) {
+    public static function pull($in, $dev = 'legacy') {
         $now = time();
+        $fleet = class_exists('Mutqan_WA_Fleet');
+        if ($fleet) { Mutqan_WA_Fleet::touch($dev, (array) ($in['sessions'] ?? [])); }
         foreach ((array) ($in['sent'] ?? []) as $one) {
             $id = (string) (is_array($one) ? ($one['id'] ?? '') : $one);
             if ($id === '') { continue; }
@@ -262,6 +277,8 @@ final class Mutqan_WA {
         $jobs = [];
         foreach (Mutqan_Store::select('wa_outbox', [], ['limit' => 100, 'order' => 'asc'], self::sys()) as $job) {
             if (count($jobs) >= $limit) { break; }
+            // A device only collects what leaves from its own numbers.
+            if ($fleet && !Mutqan_WA_Fleet::job_for_device($job, $dev)) { continue; }
             if (($job['via'] ?? '') === 'auto' && ($t = strtotime((string) ($job['at'] ?? ''))) && $now - $t > self::AUTO_MAX_AGE) { Mutqan_Store::delete('wa_outbox', (string) $job['id'], self::sys()); continue; }
             $state = (string) ($job['state'] ?? 'pending');
             $taken = (int) ($job['takenAt'] ?? 0);
@@ -269,7 +286,7 @@ final class Mutqan_WA {
             Mutqan_Store::update('wa_outbox', (string) $job['id'], ['state' => 'taken', 'takenAt' => $now], self::sys());
             $jobs[] = ['id' => (string) $job['id'], 'acct' => (string) ($job['acct'] ?? ''), 'to' => (string) ($job['to'] ?? ''), 'text' => (string) ($job['text'] ?? '')];
         }
-        return ['jobs' => $jobs, 'at' => $now];
+        return ['jobs' => $jobs, 'at' => $now, 'cmds' => $fleet ? Mutqan_WA_Fleet::cmds_for($dev, (array) ($in['done'] ?? [])) : []];
     }
 
     /* ---------------------------------------------------------------- storage */
@@ -303,14 +320,16 @@ final class Mutqan_WA {
 
     public static function webhook($raw, $sig) {
         $c = self::cfg();
-        if (!is_string($sig) || !hash_equals(hash_hmac('sha256', $raw, $c['secret']), $sig)) { throw new Mutqan_Error('forbidden', 'توقيع غير صحيح.', 403); }
+        $dev = class_exists('Mutqan_WA_Fleet') ? Mutqan_WA_Fleet::signer($raw, $sig) : null;
+        if ($dev === null && (!is_string($sig) || !hash_equals(hash_hmac('sha256', $raw, $c['secret']), $sig))) { throw new Mutqan_Error('forbidden', 'توقيع غير صحيح.', 403); }
+        if (class_exists('Mutqan_WA_Fleet')) { Mutqan_WA_Fleet::touch($dev); }
         $e = json_decode($raw, true);
         if (!is_array($e)) { throw new Mutqan_Error('bad_input', 'حمولة غير صالحة.', 400); }
         $acct = self::id($e['accountId'] ?? '');
         if (($e['type'] ?? '') === 'status') {
             set_transient('mq_wa_st_' . $acct, ['status' => (string) ($e['status'] ?? ''), 'at' => time()], DAY_IN_SECONDS);
             if (($e['status'] ?? '') === 'open') { update_option('mutqan_wa_last_acct', $acct, false); }
-            self::remember_session($acct, $e);
+            self::remember_session($acct, $e, $dev);
             if (in_array($e['status'] ?? '', ['logged_out', 'closed'], true)) { self::notify_admins('تنبيه واتساب', 'الرقم «' . $acct . '» انقطع اتصاله — افتح صندوق الواتساب لإعادة الربط.', 'wa-down-' . $acct); }
             return ['ok' => true];
         }
@@ -321,6 +340,7 @@ final class Mutqan_WA {
         $isNew = self::store_message($acct, $phone, ['msgId' => (string) ($e['msgId'] ?? wp_generate_uuid4()), 'dir' => $dir, 'text' => (string) ($e['text'] ?? ''), 'kind' => (string) ($e['kind'] ?? 'text'), 'ts' => (int) ($e['ts'] ?? time()), 'name' => (string) ($e['name'] ?? ''), 'via' => $dir === 'out' ? 'phone' : 'customer']);
         if (!$isNew) { return ['ok' => true]; }
         $tid = self::tid($acct, $phone);
+        if ($dir === 'in' && class_exists('Mutqan_WA_Fleet')) { Mutqan_WA_Fleet::on_incoming($acct, $phone, (string) ($e['text'] ?? ''), $tid); }
         $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: [];
         if ($dir === 'out') {   // replied from the phone itself -> human is handling it
             $bot = $th['bot'] ?? []; $bot['pausedUntil'] = time() + 12 * 3600;
