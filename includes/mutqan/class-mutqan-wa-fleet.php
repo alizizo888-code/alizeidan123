@@ -200,10 +200,40 @@ final class Mutqan_WA_Fleet {
         if ($mode === 'code' && $phone === '') { throw new Mutqan_Error('bad_phone', 'اكتب رقم الواتساب اللي هيترَبط (05xxxxxxxx).', 400); }
         $label = mb_substr(trim(wp_strip_all_tags((string) ($in['label'] ?? ''))), 0, 40) ?: self::ROLES[$role]['label'];
         $acct = $dev . '-' . substr(bin2hex(random_bytes(3)), 0, 5);
-        $r = self::roles(); $r[$acct] = ['role' => $role, 'device' => $dev, 'label' => $label, 'createdAt' => gmdate('c')];
+        $r = self::roles(); $r[$acct] = ['role' => $role, 'device' => $dev, 'label' => $label, 'phone' => $phone, 'createdAt' => gmdate('c')];
         update_option(self::ROLES_OPT, $r, false);
         self::queue_cmd($dev, ['op' => 'add', 'id' => $acct, 'label' => $label, 'mode' => $mode, 'phone' => $phone]);
         return ['ok' => true, 'id' => $acct];
+    }
+
+    /** The device a new number should go on: the one asked for, else the online device carrying the fewest numbers. */
+    public static function pick_device($want = '') {
+        $devs = self::devices();
+        if ($want !== '' && isset($devs[$want])) { return $want; }
+        $best = ''; $score = PHP_INT_MAX;
+        foreach ($devs as $id => $d) {
+            if (empty($d['enabled'])) { continue; }
+            $v = self::device_view($id);
+            $sc = ($v['online'] ? 0 : 1000) + (int) $v['numbers'];
+            if ($sc < $score) { $score = $sc; $best = (string) $id; }
+        }
+        return $best;
+    }
+
+    /** A fresh QR (or pairing code) for a number already on a device: the device reopens it on its next check-in (~3 s). */
+    public static function relink($acct, $mode = 'qr', $phone = '') {
+        $r = self::roles(); $dev = self::device_of($acct);
+        if ($dev === '' || !isset(self::devices()[$dev])) { throw new Mutqan_Error('no_device', 'الرقم ده مش على جهاز مسجّل — شغّل الوسيط على جهاز من «أجهزة الواتساب».', 409); }
+        $mode = $mode === 'code' ? 'code' : 'qr';
+        $phone = Mutqan_WA::intl($phone);
+        if ($mode === 'code' && $phone === '') {
+            $seen = get_option(Mutqan_WA::SEEN, []); $phone = Mutqan_WA::intl((string) ($r[$acct]['phone'] ?? ($seen[$acct]['phone'] ?? '')));
+            if ($phone === '') { throw new Mutqan_Error('bad_phone', 'اكتب رقم الواتساب عشان نطلع كود الاقتران.', 400); }
+        }
+        $label = (string) ($r[$acct]['label'] ?? $acct);
+        if ($phone !== '' && isset($r[$acct])) { $r[$acct]['phone'] = $phone; update_option(self::ROLES_OPT, $r, false); }
+        self::queue_cmd($dev, ['op' => 'add', 'id' => $acct, 'label' => $label, 'mode' => $mode, 'phone' => $phone]);
+        return ['ok' => true, 'id' => $acct, 'device' => $dev, 'mode' => $mode];
     }
 
     public static function remove_number($acct) {

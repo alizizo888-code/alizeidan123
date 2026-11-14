@@ -187,6 +187,7 @@ final class Mutqan_AI {
         if ($f !== '' && isset($ft[$f]) && array_search($ft[$f], self::TIERS, true) > array_search(in_array($want, self::TIERS, true) ? $want : 'low', self::TIERS, true)) { $want = $ft[$f]; }
         $tier = self::allowed_tier($want, $p);
         $model = self::tier_model($tier, $s);
+        if ($model !== '' && class_exists('Mutqan_Points') && !Mutqan_Points::available()) { $model = ''; }   // wallet empty: free chain
         if ($model !== '' && !self::cooling('anthropic')) {
             $r = self::call_anthropic(array_merge($s['providers']['anthropic'], ['model' => $model]), $prompt, $wantJson, $temp);
             if ($r['ok']) {
@@ -199,16 +200,21 @@ final class Mutqan_AI {
         }
 
         $tried = 0; $lastText = ''; $lastProvider = '';
-        foreach ($s['order'] as $id) {
-            if ($id === 'anthropic') { continue; }
-            $c = $s['providers'][$id] ?? null;
-            if (!$c || !self::usable($id, $c) || self::cooling($id)) { continue; }
-            // A provider that is out of quota answers 429 at once and is then in a cooldown, so the next
-            // request skips it without paying for it again. Five is the most a customer will wait for.
-            if ($tried >= 5) { break; }
+        // The team gets every door; a customer waits for five at most.
+        $max = Mutqan_Policy::is_staff($p) ? 12 : 5;
+        $chain = [];
+        foreach ($s['order'] as $id) { if ($id !== 'anthropic' && isset($s['providers'][$id]) && self::usable($id, $s['providers'][$id])) { $chain[] = $id; } }
+        $fresh = array_values(array_filter($chain, function ($id) { return !self::cooling($id); }));
+        // Every provider cooling down is the moment the old code said «busy» without asking anybody. A cooldown is a
+        // guess about a quota, not a fact: when nobody is left, the two oldest-cooled doors are tried once more anyway.
+        if (!$fresh) { $fresh = array_slice($chain, 0, 2); }
+        foreach ($fresh as $id) {
+            $c = $s['providers'][$id];
+            if ($tried >= $max) { break; }
             $tried++;
             $r = self::call($id, $c, $prompt, $wantJson, $temp);
             if ($r['ok']) {
+                delete_transient('mq_cool_' . $id);
                 $text = trim($r['text']);
                 $json = $wantJson ? self::extract_json($text) : null;
                 if ($wantJson && $json === null) { $lastText = $text; $lastProvider = $id; self::note($id, 'JSON غير صالح'); continue; }
@@ -384,7 +390,8 @@ final class Mutqan_AI {
         try {
             $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
             Mutqan_Store::insert('_ai_usage', ['at' => gmdate('c'), 'date' => gmdate('Y-m-d'), 'kind' => $provider, 'model' => $model, 'feature' => $feature,
-                'tokensIn' => (int) ($u['input_tokens'] ?? 0), 'tokensOut' => (int) ($u['output_tokens'] ?? 0)], null, [], $sys);
+                'tokensIn' => (int) ($u['input_tokens'] ?? 0), 'tokensOut' => (int) ($u['output_tokens'] ?? 0),
+                'points' => class_exists('Mutqan_Points') && $provider === 'anthropic' ? Mutqan_Points::spend($model, $u['input_tokens'] ?? 0, $u['output_tokens'] ?? 0) : 0], null, [], $sys);
         } catch (Throwable $e) { /* usage logging never blocks the answer */ }
     }
 

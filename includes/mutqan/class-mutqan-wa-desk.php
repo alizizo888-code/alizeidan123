@@ -160,6 +160,12 @@ final class Mutqan_WA_Desk {
             return self::assign_by_name(trim($m[1]), trim($m[2]), $who);
         }
         if (preg_match('/(?:اسحب|ارجع|فك)\s*(?:الطلب\s*)?#?(\d{3,})/u', $t, $m)) { return self::unassign(trim($m[1]), $who); }
+        // Everything the app's internal engine knows (cache, money, alerts, where the technicians are…) works from WhatsApp too.
+        if (class_exists('Mutqan_Quick')) {
+            $p = ['id' => (string) ($who['id'] ?? ''), 'role' => (string) ($who['role'] ?? ''), 'kind' => 'user', 'powers' => ['read', 'write', 'manage'], 'name' => (string) ($who['name'] ?? '')];
+            $q = Mutqan_Quick::try_run($t, $p, 'agent');
+            if ($q) { return (string) $q['text'] . (!empty($q['pending']) ? "\n(الأمر ده محتاج تأكيد من التطبيق: المساعد ← أوامر)" : ''); }
+        }
         return self::ops_help();
     }
 
@@ -169,7 +175,8 @@ final class Mutqan_WA_Desk {
             . "👷 *الفنيين* — مين متاح ومين في الموقع\n"
             . "🗂 *الطلبات* — المفتوح والمعلّق\n"
             . "➡️ *وجّه 1234 لوليد* — إسناد طلب لفني\n"
-            . "↩️ *اسحب 1234* — سحب الطلب من الفني";
+            . "↩️ *اسحب 1234* — سحب الطلب من الفني\n"
+            . "⚡ *التنبيهات* · *فين الفنيين* · *فلوس النهارده* · *طلب 1234* · *نضف الكاش* — بتتنفذ فورًا";
     }
 
     public static function report() {

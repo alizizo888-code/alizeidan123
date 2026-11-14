@@ -31,21 +31,51 @@ final class Mutqan_Agent {
         if (!in_array($p['role'] ?? '', ['owner', 'operations'], true)) { throw new Mutqan_Error('forbidden', 'مساعد التحكم للمالك ومشرف العمليات فقط.', 403); }
         if (!empty($in['confirm'])) { return self::confirm((string) $in['confirm'], $p); }
         if (!empty($in['cancel'])) { delete_transient('mq_agent_' . preg_replace('/[^a-z0-9]/', '', (string) $in['cancel'])); return ['text' => 'اتلغى الأمر.']; }
+        if (isset($in['points'])) { return self::points($in['points'], $p); }
         $msgs = self::clean_messages($in['messages'] ?? []);
-        if (Mutqan_AI::anthropic_key() === '') { return self::free_turn($msgs, $p); }
         if (!$msgs) { throw new Mutqan_Error('empty_prompt', 'اكتب طلبك.', 400); }
-        Mutqan_Limiter::hit('agent', 120, 3600);
-        return self::loop($msgs, $p);
+        // 1) The internal engine: the usual commands run at once, no model, no limit, no points.
+        $last = end($msgs)['content'] ?? '';
+        if (is_string($last) && class_exists('Mutqan_Quick')) { $q = Mutqan_Quick::try_run($last, $p, 'agent'); if ($q) { return $q; } }
+        // 2) Claude (paid, from the points wallet), then 3) the free chain. A failure never reaches the owner as a bare error.
+        $why = '';
+        if (Mutqan_AI::anthropic_key() !== '' && (!class_exists('Mutqan_Points') || Mutqan_Points::available())) {
+            try { Mutqan_Limiter::hit('agent', ($p['role'] ?? '') === 'owner' ? 600 : 240, 3600); return self::loop($msgs, $p); }
+            catch (Mutqan_Error $e) { if ($e->slug !== 'ai_unavailable') { throw $e; } $why = $e->getMessage(); }
+        }
+        try { return self::free_turn($msgs, $p); }
+        catch (Mutqan_Error $e) { if ($e->slug !== 'ai_unavailable') { throw $e; } $why = trim($why . ' ' . $e->getMessage()); }
+        return self::offline_reply($why);
     }
+
+    /** Nobody could answer: say why in one line, show the commands that work without AI, and offer the test. */
+    public static function offline_reply($why = '') {
+        $st = Mutqan_AI::settings(); $live = Mutqan_AI::live_providers($st); $cool = [];
+        foreach (Mutqan_AI::cooldowns() as $id => $c) { if ($c) { $cool[] = Mutqan_AI::labels()[$id] ?? $id; } }
+        $head = !Mutqan_AI::any_enabled($st) ? 'مفيش مزود ذكاء مفعّل لسه — حط مفتاح مجاني (Groq / Gemini / Cerebras) من «إعدادات البوت».'
+            : 'مزودين الذكاء مشغولين دلوقتي' . ($cool ? ' (في فترة تهدئة: ' . implode('، ', array_slice($cool, 0, 6)) . ')' : '') . '. اكتب «حالة الذكاء» عشان أختبرهم وأرجّع اللي شغال.';
+        return ['text' => $head . "
+
+" . Mutqan_Quick::help(), 'steps' => [], 'pending' => null, 'engine' => 'internal', 'degraded' => true, 'why' => mb_substr($why, 0, 200), 'live' => $live];
+    }
+
+    private static function points($in, $p) {
+        if (is_array($in) && $in) {
+            if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'النقاط يعدّلها المالك بس.', 403); }
+            return ['points' => Mutqan_Points::set($in)];
+        }
+        return ['points' => Mutqan_Points::state()];
+    }
+
+    public static function park_public($name, $input, $p) { return self::park($name, $input, $p); }
+    public static function audit_public($name, $input, $ok, $p) { self::audit($name, $input, $ok, $p); }
 
     /**
      * No paid Claude key: the site's own AI engine (free providers, the same one the bot uses) picks ONE tool from the same
      * closed list as JSON, the server runs it (changes still wait for «تنفيذ»), then the engine words the answer.
      */
     private static function free_turn($msgs, $p) {
-        if (!Mutqan_AI::any_enabled()) {
-            return ['text' => 'محرك الذكاء اللي جوه الموقع لسه مش متفعّل: فعّل مزود مجاني (Groq أو Gemini) من «إعدادات البوت» وحط مفتاحه. لحد ما يتفعّل، استخدم «مركز تحكم أكسجين» في Claude — بيشتغل باشتراكك ومربوط بنفس الأدوات.', 'steps' => [], 'pending' => null];
-        }
+        if (!Mutqan_AI::any_enabled()) { return self::offline_reply(); }
         $last = ''; foreach (array_reverse($msgs) as $m) { if ($m['role'] === 'user') { $last = $m['content']; break; } }
         $list = implode("\n", array_map(function ($t) { return '- ' . $t['name'] . ': ' . $t['description'] . ' مدخلات: ' . implode(',', array_keys((array) $t['input_schema']['properties'])); }, self::tools()));
         $prompt = "أنت مساعد تحكم لشركة صيانة. اختار أداة واحدة من القائمة تنفذ طلب المستخدم، أو لا أداة لو مجرد كلام.\nالأدوات:\n$list\n\nطلب المستخدم: $last\n\nرد بـ JSON فقط بالشكل {\"tool\":\"اسم الأداة أو none\",\"input\":{...},\"reply\":\"رد قصير بالعامية المصرية لو مفيش أداة\"}";
@@ -452,7 +482,7 @@ final class Mutqan_Agent {
     }
 
     private static function order_brief($o) {
-        return array_intersect_key((array) $o, array_flip(['id', 'status', 'brand', 'specialtyId', 'clientName', 'clientPhone', 'address', 'appointmentAt', 'technicianId', 'createdAt', 'total', 'price', 'lat', 'lng']));
+        return array_intersect_key((array) $o, array_flip(['id', 'number', 'status', 'brand', 'specialtyId', 'clientName', 'clientPhone', 'address', 'appointmentAt', 'technicianId', 'createdAt', 'total', 'price', 'lat', 'lng']));
     }
 
     /** Never hand API keys, tokens or passwords to the assistant or the control centre. */

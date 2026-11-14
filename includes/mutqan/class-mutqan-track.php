@@ -53,7 +53,49 @@ final class Mutqan_Track {
         if (!$t) { return ['ok' => false, 'reason' => 'unknown_tech']; }
         // One current point, overwritten. Nothing accumulates, so there is no trail of a person.
         Mutqan_Store::update('tech_profiles', $techId, ['lat' => round((float) $lat, 6), 'lng' => round((float) $lng, 6), 'atAt' => time()], self::sys());
-        return ['ok' => true, 'at' => time()];
+        $near = [];
+        try { $near = self::approach($techId, (float) $lat, (float) $lng); } catch (Throwable $e) { error_log('[mutqan] approach ' . $e->getMessage()); }
+        return ['ok' => true, 'at' => time(), 'nearby' => $near];
+    }
+
+    const NEAR_M = 300;
+
+    /**
+     * The customer's side of a position: on the way, the order carries where the technician is and how far, and the
+     * moment he is within NEAR_M the order turns «الفني قريب» and the customer is told — by the server, from the
+     * position the app sends in the background, not only while the technician keeps the order page open.
+     */
+    public static function approach($techId, $lat, $lng) {
+        $out = [];
+        $jobs = Mutqan_Store::select('orders', ['technicianId' => (string) $techId, 'status' => ['in' => ['accepted', 'en_route', 'nearby']]], ['limit' => 5], self::sys());
+        foreach ($jobs as $o) {
+            if (!self::valid($o['lat'] ?? null, $o['lng'] ?? null)) { continue; }
+            $m = (int) round(Mutqan_Dispatch::meters($lat, $lng, (float) $o['lat'], (float) $o['lng']));
+            $now = gmdate('c');
+            $patch = ['technicianLocation' => ['lat' => round($lat, 6), 'lng' => round($lng, 6), 'updatedAt' => $now], 'technicianDistanceM' => $m];
+            $limit = (int) (get_option('mutqan_near_m', self::NEAR_M) ?: self::NEAR_M);
+            if (($o['status'] ?? '') === 'en_route' && $m <= $limit) {
+                $patch['status'] = 'nearby';
+                $patch['statusHistory'] = array_merge((array) ($o['statusHistory'] ?? []), [['status' => 'nearby', 'at' => $now, 'by' => 'system', 'note' => $m . ' م']]);
+                $out[] = (string) $o['id'];
+                self::tell_customer($o, $m);
+            }
+            Mutqan_Store::update('orders', (string) $o['id'], $patch, self::sys());
+        }
+        return $out;
+    }
+
+    private static function tell_customer($o, $m) {
+        $short = '#' . ((string) ($o['number'] ?? '') ?: substr((string) $o['id'], -5));
+        if (!empty($o['clientId'])) {
+            Mutqan_Store::insert('_push', ['target' => ['user' => (string) $o['clientId']], 'title' => '📍 الفني قريب منك ' . $short, 'body' => 'على بُعد حوالي ' . $m . ' متر — استعد لاستقباله.',
+                'url' => '#/order/' . $o['id'], 'sound' => 'chime', 'priority' => 'high', 'event' => 'order_status', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 86400)], self::sys());
+        }
+        $phone = class_exists('Mutqan_WA') ? Mutqan_WA::intl((string) ($o['clientPhone'] ?? '')) : '';
+        if ($phone !== '' && get_option('mutqan_near_wa', 1)) {
+            try { $acct = Mutqan_WA::open_account(); if ($acct !== '') { Mutqan_WA::send($acct, $phone, '📍 الفني قريب منك (حوالي ' . $m . ' متر) — طلبك ' . $short . '. استعد لاستقباله 🙏', 'auto', 'system'); } }
+            catch (Throwable $e) { error_log('[mutqan] near wa ' . $e->getMessage()); }
+        }
     }
 
     /** Where a technician is, or null when it is unknown or too old to mean anything. */

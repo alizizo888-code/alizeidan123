@@ -134,7 +134,8 @@ final class Mutqan_WebPush {
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $n = 0;
         foreach (array_slice($subs, 0, self::MAX_PER_ALERT) as $s) {
-            $code = self::send($s, $payload, $hi ? 'high' : 'normal', 86400);
+            // A call that rings an hour late is worse than none: it lives a minute; everything else a day.
+            $code = self::send($s, $payload, $hi ? 'high' : 'normal', strpos((string) ($doc['event'] ?? ''), 'call') !== false ? 60 : 86400);
             if ($code === 404 || $code === 410) { self::drop((string) $s['endpoint']); }
             if ($code >= 200 && $code < 300) { $n++; }
         }
