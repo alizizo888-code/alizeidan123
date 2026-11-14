@@ -47,6 +47,13 @@ final class Mutqan_Ops {
         if ($isTech && $op !== 'ask') { throw new Mutqan_Error('forbidden', 'غير مسموح.', 403); }
         if ($op === 'alerts') { return ['alerts' => self::alerts(), 'at' => gmdate('c')]; }
         if ($op === 'pos') { return self::ping($p, $in['lat'] ?? null, $in['lng'] ?? null); }
+        // «الخريطة الحية»: every technician (code, colour, trail, speed, next job, ETA), operations staff and customers.
+        if ($op === 'fleet') { return Mutqan_Route::fleet(); }
+        if ($op === 'route_assign') {
+            if (!Mutqan_Policy::has_power($p, 'write')) { throw new Mutqan_Error('forbidden', 'الإسناد للعمليات والمالك.', 403); }
+            return Mutqan_Route::assign((string) ($in['order'] ?? ''), (string) ($in['tech'] ?? ''), $p);
+        }
+        if ($op === 'fleet_ai') { return self::fleet_ai($p); }
         $msgs = self::clean_messages($in['messages'] ?? []);
         if (!$msgs) { throw new Mutqan_Error('empty_prompt', 'اكتب سؤالك.', 400); }
         if (!$isTech && class_exists('Mutqan_Quick')) {            // the internal engine first: instant, free, no limit
@@ -67,6 +74,23 @@ final class Mutqan_Ops {
         return Mutqan_Agent::offline_reply($why);
     }
 
+    /**
+     * The map, read by the model: who to send where. The rules already found the jobs on each road; the model only puts
+     * them in order and words it. With no model available the rules' own list is the answer.
+     */
+    private static function fleet_ai($p) {
+        Mutqan_Limiter::hit('fleet_ai', 60, 3600);
+        $brief = Mutqan_Route::brief(Mutqan_Route::fleet());
+        $text = $brief; $engine = 'internal';
+        try {
+            $r = Mutqan_AI::run("أنت مدير حركة فنيين لشركة صيانة في مكة وجدة. دي صورة الخريطة الحية الآن (كل فني بكوده):\n$brief\n\n"
+                . "اكتب بالعامية المصرية في نقاط قصيرة: 1) مين ياخد أنهي مهمة على طريقه ولماذا 2) أي فني واقف كتير أو متأخر عن موعده 3) أي طلب محتاج فني ومفيش حد قريب. استخدم أكواد الفنيين وأرقام الطلبات بالظبط، ومتألفش أرقام.",
+                ['temperature' => 0.2, 'tier' => 'routine', 'feature' => 'fleet'], $p);
+            if (trim((string) ($r['text'] ?? '')) !== '') { $text = trim($r['text']); $engine = (string) ($r['provider'] ?? 'ai'); }
+        } catch (Throwable $e) { /* the rules' list stands */ }
+        return ['text' => $text, 'engine' => $engine, 'at' => gmdate('c')];
+    }
+
     /* ------------------------------------------------------------------ supervisor position */
 
     /** A supervisor / operations member says where they are (one point, overwritten). Technicians use /track. */
@@ -76,6 +100,7 @@ final class Mutqan_Ops {
         $all = self::positions(true);
         $all[(string) $p['id']] = ['lat' => round((float) $lat, 6), 'lng' => round((float) $lng, 6), 'at' => time(), 'role' => (string) $p['role'], 'name' => mb_substr((string) ($p['name'] ?? $p['displayName'] ?? ''), 0, 60)];
         update_option(self::OPT_POS, $all, false);
+        if (class_exists('Mutqan_Route')) { Mutqan_Route::record('s' . $p['id'], $lat, $lng); }
         return ['ok' => true, 'at' => time()];
     }
 

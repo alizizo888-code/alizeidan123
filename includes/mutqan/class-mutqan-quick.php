@@ -52,7 +52,12 @@ final class Mutqan_Quick {
             return ['kind' => 'ops', 'tool' => 'order_story', 'input' => ['number' => $m[4]]];
         }
 
-        if (self::has($n, ['فين الفنيين', 'الفنيين فين', 'مكان الفنيين', 'اماكن الفنيين', 'مواقع الفنيين'])) { return ['kind' => 'ops', 'tool' => 'where_techs', 'input' => []]; }
+        // خط سير محمود / مهام على طريق سامي / تتبع ف-03 / الخريطة الحية
+        if (self::has($n, ['خط سير', 'مسار', 'تتبع', 'علي طريق', 'في طريق'])) {
+            $who = trim(preg_replace('/^.*?(خط سير|مسار|تتبع|علي طريق|في طريق)\s*(الفني)?\s*(ل|لـ)?\s*/u', '', $n));
+            return ['kind' => 'self', 'tool' => 'route', 'input' => ['name' => $who]];
+        }
+        if (self::has($n, ['الخريطه الحيه', 'مين علي الطريق', 'مين ماشي', 'فين الفنيين', 'الفنيين فين', 'مكان الفنيين', 'اماكن الفنيين', 'مواقع الفنيين'])) { return ['kind' => 'self', 'tool' => 'route', 'input' => ['name' => '']]; }
         if (self::has($n, ['فين المشرفين', 'المشرفين فين'])) { return ['kind' => 'ops', 'tool' => 'where_supervisors', 'input' => []]; }
         if (self::has($n, ['تنبيهات', 'التنبيهات', 'المشاكل', 'متاخر', 'المتاخره'])) { return ['kind' => 'ops', 'tool' => 'alerts', 'input' => []]; }
         if (self::has($n, ['فلوس', 'الايراد', 'ايرادات', 'المصاريف', 'الربح', 'الخزنه', 'الحسابات'])) {
@@ -86,7 +91,7 @@ final class Mutqan_Quick {
         if ($from === 'ops' && ($m['kind'] === 'agent' && Mutqan_Agent::needs_confirm($m['tool'], $m['input']) || in_array($m['tool'], ['assign', 'cache_purge'], true))) {
             return ['text' => 'ده أمر تنفيذ — اكتبه في تبويب «أوامر» وهيتنفذ على طول.', 'steps' => [], 'pending' => null, 'engine' => 'internal'];
         }
-        if ($role === 'supervisor' && $m['kind'] !== 'ops') { return null; }
+        if ($role === 'supervisor' && $m['kind'] !== 'ops' && $m['tool'] !== 'route') { return null; }
         try {
             $out = self::run($m, $p);
         } catch (Throwable $e) {
@@ -112,6 +117,11 @@ final class Mutqan_Quick {
         }
         switch ($tool) {
             case 'help': return ['text' => self::help(), 'steps' => [], 'pending' => null];
+            case 'route': {
+                $name = (string) ($in['name'] ?? '');
+                if (preg_match('/^ف\s*-?\s*(\d{1,3})$/u', $name, $mm)) { $name = 'ف-' . str_pad($mm[1], 2, '0', STR_PAD_LEFT); }
+                return ['text' => Mutqan_Route::brief(Mutqan_Route::fleet(), $name), 'steps' => [['tool' => 'fleet', 'status' => 'done']], 'pending' => null];
+            }
             case 'points': {
                 $s = Mutqan_Points::state();
                 $t = $s['unlimited'] ? 'النقاط: بدون حد شهري.' : 'رصيد النقاط: ' . number_format($s['balance']) . ' من ' . number_format((int) $s['monthly'] + (int) $s['topup']) . ' الشهر ده.';
@@ -160,7 +170,7 @@ final class Mutqan_Quick {
     public static function help() {
         return "أوامر بتتنفذ فورًا من غير ذكاء اصطناعي:\n"
             . "• اسند طلب 1024 لمحمود\n• طلب 1024 (قصة الطلب كاملة)\n• الطلبات الجديدة / الطلبات\n• الوضع (ملخص العمليات)\n• التنبيهات\n"
-            . "• فين الفنيين / الفنيين\n• فلوس النهارده / فلوس الأسبوع / فلوس الشهر\n• رسايل الواتساب\n• ايه اللي حصل (سجل 24 ساعة)\n"
+            . "• فين الفنيين / خط سير محمود / تتبع ف-03 / مهام على طريق سامي\n• الفنيين\n• فلوس النهارده / فلوس الأسبوع / فلوس الشهر\n• رسايل الواتساب\n• ايه اللي حصل (سجل 24 ساعة)\n"
             . "• نضف المواقع كلها من الكاش\n• حالة الذكاء (اختبار المزودين)\n• النقاط (رصيد توكن Claude)\n"
             . "أي حاجة تانية بتروح للذكاء الاصطناعي.";
     }

@@ -12,7 +12,8 @@ if (!defined('ABSPATH')) { exit; }
  * On a person's whereabouts this is deliberately narrow, because a maintenance business does not
  * need, and should not keep, a record of where its people are:
  *
- *   - a position is kept only while that technician has an open job. Off shift, nothing is stored.
+ *   - a position is kept only while that technician has an open job or has switched himself «متصل» (on shift).
+ *     Off shift, nothing is stored, and switching off erases the point and the day's road.
  *   - it is one current point, overwritten each time. There is no history to follow afterwards.
  *   - it goes stale on its own after a few hours, so a phone left behind does not keep reporting
  *     a position that is no longer true.
@@ -48,11 +49,14 @@ final class Mutqan_Track {
         $techId = (string) $techId;
         if ($techId === '' || !self::valid($lat, $lng)) { return ['ok' => false, 'reason' => 'bad_position']; }
         $open = Mutqan_Store::select('orders', ['technicianId' => $techId, 'status' => ['in' => self::OPEN]], ['limit' => 1], self::sys());
-        if (!$open) { return ['ok' => false, 'reason' => 'no_open_job']; }
         $t = Mutqan_Store::get_raw('tech_profiles', $techId);
-        if (!$t) { return ['ok' => false, 'reason' => 'unknown_tech']; }
+        if (!$t) { return ['ok' => false, 'reason' => $open ? 'unknown_tech' : 'no_open_job']; }
+        // On shift counts too: a technician who switched himself «متصل» is on the live map so operations can send him the
+        // next job on his road. Switching off (or no job and off shift) keeps nothing.
+        if (!$open && empty($t['active'])) { self::forget($techId, $t); return ['ok' => false, 'reason' => 'no_open_job']; }
         // One current point, overwritten. Nothing accumulates, so there is no trail of a person.
-        Mutqan_Store::update('tech_profiles', $techId, ['lat' => round((float) $lat, 6), 'lng' => round((float) $lng, 6), 'atAt' => time()], self::sys());
+        Mutqan_Store::update('tech_profiles', $techId, ['lat' => round((float) $lat, 6), 'lng' => round((float) $lng, 6), 'atAt' => time(), 'lastSeenAt' => gmdate('c')], self::sys());
+        if (class_exists('Mutqan_Route')) { Mutqan_Route::record($techId, $lat, $lng); }
         $near = [];
         try { $near = self::approach($techId, (float) $lat, (float) $lng); } catch (Throwable $e) { error_log('[mutqan] approach ' . $e->getMessage()); }
         return ['ok' => true, 'at' => time(), 'nearby' => $near];
@@ -108,13 +112,19 @@ final class Mutqan_Track {
     }
 
     /** Clears a position the moment the last job closes — nothing is held past the shift. */
+    private static function forget($techId, $t) {
+        if (isset($t['atAt'])) { Mutqan_Store::update('tech_profiles', $techId, ['lat' => null, 'lng' => null, 'atAt' => null], self::sys()); }
+        if (class_exists('Mutqan_Route')) { Mutqan_Route::clear($techId); }
+    }
+
     public static function clear_if_free($techId) {
         $techId = (string) $techId;
         if ($techId === '') { return false; }
         if (Mutqan_Store::select('orders', ['technicianId' => $techId, 'status' => ['in' => self::OPEN]], ['limit' => 1], self::sys())) { return false; }
         $t = Mutqan_Store::get_raw('tech_profiles', $techId);
-        if (!$t || !isset($t['atAt'])) { return false; }
+        if (!$t || !empty($t['active']) || !isset($t['atAt'])) { return false; }     // still on shift: stays on the map
         Mutqan_Store::update('tech_profiles', $techId, ['lat' => null, 'lng' => null, 'atAt' => null], self::sys());
+        if (class_exists('Mutqan_Route')) { Mutqan_Route::clear($techId); }
         return true;
     }
 }
