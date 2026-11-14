@@ -51,3 +51,21 @@ export class Pacer {
   mark() { this._roll(); this.count++ }
   delay() { return Math.round(this.minMs + this.rand() * (this.maxMs - this.minMs)) }
 }
+
+// One order from the management screen, carried out on this device. Pure apart from the callbacks, so it is
+// unit-tested: add → a new number opens and its QR goes up to the screen; remove → logged out and forgotten;
+// restart → reconnected. Returns the order's id so the server can drop it.
+export async function applyCmd(cmd, { meta, start, remove, save }) {
+  const id = cleanId(cmd && cmd.id)
+  if (!id || !cmd.cid) return null
+  if (cmd.op === 'add') {
+    const mode = cmd.mode === 'code' ? 'code' : 'qr'
+    meta[id] = { label: String(cmd.label || id).slice(0, 60), mode, phone: mode === 'code' ? digits(cmd.phone) : (meta[id]?.phone || '') }
+    save(); await start(id)
+  } else if (cmd.op === 'remove') {
+    if (meta[id]) await remove(id)
+  } else if (cmd.op === 'restart') {
+    if (meta[id]) await start(id)
+  } else return cmd.cid
+  return cmd.cid
+}

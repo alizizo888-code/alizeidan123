@@ -4,7 +4,7 @@ import express from 'express'
 import pino from 'pino'
 import QRCode from 'qrcode'
 import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys'
-import { sign, safeEq, cleanId, digits, jidToPhone, phoneToJid, isUserJid, extract, Pacer } from './core.js'
+import { sign, safeEq, cleanId, digits, jidToPhone, phoneToJid, isUserJid, extract, Pacer, applyCmd } from './core.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const TOKEN = process.env.GATEWAY_TOKEN || ''          // WordPress -> gateway
@@ -14,11 +14,16 @@ const HOOK_SECRET = process.env.WEBHOOK_SECRET || ''
 // reach, so WordPress cannot dial it; the phone collects what is waiting for it instead. Leave
 // PULL_URL empty on a machine that can be dialled and nothing changes.
 const PULL_URL = process.env.PULL_URL || (HOOK_URL ? HOOK_URL.replace(/\/wa-hook$/, '/wa-pull') : '')
-const PULL_EVERY = Math.max(2000, Number(process.env.PULL_EVERY_MS || 5000))
-const PULL_IDLE = Math.max(PULL_EVERY, Number(process.env.PULL_IDLE_MS || 20000))
+// Every three seconds by default: a tiny signed request that is the whole «refresh» — it sends what went out, collects
+// what is waiting (messages to send, numbers to open, a fresh QR to show), and reports every number's state, so the
+// operations screen, the order tracking and the alerts are never more than a few seconds behind. Free: no API, no quota.
+const PULL_EVERY = Math.max(2000, Number(process.env.PULL_EVERY_MS || 3000))
+const PULL_IDLE = Math.max(PULL_EVERY, Number(process.env.PULL_IDLE_MS || 3000))
 const DATA = path.resolve(process.env.DATA_DIR || './data')
 const DAILY_CAP = Number(process.env.SEND_DAILY_CAP || 200)
 const MAX_SESSIONS = Number(process.env.MAX_SESSIONS || 20)
+// Set by «تسجيل الجهاز» in the desk app: this device's id, so its numbers never collide with another device's.
+const DEVICE_ID = cleanId(process.env.DEVICE_ID || '')
 if (!TOKEN || TOKEN.length < 24) { console.error('GATEWAY_TOKEN (>=24 chars) is required'); process.exit(1) }
 if (!HOOK_URL || !HOOK_SECRET) console.warn('WEBHOOK_URL / WEBHOOK_SECRET missing: events will not reach WordPress')
 
@@ -174,15 +179,14 @@ app.post('/sessions', wrap(async (q) => {
   return view(id)
 }))
 app.post('/sessions/:id/restart', wrap(async (q) => { const id = cleanId(q.params.id); if (!meta[id]) throw Object.assign(new Error('not found'), { code: 404 }); await start(id); return view(id) }))
-app.delete('/sessions/:id', wrap(async (q) => {
-  const id = cleanId(q.params.id)
+async function removeSession(id) {
   const st = S.get(id)
   try { await st?.sock?.logout() } catch {}
   try { st?.sock?.end(undefined) } catch {}
   S.delete(id); delete meta[id]; saveMeta()
   fs.rmSync(path.join(DATA, 'auth', id), { recursive: true, force: true })
-  return { ok: true }
-}))
+}
+app.delete('/sessions/:id', wrap(async (q) => { await removeSession(cleanId(q.params.id)); return { ok: true } }))
 app.post('/sessions/:id/send', wrap(async (q) => {
   const id = cleanId(q.params.id)
   const to = digits(q.body.to); const text = String(q.body.text || '').slice(0, 4000)
@@ -200,15 +204,26 @@ async function pullLoop() {
   if (!PULL_URL || !HOOK_SECRET) return
   let wait = PULL_EVERY
   let sent = []
+  let done = []
   while (!pullStop) {
     let got = 0
     try {
-      const body = JSON.stringify({ sent, limit: 10 })
-      sent = []
+      // Each check-in also says which numbers this device carries and how they are — the screen's live view.
+      const sessions = Object.keys(meta).map((id) => { const v = view(id); return { id, status: v.status, phone: v.phone } })
+      const body = JSON.stringify({ sent, done, sessions, device: DEVICE_ID, limit: 10 })
+      sent = []; done = []
       const r = await fetch(PULL_URL, { method: 'POST', headers: { 'content-type': 'application/json', 'x-mq-signature': sign(HOOK_SECRET, body) }, body, signal: AbortSignal.timeout(20000) })
       const j = r.ok ? await r.json().catch(() => null) : null
       const jobs = (j && j.data && Array.isArray(j.data.jobs)) ? j.data.jobs : []
       got = jobs.length
+      // Orders from the management screen: open a new number, remove one, reconnect one.
+      const cmds = (j && j.data && Array.isArray(j.data.cmds)) ? j.data.cmds : []
+      for (const cmd of cmds) {
+        if (cmd.op === 'add' && !meta[cleanId(cmd.id)] && Object.keys(meta).length >= MAX_SESSIONS) { done.push(cmd.cid); continue }
+        try { const cid = await applyCmd(cmd, { meta, start, remove: removeSession, save: saveMeta }); if (cid) { done.push(cid); console.log('🛠️ أمر من الشاشة: ' + cmd.op + ' ' + cmd.id) } }
+        catch (e) { log.warn({ err: String(e) }, 'cmd') }
+      }
+      got += cmds.length
       for (const job of jobs) {
         // The number WordPress names, or the only one connected — a phone usually carries one.
         const id = (job.acct && S.has(job.acct)) ? job.acct : [...S.keys()].find((k) => S.get(k)?.status === 'open')
@@ -219,7 +234,9 @@ async function pullLoop() {
     } catch (e) {
       log.warn({ err: String(e) }, 'pull')
     }
-    wait = got ? PULL_EVERY : Math.min(PULL_IDLE, Math.round(wait * 1.5))
+    // A number waiting to be scanned keeps the pace at its fastest: the QR must reach the screen while it is still valid.
+    const pairing = Object.keys(meta).some((id) => ['qr', 'code', 'connecting'].includes(S.get(id)?.status))
+    wait = got || pairing ? PULL_EVERY : Math.min(PULL_IDLE, Math.round(wait * 1.5))
     await new Promise((r) => setTimeout(r, wait))
   }
 }
@@ -228,7 +245,7 @@ app.listen(PORT, () => console.log('mutqan wa-gateway on :' + PORT))
 // Nothing can call into a phone to ask it to begin, so when it has no number yet it opens one by
 // itself and its QR goes up to the operations screen to be scanned from there.
 if (!Object.keys(meta).length && (process.env.AUTO_SESSION ?? '1') !== '0') {
-  const id = cleanId(process.env.SESSION_ID || 'main')
+  const id = cleanId(process.env.SESSION_ID || (DEVICE_ID ? DEVICE_ID + '-main' : 'main'))
   // PAIR_PHONE=0536554731 → a pairing code printed right here, typed into WhatsApp on the SAME phone (a QR cannot be scanned by the phone showing it).
   const pair = digits(process.env.PAIR_PHONE || '').replace(/^0(5\d{8})$/, '966$1').replace(/^(5\d{8})$/, '966$1')
   meta[id] = { label: process.env.SESSION_LABEL || 'واتساب الشغل', mode: pair ? 'code' : 'qr', phone: pair }
