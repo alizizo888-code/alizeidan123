@@ -65,6 +65,55 @@ final class Oxygen_Network {
     }
     public static function is_hub() { return self::own_host() === self::HUB_HOST; }
 
+    /* ------------------------------------------------------------------ network-wide cache purge */
+
+    const OPT_PURGE = 'oxygen_network_purge_at';   // hub: when the owner last asked every site to clear its cache
+    const OPT_PURGED = 'oxygen_network_purged_at'; // every site: the hub signal it has already acted on
+
+    /** Clears every cache this site may have: object cache, page-cache plugins (LiteSpeed on Hostinger and the usual others). */
+    public static function purge_local() {
+        $done = [];
+        if (function_exists('wp_cache_flush')) { wp_cache_flush(); $done[] = 'object'; }
+        if (has_action('litespeed_purge_all') || defined('LSCWP_V')) { do_action('litespeed_purge_all'); $done[] = 'litespeed'; }
+        if (function_exists('rocket_clean_domain')) { rocket_clean_domain(); $done[] = 'wp-rocket'; }
+        if (function_exists('w3tc_flush_all')) { w3tc_flush_all(); $done[] = 'w3tc'; }
+        if (function_exists('wp_cache_clear_cache')) { wp_cache_clear_cache(); $done[] = 'wp-super-cache'; }
+        if (function_exists('sg_cachepress_purge_cache')) { sg_cachepress_purge_cache(); $done[] = 'sg'; }
+        if (class_exists('autoptimizeCache') && method_exists('autoptimizeCache', 'clearall')) { autoptimizeCache::clearall(); $done[] = 'autoptimize'; }
+        do_action('oxygen_purge_cache');
+        if (function_exists('delete_transient')) { delete_transient(self::TR_REMOTE); delete_transient('mq_kb_rows'); }
+        update_option(self::OPT_PURGED, gmdate('c'), false);
+        return $done;
+    }
+
+    /**
+     * Hub only: purge here, then wake every other site. A satellite never trusts the caller: it asks the hub when the last
+     * purge was requested and acts only if that is newer than what it has already done, so the wake-up link is harmless.
+     */
+    public static function purge_network() {
+        $at = gmdate('c');
+        update_option(self::OPT_PURGE, $at, false);
+        $sites = ['oxygen' => self::purge_local()];
+        foreach (self::ids() as $id) {
+            $h = self::host_of($id);
+            if (!$h || $h === self::HUB_HOST) { continue; }
+            wp_remote_post('https://' . $h . '/wp-json/oxygen/v1/net-purge', ['timeout' => 0.5, 'blocking' => false]);
+            $sites[$id] = 'sent';
+        }
+        return ['at' => $at, 'sites' => $sites, 'count' => count($sites)];
+    }
+
+    /** Satellite: act on the hub's latest purge request if it has not been done yet. */
+    public static function purge_check() {
+        if (self::is_hub() || get_transient('oxygen_net_purge_lock')) { return ['skipped' => true]; }
+        set_transient('oxygen_net_purge_lock', 1, 20);
+        $res = wp_remote_get('https://' . self::HUB_HOST . '/wp-json/oxygen/v1/net-registry', ['timeout' => 4]);
+        $d = !is_wp_error($res) ? json_decode((string) wp_remote_retrieve_body($res), true) : null;
+        $want = is_array($d) ? (string) ($d['purge'] ?? '') : '';
+        if ($want === '' || strcmp($want, (string) get_option(self::OPT_PURGED, '')) <= 0) { return ['purged' => false]; }
+        return ['purged' => self::purge_local()];
+    }
+
     /** Linked sites: the hub keeps them; every other site reads the hub's list (cached six hours) so a new site knows who it is. */
     public static function extras() {
         if (!function_exists('get_option')) { return []; }
@@ -238,7 +287,10 @@ if (function_exists('add_action')) {
         register_rest_route('oxygen/v1', '/net-registry', ['methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function () {
             $out = [];
             if (Oxygen_Network::is_hub()) { foreach (Oxygen_Network::extras() as $id => $x) { $out[$id] = ['name' => $x['name'], 'host' => $x['host'], 'color' => $x['color']]; } }
-            return rest_ensure_response(['sites' => (object) $out]);
+            return rest_ensure_response(['sites' => (object) $out, 'purge' => Oxygen_Network::is_hub() ? (string) get_option(Oxygen_Network::OPT_PURGE, '') : '']);
+        }]);
+        register_rest_route('oxygen/v1', '/net-purge', ['methods' => 'POST', 'permission_callback' => '__return_true', 'callback' => function () {
+            return rest_ensure_response(Oxygen_Network::purge_check());
         }]);
     });
 }

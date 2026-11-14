@@ -29,9 +29,9 @@ final class Mutqan_Devices {
     /** The apps the owner hands out, with where each one lives (shown on the owner's apps screen). */
     public static function catalog() {
         $out = [];
-        foreach (self::APPS as $k => $a) { $out[] = ['app' => $k, 'label' => $a['label'], 'url' => self::DESK . $a['page'], 'apk' => self::DESK . $a['apk'], 'roles' => $a['roles'], 'linkable' => true]; }
-        $out[] = ['app' => 'owner', 'label' => 'تطبيق المالك', 'url' => self::DESK . 'desk.html', 'apk' => self::DESK . 'oxygen-deskctl.apk', 'roles' => ['owner'], 'linkable' => false];
-        $out[] = ['app' => 'customer', 'label' => 'تطبيق العميل', 'url' => home_url('/app/'), 'apk' => self::DESK . 'oxygen-app.apk', 'roles' => [], 'linkable' => false];
+        foreach (self::APPS as $k => $a) { $out[] = ['app' => $k, 'label' => $a['label'], 'url' => self::DESK . $a['page'], 'apk' => Mutqan_Native::apk_url($a['apk']), 'roles' => $a['roles'], 'linkable' => true]; }
+        $out[] = ['app' => 'owner', 'label' => 'تطبيق المالك', 'url' => self::DESK . 'desk.html', 'apk' => Mutqan_Native::apk_url('oxygen-deskctl.apk'), 'roles' => ['owner'], 'linkable' => false];
+        $out[] = ['app' => 'customer', 'label' => 'تطبيق العميل', 'url' => home_url('/app/'), 'apk' => Mutqan_Native::apk_url('oxygen-app.apk'), 'roles' => [], 'linkable' => false];
         return $out;
     }
 
@@ -83,7 +83,7 @@ final class Mutqan_Devices {
         $url = self::DESK . $A['page'] . '#/activate/' . $token;
         $who = $doc['name'];
         $msg = "أهلاً {$who} 👋\nده رابط {$A['label']} — أكسجين/أكسجين:\n{$url}\n\n1) افتح الرابط من كروم ونزّل التطبيق.\n2) افتح التطبيق واكتب كود التفعيل: {$code}\n\nالرابط لجهاز واحد بس وصالح 3 أيام.";
-        return ['link' => self::public_link($doc), 'url' => $url, 'code' => $code, 'apk' => self::DESK . $A['apk'], 'message' => $msg,
+        return ['link' => self::public_link($doc), 'url' => $url, 'code' => $code, 'apk' => Mutqan_Native::apk_url($A['apk']), 'message' => $msg,
             'whatsapp' => 'https://wa.me/' . self::wa_phone($u['phone']) . '?text=' . rawurlencode($msg)];
     }
 
@@ -149,7 +149,7 @@ final class Mutqan_Devices {
         $A = self::APPS[$d['app']];
         $st = self::state($d);
         return ['app' => $d['app'], 'appLabel' => $A['label'], 'name' => $d['name'], 'role' => self::ROLE_LABEL[$d['role']] ?? '', 'status' => $st,
-            'code' => $st === 'pending' ? $d['code'] : '', 'apk' => self::DESK . $A['apk'], 'page' => self::DESK . $A['page']];
+            'code' => $st === 'pending' ? $d['code'] : '', 'apk' => Mutqan_Native::apk_url($A['apk']), 'page' => self::DESK . $A['page']];
     }
 
     public static function activate($in) {

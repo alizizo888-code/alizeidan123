@@ -49,11 +49,22 @@ final class Mutqan_Ops {
         if ($op === 'pos') { return self::ping($p, $in['lat'] ?? null, $in['lng'] ?? null); }
         $msgs = self::clean_messages($in['messages'] ?? []);
         if (!$msgs) { throw new Mutqan_Error('empty_prompt', 'اكتب سؤالك.', 400); }
-        Mutqan_Limiter::hit('ops_ai', 150, 3600);
+        if (!$isTech && class_exists('Mutqan_Quick')) {            // the internal engine first: instant, free, no limit
+            $q = Mutqan_Quick::try_run((string) (end($msgs)['content'] ?? ''), $p, 'ops');
+            if ($q) { return $q; }
+        }
+        Mutqan_Limiter::hit('ops_ai', 300, 3600);
         if ($isTech) { self::$who = $p; }
         $tier = Mutqan_AI::allowed_tier('high', $p);           // owner/operations: high · supervisor: routine
-        $model = Mutqan_AI::tier_model($tier);
-        return $model !== '' ? self::loop($msgs, $p, $model) : self::free_turn($msgs, $p);
+        $model = class_exists('Mutqan_Points') && !Mutqan_Points::available() ? '' : Mutqan_AI::tier_model($tier);
+        $why = '';
+        if ($model !== '') {
+            try { return self::loop($msgs, $p, $model); }
+            catch (Mutqan_Error $e) { if ($e->slug !== 'ai_unavailable') { throw $e; } $why = $e->getMessage(); }
+        }
+        try { return self::free_turn($msgs, $p); }
+        catch (Mutqan_Error $e) { if ($e->slug !== 'ai_unavailable' || $isTech) { throw $e; } }
+        return Mutqan_Agent::offline_reply($why);
     }
 
     /* ------------------------------------------------------------------ supervisor position */

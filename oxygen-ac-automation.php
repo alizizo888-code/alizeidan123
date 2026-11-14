@@ -36,7 +36,7 @@ Oxygen_Social::boot();
 Oxygen_Desk::boot();
 Oxygen_Network_Report::boot();
 Oxygen_Owner_Link::boot();
-foreach (['store', 'policy', 'auth', 'otp', 'passkey', 'promo', 'wa', 'ai', 'shop', 'defaults', 'link', 'block', 'telegram', 'blogger', 'agent', 'order-ai', 'webpush', 'relay', 'callnet', 'wa-desk', 'geo', 'places', 'track', 'live', 'ops', 'devices', 'network', 'brain', 'kb', 'playbook', 'sales', 'orderbot', 'wa-fleet', 'dispatch', 'rest', 'admin'] as $mutqan_part) { require_once plugin_dir_path(__FILE__) . 'includes/mutqan/class-mutqan-' . $mutqan_part . '.php'; }
+foreach (['store', 'policy', 'auth', 'otp', 'passkey', 'promo', 'wa', 'ai', 'shop', 'defaults', 'link', 'block', 'telegram', 'blogger', 'points', 'quick', 'agent', 'order-ai', 'webpush', 'relay', 'callnet', 'wa-desk', 'geo', 'places', 'track', 'native', 'live', 'ops', 'devices', 'network', 'brain', 'kb', 'playbook', 'sales', 'orderbot', 'wa-fleet', 'dispatch', 'rest', 'admin'] as $mutqan_part) { require_once plugin_dir_path(__FILE__) . 'includes/mutqan/class-mutqan-' . $mutqan_part . '.php'; }
 Mutqan_Rest::boot(); Mutqan_Sales::boot(); Mutqan_WA_Fleet::boot(); Mutqan_Admin::boot(); Mutqan_Defaults::boot(); Mutqan_Geo::boot();
 final class Oxygen_AC_Automation {
  const OPT='oxygen_ac_automation_settings'; const CRON='oxygen_ac_daily_job'; private static $instance=null;

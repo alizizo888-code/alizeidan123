@@ -36,12 +36,21 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
             ]);
         }
+        // One unchanging download address per Android app; the phone is sent to the public release file.
+        register_rest_route(self::NS, '/apk', ['methods' => 'GET', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                $to = Mutqan_Native::apk_target((string) $req->get_param('f'));
+                if ($to === '') { return new WP_REST_Response(['error' => ['code' => 'not_found', 'message' => 'تطبيق غير معروف.']], 404); }
+                $res = new WP_REST_Response(null, 302);
+                $res->header('Location', $to); $res->header('Cache-Control', 'public, max-age=300');
+                return $res;
+            }]);
         // The phone asks for work instead of being called: a gateway on a handset has no address of
         // its own. Signed with the same secret as the webhook, so there is nothing extra to set up.
         register_rest_route(self::NS, '/wa-pull', ['methods' => 'POST', 'permission_callback' => '__return_true',
@@ -606,6 +615,8 @@ final class Mutqan_Rest {
         if (!Mutqan_Policy::has_power($p, 'read')) { throw new Mutqan_Error('forbidden', 'للفريق فقط.', 403); }
         return Mutqan_Live::snapshot((string) $req->get_param('v'));
     }
+
+    public static function h_native($req, $p) { return Mutqan_Native::handle(self::body($req), $p); }
 
     public static function h_track($req, $p) {
         // Only the technician themselves, and only about themselves: nobody reports anybody else's

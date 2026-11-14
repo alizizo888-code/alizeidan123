@@ -121,11 +121,16 @@ final class Mutqan_WA {
         if (!$write) { throw new Mutqan_Error('forbidden', 'غير مسموح.', 403); }
         Mutqan_Limiter::hit('wa_ops', 300, 3600);
         switch ($op) {
+            // «ربط بلمسة»: one field (the number), the right device is chosen, the QR shows up on this screen.
+            case 'link': return self::link($in);
+            case 'relink':
+                if (self::cfg()['url'] !== '') { return self::gw('POST', '/sessions/' . rawurlencode(self::id($in['id'] ?? '')) . '/restart', []); }
+                return Mutqan_WA_Fleet::relink(self::id($in['id'] ?? ''), (string) ($in['mode'] ?? 'qr'), (string) ($in['phone'] ?? ''));
             case 'connect':
-                if (self::cfg()['url'] === '') { throw new Mutqan_Error('phone_gateway', 'الوسيط شغال على الموبايل: شغّله هناك وهيظهر الـQR هنا خلال ثوانٍ لتمسحه.', 409); }
+                if (self::cfg()['url'] === '') { return self::link($in); }
                 return self::gw('POST', '/sessions', ['id' => (string) ($in['id'] ?? ''), 'label' => (string) ($in['label'] ?? ''), 'mode' => ($in['mode'] ?? '') === 'code' ? 'code' : 'qr', 'phone' => (string) ($in['phone'] ?? '')]);
             case 'restart':
-                if (self::cfg()['url'] === '') { throw new Mutqan_Error('phone_gateway', 'الوسيط على الموبايل — أعد تشغيله من هناك.', 409); }
+                if (self::cfg()['url'] === '') { return Mutqan_WA_Fleet::relink(self::id($in['id'] ?? ''), 'qr'); }
                 return self::gw('POST', '/sessions/' . rawurlencode(self::id($in['id'] ?? '')) . '/restart', []);
             case 'logout':
                 if (self::cfg()['url'] === '') { self::forget_session(self::id($in['id'] ?? '')); return ['ok' => true]; }
@@ -133,6 +138,25 @@ final class Mutqan_WA {
             case 'send': return self::staff_send($in, $p);
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
+    }
+
+    /** A new number from just its digits: on the gateway server if there is one, else on the best registered device. */
+    private static function link($in) {
+        $phone = self::intl($in['phone'] ?? '');
+        $mode = ($in['mode'] ?? '') === 'code' ? 'code' : 'qr';
+        $label = trim((string) ($in['label'] ?? '')) ?: ($phone !== '' ? '+' . $phone : 'رقم جديد');
+        if (self::cfg()['url'] !== '') {
+            $id = 'n' . ($phone !== '' ? substr($phone, -9) : substr(bin2hex(random_bytes(3)), 0, 6));
+            $r = self::gw('POST', '/sessions', ['id' => $id, 'label' => $label, 'mode' => $mode, 'phone' => $phone]);
+            return ['ok' => true, 'id' => (string) ($r['id'] ?? $id), 'via' => 'server'];
+        }
+        $dev = class_exists('Mutqan_WA_Fleet') ? Mutqan_WA_Fleet::pick_device((string) ($in['device'] ?? '')) : '';
+        if ($dev === '') {
+            throw new Mutqan_Error('no_device', 'مفيش جهاز وسيط متسجّل لسه. افتح «أجهزة الواتساب» وسجّل الموبايل اللي هيشيل الأرقام (أمر واحد يتلصق في Termux) — بعدها اضغط على أي رقم ويظهر الـQR هنا.', 409);
+        }
+        $r = Mutqan_WA_Fleet::add_number(['device' => $dev, 'role' => (string) ($in['role'] ?? 'general'), 'mode' => $mode, 'phone' => $phone, 'label' => $label]);
+        $v = Mutqan_WA_Fleet::device_view($dev);
+        return $r + ['via' => 'device', 'device' => $dev, 'deviceName' => $v['name'] ?? '', 'deviceOnline' => !empty($v['online'])];
     }
 
     private static function id($s) { $s = strtolower(preg_replace('/[^a-z0-9_-]/i', '', (string) $s)); if ($s === '') { throw new Mutqan_Error('bad_id', 'معرّف غير صالح.', 400); } return substr($s, 0, 32); }
