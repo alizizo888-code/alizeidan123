@@ -404,6 +404,7 @@ final class Mutqan_Store {
         $doc = self::row_to_doc(self::fetch_row($coll, $id));
         // Every order, whichever door it came through, is dispatched here when the room is on «آلي».
         if ($coll === 'orders' && class_exists('Mutqan_Dispatch')) { $doc = Mutqan_Dispatch::on_created($doc); }
+        if ($coll === 'orders' && class_exists('Mutqan_WA_Central')) { Mutqan_WA_Central::order_ready($doc); }   // the master's «أوردر جاهز» + n8n
         // Every alert also goes out as a real background notification to the devices it is for.
         if ($coll === '_push' && class_exists('Mutqan_WebPush')) { Mutqan_WebPush::queue($doc); }
         if ($coll === 'orders' && class_exists('Mutqan_Sales')) { Mutqan_Sales::on_order($doc); }

@@ -88,7 +88,7 @@ final class Mutqan_WA_Fleet {
         $d = self::devices();
         if (count($d) >= 20) { throw new Mutqan_Error('too_many', 'وصلت للحد الأقصى للأجهزة (20). ألغِ جهازًا قديمًا أولًا.', 400); }
         $id = 'd' . substr(bin2hex(random_bytes(4)), 0, 6);
-        $d[$id] = ['name' => $name, 'secret' => bin2hex(random_bytes(24)), 'token' => bin2hex(random_bytes(16)), 'enabled' => 1,
+        $d[$id] = ['name' => $name, 'kind' => ($in['kind'] ?? '') === 'vps' ? 'vps' : 'phone', 'secret' => bin2hex(random_bytes(24)), 'token' => bin2hex(random_bytes(16)), 'enabled' => 1,
             'createdAt' => gmdate('c'), 'by' => (string) ($p['name'] ?? ($p['id'] ?? '')), 'lastSeen' => 0, 'agent' => mb_substr((string) ($in['agent'] ?? ''), 0, 120)];
         self::put_devices($d);
         return self::device_view($id, true);
@@ -109,6 +109,7 @@ final class Mutqan_WA_Fleet {
         $s = self::settings();
         $dir = $s['subdir'] !== '' ? 'mq-wa/' . $s['subdir'] : 'mq-wa';
         $env = "GATEWAY_TOKEN={$d['token']}\nWEBHOOK_URL=" . Mutqan_WA::hook_url() . "\nWEBHOOK_SECRET={$d['secret']}\nDEVICE_ID={$id}\nDATA_DIR=./data\nSEND_DAILY_CAP={$s['dailyCap']}\n";
+        if (($d['kind'] ?? '') === 'vps') { return self::setup_vps($id, $d, $s, $dir, $env); }
         return "pkg update -y && pkg install -y nodejs-lts git\n"
             . "git clone --depth 1 -b {$s['branch']} {$s['repo']} mq-wa || (cd mq-wa && git pull)\n"
             . "cd {$dir} && npm ci --omit=dev\n"
@@ -116,11 +117,33 @@ final class Mutqan_WA_Fleet {
             . "termux-wake-lock; set -a && . ./.env && set +a && node src/index.js";
     }
 
+    /**
+     * Ubuntu 24.04 (the Hostinger VPS): one paste as root. Node 20, the gateway as a systemd service that restarts on
+     * failure and comes back after a reboot, its own folder and port per device. Pull mode: the server asks this site for
+     * work every 3 s, so no domain, open port or certificate is needed. Safe to paste again: it updates in place.
+     */
+    public static function setup_vps($id, $d, $s, $dir, $env) {
+        $svc = 'mutqan-wa-' . $id;
+        $port = 18000 + (abs(crc32($id)) % 1000);
+        $env .= "PORT={$port}\nPULL_EVERY_MS=3000\nPULL_IDLE_MS=3000\n";
+        return "set -e; export DEBIAN_FRONTEND=noninteractive\n"
+            . "if ! node -v 2>/dev/null | grep -qE '^v(2[0-9])'; then apt-get update -y && apt-get install -y ca-certificates curl git && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs; fi\n"
+            . "command -v git >/dev/null || apt-get install -y git\n"
+            . "mkdir -p /opt/mutqan/{$id} && cd /opt/mutqan/{$id}\n"
+            . "if [ -d mq-wa/.git ]; then git -C mq-wa pull -q; else git clone -q --depth 1 -b {$s['branch']} {$s['repo']} mq-wa; fi\n"
+            . "cd {$dir} && npm ci --omit=dev --no-audit --no-fund\n"
+            . "cat > .env <<'EOF'\n{$env}EOF\n"
+            . "cat > /etc/systemd/system/{$svc}.service <<EOF\n[Unit]\nDescription=Mutqan WhatsApp gateway ({$id})\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nWorkingDirectory=\$(pwd)\nEnvironmentFile=\$(pwd)/.env\nExecStart=/usr/bin/node src/index.js\nRestart=always\nRestartSec=5\n\n[Install]\nWantedBy=multi-user.target\nEOF\n"
+            . "systemctl daemon-reload && systemctl enable --now {$svc} && systemctl restart {$svc}\n"
+            . "sleep 3; systemctl --no-pager --lines=5 status {$svc} || true\n"
+            . "echo '✅ الوسيط شغال على السيرفر. افتح التطبيق ← الواتساب ← الأرقام ← ربط رقم جديد وامسح الـQR.'";
+    }
+
     public static function device_view($id, $withSecret = false) {
         $d = self::devices()[$id] ?? null;
         if (!$d) { return null; }
         $nums = array_values(array_filter(self::numbers(), function ($n) use ($id) { return $n['device'] === $id; }));
-        $v = ['id' => $id, 'name' => $d['name'], 'enabled' => !empty($d['enabled']), 'createdAt' => $d['createdAt'], 'by' => $d['by'] ?? '',
+        $v = ['id' => $id, 'name' => $d['name'], 'kind' => (string) ($d['kind'] ?? 'phone'), 'enabled' => !empty($d['enabled']), 'createdAt' => $d['createdAt'], 'by' => $d['by'] ?? '',
             'lastSeen' => (int) $d['lastSeen'], 'online' => (int) $d['lastSeen'] > 0 && time() - (int) $d['lastSeen'] < self::ONLINE,
             'seenAgo' => (int) $d['lastSeen'] ? time() - (int) $d['lastSeen'] : null, 'numbers' => count($nums),
             'pending' => count((array) ((get_option(self::CMDS, [])[$id] ?? [])))];
@@ -161,7 +184,7 @@ final class Mutqan_WA_Fleet {
             $st = (string) ($r['status'] ?? '');
             $fresh = $age < Mutqan_WA::QR_FRESH;
             $out[] = ['id' => (string) $acct, 'label' => (string) ($r['label'] ?? $acct), 'phone' => (string) ($r['phone'] ?? ''), 'name' => (string) ($r['name'] ?? ''),
-                'device' => (string) ($roles[$acct]['device'] ?? ($r['dev'] ?? '')), 'role' => (string) ($roles[$acct]['role'] ?? 'general'),
+                'device' => (string) ($roles[$acct]['device'] ?? ($r['dev'] ?? '')), 'role' => (string) ($roles[$acct]['role'] ?? 'general'), 'brand' => (string) ($roles[$acct]['brand'] ?? ''),
                 'status' => $st === 'open' ? 'open' : ($fresh ? $st : ($st === 'logged_out' ? 'logged_out' : 'stopped')),
                 'qr' => $fresh ? ($r['qr'] ?? null) : null, 'pairingCode' => $fresh ? ($r['pairingCode'] ?? null) : null, 'seenAgo' => $age];
             // A number is only as reachable as the device carrying it: nothing is routed to a phone that went quiet.
@@ -173,6 +196,14 @@ final class Mutqan_WA_Fleet {
             if (!isset($seen[$acct]) && !empty($x['device'])) { $out[] = ['id' => (string) $acct, 'label' => (string) ($x['label'] ?? $acct), 'phone' => '', 'name' => '', 'device' => (string) $x['device'], 'role' => (string) ($x['role'] ?? 'general'), 'status' => 'pending', 'qr' => null, 'pairingCode' => null, 'seenAgo' => null]; }
         }
         return $out;
+    }
+
+    /** Which site a line answers for ('' = the whole network). */
+    public static function set_brand($acct, $brand) {
+        $brand = class_exists('Oxygen_Network') && Oxygen_Network::valid($brand) ? $brand : '';
+        $r = self::roles(); $x = (array) ($r[$acct] ?? []); $x['brand'] = $brand; $r[$acct] = $x;
+        update_option(self::ROLES_OPT, $r, false);
+        return ['ok' => true, 'id' => $acct, 'brand' => $brand];
     }
 
     public static function set_role($acct, $role) {
@@ -200,7 +231,8 @@ final class Mutqan_WA_Fleet {
         if ($mode === 'code' && $phone === '') { throw new Mutqan_Error('bad_phone', 'اكتب رقم الواتساب اللي هيترَبط (05xxxxxxxx).', 400); }
         $label = mb_substr(trim(wp_strip_all_tags((string) ($in['label'] ?? ''))), 0, 40) ?: self::ROLES[$role]['label'];
         $acct = $dev . '-' . substr(bin2hex(random_bytes(3)), 0, 5);
-        $r = self::roles(); $r[$acct] = ['role' => $role, 'device' => $dev, 'label' => $label, 'phone' => $phone, 'createdAt' => gmdate('c')];
+        $brand = class_exists('Oxygen_Network') && Oxygen_Network::valid((string) ($in['brand'] ?? '')) ? (string) $in['brand'] : '';
+        $r = self::roles(); $r[$acct] = ['role' => $role, 'device' => $dev, 'label' => $label, 'phone' => $phone, 'brand' => $brand, 'createdAt' => gmdate('c')];
         update_option(self::ROLES_OPT, $r, false);
         self::queue_cmd($dev, ['op' => 'add', 'id' => $acct, 'label' => $label, 'mode' => $mode, 'phone' => $phone]);
         return ['ok' => true, 'id' => $acct];
@@ -398,6 +430,7 @@ final class Mutqan_WA_Fleet {
             case 'fleet_remove': return self::remove_number((string) ($in['id'] ?? ''));
             case 'fleet_restart': return self::restart_number((string) ($in['id'] ?? ''));
             case 'fleet_role': return self::set_role((string) ($in['id'] ?? ''), (string) ($in['role'] ?? ''));
+            case 'fleet_brand': return self::set_brand((string) ($in['id'] ?? ''), (string) ($in['brand'] ?? ''));
             case 'fleet_check': return ['issues' => self::tick()];
             case 'fleet_save':
                 if (!$owner) { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); }

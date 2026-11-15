@@ -42,6 +42,13 @@ final class Mutqan_Rest {
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
             ]);
         }
+        // n8n (on the VPS) → here, signed with the central's secret.
+        register_rest_route(self::NS, '/n8n', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                try { $out = Mutqan_WA_Central::inbound((string) $req->get_body(), (string) $req->get_header('x-mutqan-signature')); $res = new WP_REST_Response(['data' => $out], 200); }
+                catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+                return $res;
+            }]);
         // One unchanging download address per Android app; the phone is sent to the public release file.
         register_rest_route(self::NS, '/apk', ['methods' => 'GET', 'permission_callback' => '__return_true',
             'callback' => function ($req) {
