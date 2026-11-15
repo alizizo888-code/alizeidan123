@@ -52,6 +52,8 @@ final class Mutqan_WA_Desk {
     public static function identify($phone) {
         $k = self::key($phone);
         if (strlen($k) < 8) { return ['kind' => 'customer']; }
+        // The owner's master WhatsApp: everything ready arrives there, and every command works from it.
+        if (class_exists('Mutqan_WA_Central') && Mutqan_WA_Central::is_master($phone)) { return ['kind' => 'staff', 'id' => 'master', 'name' => 'الماستر', 'role' => 'owner']; }
         foreach (Mutqan_Store::select('tech_profiles', [], ['limit' => 400], self::sys()) as $t) {
             if (!empty($t['phone']) && self::key($t['phone']) === $k) {
                 return ['kind' => 'tech', 'id' => (string) ($t['id'] ?? ''), 'name' => self::tech_name($t), 'doc' => $t];
@@ -160,6 +162,11 @@ final class Mutqan_WA_Desk {
             return self::assign_by_name(trim($m[1]), trim($m[2]), $who);
         }
         if (preg_match('/(?:اسحب|ارجع|فك)\s*(?:الطلب\s*)?#?(\d{3,})/u', $t, $m)) { return self::unassign(trim($m[1]), $who); }
+        // The master's own words: «رد 1234 …» from the customer's own line, «اعتمد 1234» to the right technician.
+        if (class_exists('Mutqan_WA_Central') && in_array($who['role'] ?? '', ['owner', 'operations'], true)) {
+            $mc = Mutqan_WA_Central::master_command($t, ['name' => (string) ($who['name'] ?? 'الإدارة')]);
+            if ($mc !== null) { return $mc; }
+        }
         // Everything the app's internal engine knows (cache, money, alerts, where the technicians are…) works from WhatsApp too.
         if (class_exists('Mutqan_Quick')) {
             $p = ['id' => (string) ($who['id'] ?? ''), 'role' => (string) ($who['role'] ?? ''), 'kind' => 'user', 'powers' => ['read', 'write', 'manage'], 'name' => (string) ($who['name'] ?? '')];
@@ -176,6 +183,7 @@ final class Mutqan_WA_Desk {
             . "🗂 *الطلبات* — المفتوح والمعلّق\n"
             . "➡️ *وجّه 1234 لوليد* — إسناد طلب لفني\n"
             . "↩️ *اسحب 1234* — سحب الطلب من الفني\n"
+            . "📤 *رد 1234 نص* — يوصل للعميل من نفس خطه · ✅ *اعتمد 1234* — لأنسب فني\n"
             . "⚡ *التنبيهات* · *فين الفنيين* · *فلوس النهارده* · *طلب 1234* · *نضف الكاش* — بتتنفذ فورًا";
     }
 

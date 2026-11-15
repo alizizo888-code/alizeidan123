@@ -123,6 +123,9 @@ final class Mutqan_WA {
         switch ($op) {
             // «ربط بلمسة»: one field (the number), the right device is chosen, the QR shows up on this screen.
             case 'link': return self::link($in);
+            case 'central_get': if (($p['role'] ?? '') !== 'owner' && ($p['role'] ?? '') !== 'operations') { throw new Mutqan_Error('forbidden', 'للمالك والعمليات.', 403); } $v = Mutqan_WA_Central::view(); if (($p['role'] ?? '') !== 'owner') { unset($v['n8nSecret']); } return $v;
+            case 'central_set': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return Mutqan_WA_Central::save($in);
+            case 'central_test': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return ['sent' => Mutqan_WA_Central::to_master("✅ تجربة: الماستر متوصل بالسنترال — أي أوردر جاهز من أي موقع هيوصلك هنا.\nجرّب ترد: *الوضع* أو *التنبيهات*.")];
             case 'relink':
                 if (self::cfg()['url'] !== '') { return self::gw('POST', '/sessions/' . rawurlencode(self::id($in['id'] ?? '')) . '/restart', []); }
                 return Mutqan_WA_Fleet::relink(self::id($in['id'] ?? ''), (string) ($in['mode'] ?? 'qr'), (string) ($in['phone'] ?? ''));
@@ -154,7 +157,7 @@ final class Mutqan_WA {
         if ($dev === '') {
             throw new Mutqan_Error('no_device', 'مفيش جهاز وسيط متسجّل لسه. افتح «أجهزة الواتساب» وسجّل الموبايل اللي هيشيل الأرقام (أمر واحد يتلصق في Termux) — بعدها اضغط على أي رقم ويظهر الـQR هنا.', 409);
         }
-        $r = Mutqan_WA_Fleet::add_number(['device' => $dev, 'role' => (string) ($in['role'] ?? 'general'), 'mode' => $mode, 'phone' => $phone, 'label' => $label]);
+        $r = Mutqan_WA_Fleet::add_number(['device' => $dev, 'role' => (string) ($in['role'] ?? 'general'), 'mode' => $mode, 'phone' => $phone, 'label' => $label, 'brand' => (string) ($in['brand'] ?? '')]);
         $v = Mutqan_WA_Fleet::device_view($dev);
         return $r + ['via' => 'device', 'device' => $dev, 'deviceName' => $v['name'] ?? '', 'deviceOnline' => !empty($v['online'])];
     }
@@ -315,7 +318,7 @@ final class Mutqan_WA {
 
     /* ---------------------------------------------------------------- storage */
 
-    private static function put_thread($tid, $patch, $seed = []) {
+    public static function put_thread($tid, $patch, $seed = []) {
         $sys = self::sys();
         $cur = Mutqan_Store::get_raw('wa_threads', $tid);
         if ($cur === null) { return Mutqan_Store::insert('wa_threads', $patch + $seed, $tid, [], $sys); }
@@ -365,6 +368,8 @@ final class Mutqan_WA {
         if (!$isNew) { return ['ok' => true]; }
         $tid = self::tid($acct, $phone);
         if ($dir === 'in' && class_exists('Mutqan_WA_Fleet')) { Mutqan_WA_Fleet::on_incoming($acct, $phone, (string) ($e['text'] ?? ''), $tid); }
+        // «السنترال»: the identity card (site, domain, company, line) goes on the conversation at its first message.
+        if ($dir === 'in' && class_exists('Mutqan_WA_Central')) { try { Mutqan_WA_Central::on_incoming($acct, $phone, (string) ($e['text'] ?? ''), $tid); } catch (Throwable $ex) { error_log('[mutqan] central card ' . $ex->getMessage()); } }
         $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: [];
         if ($dir === 'out') {   // replied from the phone itself -> human is handling it
             $bot = $th['bot'] ?? []; $bot['pausedUntil'] = time() + 12 * 3600;
@@ -453,6 +458,9 @@ final class Mutqan_WA {
             'note' => mb_substr((string) ($lead['note'] ?? ''), 0, 300),
             'waThread' => $tid,
             'waAccount' => $acct,
+            // The identity card: which site and line this customer came through, so nobody mixes company A with B.
+            'brand' => (string) ($th['card']['brand'] ?? '') ?: 'oxygen',
+            'card' => (array) ($th['card'] ?? []),
             'createdAt' => gmdate('c'),
             // The plan: what was agreed on WhatsApp, so operations is not guessing at a price later.
             'plan' => array_filter([
