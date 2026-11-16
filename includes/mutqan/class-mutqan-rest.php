@@ -266,6 +266,8 @@ final class Mutqan_Rest {
 
     /** A message / request inside an order: delivered to the other side at once (push + the admin alert center), server-side so it arrives even if the sender closes the app. */
     public static function after_order_msg($m) {
+        // «محادثة واحدة»: what the company / technician writes to the customer on the site also reaches his WhatsApp.
+        if ((($m['channel'] ?? '') === 'ops' || ($m['from'] ?? '') === 'tech') && class_exists('Mutqan_WA')) { try { Mutqan_WA::order_msg_to_wa($m); } catch (Throwable $e) { error_log('[mutqan] order→wa ' . $e->getMessage()); } }
         $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
         $ord = Mutqan_Store::get_raw('orders', (string) $m['orderId']) ?: [];
         $short = '#' . substr((string) $m['orderId'], -5);

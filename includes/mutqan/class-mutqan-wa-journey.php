@@ -246,8 +246,9 @@ final class Mutqan_WA_Journey {
         // A plain message to the technician («هات معاك سلم») is still a request for him.
         if ($intent === 'general' && !empty($o['technicianId']) && mb_strlen($text) > 8 && !self::is_yes($text)) { $intent = 'request'; }
         $did = Mutqan_OrderBot::act($intent, $o, $text);
-        $o = Mutqan_Store::get_raw('orders', $o['id']) ?: $o;
-        $f = Mutqan_OrderBot::facts($o + ['id' => $o['id'] ?? '']);
+        $oid = (string) ($o['id'] ?? '');
+        $o = (Mutqan_Store::get_raw('orders', $oid) ?: $o) + ['id' => $oid];
+        $f = Mutqan_OrderBot::facts($o);
         self::step($o, 'wa_customer', 'العميل على واتساب: ' . mb_substr($text, 0, 80));
         return Mutqan_OrderBot::template($intent, $f, $did);
     }
