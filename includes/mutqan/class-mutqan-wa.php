@@ -133,6 +133,9 @@ final class Mutqan_WA {
             case 'contacts_export': if (!in_array(($p['role'] ?? ''), ['owner', 'operations'], true)) { throw new Mutqan_Error('forbidden', 'للمالك والعمليات.', 403); } return Mutqan_Customers::export_csv(!isset($in['techs']) || !empty($in['techs']));
             case 'followups_get': return Mutqan_Customers::settings();
             case 'followups_set': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } $s = Mutqan_Customers::settings(); foreach (['enabled', 'perDay', 'hour', 'maintenanceDays', 'warrantyDays'] as $k) { if (isset($in[$k]) && is_numeric($in[$k])) { $s[$k] = (int) $in[$k]; } } $s['perDay'] = max(0, min(60, $s['perDay'])); update_option(Mutqan_Customers::OPT, $s, false); return $s;
+            case 'chatwoot_get': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return Mutqan_Chatwoot::view();
+            case 'chatwoot_set': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return Mutqan_Chatwoot::save($in);
+            case 'chatwoot_test': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return Mutqan_Chatwoot::test();
             case 'central_get': if (($p['role'] ?? '') !== 'owner' && ($p['role'] ?? '') !== 'operations') { throw new Mutqan_Error('forbidden', 'للمالك والعمليات.', 403); } $v = Mutqan_WA_Central::view(); if (($p['role'] ?? '') !== 'owner') { unset($v['n8nSecret']); } return $v;
             case 'central_set': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return Mutqan_WA_Central::save($in);
             case 'central_test': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return ['sent' => Mutqan_WA_Central::to_master("✅ تجربة: الماستر متوصل بالسنترال — أي أوردر جاهز من أي موقع هيوصلك هنا.\nجرّب ترد: *الوضع* أو *التنبيهات*.")];
@@ -352,6 +355,8 @@ final class Mutqan_WA {
         $patch = ['lastText' => mb_substr((string) $m['text'], 0, 120) ?: ('[' . ($m['kind'] ?? 'text') . ']'), 'lastAt' => $at, 'lastDir' => $m['dir']];
         if ($m['dir'] === 'in') { $patch['unread'] = (int) ($th['unread'] ?? 0) + 1; $patch['status'] = 'open'; if (!empty($m['name'])) { $patch['name'] = mb_substr($m['name'], 0, 60); } }
         self::put_thread($tid, $patch, ['accountId' => $acct, 'phone' => $phone, 'name' => mb_substr((string) ($m['name'] ?? ''), 0, 60), 'unread' => 0, 'status' => 'open']);
+        // «جسر Chatwoot»: the team's inbox sees every message of the conversation (off until it is set up).
+        if (class_exists('Mutqan_Chatwoot')) { Mutqan_Chatwoot::mirror($acct, $phone, $tid, ['dir' => $m['dir'], 'text' => (string) $m['text'], 'kind' => $m['kind'] ?? 'text', 'via' => $m['via'] ?? '', 'by' => $m['by'] ?? '', 'mediaUrl' => $media['url'] ?? null]); }
         return true;
     }
 

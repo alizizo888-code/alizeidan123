@@ -42,6 +42,14 @@ final class Mutqan_Rest {
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
             ]);
         }
+        // Chatwoot (the team's inbox) → here: an agent's reply goes out from the customer's own line.
+        register_rest_route(self::NS, '/chatwoot', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                try { $out = Mutqan_Chatwoot::webhook((string) $req->get_body(), (string) $req->get_param('k')); $res = new WP_REST_Response(['data' => $out], 200); }
+                catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+                catch (Throwable $e) { error_log('[mutqan] chatwoot hook ' . $e->getMessage()); $res = new WP_REST_Response(['error' => ['code' => 'server_error']], 500); }
+                return $res;
+            }]);
         // n8n (on the VPS) → here, signed with the central's secret.
         register_rest_route(self::NS, '/n8n', ['methods' => 'POST', 'permission_callback' => '__return_true',
             'callback' => function ($req) {
