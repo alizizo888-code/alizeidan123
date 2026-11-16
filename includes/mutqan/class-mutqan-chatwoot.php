@@ -100,7 +100,31 @@ final class Mutqan_Chatwoot {
         $id = (int) ($r['id'] ?? 0);
         if ($id <= 0) { throw new Mutqan_Error('chatwoot_error', 'Chatwoot ما رجّعش رقم الصندوق.', 502); }
         self::map_set($acct, $id);
+        self::add_members($id);
         return $id;
+    }
+
+    /** Everyone on the Chatwoot team becomes a member of the inbox, so its conversations show in their app and get assigned. */
+    public static function add_members($inbox) {
+        try {
+            $agents = self::api('GET', '/agents');
+            $ids = array_values(array_filter(array_map(function ($a) { return (int) ($a['id'] ?? 0); }, (array) ($agents['payload'] ?? $agents))));
+            if (!$ids) { return 0; }
+            self::api('POST', '/inbox_members', ['inbox_id' => (int) $inbox, 'user_ids' => $ids]);
+            return count($ids);
+        } catch (Throwable $e) { error_log('[mutqan] chatwoot members ' . $e->getMessage()); return 0; }
+    }
+
+    /** «مزامنة»: test the key, make sure every open WhatsApp line has its inbox, and the team is in every inbox. */
+    public static function sync() {
+        $out = ['test' => self::test(), 'inboxes' => []];
+        $lines = class_exists('Mutqan_WA_Fleet') ? Mutqan_WA_Fleet::numbers() : [];
+        foreach ($lines as $n) {
+            if (($n['status'] ?? '') !== 'open') { continue; }
+            $inbox = self::inbox_for((string) $n['id']);
+            $out['inboxes'][] = ['line' => (string) $n['label'], 'inbox' => $inbox, 'members' => self::add_members($inbox)];
+        }
+        return $out;
     }
 
     /** The customer's conversation in that inbox: contact + conversation made once, remembered on the thread. */
@@ -176,6 +200,9 @@ final class Mutqan_Chatwoot {
         if (!is_array($e)) { throw new Mutqan_Error('bad_input', 'حمولة غير صالحة.', 400); }
         // One-time link from the Chatwoot server itself (a task on the VPS reads the owner's access token and sends it
         // here over HTTPS with this bridge's secret): saved, tested, switched on — the token never passes through a chat.
+        if (($e['event'] ?? '') === 'mutqan_sync') {
+            try { return ['ok' => true] + self::sync(); } catch (Throwable $ex) { return ['ok' => false, 'error' => $ex->getMessage()]; }
+        }
         if (($e['event'] ?? '') === 'mutqan_link') {
             $tok = trim((string) ($e['token'] ?? ''));
             if (!preg_match('/^[A-Za-z0-9_-]{10,200}$/', $tok)) { throw new Mutqan_Error('bad_input', 'مفتاح غير صالح.', 400); }
@@ -184,7 +211,8 @@ final class Mutqan_Chatwoot {
             update_option(self::OPT, $s, false);
             try { self::test(); } catch (Throwable $ex) { return ['ok' => false, 'linked' => true, 'test' => $ex->getMessage()]; }
             $s['enabled'] = 1; update_option(self::OPT, $s, false);
-            return ['ok' => true, 'linked' => true, 'enabled' => true];
+            try { $sync = self::sync(); } catch (Throwable $ex) { $sync = ['error' => $ex->getMessage()]; }
+            return ['ok' => true, 'linked' => true, 'enabled' => true, 'sync' => $sync];
         }
         if (empty($s['enabled'])) { return ['ok' => true, 'off' => true]; }
         if (($e['event'] ?? '') !== 'message_created') { return ['ok' => true, 'ignored' => 'event']; }
