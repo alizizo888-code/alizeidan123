@@ -26,6 +26,10 @@ RewriteRule ^api/(.*)$ api/index.php?r=$1 [QSA,L]
 RewriteRule ^(m|idara|edara)/?$ desk.html [L]
 RewriteRule ^(ops|amaliyat)/?$ desk-ops.html [L]
 RewriteRule ^(sites|mawaqi)/?$ sites.html [L]
+# «واتساب الإدارة»: its own address (wa.oxygen11.com) and a short path on this one.
+RewriteRule ^(wa|whatsapp|watsap)/?$ desk-wa.html [L]
+RewriteCond %{HTTP_HOST} ^wa\. [NC]
+RewriteRule ^$ desk-wa.html [L]
 </IfModule>
 
 # Private folders and files are never served
