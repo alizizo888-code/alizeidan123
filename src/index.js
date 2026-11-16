@@ -79,6 +79,7 @@ async function flush() {
       const r = await fetch(HOOK_URL, { method: 'POST', headers: { 'content-type': 'application/json', 'x-mq-signature': sign(HOOK_SECRET, body) }, body, signal: AbortSignal.timeout(30000) })
       if (!r.ok && r.status >= 500) throw new Error('hook ' + r.status)
       outbox.shift()
+      if (item.event.type === 'message') kickPull()
     } catch (e) {
       if (++item.tries >= 6) { outbox.shift(); continue }
       await new Promise((r) => setTimeout(r, 2000 * item.tries))
@@ -98,7 +99,7 @@ async function start(id) {
   if (!m) throw new Error('unknown session')
   const old = S.get(id)
   if (old?.sock) { try { old.sock.end(undefined) } catch {} }
-  const st = old || { status: 'connecting', pacer: new Pacer({ dailyCap: DAILY_CAP }), queue: [], busy: false, retry: 0 }
+  const st = old || { status: 'connecting', pacer: new Pacer({ dailyCap: DAILY_CAP, minMs: 700, maxMs: 2200 }), queue: [], busy: false, retry: 0 }
   st.sent = st.sent || new Set()
   st.status = 'connecting'; st.qr = null; st.code = null
   S.set(id, st)
@@ -241,6 +242,9 @@ app.post('/sessions/:id/send', wrap(async (q) => {
 // backs off while there is nothing to do, because this runs on a phone battery; it quickens again
 // the moment a batch comes back.
 let pullStop = false
+// A message just handed to WordPress usually has an answer a moment later: ask for it at once, not on the next round.
+let pullWake = null
+const kickPull = () => { if (pullWake) setTimeout(() => pullWake && pullWake(), 400) }
 async function pullLoop() {
   if (!PULL_URL || !HOOK_SECRET) return
   let wait = PULL_EVERY
@@ -269,7 +273,8 @@ async function pullLoop() {
         // The number WordPress names, or the only one connected — a phone usually carries one.
         const id = (job.acct && S.has(job.acct)) ? job.acct : [...S.keys()].find((k) => S.get(k)?.status === 'open')
         if (!id) { sent.push({ id: job.id, ok: false }); continue }
-        try { const res = await enqueueSend(id, digits(job.to), String(job.text || '')); sent.push({ id: job.id, ok: true, msgId: res?.msgId || '' }) }
+        // Queued, not awaited: the next check-in must not wait for this number's typing pause.
+        try { enqueueSend(id, digits(job.to), String(job.text || '')).then((res) => { sent.push({ id: job.id, ok: true, msgId: res?.msgId || '' }); kickPull() }, (e) => { log.warn({ err: String(e) }, 'pull send'); sent.push({ id: job.id, ok: false }) }) }
         catch (e) { log.warn({ err: String(e) }, 'pull send'); sent.push({ id: job.id, ok: false }) }
       }
     } catch (e) {
@@ -278,7 +283,8 @@ async function pullLoop() {
     // A number waiting to be scanned keeps the pace at its fastest: the QR must reach the screen while it is still valid.
     const pairing = Object.keys(meta).some((id) => ['qr', 'code', 'connecting'].includes(S.get(id)?.status))
     wait = got || pairing ? PULL_EVERY : Math.min(PULL_IDLE, Math.round(wait * 1.5))
-    await new Promise((r) => setTimeout(r, wait))
+    await new Promise((r) => { const t = setTimeout(r, wait); pullWake = () => { clearTimeout(t); r() } })
+    pullWake = null
   }
 }
 
