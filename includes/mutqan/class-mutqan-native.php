@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) { exit; }
  */
 final class Mutqan_Native {
     const RELEASE = 'https://github.com/alizizo888-code/alizeidan123/releases/download/apps-latest/';
-    const APKS = ['oxygen-app.apk', 'oxygen-ops.apk', 'oxygen-deskops.apk', 'oxygen-deskctl.apk', 'oxygen-desktech.apk'];
+    const APKS = ['oxygen-app.apk', 'oxygen-ops.apk', 'oxygen-deskops.apk', 'oxygen-deskctl.apk', 'oxygen-desktech.apk', 'oxygen-deskwa.apk'];
     const WA_APPS = ['com.whatsapp', 'com.whatsapp.w4b'];
 
     private static function sys() { return ['kind' => 'user', 'role' => 'owner', 'id' => 'system', 'powers' => ['read', 'write', 'manage']]; }
