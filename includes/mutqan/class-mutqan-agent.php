@@ -79,7 +79,8 @@ final class Mutqan_Agent {
         $last = ''; foreach (array_reverse($msgs) as $m) { if ($m['role'] === 'user') { $last = $m['content']; break; } }
         $list = implode("\n", array_map(function ($t) { return '- ' . $t['name'] . ': ' . $t['description'] . ' مدخلات: ' . implode(',', array_keys((array) $t['input_schema']['properties'])); }, self::tools()));
         $prompt = "أنت مساعد تحكم لشركة صيانة. اختار أداة واحدة من القائمة تنفذ طلب المستخدم، أو لا أداة لو مجرد كلام.\nالأدوات:\n$list\n\nطلب المستخدم: $last\n\nرد بـ JSON فقط بالشكل {\"tool\":\"اسم الأداة أو none\",\"input\":{...},\"reply\":\"رد قصير بالعامية المصرية لو مفيش أداة\"}";
-        $r = Mutqan_AI::run($prompt, ['json' => true, 'temperature' => 0.1, 'tier' => 'low'], $p);
+        $prompt = self::system($p) . "\n\n" . $prompt;
+        $r = Mutqan_AI::run($prompt, ['json' => true, 'temperature' => 0.1, 'tier' => 'low', 'budget' => 18], $p);
         $j = is_array($r['json'] ?? null) ? $r['json'] : [];
         $tool = (string) ($j['tool'] ?? 'none'); $input = is_array($j['input'] ?? null) ? $j['input'] : [];
         if ($tool === 'none' || !in_array($tool, array_column(self::tools(), 'name'), true)) { return ['text' => (string) ($j['reply'] ?? ($r['text'] ?? '')), 'steps' => [], 'pending' => null]; }
@@ -87,7 +88,7 @@ final class Mutqan_Agent {
         try { $out = self::run_tool($tool, $input, $p); self::audit($tool, $input, true, $p); }
         catch (Throwable $e) { self::audit($tool, $input, false, $p); return ['text' => 'ما اتنفذش: ' . $e->getMessage(), 'steps' => [['tool' => $tool, 'status' => 'error']], 'pending' => null]; }
         $data = mb_substr(wp_json_encode($out, JSON_UNESCAPED_UNICODE), 0, 6000);
-        try { $w = Mutqan_AI::run("طلب المستخدم: $last\nنتيجة النظام (JSON): $data\nلخّص النتيجة للمستخدم بالعامية المصرية في سطور قصيرة واضحة بالأرقام. من غير JSON.", ['temperature' => 0.3, 'tier' => 'low'], $p); $text = trim((string) ($w['text'] ?? '')); }
+        try { $w = Mutqan_AI::run("طلب المستخدم: $last\nنتيجة النظام (JSON): $data\nلخّص النتيجة للمستخدم بالعامية المصرية في سطور قصيرة واضحة بالأرقام. من غير JSON.", ['temperature' => 0.3, 'tier' => 'low', 'budget' => 12], $p); $text = trim((string) ($w['text'] ?? '')); }
         catch (Throwable $e) { $text = $data; }
         return ['text' => $text, 'steps' => [['tool' => $tool, 'status' => 'ok']], 'pending' => null];
     }
@@ -105,9 +106,22 @@ final class Mutqan_Agent {
         return $out;
     }
 
+    /** What the advisor knows before the first word: the day, the alerts, the lines, the standing instructions. */
+    public static function situation() {
+        $L = [];
+        $sys = ['id' => 'system', 'role' => 'owner', 'kind' => 'user', 'powers' => ['read', 'write', 'manage']];
+        try { if (class_exists('Mutqan_Ops')) { $o = Mutqan_Ops::run_tool('ops_overview', []); $L[] = 'لقطة العمليات: ' . mb_substr(wp_json_encode($o, JSON_UNESCAPED_UNICODE), 0, 1500); } } catch (Throwable $e) { /* keep going */ }
+        try { if (class_exists('Mutqan_Sales')) { foreach (array_slice((array) (Mutqan_Sales::settings()['notes'] ?? []), -10) as $n) { $L[] = '📌 تعليمة دائمة: ' . mb_substr(is_array($n) ? (string) ($n['text'] ?? '') : (string) $n, 0, 200); } } } catch (Throwable $e) { /* keep going */ }
+        try { if (class_exists('Mutqan_WA_Fleet')) { $nums = Mutqan_WA_Fleet::numbers(); if ($nums) { $L[] = 'خطوط الواتساب: ' . implode('، ', array_map(function ($n) { return $n['label'] . ' (' . ($n['status'] === 'open' ? 'متصل' : 'غير متصل') . ')'; }, $nums)); } } } catch (Throwable $e) { /* keep going */ }
+        try { if (class_exists('Oxygen_Network')) { $L[] = 'شبكة المواقع: ' . count(Oxygen_Network::satellites()) . ' موقع فرعي + أكسجين وأكسجين، ومدونات بلوجر.'; } } catch (Throwable $e) { /* keep going */ }
+        return implode("\n", array_filter($L));
+    }
+
     private static function system($p) {
         $who = ($p['role'] ?? '') === 'owner' ? 'المالك' : 'مشرف العمليات';
-        return "أنت مساعد التحكم الداخلي لشركة أكسجين/أكسجين للصيانة والمقاولات العامة (مكة وجدة). تتكلم مع {$who} بالعربية المصرية المختصرة.\n"
+        return "أنت «المستشار الذكي» لشركة أكسجين/أكسجين للصيانة والمقاولات العامة (مكة وجدة): العقل اللي ماسك المواقع والمحادثات والطلبات والأزمات والتعديلات والتعليمات. تتكلم مع {$who} بالعربية المصرية المختصرة وبثقة.\n"
+            . "## الوضع دلوقتي\n" . self::situation() . "\n"
+            . "## طريقتك\n- ابدأ بالأهم: أي أزمة (عميل زعلان، طلب متأخر، فني مش بيرد، خط واتساب واقع، موقع واقف) قولها أول سطر ومعاها الحل المقترح.\n- لو الطلب محتاج كذا خطوة اعملها بالأدوات واحدة ورا التانية، واختم بملخص: اتعمل إيه، فاضل إيه، وإيه اللي محتاج قرارك.\n- أي تعليمة دائمة من المالك (أسعار، مواعيد، أسلوب كلام، قواعد توزيع) خزنها بالأداة المناسبة عشان تتطبق على طول.\n"
             . "شغلك فقط على أنظمة الشركة عبر الأدوات المتاحة: الطلبات، الواتساب، موقع ووردبريس، DNS نطاق oxygen11.com على هوستنجر، ومدونات الشبكة على بلوجر (قراءة).\n"
             . "وأنت كمان مدرّب «العقل التجاري» اللي بيفاصل العملاء: لما المالك يشرح أسعار أو قواعد مواعيد (مثلاً: جدة أيام الأحد والثلاثاء، بعد 3 طلبات قرّب المواعيد، أقصى خصم 10%) حوّل كلامه لـ sales_brain_set، ولما يدّي توجيه في أسلوب الكلام استخدم sales_teach. اقرأ sales_brain_get قبل أي تعديل، وجرّب بـ sales_simulate لو طلب يشوف البوت هيرد إزاي.\n"
             . "لا تعد بتنفيذ شيء خارج هذه الأدوات، وارفض أي طلب لا يخص الشركة. قبل أي تعديل اقرأ الحالة الحالية بأداة قراءة.\n"
@@ -174,7 +188,10 @@ final class Mutqan_Agent {
     private static function loop($msgs, $p) {
         $model = Mutqan_AI::tier_model('high') ?: 'claude-opus-5-5';
         $steps = []; $pending = null; $text = '';
+        // A whole answer has about a minute, whatever the tools: past that the advisor says what it has instead of hanging.
+        $t0 = microtime(true);
         for ($i = 0; $i < self::MAX_STEPS; $i++) {
+            if ($i > 0 && microtime(true) - $t0 > 60) { $text .= ($text !== '' ? "\n" : '') . '⏱ وقفت هنا عشان ما أطوّلش عليك — قولّي «كمّل» وأكمّل من نفس النقطة.'; break; }
             list($code, $data, $raw) = Mutqan_AI::anthropic_request(['model' => $model, 'max_tokens' => 2500, 'system' => self::system($p), 'tools' => self::tools(), 'messages' => $msgs]);
             if ($code < 200 || $code >= 300 || !isset($data['content'])) {
                 error_log('[mutqan] agent ' . $code . ' ' . substr((string) $raw, 0, 300));

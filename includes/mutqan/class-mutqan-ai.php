@@ -189,7 +189,9 @@ final class Mutqan_AI {
         $model = self::tier_model($tier, $s);
         if ($model !== '' && class_exists('Mutqan_Points') && !Mutqan_Points::available()) { $model = ''; }   // wallet empty: free chain
         if ($model !== '' && !self::cooling('anthropic')) {
+            self::$cap = (int) max(6, min(25, (float) ($opts['budget'] ?? 20)));
             $r = self::call_anthropic(array_merge($s['providers']['anthropic'], ['model' => $model]), $prompt, $wantJson, $temp);
+            self::$cap = 0;
             if ($r['ok']) {
                 $text = trim($r['text']); $json = $wantJson ? self::extract_json($text) : null;
                 if (!$wantJson || $json !== null) { self::note('anthropic', 'ok'); $out = ['text' => $text, 'json' => $json, 'provider' => 'anthropic', 'tier' => $tier]; self::teach($prompt, $out, $opts, $p); return $out; }
@@ -218,6 +220,7 @@ final class Mutqan_AI {
             self::$cap = (int) max(4, min(14, floor($left)));
             $tried++;
             $r = self::call($id, $c, $prompt, $wantJson, $temp);
+            self::$cap = 0;
             if ($r['ok']) {
                 delete_transient('mq_cool_' . $id);
                 $text = trim($r['text']);
@@ -281,9 +284,9 @@ final class Mutqan_AI {
 
     /* ------------------------------------------------------------------ providers */
 
-    private static $cap = 14;   // seconds one provider may take (set per answer from its budget)
+    private static $cap = 0;   // seconds one provider may take inside a budgeted answer (0 = the caller's own timeout: the advisor's long tool turns)
     private static function http($url, $headers, $body, $timeout = 22) {
-        $timeout = min((int) $timeout, self::$cap);
+        if (self::$cap > 0) { $timeout = min((int) $timeout, self::$cap); }
         $res = wp_remote_post($url, ['timeout' => $timeout, 'headers' => $headers, 'body' => wp_json_encode($body)]);
         if (is_wp_error($res)) { return [0, null, $res->get_error_message(), '']; }
         $code = (int) wp_remote_retrieve_response_code($res);
