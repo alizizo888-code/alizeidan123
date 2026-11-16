@@ -89,6 +89,14 @@ final class Mutqan_WA_Central {
     }
 
     /** The site a message belongs to: the code in the customer's words wins, else the line's own site, else none. */
+    /** «#khabeer/a123 … بخصوص: عنوان» — the article or page the customer pressed WhatsApp on. */
+    public static function source($text) {
+        $src = [];
+        if (preg_match('/#[a-z][a-z0-9]{1,23}\/([ap])(\d{1,9})/i', (string) $text, $m)) { $src = ['type' => strtolower($m[1]) === 'a' ? 'article' : 'page', 'id' => (int) $m[2]]; }
+        if (preg_match('/بخصوص:\s*([^#\n]{2,90})/u', (string) $text, $m)) { $src['title'] = trim($m[1]); }
+        return $src;
+    }
+
     public static function detect($acct, $text) {
         if (preg_match_all('/#([a-z][a-z0-9]{1,23})\b/i', (string) $text, $m)) {
             foreach ($m[1] as $code) { $code = strtolower($code); if (class_exists('Oxygen_Network') && Oxygen_Network::valid($code)) { return [$code, 'link']; } }
@@ -104,7 +112,7 @@ final class Mutqan_WA_Central {
         $site = self::site($brand);
         return ['brand' => $brand !== '' ? $site['id'] : '', 'site' => $brand !== '' ? $site['name'] : 'غير محدد', 'domain' => $brand !== '' ? $site['domain'] : '',
             'color' => $site['color'], 'how' => $how, 'line' => ['id' => (string) $acct, 'label' => (string) ($line['label'] ?? $acct), 'phone' => (string) ($line['phone'] ?? ''), 'role' => (string) ($line['role'] ?? 'general')],
-            'at' => gmdate('c')];
+            'source' => self::source($text), 'at' => gmdate('c')];
     }
 
     /** First message of a conversation: put the card on it (once), tell n8n. Later messages may still fill a missing site. */
@@ -157,13 +165,45 @@ final class Mutqan_WA_Central {
             $s = self::settings();
             self::emit('order_ready', ['order' => array_intersect_key($doc, array_flip(['id', 'number', 'brand', 'source', 'status', 'clientName', 'clientPhone', 'service', 'serviceLabel', 'address', 'lat', 'lng', 'appointmentAt', 'agreedPrice', 'card'])), 'text' => self::digest_text($doc)]);
             if (empty($s['digest']) || !$s['master']) { return; }
-            self::to_master(self::digest_text($doc), 'order-' . $doc['id']);
+            self::to_master(self::digest_text($doc), 'order-' . $doc['id'], 'order', $doc);
         } catch (Throwable $e) { error_log('[mutqan] central order_ready ' . $e->getMessage()); }
     }
 
+    const KINDS = [
+        'order' => '🆕 طلب جديد', 'confirm' => '✅ تأكيد عميل', 'ops' => '🛠 عمليات', 'review' => '⚠️ راجع بنفسك', 'tech' => '👷 فني',
+        'done' => '🏁 إنجاز', 'rating' => '⭐ تقييم', 'cancel' => '❌ إلغاء', 'winback' => '♻️ استرجاع', 'report' => '📊 تقرير', 'alert' => '🔔 تنبيه', 'system' => '🤖 النظام',
+    ];
+
+    /**
+     * Every message to the team carries the same frame: what kind it is, which site/company it belongs to, when, and
+     * the order number — so a number that carries orders, reports, sites and articles at once never mixes them up.
+     */
+    public static function frame($kind, $body, $o = null) {
+        $label = self::KINDS[$kind] ?? self::KINDS['system'];
+        $brand = is_array($o) ? (string) ($o['brand'] ?? ($o['card']['brand'] ?? '')) : '';
+        $site = '';
+        if (is_array($o)) {
+            $card = (array) ($o['card'] ?? []);
+            $sn = (string) ($card['site'] ?? '') ?: ($brand !== '' ? self::site($brand)['name'] : '');
+            $dom = (string) ($card['domain'] ?? '') ?: ($brand !== '' ? self::site($brand)['domain'] : '');
+            if ($sn !== '' && $sn !== 'غير محدد') { $site = '🌐 ' . $sn . ($dom !== '' ? ' · ' . $dom : ''); }
+            if (!empty($card['source']['title'])) { $site .= "\n📰 المصدر: " . mb_substr((string) $card['source']['title'], 0, 80); }
+            if (!empty($card['line']['label'])) { $site .= ($site !== '' ? "\n" : '') . '📞 الخط: ' . $card['line']['label']; }
+        }
+        $num = is_array($o) ? ((string) ($o['number'] ?? '') ?: substr((string) ($o['id'] ?? ''), -5)) : '';
+        $when = wp_date('d/m H:i', time(), function_exists('wp_timezone') ? wp_timezone() : null);
+        $L = ['━━━━━━━━━━━━━━', '*' . $label . '*' . ($num !== '' ? ' · #' . $num : '') . ' · 🕐 ' . $when];
+        if ($site !== '') { $L[] = $site; }
+        $L[] = '━━━━━━━━━━━━━━';
+        $L[] = trim((string) $body);
+        return implode("\n", $L);
+    }
+
     /** One message to every master phone, from the reports line (never from a customers' line). */
-    public static function to_master($text, $key = '') {
+    public static function to_master($text, $key = '', $kind = '', $o = null) {
         $s = self::settings(); $sent = 0;
+        if ($kind === '') { $kind = strpos($key, 'order-') === 0 ? 'order' : (strpos($key, 'daily-') === 0 ? 'report' : 'system'); }
+        $text = self::frame($kind, $text, $o);
         if (!$s['master']) { return 0; }
         $acct = Mutqan_WA_Fleet::account_for('report');
         if ($acct === '') { $acct = Mutqan_WA::open_account(); }
@@ -326,6 +366,13 @@ final class Mutqan_WA_Central {
         $b = Oxygen_Network::brand($id) ?: [];
         $tag = '#' . $id;
         $hello = 'مرحبا ' . (string) ($b['name'] ?? '') . ' 👋';
+        // The page or article the customer is reading travels with the first message, so the line knows the source.
+        if (function_exists('is_singular') && is_singular()) {
+            $pid = (int) get_queried_object_id();
+            $title = trim(wp_strip_all_tags((string) get_the_title($pid)));
+            if ($pid > 0) { $tag .= '/' . (is_singular('post') ? 'a' : 'p') . $pid; }
+            if ($title !== '') { $hello .= ' بخصوص: ' . mb_substr($title, 0, 60); }
+        }
         echo '<script>(function(){var T=' . wp_json_encode($tag) . ',H=' . wp_json_encode($hello) . ';function f(a){try{var u=new URL(a.href);if(!/(^|\.)wa\.me$|api\.whatsapp\.com$/.test(u.hostname))return;var t=u.searchParams.get("text")||"";if(t.indexOf(T)>-1)return;u.searchParams.set("text",(t||H)+" "+T);a.href=u.toString()}catch(e){}}function run(){var l=document.querySelectorAll(\'a[href*="wa.me"],a[href*="api.whatsapp.com"]\');for(var i=0;i<l.length;i++)f(l[i])}run();document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a");if(a)f(a)},true)})();</script>';
     }
 }

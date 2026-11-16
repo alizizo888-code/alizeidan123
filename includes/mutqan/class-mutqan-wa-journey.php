@@ -94,7 +94,15 @@ final class Mutqan_WA_Journey {
     }
 
     /** Sends to the customer from the line his order belongs to (the one he wrote to, or his site's customers' line). */
+    /** The company the customer dealt with, at the foot of every message, so he always knows who is talking. */
+    public static function sign($o, $text) {
+        $site = self::site_name($o);
+        if ($site === '' || mb_strpos($text, '— *' . $site . '*') !== false) { return $text; }
+        return rtrim($text) . "\n\n— *" . $site . '* 🌷';
+    }
+
     private static function tell_customer($o, $text) {
+        $text = self::sign($o, $text);
         $phone = (string) ($o['clientPhone'] ?? '');
         if ($phone === '' || !class_exists('Mutqan_WA')) { return false; }
         $acct = (string) ($o['waAccount'] ?? '');
@@ -104,9 +112,13 @@ final class Mutqan_WA_Journey {
         }
         return (bool) Mutqan_WA::auto_send($phone, $text, 'order');
     }
-    private static function tell_room($text, $key) {
+    private static function tell_room($text, $key, $o = null) {
         if (!class_exists('Mutqan_WA_Central')) { return 0; }
-        return Mutqan_WA_Central::to_master($text, $key);
+        $k = (string) $key;
+        $kind = 'ops';
+        foreach (['jr-ok-' => 'confirm', 'jr-as-' => 'ops', 'jr-go-' => 'tech', 'jr-arr-' => 'tech', 'jr-done-' => 'done', 'jr-rate-' => 'rating', 'jr-cmt-' => 'rating', 'jr-x-' => 'cancel', 'jr-cancel-' => 'cancel', 'jr-wb' => 'winback'] as $p => $kd) { if (strpos($k, $p) === 0) { $kind = $kd; break; } }
+        if (strpos($text, 'راجع وابعت بنفسك') !== false || strpos($text, 'عميل مش راضي') !== false) { $kind = 'review'; }
+        return Mutqan_WA_Central::to_master($text, $key, $kind, $o);
     }
     private static function step($o, $kind, $text) {
         if (class_exists('Mutqan_WA') && !empty($o['id'])) { try { Mutqan_WA::add_step((string) $o['id'], $kind, $text, 'حلقة الوصل'); } catch (Throwable $e) { error_log('[mutqan] journey step ' . $e->getMessage()); } }
@@ -155,7 +167,7 @@ final class Mutqan_WA_Journey {
         } catch (Throwable $e) { error_log('[mutqan] journey inbound ' . $e->getMessage()); return false; }
         if ($reply === null) { return false; }
         if ($reply !== '') {
-            try { Mutqan_WA::send($acct ?: (string) $o['waAccount'], Mutqan_WA::intl($phone), $reply, 'journey', 'system'); }
+            try { Mutqan_WA::send($acct ?: (string) $o['waAccount'], Mutqan_WA::intl($phone), self::sign($o, $reply), 'journey', 'system'); }
             catch (Throwable $e) { error_log('[mutqan] journey reply ' . $e->getMessage()); }
         }
         return true;
@@ -186,7 +198,7 @@ final class Mutqan_WA_Journey {
         $patch = []; $got = [];
         if (class_exists('Mutqan_OrderBot') && Mutqan_OrderBot::intent($text) === 'cancel') {
             Mutqan_OrderBot::act('cancel', $o, $text);
-            self::tell_room('❌ العميل طلب إلغاء طلب #' . self::num($o) . ' قبل التأكيد: «' . mb_substr($text, 0, 120) . '»', 'jr-cancel-' . $o['id']);
+            self::tell_room('❌ العميل طلب إلغاء طلب #' . self::num($o) . ' قبل التأكيد: «' . mb_substr($text, 0, 120) . '»', 'jr-cancel-' . $o['id'], $o);
             return 'وصلني طلب الإلغاء وبلّغت العمليات، وهيتأكد لك حالًا.';
         }
         $c = self::coords($text);
@@ -216,7 +228,7 @@ final class Mutqan_WA_Journey {
         $room = array_merge($room, ['👤 ' . ((string) ($o['clientName'] ?? '') ?: '—') . ' — ' . (string) $o['clientPhone']], self::summary($o));
         $room[] = '';
         $room[] = empty($o['technicianId']) ? 'وزّعه: *اعتمد ' . self::num($o) . '* أو *اسند طلب ' . self::num($o) . ' لمحمود*' : '👷 مع الفني: ' . (string) ($o['technicianName'] ?? '');
-        self::tell_room(implode("\n", $room), 'jr-ok-' . $o['id']);
+        self::tell_room(implode("\n", $room), 'jr-ok-' . $o['id'], $o);
         return "تم تأكيد طلبك ✅\nهنبلغك هنا أول ما الفني يستلم ويتحرك، وتقدر تسألني في أي وقت «الفني فين؟» أو تطلب أي حاجة توصل له.";
     }
 
@@ -257,7 +269,7 @@ final class Mutqan_WA_Journey {
             self::step($o, 'wa_rating', 'تقييم العميل: ' . $stars . '/5');
             $line = str_repeat('⭐', $stars) . ' *تقييم العميل لطلب #' . self::num($o) . ': ' . $stars . '/5*' . "\n👤 " . ((string) ($o['clientName'] ?? '') ?: (string) $o['clientPhone']) . (!empty($o['technicianName']) ? "\n👷 الفني: " . $o['technicianName'] : '') . ($r['comment'] !== '' ? "\n💬 «" . $r['comment'] . '»' : '');
             if ($stars <= 3) { $line = "⚠️ *عميل مش راضي*\n" . $line . "\n\nكلّمه: *رد " . self::num($o) . ' نص الرسالة*'; if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert('⚠️ تقييم منخفض #' . self::num($o), $stars . '/5 ' . $r['comment'], '#/staff/order/' . $o['id'], 'order_rating', 'high', $o['id']); } }
-            self::tell_room($line, 'jr-rate-' . $o['id']);
+            self::tell_room($line, 'jr-rate-' . $o['id'], $o);
             if ($r['comment'] === '') { return $stars >= 4 ? "شكرًا لتقييمك 🙏 يسعدنا إنك راضي.\nلو حابب تكتب لنا كلمة عن الفني أو الخدمة اكتبها هنا." : "شكرًا لصراحتك 🙏 آسفين إن التجربة ما كانتش زي ما تستاهل.\nقولنا إيه اللي حصل وهيكلمك المسؤول بنفسه."; }
             self::drop($phone);
             return $stars >= 4 ? 'شكرًا لتقييمك وكلامك 🙏 في خدمتك دايمًا.' : 'شكرًا لصراحتك 🙏 وصلت ملاحظتك للمسؤول وهيتواصل معاك.';
@@ -265,7 +277,7 @@ final class Mutqan_WA_Journey {
         if (!empty($r['stars'])) {
             $r['comment'] = trim(($r['comment'] ?? '') . ' ' . mb_substr($text, 0, 300));
             Mutqan_Store::update('orders', $o['id'], ['rating' => $r], self::sys());
-            self::tell_room('💬 تعليق العميل على طلب #' . self::num($o) . ' (' . $r['stars'] . '/5): «' . mb_substr($text, 0, 300) . '»', 'jr-cmt-' . $o['id'] . '-' . md5($text));
+            self::tell_room('💬 تعليق العميل على طلب #' . self::num($o) . ' (' . $r['stars'] . '/5): «' . mb_substr($text, 0, 300) . '»', 'jr-cmt-' . $o['id'] . '-' . md5($text), $o);
             self::drop($phone);
             return 'وصل كلامك للإدارة 🙏 شكرًا ليك.';
         }
@@ -330,7 +342,7 @@ final class Mutqan_WA_Journey {
         if ($why !== '') { $room[] = '🎯 ' . $why; }
         $room = array_merge($room, self::summary($o));
         $room[] = ''; $room[] = 'وزّعه: *اعتمد ' . self::num($o) . '* أو *اسند طلب ' . self::num($o) . ' لمحمود*';
-        self::tell_room(implode("\n", $room), 'jr-wb-' . $o['id'] . '-' . time());
+        self::tell_room(implode("\n", $room), 'jr-wb-' . $o['id'] . '-' . time(), $o);
         if (class_exists('Mutqan_Dispatch') && Mutqan_Dispatch::is_auto()) { try { Mutqan_Dispatch::dispatch(Mutqan_Store::get_raw('orders', $o['id']) + ['id' => $o['id']]); } catch (Throwable $e) { error_log('[mutqan] winback dispatch ' . $e->getMessage()); } }
         return "رجّعنا طلبك ✅ بنفس البيانات" . ($why !== '' ? ' (' . $why . ')' : '') . ".\nهنبلغك هنا أول ما الفني يستلم ويتحرك. شكرًا لثقتك 🌷";
     }
@@ -350,7 +362,7 @@ final class Mutqan_WA_Journey {
             // More words after the reason: kept for the owner.
             $wb['text'] = trim(($wb['text'] ?? '') . ' ' . mb_substr($text, 0, 200));
             Mutqan_Store::update('orders', $o['id'], ['winback' => $wb], self::sys());
-            self::tell_room('💬 العميل (طلب #' . self::num($o) . ' الملغي): «' . mb_substr($text, 0, 200) . '»', 'jr-wbt-' . $o['id'] . '-' . md5($text));
+            self::tell_room('💬 العميل (طلب #' . self::num($o) . ' الملغي): «' . mb_substr($text, 0, 200) . '»', 'jr-wbt-' . $o['id'] . '-' . md5($text), $o);
             return 'وصل كلامك للإدارة 🙏 ولو حابب نرجّع الطلب في أي وقت اكتب *رجّعه*.';
         }
         if ($reason === '') { $reason = 'other'; }
@@ -377,7 +389,7 @@ final class Mutqan_WA_Journey {
         }
         Mutqan_Store::update('orders', $o['id'], ['winback' => $wb, 'cancelReason' => self::WB_LABEL[$reason] . ($wb['text'] !== '' ? ' — ' . $wb['text'] : '')], self::sys());
         self::step($o, 'wa_cancel_reason', 'سبب الإلغاء: ' . self::WB_LABEL[$reason]);
-        self::tell_room('❓ *سبب إلغاء طلب #' . self::num($o) . '*: ' . self::WB_LABEL[$reason] . ($wb['text'] !== '' ? "\n💬 «" . $wb['text'] . '»' : '') . ($reason === 'price' && !empty($wb['offerPct']) ? "\n🎯 عرضت عليه خصم " . $wb['offerPct'] . '%' : ($reason === 'time' ? "\n🎯 بسأله عن موعد جديد" : ($reason === 'late' ? "\n🎯 عرضت عليه أولوية وأقرب فني" : ''))) . "\n\nتكلّمه بنفسك: *رد " . self::num($o) . ' نص الرسالة*', 'jr-wbr-' . $o['id'] . '-' . $reason);
+        self::tell_room('❓ *سبب إلغاء طلب #' . self::num($o) . '*: ' . self::WB_LABEL[$reason] . ($wb['text'] !== '' ? "\n💬 «" . $wb['text'] . '»' : '') . ($reason === 'price' && !empty($wb['offerPct']) ? "\n🎯 عرضت عليه خصم " . $wb['offerPct'] . '%' : ($reason === 'time' ? "\n🎯 بسأله عن موعد جديد" : ($reason === 'late' ? "\n🎯 عرضت عليه أولوية وأقرب فني" : ''))) . "\n\nتكلّمه بنفسك: *رد " . self::num($o) . ' نص الرسالة*', 'jr-wbr-' . $o['id'] . '-' . $reason, $o);
         if ($reason === 'other_co') { self::drop($phone); }
         return $reply;
     }
@@ -417,14 +429,14 @@ final class Mutqan_WA_Journey {
                 case 'accepted':
                 case 'en_route':
                     if ($phone !== '') { $j = self::current($phone); if (!$j || $j['o'] === $doc['id']) { self::put($phone, $doc['id'], $j && $j['s'] === 'confirm' ? 'confirm' : 'live'); } }
-                    if ($st === 'en_route') { self::tell_room('🚗 الفني ' . $tech . ' اتحرك لطلب #' . $n . ' — ' . $who, 'jr-go-' . $doc['id']); }
+                    if ($st === 'en_route') { self::tell_room('🚗 الفني ' . $tech . ' اتحرك لطلب #' . $n . ' — ' . $who, 'jr-go-' . $doc['id'], $doc); }
                     return true;
                 case 'arrived':
-                    self::tell_room('🏠 *الفني ' . $tech . ' وصل* لطلب #' . $n . ' — ' . $who . (!empty($doc['address']) ? "\n📍 " . mb_substr((string) $doc['address'], 0, 100) : ''), 'jr-arr-' . $doc['id']);
+                    self::tell_room('🏠 *الفني ' . $tech . ' وصل* لطلب #' . $n . ' — ' . $who . (!empty($doc['address']) ? "\n📍 " . mb_substr((string) $doc['address'], 0, 100) : ''), 'jr-arr-' . $doc['id'], $doc);
                     return true;
                 case 'completed':
                     $price = class_exists('Mutqan_Sales') ? (int) Mutqan_Sales::amount($doc) : 0;
-                    self::tell_room('✅ *تمت المهمة* — طلب #' . $n . "\n👤 " . $who . ($tech !== '' ? "\n👷 الفني: " . $tech : '') . ($price > 0 ? "\n💰 " . $price . ' ر.س' : '') . "\n⭐ تقييم العميل هيوصلك هنا أول ما يرد.", 'jr-done-' . $doc['id']);
+                    self::tell_room('✅ *تمت المهمة* — طلب #' . $n . "\n👤 " . $who . ($tech !== '' ? "\n👷 الفني: " . $tech : '') . ($price > 0 ? "\n💰 " . $price . ' ر.س' : '') . "\n⭐ تقييم العميل هيوصلك هنا أول ما يرد.", 'jr-done-' . $doc['id'], $doc);
                     if ($phone !== '') {
                         self::put($phone, $doc['id'], 'rate');
                         self::tell_customer($doc, "🙏 شكرًا لثقتك" . (self::site_name($doc) !== '' ? ' في *' . self::site_name($doc) . '*' : '') . ".\nقيّم الخدمة والفني" . ($tech !== '' ? ' ' . $tech : '') . " برقم من *1* لـ *5* ⭐ (5 = ممتازة)، ورأيك بيوصل للمدير مباشرة.");
@@ -432,7 +444,7 @@ final class Mutqan_WA_Journey {
                     return true;
                 case 'cancelled':
                     $byCustomer = is_array($p) && class_exists('Mutqan_Policy') && !Mutqan_Policy::is_staff($p);
-                    self::tell_room('❌ اتلغى طلب #' . $n . ' — ' . $who . ($byCustomer ? "\n🔁 العميل لغاه بنفسه — بسأله عن السبب وبحاول أرجّعه، وهبلغك بالنتيجة." : ''), 'jr-x-' . $doc['id']);
+                    self::tell_room('❌ اتلغى طلب #' . $n . ' — ' . $who . ($byCustomer ? "\n🔁 العميل لغاه بنفسه — بسأله عن السبب وبحاول أرجّعه، وهبلغك بالنتيجة." : ''), 'jr-x-' . $doc['id'], $doc);
                     if ($phone !== '' && $byCustomer) { self::winback_start($doc); }
                     elseif ($phone !== '') { $j = self::current($phone); if ($j && $j['o'] === $doc['id']) { self::drop($phone); } }
                     return true;
@@ -453,10 +465,10 @@ final class Mutqan_WA_Journey {
                 $card = class_exists('Mutqan_WA_Desk') ? Mutqan_WA_Desk::job_card($doc) : '';
                 $card = preg_replace('/\n*رد بكلمة:.*$/su', '', (string) $card);
                 $why = !empty($t['isSite']) ? '«فني الموقع» حساب عام' : 'الفني ده ما لوش رقم واتساب في ملفه';
-                self::tell_room("⚠️ *راجع وابعت بنفسك* — " . $why . "\n" . $head . "\n\n" . $card . (empty($doc['clientPhone']) ? "\n\n📵 الطلب من غير رقم عميل — كلّمه من بيانات الطلب في التطبيق." : '') . "\n\nوزّعه على فني: *اسند طلب " . self::num($doc) . " لمحمود*", 'jr-as-' . $doc['id'] . '-' . $doc['technicianId']);
+                self::tell_room("⚠️ *راجع وابعت بنفسك* — " . $why . "\n" . $head . "\n\n" . $card . (empty($doc['clientPhone']) ? "\n\n📵 الطلب من غير رقم عميل — كلّمه من بيانات الطلب في التطبيق." : '') . "\n\nوزّعه على فني: *اسند طلب " . self::num($doc) . " لمحمود*", 'jr-as-' . $doc['id'] . '-' . $doc['technicianId'], $doc);
                 return true;
             }
-            self::tell_room($head . (!empty($doc['customerConfirmed']) ? '' : "\n⏳ العميل لسه ما أكدش على واتساب"), 'jr-as-' . $doc['id'] . '-' . $doc['technicianId']);
+            self::tell_room($head . (!empty($doc['customerConfirmed']) ? '' : "\n⏳ العميل لسه ما أكدش على واتساب"), 'jr-as-' . $doc['id'] . '-' . $doc['technicianId'], $doc);
             return true;
         } catch (Throwable $e) { error_log('[mutqan] journey assigned ' . $e->getMessage()); return false; }
     }

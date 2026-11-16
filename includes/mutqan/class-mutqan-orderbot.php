@@ -339,7 +339,9 @@ final class Mutqan_OrderBot {
             set_transient($key, 1, DAY_IN_SECONDS);
             $head = strtr(self::WA_STATUS[$st], ['{tech}' => (string) ($doc['technicianName'] ?? '')]);
             $head = preg_replace('/\s{2,}/u', ' ', $head);
-            return (bool) Mutqan_WA::auto_send($phone, $head . "\n\n" . self::status_text(self::facts($doc)), 'order');
+            $msg = $head . "\n\n" . self::status_text(self::facts($doc));
+            if (class_exists('Mutqan_WA_Journey')) { $msg = Mutqan_WA_Journey::sign($doc, $msg); }
+            return (bool) Mutqan_WA::auto_send($phone, $msg, 'order');
         } catch (Throwable $e) { error_log('[mutqan] orderbot status: ' . $e->getMessage()); return false; }
     }
 }
