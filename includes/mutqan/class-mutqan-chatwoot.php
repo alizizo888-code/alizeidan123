@@ -174,6 +174,18 @@ final class Mutqan_Chatwoot {
         if (!is_string($key) || $key === '' || !hash_equals($s['secret'], $key)) { throw new Mutqan_Error('forbidden', 'مفتاح غير صحيح.', 403); }
         $e = json_decode((string) $raw, true);
         if (!is_array($e)) { throw new Mutqan_Error('bad_input', 'حمولة غير صالحة.', 400); }
+        // One-time link from the Chatwoot server itself (a task on the VPS reads the owner's access token and sends it
+        // here over HTTPS with this bridge's secret): saved, tested, switched on — the token never passes through a chat.
+        if (($e['event'] ?? '') === 'mutqan_link') {
+            $tok = trim((string) ($e['token'] ?? ''));
+            if (!preg_match('/^[A-Za-z0-9_-]{10,200}$/', $tok)) { throw new Mutqan_Error('bad_input', 'مفتاح غير صالح.', 400); }
+            $s['token'] = $tok;
+            if ((int) ($e['account'] ?? 0) > 0) { $s['account'] = (int) $e['account']; }
+            update_option(self::OPT, $s, false);
+            try { self::test(); } catch (Throwable $ex) { return ['ok' => false, 'linked' => true, 'test' => $ex->getMessage()]; }
+            $s['enabled'] = 1; update_option(self::OPT, $s, false);
+            return ['ok' => true, 'linked' => true, 'enabled' => true];
+        }
         if (empty($s['enabled'])) { return ['ok' => true, 'off' => true]; }
         if (($e['event'] ?? '') !== 'message_created') { return ['ok' => true, 'ignored' => 'event']; }
         $type = $e['message_type'] ?? '';
