@@ -3,7 +3,7 @@ import path from 'node:path'
 import express from 'express'
 import pino from 'pino'
 import QRCode from 'qrcode'
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys'
+import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers, downloadMediaMessage } from '@whiskeysockets/baileys'
 import { sign, safeEq, cleanId, digits, jidToPhone, phoneToJid, isUserJid, extract, Pacer, applyCmd } from './core.js'
 
 const PORT = Number(process.env.PORT || 8787)
@@ -57,6 +57,32 @@ async function realJid(sock, jid, key) {
 // A number we only know by its private id is answered on that id.
 const toJid = (to) => { const d = digits(to); return lidMap['@' + d] ? d + '@lid' : phoneToJid(d) }
 const markLidOnly = (jid) => { if (isLid(jid)) { const d = jidToPhone(jid); if (!lidMap['@' + d]) { lidMap['@' + d] = 1; saveLid() } } }
+
+// The real person behind a number: profile picture (asked once a day per contact) and the pictures they send.
+const avatarAt = new Map()
+async function avatarOf(sock, jid) {
+  const k = jidToPhone(jid); const last = avatarAt.get(k)
+  if (last && Date.now() - last.at < 24 * 3600 * 1000) return undefined   // already sent today
+  let url = ''
+  try { url = await Promise.race([sock.profilePictureUrl(jid, 'image'), new Promise((r) => setTimeout(() => r(''), 4000))]) || '' } catch { url = '' }
+  avatarAt.set(k, { at: Date.now() }); if (avatarAt.size > 5000) avatarAt.delete(avatarAt.keys().next().value)
+  return url
+}
+const MEDIA_MAX = 1500 * 1024
+async function mediaOf(msg, kind) {
+  if (!['image', 'sticker', 'video', 'document', 'voice', 'audio'].includes(kind)) return undefined
+  let m = msg.message || {}
+  if (m.ephemeralMessage) m = m.ephemeralMessage.message || {}
+  if (m.viewOnceMessage) m = m.viewOnceMessage.message || {}
+  const node = m.imageMessage || m.stickerMessage || m.videoMessage || m.documentMessage || m.audioMessage || {}
+  const out = { mime: String(node.mimetype || ''), size: Number(node.fileLength || 0) || 0 }
+  if (node.jpegThumbnail) { try { out.thumb = Buffer.from(node.jpegThumbnail).toString('base64') } catch {} }
+  // Pictures, stickers, voice notes and small files travel whole; a large video only as its thumbnail.
+  if (out.size && out.size <= MEDIA_MAX && kind !== 'video') {
+    try { const buf = await Promise.race([downloadMediaMessage(msg, 'buffer', {}), new Promise((r) => setTimeout(() => r(null), 15000))]); if (buf && buf.length <= MEDIA_MAX) out.data = Buffer.from(buf).toString('base64') } catch (e) { log.warn({ err: String(e) }, 'media') }
+  }
+  return out.thumb || out.data ? out : undefined
+}
 
 /** id -> runtime state */
 const S = new Map()
@@ -161,7 +187,9 @@ async function start(id) {
         const me = st.phone || jidToPhone(sock.user?.id); const myLid = jidToPhone(sock.user?.lid || '')
         const self = !!msg.key.fromMe && (jidToPhone(jid) === me || (myLid && jidToPhone(raw) === myLid))
         const phone = self ? me : jidToPhone(jid)
-        emit({ type: 'message', accountId: id, msgId: msg.key.id, direction: msg.key.fromMe && !self ? 'out' : 'in', phone, name: self ? 'أنا (المالك)' : (msg.pushName || ''), text: x.text, kind: x.kind, ts: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000), fromPhone: !!msg.key.fromMe && !self, self, lid: isLid(jid) ? jidToPhone(jid) : undefined })
+        const media = await mediaOf(msg, x.kind)
+        const avatar = !msg.key.fromMe ? await avatarOf(sock, jid) : undefined
+        emit({ type: 'message', accountId: id, msgId: msg.key.id, direction: msg.key.fromMe && !self ? 'out' : 'in', phone, name: self ? 'أنا (المالك)' : (msg.pushName || ''), text: x.text, kind: x.kind, ts: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000), fromPhone: !!msg.key.fromMe && !self, self, lid: isLid(jid) ? jidToPhone(jid) : undefined, media, avatar })
       } catch (e) { log.warn(e) }
     }
   })
