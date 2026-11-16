@@ -163,7 +163,7 @@ final class Mutqan_OrderBot {
         self::push($o['technicianId'], '🤖 ' . mb_substr($text, 0, 60), $text, '#/staff/order/' . $o['id']);
         $ph = self::tech_phone($o);
         if ($ph !== '' && class_exists('Mutqan_WA')) {
-            try { Mutqan_WA::auto_send($ph, "🤖 من المساعد الذكي — طلب #" . substr((string) $o['id'], -5) . "\n" . $text . "\nرد من التطبيق: " . home_url('/#/staff/order/' . rawurlencode((string) $o['id'])), 'order'); }
+            try { Mutqan_WA::auto_send($ph, "🤖 من المساعد الذكي — طلب #" . ((string) ($o['number'] ?? '') ?: substr((string) $o['id'], -5)) . "\n" . $text . "\nرد من التطبيق: " . home_url('/#/staff/order/' . rawurlencode((string) $o['id'])), 'order'); }
             catch (Throwable $e) { error_log('[mutqan] orderbot wa tech: ' . $e->getMessage()); }
         }
         return true;

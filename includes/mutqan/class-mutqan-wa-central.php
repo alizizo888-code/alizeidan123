@@ -45,6 +45,8 @@ final class Mutqan_WA_Central {
             $list = is_array($in['master']) ? $in['master'] : preg_split('/[\s,،]+/u', (string) $in['master']);
             $s['master'] = array_values(array_unique(array_filter(array_map([__CLASS__, 'intl'], (array) $list))));
         }
+        // «رقم التجربة»: one phone that plays the customer too (the owner testing the whole chain from his own WhatsApp). '' = off.
+        if (isset($in['testCustomer'])) { $tc = self::intl((string) $in['testCustomer']); if ($tc === '') { delete_option('mutqan_test_customer'); } else { update_option('mutqan_test_customer', $tc, false); } }
         if (isset($in['digest'])) { $s['digest'] = !empty($in['digest']) ? 1 : 0; }
         if (isset($in['journey']) && class_exists('Mutqan_WA_Journey')) { Mutqan_WA_Journey::set_enabled(!empty($in['journey'])); }
         if (isset($in['dailyHour']) && is_numeric($in['dailyHour'])) { $s['dailyHour'] = max(0, min(23, (int) $in['dailyHour'])); }
@@ -64,7 +66,7 @@ final class Mutqan_WA_Central {
         $s = self::settings();
         return ['master' => $s['master'], 'digest' => (int) $s['digest'], 'dailyHour' => (int) $s['dailyHour'], 'n8nUrl' => $s['n8nUrl'], 'n8nSecret' => $s['n8nSecret'],
             'n8nInbound' => rest_url(Mutqan_Rest::NS . '/n8n'), 'events' => $s['events'], 'lines' => self::lines(),
-            'journey' => class_exists('Mutqan_WA_Journey') ? (int) Mutqan_WA_Journey::enabled() : 0];
+            'journey' => class_exists('Mutqan_WA_Journey') ? (int) Mutqan_WA_Journey::enabled() : 0, 'testCustomer' => (string) get_option('mutqan_test_customer', '')];
     }
 
     public static function intl($p) { return class_exists('Mutqan_WA') ? Mutqan_WA::intl((string) $p) : preg_replace('/\D/', '', (string) $p); }
