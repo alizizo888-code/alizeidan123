@@ -459,6 +459,9 @@ final class Mutqan_WA {
         if ($botOff) { self::notify_admins('رسالة واتساب جديدة', $label . ': ' . mb_substr((string) ($e['text'] ?? ''), 0, 80), 'wa-' . $tid, 120); return ['ok' => true]; }
         self::put_thread($tid, ['lastIn' => mb_substr((string) ($e['text'] ?? ''), 0, 300)]);
         $txt = (string) ($e['text'] ?? '');
+        // The website's «send your order on WhatsApp» message («رقم الطلب: #ab12c»): the order was placed as a guest,
+        // so this message is where its customer's number comes from. Claim it, then «حلقة الوصل» takes over.
+        if (preg_match('/رقم الطلب:?\s*#([a-z0-9]{5,8})/iu', $txt, $rm) && self::claim_order($rm[1], $acct, $phone, $tid, (string) ($e['name'] ?? ''))) { return ['ok' => true, 'claimed' => true]; }
         if (class_exists('Mutqan_Customers')) {
             // «إيقاف»: no more regular messages to this number, ever, until he writes again to ask.
             if (Mutqan_Customers::is_stop($txt)) { Mutqan_Customers::set_optout($phone, true); try { self::send($acct, $phone, 'تم ✅ مش هنبعتلك رسائل دورية تاني. ولو احتجتنا اكتب هنا في أي وقت.', 'bot'); } catch (Throwable $ex) {} return ['ok' => true]; }
@@ -639,6 +642,28 @@ final class Mutqan_WA {
             $cur = Mutqan_Store::get_raw('wa_bot', $id);
             Mutqan_Store::upsert('wa_bot', ['kind' => 'miss', 'q' => $q, 'count' => (int) ($cur['count'] ?? 0) + 1, 'at' => gmdate('c')], $id, [], self::sys());
         } catch (Throwable $e) { error_log('[mutqan] wa miss: ' . $e->getMessage()); }
+    }
+
+    /** Joins a guest order to the WhatsApp number that sent its «رقم الطلب» message. True when an order was claimed. */
+    public static function claim_order($ref, $acct, $phone, $tid, $name = '') {
+        $ref = strtolower((string) $ref);
+        $rows = Mutqan_Store::select('orders', [], ['order' => '-createdAt', 'limit' => 150], self::sys());
+        foreach ($rows as $o) {
+            $id = (string) ($o['id'] ?? '');
+            if ($id === '' || substr(strtolower($id), -strlen($ref)) !== $ref) { continue; }
+            if (trim((string) ($o['clientPhone'] ?? '')) !== '' && substr(preg_replace('/\D/', '', (string) $o['clientPhone']), -9) !== substr(preg_replace('/\D/', '', (string) $phone), -9)) { return false; }
+            $patch = ['clientPhone' => self::intl($phone), 'waAccount' => $acct, 'waThread' => $tid];
+            if (trim((string) ($o['clientName'] ?? '')) === '' && trim((string) $name) !== '') { $patch['clientName'] = mb_substr(trim((string) $name), 0, 80); }
+            if (empty($o['card']) && class_exists('Mutqan_WA_Central')) { $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: []; if (!empty($th['card'])) { $patch['card'] = $th['card']; } }
+            Mutqan_Store::update('orders', $id, $patch, self::sys());
+            self::put_thread($tid, ['orderId' => $id]);
+            self::add_step($id, 'wa_claim', 'العميل بعت الطلب على واتساب — اتسجل رقمه');
+            $o = array_merge($o, $patch, ['id' => $id]);
+            if (class_exists('Mutqan_WA_Journey')) { Mutqan_WA_Journey::on_created($o); }
+            else { try { self::send($acct, $phone, 'وصلنا طلبك ✅ وهنأكد معاك التفاصيل حالًا.', 'bot'); } catch (Throwable $e) {} }
+            return true;
+        }
+        return false;
     }
 
     /** The name the owner gave a number, never its internal id. */
