@@ -17,7 +17,9 @@ final class Mutqan_WA {
         $c = get_option(self::OPT, []);
         $c = is_array($c) ? $c : [];
         if (empty($c['secret'])) { $c['secret'] = bin2hex(random_bytes(24)); update_option(self::OPT, $c, false); }
-        return $c + ['url' => '', 'token' => ''];
+        $c += ['url' => '', 'token' => ''];
+        if (stripos((string) $c['url'], '/wp-json/') !== false) { $c['url'] = ''; } // our own link is never a gateway
+        return $c;
     }
     public static function hook_url() { return rest_url(Mutqan_Rest::NS . '/wa-hook'); }
     public static function pull_url() { return rest_url(Mutqan_Rest::NS . '/wa-pull'); }
@@ -85,6 +87,11 @@ final class Mutqan_WA {
         $c = self::cfg();
         $url = trim((string) ($in['url'] ?? $c['url']));
         if ($url !== '' && !preg_match('#^https?://[^\s/]+(:\d+)?(/.*)?$#i', $url)) { throw new Mutqan_Error('bad_url', 'رابط الوسيط غير صالح.', 400); }
+        // The site's own address (often its receive link pasted by mistake) is not a gateway: calling it
+        // loops back here and every screen shows «خطأ من الوسيط». Treat it as "no direct gateway".
+        $own = strtolower((string) wp_parse_url(home_url(), PHP_URL_HOST));
+        $host = strtolower((string) wp_parse_url($url, PHP_URL_HOST));
+        if ($url !== '' && (stripos($url, '/wp-json/') !== false || ($own !== '' && ($host === $own || $host === 'www.' . $own)))) { $url = ''; }
         $c['url'] = rtrim($url, '/');
         if (!empty($in['token'])) { $c['token'] = trim((string) $in['token']); }
         if (!empty($in['rotateSecret'])) { $c['secret'] = bin2hex(random_bytes(24)); }
