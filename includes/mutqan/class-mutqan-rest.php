@@ -815,6 +815,11 @@ final class Mutqan_Rest {
         if ($rel === '/app') { wp_safe_redirect(home_url('/app/') . (isset($_SERVER['QUERY_STRING']) && $_SERVER['QUERY_STRING'] !== '' ? '?' . $_SERVER['QUERY_STRING'] : '')); exit; }
         $file = self::app_dir() . 'index.html';
         nocache_headers();
+        // Hostinger's server cache (LiteSpeed) kept serving a face's OLD app shell after a deploy — an old order form without
+        // the name/phone step (order #1001, 17 Nov). The shell is tiny; it must never be cached by the server or the CDN.
+        header('X-LiteSpeed-Cache-Control: no-cache');
+        header('CDN-Cache-Control: no-store');
+        do_action('litespeed_control_set_nocache', 'mutqan app shell');
         header('Content-Type: text/html; charset=utf-8');
         header('X-Content-Type-Options: nosniff');
         header('Referrer-Policy: strict-origin-when-cross-origin');
