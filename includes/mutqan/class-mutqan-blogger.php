@@ -16,6 +16,15 @@ final class Mutqan_Blogger {
     public static function boot() {
         add_action('rest_api_init', function () {
             register_rest_route('mutqan/v1', '/blogger-oauth', ['methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => [__CLASS__, 'callback']]);
+            // The article publisher on GitHub's servers borrows a one-hour key from here (see oidc_token): no secret is copied anywhere.
+            register_rest_route('mutqan/v1', '/blogger-token', ['methods' => 'POST', 'permission_callback' => '__return_true', 'callback' => function ($req) {
+                try {
+                    $auth = (string) $req->get_header('authorization');
+                    $jwt = preg_match('/^Bearer\s+(\S+)$/i', $auth, $m) ? $m[1] : '';
+                    return new WP_REST_Response(['data' => self::oidc_token($jwt)], 200);
+                } catch (Mutqan_Error $e) { return new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+                catch (Throwable $e) { return new WP_REST_Response(['error' => ['code' => 'blogger', 'message' => $e->getMessage()]], 503); }
+            }]);
         });
         add_action('admin_post_mutqan_blogger_save', [__CLASS__, 'save']);
         add_action('admin_post_mutqan_blogger_connect', [__CLASS__, 'connect']);
@@ -95,6 +104,71 @@ final class Mutqan_Blogger {
         if (empty($d['access_token'])) { throw new Exception('تجديد مفتاح بلوجر فشل: ' . ($d['error'] ?? 'غير معروف')); }
         set_transient('mq_blogger_at', $d['access_token'], max(60, (int) ($d['expires_in'] ?? 3600) - 120));
         return $d['access_token'];
+    }
+
+    /* ------------------------------------------------------------------ the GitHub publisher's one-hour key */
+
+    const OIDC_ISS = 'https://token.actions.githubusercontent.com';
+    const OIDC_AUD = 'oxygen11-blogger';
+    const OIDC_REPOS = ['alizizo888-code/mutaqin-oxygen-app', 'alizizo888-code/alizeidan123'];
+
+    /**
+     * GitHub gives every workflow run a signed identity token (OIDC). This checks that the token is GitHub's, is for this
+     * purpose (audience), comes from one of the owner's two repositories and its Blogger workflow, and has not expired —
+     * then hands back a Blogger access token that lives one hour. The refresh token never leaves this site, and there is
+     * no secret to paste into GitHub: the articles keep going out with nobody's computer on.
+     */
+    public static function oidc_token($jwt) {
+        Mutqan_Limiter::hit('blogger_oidc', 60, 3600);
+        $c = self::claims($jwt);
+        if (!self::connected()) { throw new Mutqan_Error('not_connected', 'بلوجر مش مربوط على الموقع لسه — اربطه مرة واحدة من «تطبيق متقن».', 409); }
+        return ['access_token' => self::token(), 'expires_in' => 3300, 'repository' => $c['repository']];
+    }
+
+    /** The verified claims of a GitHub Actions OIDC token, or a 403. */
+    public static function claims($jwt, $jwks = null, $now = null) {
+        $now = $now ?: time();
+        $parts = explode('.', (string) $jwt);
+        if (count($parts) !== 3) { throw new Mutqan_Error('forbidden', 'توكن غير صالح.', 403); }
+        $b64 = function ($s) { return base64_decode(strtr($s, '-_', '+/') . str_repeat('=', (4 - strlen($s) % 4) % 4)); };
+        $h = json_decode($b64($parts[0]), true); $c = json_decode($b64($parts[1]), true);
+        if (!is_array($h) || !is_array($c) || ($h['alg'] ?? '') !== 'RS256' || empty($h['kid'])) { throw new Mutqan_Error('forbidden', 'توكن غير صالح.', 403); }
+        $jwks = $jwks ?: self::jwks();
+        $key = null;
+        foreach ((array) ($jwks['keys'] ?? []) as $k) { if (($k['kid'] ?? '') === $h['kid'] && ($k['kty'] ?? '') === 'RSA') { $key = $k; break; } }
+        if (!$key) { delete_transient('mq_gh_jwks'); throw new Mutqan_Error('forbidden', 'مفتاح التوقيع غير معروف.', 403); }
+        $pem = self::jwk_pem($b64($key['n']), $b64($key['e']));
+        if (openssl_verify($parts[0] . '.' . $parts[1], $b64($parts[2]), $pem, OPENSSL_ALGO_SHA256) !== 1) { throw new Mutqan_Error('forbidden', 'التوقيع غير صحيح.', 403); }
+        $aud = (array) ($c['aud'] ?? []);
+        $wf = (string) ($c['workflow_ref'] ?? ($c['job_workflow_ref'] ?? ''));
+        if (($c['iss'] ?? '') !== self::OIDC_ISS || !in_array(self::OIDC_AUD, $aud, true)
+            || !in_array((string) ($c['repository'] ?? ''), self::OIDC_REPOS, true)
+            || strpos($wf, '/.github/workflows/blogger-') === false
+            || (int) ($c['exp'] ?? 0) < $now || (int) ($c['nbf'] ?? ($c['iat'] ?? 0)) > $now + 60) {
+            throw new Mutqan_Error('forbidden', 'التوكن مش من مستودع الشركة أو انتهى.', 403);
+        }
+        return $c;
+    }
+
+    private static function jwks() {
+        $j = get_transient('mq_gh_jwks');
+        if (is_array($j)) { return $j; }
+        $res = wp_remote_get(self::OIDC_ISS . '/.well-known/jwks', ['timeout' => 10]);
+        $j = json_decode((string) wp_remote_retrieve_body($res), true);
+        if (!is_array($j) || empty($j['keys'])) { throw new Mutqan_Error('jwks', 'تعذر قراءة مفاتيح GitHub.', 503); }
+        set_transient('mq_gh_jwks', $j, 6 * HOUR_IN_SECONDS);
+        return $j;
+    }
+
+    /** RSA public key (modulus, exponent) → PEM, for openssl_verify. */
+    public static function jwk_pem($n, $e) {
+        $len = function ($l) { if ($l < 128) { return chr($l); } $b = ltrim(pack('N', $l), "\0"); return chr(0x80 | strlen($b)) . $b; };
+        $int = function ($x) use ($len) { if (ord($x[0]) > 0x7f) { $x = "\0" . $x; } return "\x02" . $len(strlen($x)) . $x; };
+        $rsa = $int($n) . $int($e); $rsa = "\x30" . $len(strlen($rsa)) . $rsa;
+        $bits = "\x03" . $len(strlen($rsa) + 1) . "\0" . $rsa;
+        $alg = "\x30\x0d\x06\x09\x2a\x86\x48\x86\xf7\x0d\x01\x01\x01\x05\x00";
+        $spki = "\x30" . $len(strlen($alg . $bits)) . $alg . $bits;
+        return "-----BEGIN PUBLIC KEY-----\n" . chunk_split(base64_encode($spki), 64, "\n") . "-----END PUBLIC KEY-----\n";
     }
 
     private static function api($method, $path, $body = null) {
