@@ -73,8 +73,16 @@ final class Mutqan_WA_Desk {
     /* ---------------------------------------------------------------- inbound */
 
     /** True when this message was ours to answer, so the reception bot is left out of it. */
+    /** «رقم التجربة»: one phone plays the customer AND gives the room's commands (an owner testing with one phone). */
+    public static function is_test_phone($phone) {
+        $t = (string) get_option('mutqan_test_customer', '');
+        return $t !== '' && self::key($t) === self::key($phone);
+    }
+    const ROOM_WORDS = '/^\s*(اعتمد|وزع|وزّع|اسند|أسند|وجه|وجّه|حول|حوّل|اسحب|فك|رد\s+#?\d|الطلبات|الملغي|رجع|تقرير|الوضع|ملخص|الفنيين|التنبيهات|فين الفنيين|فلوس|مساعدة|الاوامر|الأوامر)/u';
+
     public static function inbound($acct, $phone, $text, $tid, $th) {
         $who = self::identify($phone);
+        if ($who['kind'] !== 'customer' && self::is_test_phone($phone) && !preg_match(self::ROOM_WORDS, (string) $text)) { return false; }
         if ($who['kind'] === 'customer') { return false; }
         $text = trim((string) $text);
         try {
@@ -160,10 +168,10 @@ final class Mutqan_WA_Desk {
         if (preg_match('/(تقرير|الحالة|الوضع|ملخص)/u', $t)) { return self::report(); }
         if (preg_match('/(حالة\s*الفنيين|الفنيين|الفنيه|الفنية)/u', $t)) { return self::techs_report(); }
         if (preg_match('/(الطلبات|المعلقة|المعلقه|المفتوحة|المفتوحه)/u', $t)) { return self::orders_report(); }
-        if (preg_match('/(?:وجه|وجّه|اسند|أسند|حوّل|حول)\s*(?:الطلب\s*)?#?(\d{3,})\s*(?:الى|إلى|ل|لـ)?\s*(.+)$/u', $t, $m)) {
+        if (preg_match('/(?:وجه|وجّه|اسند|أسند|حوّل|حول)\s*(?:ال)?(?:طلب\s*)?(?:رقم\s*)?#?(\d{3,})\s*(?:الى|إلى|ل|لـ)?\s*(.+)$/u', $t, $m)) {
             return self::assign_by_name(trim($m[1]), trim($m[2]), $who);
         }
-        if (preg_match('/(?:اسحب|ارجع|فك)\s*(?:الطلب\s*)?#?(\d{3,})/u', $t, $m)) { return self::unassign(trim($m[1]), $who); }
+        if (preg_match('/(?:اسحب|ارجع|فك)\s*(?:ال)?(?:طلب\s*)?#?(\d{3,})/u', $t, $m)) { return self::unassign(trim($m[1]), $who); }
         // The master's own words: «رد 1234 …» from the customer's own line, «اعتمد 1234» to the right technician.
         if (class_exists('Mutqan_WA_Central') && in_array($who['role'] ?? '', ['owner', 'operations'], true)) {
             $mc = Mutqan_WA_Central::master_command($t, ['name' => (string) ($who['name'] ?? 'الإدارة')]);
@@ -237,14 +245,18 @@ final class Mutqan_WA_Desk {
     private static function assign_by_name($num, $name, $who) {
         $order = self::find_order($num);
         if (!$order) { return '❌ مالقيتش طلب رقمه ' . $num . '.'; }
-        $tech = null;
+        $tech = null; $best = -1;
         foreach (Mutqan_Store::select('tech_profiles', [], ['limit' => 300], self::sys()) as $t) {
-            if ($name !== '' && mb_strpos(self::tech_name($t), $name) !== false) { $tech = $t; break; }
+            $tn = self::tech_name($t);
+            if ($name === '' || mb_strpos($tn, $name) === false) { continue; }
+            // Several technicians can share a first name: the one WhatsApp can reach wins, then the closest name.
+            $score = (trim((string) ($t['phone'] ?? '')) !== '' ? 10 : 0) + ($tn === $name ? 5 : 0) + (empty($t['isSite']) ? 1 : 0);
+            if ($score > $best) { $best = $score; $tech = $t; }
         }
         if (!$tech) { return '❌ مالقيتش فني اسمه «' . $name . '». اكتب *الفنيين* تشوف الأسماء.'; }
         // The store sends the job card itself the moment the order changes hands, so dispatching it
         // here too would reach the technician twice.
-        Mutqan_Store::update('orders', (string) $order['id'], ['technicianId' => (string) $tech['id'], 'status' => 'assigned', 'assignedAt' => gmdate('c')], self::sys());
+        Mutqan_Store::update('orders', (string) $order['id'], ['technicianId' => (string) $tech['id'], 'technicianName' => self::tech_name($tech), 'status' => 'assigned', 'assignedAt' => gmdate('c')], self::sys());
         $has = trim((string) ($tech['phone'] ?? '')) !== '';
         return '✅ طلب ' . self::num($order) . ' اتوجّه لـ *' . self::tech_name($tech) . '*' . ($has ? ' واتبعتله على الواتساب.' : ' (متبعتش واتساب — الرقم مش مسجّل).');
     }
