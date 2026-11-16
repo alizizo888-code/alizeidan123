@@ -440,7 +440,7 @@ final class Mutqan_Store {
         }
         // The customer hears every move of his order on WhatsApp, with the facts and the link back to it.
         if ($coll === 'orders' && array_key_exists('status', $patch) && class_exists('Mutqan_OrderBot')) { Mutqan_OrderBot::on_status($doc, $old); }
-        if ($coll === 'orders' && array_key_exists('status', $patch) && class_exists('Mutqan_WA_Journey')) { Mutqan_WA_Journey::on_status($doc, $old); }
+        if ($coll === 'orders' && array_key_exists('status', $patch) && class_exists('Mutqan_WA_Journey')) { Mutqan_WA_Journey::on_status($doc, $old, $p); }
         if ($coll === 'orders' && !empty($patch['technicianId']) && ($patch['technicianId'] ?? null) !== ($old['technicianId'] ?? null) && class_exists('Mutqan_WA_Journey')) { Mutqan_WA_Journey::on_assigned($doc); }
         if ($coll === 'orders' && array_key_exists('technicianId', $patch)
             && ($patch['technicianId'] ?? null) !== ($old['technicianId'] ?? null) && !empty($patch['technicianId'])

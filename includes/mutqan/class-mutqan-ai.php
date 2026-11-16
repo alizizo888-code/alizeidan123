@@ -208,9 +208,14 @@ final class Mutqan_AI {
         // Every provider cooling down is the moment the old code said «busy» without asking anybody. A cooldown is a
         // guess about a quota, not a fact: when nobody is left, the two oldest-cooled doors are tried once more anyway.
         if (!$fresh) { $fresh = array_slice($chain, 0, 2); }
+        // One answer has a budget in seconds, whatever the chain: a WhatsApp reply that waits a minute is a bot that hangs.
+        $deadline = microtime(true) + max(6, min(40, (float) ($opts['budget'] ?? 20)));
         foreach ($fresh as $id) {
             $c = $s['providers'][$id];
             if ($tried >= $max) { break; }
+            $left = $deadline - microtime(true);
+            if ($tried > 0 && $left < 4) { break; }
+            self::$cap = (int) max(4, min(14, floor($left)));
             $tried++;
             $r = self::call($id, $c, $prompt, $wantJson, $temp);
             if ($r['ok']) {
@@ -276,7 +281,9 @@ final class Mutqan_AI {
 
     /* ------------------------------------------------------------------ providers */
 
+    private static $cap = 14;   // seconds one provider may take (set per answer from its budget)
     private static function http($url, $headers, $body, $timeout = 22) {
+        $timeout = min((int) $timeout, self::$cap);
         $res = wp_remote_post($url, ['timeout' => $timeout, 'headers' => $headers, 'body' => wp_json_encode($body)]);
         if (is_wp_error($res)) { return [0, null, $res->get_error_message(), '']; }
         $code = (int) wp_remote_retrieve_response_code($res);

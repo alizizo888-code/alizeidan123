@@ -189,6 +189,14 @@ final class Mutqan_WA_Central {
             if (!$o) { return 'مفيش طلب رقم ' . $m[2] . '.'; }
             return self::reply_customer($o, trim($m[3]), $p);
         }
+        // الملغي — today's cancellations and their reasons; رجع 1234 — bring a cancelled one back
+        if (class_exists('Mutqan_WA_Journey') && preg_match('/^(الملغي|الملغيه|الملغية|الطلبات الملغيه|الطلبات الملغية|الالغاءات)$/u', $n)) { return Mutqan_WA_Journey::cancelled_today(); }
+        if (class_exists('Mutqan_WA_Journey') && preg_match('/^(رجع|رجّع|ارجع|استرجع)\s*(الطلب)?\s*#?(\d{1,10})$/u', Mutqan_Auth::fold_digits($n), $m)) {
+            $o = Mutqan_Quick::find_order($m[3]);
+            if (!$o) { return 'مفيش طلب رقم ' . $m[3] . '.'; }
+            if (($o['status'] ?? '') !== 'cancelled') { return 'الطلب #' . $m[3] . ' مش ملغي (' . ($o['status'] ?? '') . ').'; }
+            return Mutqan_WA_Journey::owner_reopen($o);
+        }
         // اعتمد 1234 — send to the best technician (over the technicians' line)
         if (preg_match('/^(اعتمد|وزع|اعتماد)\s*(الطلب)?\s*#?(\d{1,10})$/u', $n, $m)) {
             $o = Mutqan_Quick::find_order($m[3]);

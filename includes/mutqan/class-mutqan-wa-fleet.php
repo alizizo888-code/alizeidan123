@@ -358,8 +358,17 @@ final class Mutqan_WA_Fleet {
             $s = self::settings();
             $role = (string) (self::roles()[$acct]['role'] ?? 'general');
             $tag = self::tag($text);
-            if ($tag === 'general' && !empty($s['aiTagging']) && class_exists('Mutqan_AI') && Mutqan_AI::any_enabled() && mb_strlen($text) > 12) {
-                try { $r = Mutqan_AI::run("صنّف رسالة عميل شركة صيانة في كلمة واحدة من: complaint, order, tech, marketing, general.\nالرسالة: " . mb_substr($text, 0, 400) . "\nأعد JSON: {\"tag\":\"...\"}", ['json' => true, 'temperature' => 0, 'feature' => 'wa_tag', 'kb' => false], self::sys()); $t = (string) ($r['json']['tag'] ?? ''); if (isset(self::TAGS[$t])) { $tag = $t; } } catch (Throwable $e) {}
+            // The model's opinion of a vague message is worth having, but never in front of the reply: it runs after the
+            // gateway has its answer (the reply itself leaves from the queue), with a short budget.
+            if ($tag === 'general' && !empty($s['aiTagging']) && class_exists('Mutqan_AI') && Mutqan_AI::any_enabled() && mb_strlen($text) > 12 && function_exists('add_action')) {
+                add_action('shutdown', function () use ($text, $tid) {
+                    if (function_exists('fastcgi_finish_request')) { @fastcgi_finish_request(); }
+                    try {
+                        $r = Mutqan_AI::run("صنّف رسالة عميل شركة صيانة في كلمة واحدة من: complaint, order, tech, marketing, general.\nالرسالة: " . mb_substr($text, 0, 400) . "\nأعد JSON: {\"tag\":\"...\"}", ['json' => true, 'temperature' => 0, 'feature' => 'wa_tag', 'kb' => false, 'budget' => 8], self::sys());
+                        $t = (string) ($r['json']['tag'] ?? '');
+                        if (isset(self::TAGS[$t]) && $t !== 'general') { $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: []; Mutqan_Store::update('wa_threads', $tid, ['tags' => array_slice(array_values(array_unique(array_merge((array) ($th['tags'] ?? []), [$t]))), -5)], self::sys()); }
+                    } catch (Throwable $e) {}
+                }, 99);
             }
             $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: [];
             $tags = array_values(array_unique(array_merge((array) ($th['tags'] ?? []), $tag === 'general' ? [] : [$tag])));
