@@ -1,0 +1,8 @@
+# wa.oxygen11.com — the short address of «واتساب الإدارة». The app itself lives with the other desk apps.
+Options -Indexes
+RedirectMatch 302 ^/?$ https://desk.oxygen11.com/desk-wa.html
+RedirectMatch 302 ^/(ai|zaka)/?$ https://desk.oxygen11.com/desk-wa.html#/staff/assistant
+RedirectMatch 302 ^/(numbers|arqam)/?$ https://desk.oxygen11.com/desk-wa.html#/staff/wa-fleet
+<IfModule mod_headers.c>
+Header set X-Robots-Tag "noindex, nofollow, noarchive"
+</IfModule>
