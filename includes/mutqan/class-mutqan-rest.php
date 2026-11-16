@@ -36,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -73,6 +73,15 @@ final class Mutqan_Rest {
                 try { $out = Mutqan_WA::pull_signed((string) $req->get_body(), (string) $req->get_header('x-mq-signature')); $res = new WP_REST_Response(['data' => $out], 200); }
                 catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
                 catch (Throwable $e) { error_log('[mutqan] wa-pull ' . $e->getMessage()); $res = new WP_REST_Response(['error' => ['code' => 'server_error']], 500); }
+                $res->header('Cache-Control', 'no-store');
+                return $res;
+            }]);
+        // The WhatsApp hub on the VPS asks its short data questions here, signed with the secret made at pairing.
+        register_rest_route(self::NS, '/hub', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                try { $res = new WP_REST_Response(['data' => Mutqan_Hub::api((string) $req->get_body(), (string) $req->get_header('x-mq-hub'))], 200); }
+                catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+                catch (Throwable $e) { error_log('[mutqan] hub ' . $e->getMessage()); $res = new WP_REST_Response(['error' => ['code' => 'server_error', 'message' => $e->getMessage()]], 500); }
                 $res->header('Cache-Control', 'no-store');
                 return $res;
             }]);
@@ -352,7 +361,8 @@ final class Mutqan_Rest {
         self::admin_alert(($high ? '⭐ ' : '') . ($urgent ? '🚨 طلب عاجل جديد' : ($ops ? '📋 طلب بانتظار التوزيع' : '🆕 طلب جديد')) . (!empty($doc['specialtyId']) ? ' — ' . self::spec_label($doc['specialtyId']) : ''), implode("\n", $lines) ?: 'طلب خدمة جديد بانتظار المعالجة', '#/staff/order/' . $doc['id'], 'new_order', 'high', $doc['id']);
         // The same order, sent AUTOMATICALLY on WhatsApp by the business number to the customer (his copy + the conversation opens in the WhatsApp inbox). No confirmation step for anyone.
         $sent = false;
-        if (!$ops && !empty($doc['clientPhone'])) {
+        // With the hub paired its confirmation is the customer's copy: one message, not two.
+        if (!$ops && !empty($doc['clientPhone']) && !(class_exists('Mutqan_Hub') && Mutqan_Hub::on())) {
             try {
                 $how = Mutqan_WA::auto_send($doc['clientPhone'], self::order_wa_text($doc, $price, $seal), 'order');
                 $sent = $how !== false;
@@ -529,6 +539,7 @@ final class Mutqan_Rest {
     public static function h_sales($req, $p) { return Mutqan_Sales::handle(self::body($req), $p); }
 
     /** «مساعد الطلب»: answers the customer inside his order's conversation and relays to the technician / the room. */
+    public static function h_hubadmin($req, $p) { return Mutqan_Hub::h_admin(self::body($req), $p); }
     public static function h_orderbot($req, $p) { return Mutqan_OrderBot::handle(self::body($req), $p); }
 
     /* ------------------------------------------------------------------ /push (in-app notifications) */

@@ -198,6 +198,7 @@ final class Mutqan_WA {
 
     /** Id of a connected (status «open») business number, or '' when the gateway is not set up / down. Cached for a minute so an order never waits on it twice. */
     public static function open_account() {
+        if (class_exists('Mutqan_Hub') && Mutqan_Hub::on()) { return 'hub'; }
         $c = self::cfg();
         // A phone gateway cannot be asked which numbers it has; it tells us when it connects.
         if ($c['url'] === '') { return (string) get_option('mutqan_wa_last_acct', ''); }
@@ -225,6 +226,8 @@ final class Mutqan_WA {
     public static function auto_send($phone, $text, $by = 'order') {
         $to = self::intl($phone);
         if ($to === '') { return false; }
+        // The hub on the VPS sends every WhatsApp message now; the site only hands it over.
+        if (class_exists('Mutqan_Hub') && Mutqan_Hub::on()) { return Mutqan_Hub::send($to, $text, $by) ? 'sent' : false; }
         // A message leaves from the number whose job it is (orders from the customers' line, job cards from the
         // technicians' line, reports from the reports line), through the device that carries that number.
         $fleet = class_exists('Mutqan_WA_Fleet') ? Mutqan_WA_Fleet::account_for($by) : '';
@@ -253,6 +256,7 @@ final class Mutqan_WA {
      */
     public static function send($acct, $phone, $text, $via, $by = '') {
         $text = preg_replace('/(الفن[يى])\s+(?=الفن[يى]\s)/u', '', (string) $text);   // «الفني الفني علي» — names that already start with «الفني»
+        if (class_exists('Mutqan_Hub') && Mutqan_Hub::on()) { Mutqan_Hub::send($phone, $text, (string) $via); return ['ok' => true]; }
         $c = self::cfg();
         if ($c['url'] === '') { return self::queue($acct, $phone, $text, $via, $by); }
         $r = self::gw('POST', '/sessions/' . rawurlencode($acct) . '/send', ['to' => $phone, 'text' => $text]);
@@ -285,6 +289,8 @@ final class Mutqan_WA {
 
     /** Same signature as the webhook, checked the same way: the body, with the shared secret. */
     public static function pull_signed($raw, $sig) {
+        // The old gateway is retired once the hub is paired: it gets nothing to do.
+        if (class_exists('Mutqan_Hub') && Mutqan_Hub::on()) { return ['jobs' => [], 'cmds' => [], 'retired' => true]; }
         $dev = class_exists('Mutqan_WA_Fleet') ? Mutqan_WA_Fleet::signer($raw, $sig) : null;
         if ($dev === null) {
             $c = self::cfg();
@@ -479,6 +485,7 @@ final class Mutqan_WA {
     /* ---------------------------------------------------------------- webhook from the gateway */
 
     public static function webhook($raw, $sig) {
+        if (class_exists('Mutqan_Hub') && Mutqan_Hub::on()) { return ['ok' => true, 'retired' => true]; }
         $c = self::cfg();
         $dev = class_exists('Mutqan_WA_Fleet') ? Mutqan_WA_Fleet::signer($raw, $sig) : null;
         if ($dev === null && (!is_string($sig) || !hash_equals(hash_hmac('sha256', $raw, $c['secret']), $sig))) { throw new Mutqan_Error('forbidden', 'توقيع غير صحيح.', 403); }
