@@ -178,6 +178,10 @@ final class Mutqan_Callnet {
     }
 
     private static function push($user, $title, $body, $url, $event) {
+        // The same notice to the same person twice in two minutes (a button pressed again and again) goes out once.
+        $k = 'mq_cn_push_' . md5($user . '|' . $title . '|' . $url);
+        if (get_transient($k)) { return; }
+        set_transient($k, 1, 120);
         try { Mutqan_Store::insert('_push', ['target' => ['user' => (string) $user], 'title' => mb_substr($title, 0, 120), 'body' => mb_substr($body, 0, 300), 'url' => $url, 'sound' => 'bell', 'priority' => 'high', 'event' => $event, 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 3600)], self::sys()); }
         catch (Throwable $e) { error_log('[mutqan] callnet push ' . $e->getMessage()); }
     }
