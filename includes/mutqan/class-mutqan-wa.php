@@ -397,7 +397,11 @@ final class Mutqan_WA {
         self::put_thread($tid, ['lastIn' => mb_substr((string) ($e['text'] ?? ''), 0, 300)]);
         // «حلقة الوصل»: a customer with an order on the go is talking about that order — confirm, follow, rate.
         if (class_exists('Mutqan_WA_Journey') && Mutqan_WA_Journey::inbound($acct, $phone, (string) ($e['text'] ?? ''), $tid)) { return ['ok' => true]; }
-        $out = Mutqan_WA_Bot::decide($cfg + Mutqan_WA_Bot::defaults(), $th, (string) ($e['text'] ?? ''), (int) ($e['ts'] ?? time()), (string) ($e['kind'] ?? 'text'));
+        // The reception bot speaks as the company the customer came through (the card), never as a generic brand.
+        $bcfg = $cfg + Mutqan_WA_Bot::defaults();
+        $card = (array) ((Mutqan_Store::get_raw('wa_threads', $tid) ?: [])['card'] ?? ($th['card'] ?? []));
+        if (!empty($card['site']) && $card['site'] !== 'غير محدد') { $bcfg['brand'] = (string) $card['site']; }
+        $out = Mutqan_WA_Bot::decide($bcfg, $th, (string) ($e['text'] ?? ''), (int) ($e['ts'] ?? time()), (string) ($e['kind'] ?? 'text'));
         // The rules had nothing to say. If the model cannot be reached either, the bot falls back
         // on what the model has already answered before — which is the whole point of it learning.
         if (empty($out['replies']) && class_exists('Mutqan_Brain')) {
