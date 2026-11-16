@@ -358,7 +358,73 @@ final class Mutqan_WA {
         self::put_thread($tid, $patch, ['accountId' => $acct, 'phone' => $phone, 'name' => mb_substr((string) ($m['name'] ?? ''), 0, 60), 'unread' => 0, 'status' => 'open']);
         // «جسر Chatwoot»: the team's inbox sees every message of the conversation (off until it is set up).
         if (class_exists('Mutqan_Chatwoot')) { Mutqan_Chatwoot::mirror($acct, $phone, $tid, ['dir' => $m['dir'], 'text' => (string) $m['text'], 'kind' => $m['kind'] ?? 'text', 'via' => $m['via'] ?? '', 'by' => $m['by'] ?? '', 'mediaUrl' => $media['url'] ?? null]); }
+        try { self::mirror_order($acct, $phone, $tid, $m, $id, $media['url'] ?? null); } catch (Throwable $e) { error_log('[mutqan] wa→order mirror ' . $e->getMessage()); }
         return true;
+    }
+
+    /** Messages that belong to the room / the system, never to the customer's order conversation. */
+    const NOT_ORDER_VIA = ['master', 'report', 'otp', 'dispatch', 'call', 'desk', 'central', 'site_chat'];
+
+    /** The order this WhatsApp conversation is about: the one «حلقة الوصل» is following, or the one the thread was tied to. */
+    public static function order_of($phone, $tid) {
+        $id = '';
+        if (class_exists('Mutqan_WA_Journey')) { $c = Mutqan_WA_Journey::current($phone); $id = (string) ($c['o'] ?? ''); }
+        if ($id === '') { $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: []; $id = (string) ($th['orderId'] ?? ''); }
+        if ($id === '') { return null; }
+        $o = Mutqan_Store::get_raw('orders', $id);
+        if (!$o) { return null; }
+        // Only the order's own customer: a technician's or the room's conversation is never written into it.
+        $k = substr(preg_replace('/\D/', '', (string) ($o['clientPhone'] ?? '')), -9);
+        if ($k === '' || $k !== substr(preg_replace('/\D/', '', (string) $phone), -9)) { return null; }
+        return $o + ['id' => $id];
+    }
+
+    /**
+     * «محادثة واحدة»: what the customer and the company say on WhatsApp is written into the order's conversation on the
+     * site (the ops channel the customer, operations and the site assistant all read), so the order page shows the same
+     * conversation, and the site assistant knows what was said on WhatsApp. Written directly (no site notification, no
+     * second answer from the site assistant — WhatsApp already answered).
+     */
+    private static function mirror_order($acct, $phone, $tid, $m, $waId, $mediaUrl) {
+        $via = (string) ($m['via'] ?? ''); $by = (string) ($m['by'] ?? '');
+        if (in_array($via, self::NOT_ORDER_VIA, true) || ($via === 'auto' && in_array($by, self::NOT_ORDER_VIA, true))) { return; }
+        $text = trim((string) ($m['text'] ?? ''));
+        if ($m['dir'] === 'in' && class_exists('Mutqan_WA_Desk') && preg_match(Mutqan_WA_Desk::ROOM_WORDS, $text) && Mutqan_WA_Desk::is_test_phone($phone)) { return; }
+        if ($text === '' && !$mediaUrl) { return; }
+        $o = self::order_of($phone, $tid);
+        if (!$o) { return; }
+        $from = $m['dir'] === 'in' ? 'client' : (in_array($via, ['bot', 'ai', 'journey', 'auto', 'order'], true) ? 'ai' : 'ops');
+        Mutqan_Store::insert('order_msgs', [
+            'orderId' => $o['id'], 'channel' => 'ops', 'kind' => 'text', 'from' => $from,
+            'fromName' => $from === 'client' ? mb_substr((string) ($o['clientName'] ?? ($m['name'] ?? '')), 0, 60) : ($from === 'ai' ? 'المساعد' : 'خدمة العملاء'),
+            'text' => mb_substr($text !== '' ? $text : '📎 مرفق', 0, 600) . ($mediaUrl ? "\n" . $mediaUrl : ''), 'at' => gmdate('c', (int) ($m['ts'] ?? time())),
+            'clientId' => $o['clientId'] ?? (Mutqan_Store::owner_of('orders', $o['id']) ?: null), 'techId' => $o['technicianId'] ?? null,
+            'via' => 'whatsapp', 'waId' => $waId,
+        ], null, ['expiresAt' => gmdate('c', time() + 180 * 86400)], self::sys(), true);
+        if (empty($o['waAccount'])) { Mutqan_Store::update('orders', $o['id'], ['waAccount' => $acct], self::sys()); }
+    }
+
+    /**
+     * The other way: what operations, the site assistant or the technician write to the customer in the order's
+     * conversation on the site also reaches him on WhatsApp, from the line he talks to.
+     */
+    public static function order_msg_to_wa($msg) {
+        if (($msg['via'] ?? '') === 'whatsapp' || ($msg['kind'] ?? 'text') !== 'text') { return false; }
+        $from = (string) ($msg['from'] ?? '');
+        if (!in_array($from, ['ops', 'ai', 'tech'], true)) { return false; }
+        $o = Mutqan_Store::get_raw('orders', (string) ($msg['orderId'] ?? ''));
+        $phone = self::intl((string) ($o['clientPhone'] ?? ''));
+        if (!$o || $phone === '') { return false; }
+        if (($o['notifyOptOut'] ?? false) || in_array((string) ($o['status'] ?? ''), ['cancelled'], true)) { return false; }
+        $text = trim((string) ($msg['text'] ?? ''));
+        if ($text === '') { return false; }
+        $head = $from === 'tech' ? '🧑‍🔧 ' . ((string) ($o['technicianName'] ?? 'الفني')) . ': ' : '';
+        $text = $head . $text;
+        $acct = (string) ($o['waAccount'] ?? '');
+        if ($acct === '' && class_exists('Mutqan_WA_Fleet')) { $acct = (string) Mutqan_WA_Fleet::account_for('order'); }
+        if ($acct === '') { $acct = (string) self::open_account(); }
+        if ($acct === '') { return false; }
+        try { self::send($acct, $phone, $text, 'site_chat', $from); return true; } catch (Throwable $e) { error_log('[mutqan] order→wa ' . $e->getMessage()); return false; }
     }
 
     /** True when this phone is one of the numbers linked to the system (any device, any lane). */

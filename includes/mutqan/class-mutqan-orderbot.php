@@ -74,11 +74,11 @@ final class Mutqan_OrderBot {
         $st = (string) ($o['status'] ?? 'new');
         $i = self::step_of($st);
         $f = [
-            'id' => (string) ($o['id'] ?? ''), 'short' => '#' . substr((string) ($o['id'] ?? ''), -5),
+            'id' => (string) ($o['id'] ?? ''), 'short' => '#' . ((string) ($o['number'] ?? '') !== '' ? (string) $o['number'] : substr((string) ($o['id'] ?? ''), -5)),
             'service' => class_exists('Mutqan_Rest') ? Mutqan_Rest::spec_label($o['specialtyId'] ?? '') : (string) ($o['specialtyId'] ?? ''),
             'status' => $st, 'cancelled' => $st === 'cancelled', 'step' => $i, 'stepLabel' => $st === 'cancelled' ? 'ملغي' : self::STEPS[$i],
             'tech' => (string) ($o['technicianName'] ?? ''), 'hasTech' => !empty($o['technicianId']),
-            'appointment' => null, 'eta' => null, 'distanceKm' => null, 'posAgoMin' => null,
+            'appointment' => null, 'eta' => null, 'distanceKm' => null, 'posAgoMin' => null, 'techMap' => null,
             'price' => class_exists('Mutqan_Sales') ? (int) Mutqan_Sales::amount($o) : 0,
             'paid' => ($o['paymentStatus'] ?? '') === 'paid', 'warranty' => self::warranty($o), 'url' => self::order_url($o['id'] ?? ''),
         ];
@@ -93,6 +93,8 @@ final class Mutqan_OrderBot {
         if ($f['hasTech'] && in_array($st, self::MOVING, true) && class_exists('Mutqan_Track')) {
             $pos = Mutqan_Track::where((string) $o['technicianId']); $pt = self::order_point($o);
             if ($pos && $pt) { $f['distanceKm'] = round(self::km($pos['lat'], $pos['lng'], $pt[0], $pt[1]), 1); $f['posAgoMin'] = (int) floor($pos['ago'] / 60); }
+            // «فين الفني؟» — the customer can open where he is right now, on WhatsApp as on the site.
+            if ($pos) { $f['techMap'] = 'https://maps.google.com/?q=' . round($pos['lat'], 5) . ',' . round($pos['lng'], 5); if ($f['posAgoMin'] === null) { $f['posAgoMin'] = (int) floor($pos['ago'] / 60); } }
         }
         return $f;
     }
@@ -234,6 +236,8 @@ final class Mutqan_OrderBot {
             elseif ($f['distanceKm'] !== null) { $L[] = 'الفني ' . $f['tech'] . ' على بعد حوالي ' . $f['distanceKm'] . ' كم منك (آخر تحديث قبل ' . $f['posAgoMin'] . ' د).'; }
             elseif (!$f['hasTech']) { $L[] = 'طلبك لسه في التوزيع على أقرب فني.'; }
             else { $L[] = 'طلبك مع الفني ' . $f['tech'] . ' — المرحلة: ' . $f['stepLabel'] . '.'; }
+            if (!empty($f['techMap'])) { $L[] = '📍 مكان الفني الآن: ' . $f['techMap']; }
+            if ($f['hasTech'] && $f['id'] !== '') { $L[] = '🗺️ تابعه لحظة بلحظة وكلّمه من هنا: ' . $f['url']; }
         } elseif ($intent === 'warranty') {
             $L[] = $f['warranty'] ? ($f['warranty']['active'] ? 'ضمان طلبك ساري، باقي ' . $f['warranty']['left'] . ' يوم (حتى ' . $f['warranty']['until'] . ').' : 'ضمان الطلب انتهى في ' . $f['warranty']['until'] . '.') : 'الضمان بيبدأ من لحظة إنهاء الخدمة، وبيظهر هنا أول ما الطلب يكتمل.';
         } elseif ($intent === 'pay') {
