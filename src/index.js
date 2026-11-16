@@ -33,6 +33,31 @@ const META = path.join(DATA, 'sessions.json')
 const meta = (() => { try { return JSON.parse(fs.readFileSync(META, 'utf8')) } catch { return {} } })()
 const saveMeta = () => fs.writeFileSync(META, JSON.stringify(meta, null, 1))
 
+// WhatsApp now hides many senders behind a private id («…@lid») instead of their number. Whatever WhatsApp tells us
+// of the real number is kept here, so a customer is known by his phone and the answer reaches him.
+const LIDF = path.join(DATA, 'lid-map.json')
+const lidMap = (() => { try { return JSON.parse(fs.readFileSync(LIDF, 'utf8')) } catch { return {} } })()
+let lidT = null
+const saveLid = () => { clearTimeout(lidT); lidT = setTimeout(() => { try { fs.writeFileSync(LIDF, JSON.stringify(lidMap)) } catch {} }, 1500) }
+const isLid = (j) => /@lid$/.test(String(j || ''))
+const isPn = (j) => /@s\.whatsapp\.net$/.test(String(j || ''))
+function learnLid(lid, pn) {
+  if (!isLid(lid) || !isPn(pn)) return
+  const l = jidToPhone(lid); const p = jidToPhone(pn)
+  if (l && p && lidMap[l] !== p) { lidMap[l] = p; saveLid() }
+}
+async function realJid(sock, jid, key) {
+  if (!isLid(jid)) return jid
+  for (const a of [key?.remoteJidAlt, key?.senderPn, key?.participantAlt, key?.participantPn]) { if (isPn(a)) { learnLid(jid, a); return a } }
+  const known = lidMap[jidToPhone(jid)]
+  if (known) return known + '@s.whatsapp.net'
+  try { const pn = await sock.signalRepository?.lidMapping?.getPNForLID?.(jid); if (pn && isPn(String(pn).replace(/:\d+@/, '@'))) { const j = String(pn).replace(/:\d+@/, '@'); learnLid(jid, j); return j } } catch {}
+  return jid
+}
+// A number we only know by its private id is answered on that id.
+const toJid = (to) => { const d = digits(to); return lidMap['@' + d] ? d + '@lid' : phoneToJid(d) }
+const markLidOnly = (jid) => { if (isLid(jid)) { const d = jidToPhone(jid); if (!lidMap['@' + d]) { lidMap['@' + d] = 1; saveLid() } } }
+
 /** id -> runtime state */
 const S = new Map()
 
@@ -51,7 +76,7 @@ async function flush() {
     const item = outbox[0]
     const body = JSON.stringify(item.event)
     try {
-      const r = await fetch(HOOK_URL, { method: 'POST', headers: { 'content-type': 'application/json', 'x-mq-signature': sign(HOOK_SECRET, body) }, body, signal: AbortSignal.timeout(15000) })
+      const r = await fetch(HOOK_URL, { method: 'POST', headers: { 'content-type': 'application/json', 'x-mq-signature': sign(HOOK_SECRET, body) }, body, signal: AbortSignal.timeout(30000) })
       if (!r.ok && r.status >= 500) throw new Error('hook ' + r.status)
       outbox.shift()
     } catch (e) {
@@ -74,6 +99,7 @@ async function start(id) {
   const old = S.get(id)
   if (old?.sock) { try { old.sock.end(undefined) } catch {} }
   const st = old || { status: 'connecting', pacer: new Pacer({ dailyCap: DAILY_CAP }), queue: [], busy: false, retry: 0 }
+  st.sent = st.sent || new Set()
   st.status = 'connecting'; st.qr = null; st.code = null
   S.set(id, st)
   const { state, saveCreds } = await useMultiFileAuthState(path.join(DATA, 'auth', id))
@@ -114,14 +140,28 @@ async function start(id) {
       setTimeout(() => { if (S.get(id) === st && meta[id]) start(id).catch((e) => log.error(e)) }, wait)
     }
   })
-  sock.ev.on('messages.upsert', ({ messages, type }) => {
+  const learnContacts = (list) => { for (const c of list || []) { if (isLid(c.lid) && isPn(c.id)) learnLid(c.lid, c.id); if (isLid(c.id) && isPn(c.phoneNumber || c.jid)) learnLid(c.id, c.phoneNumber || c.jid) } }
+  sock.ev.on('contacts.upsert', learnContacts)
+  sock.ev.on('contacts.update', learnContacts)
+  sock.ev.on('lid-mapping.update', (u) => { for (const x of [].concat(u || [])) learnLid(x?.lid, x?.pn) })
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify' && type !== 'append') return
     for (const msg of messages) {
-      const jid = msg.key?.remoteJid
-      if (!isUserJid(jid) || !msg.message) continue
-      const x = extract(msg.message)
-      if (x.kind === 'reaction') continue
-      emit({ type: 'message', accountId: id, msgId: msg.key.id, direction: msg.key.fromMe ? 'out' : 'in', phone: jidToPhone(jid), name: msg.pushName || '', text: x.text, kind: x.kind, ts: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000), fromPhone: !!msg.key.fromMe })
+      try {
+        const raw = msg.key?.remoteJid
+        if (!isUserJid(raw) || !msg.message) continue
+        if (st.sent.has(msg.key.id)) continue            // our own message coming back: WordPress already has it
+        const x = extract(msg.message)
+        if (x.kind === 'reaction') continue
+        const jid = await realJid(sock, raw, msg.key)
+        if (isLid(jid)) markLidOnly(jid)
+        // «Message yourself» on a linked number is the owner talking to the system: it is an incoming message from
+        // that number itself, not a reply typed to a customer.
+        const me = st.phone || jidToPhone(sock.user?.id); const myLid = jidToPhone(sock.user?.lid || '')
+        const self = !!msg.key.fromMe && (jidToPhone(jid) === me || (myLid && jidToPhone(raw) === myLid))
+        const phone = self ? me : jidToPhone(jid)
+        emit({ type: 'message', accountId: id, msgId: msg.key.id, direction: msg.key.fromMe && !self ? 'out' : 'in', phone, name: self ? 'أنا (المالك)' : (msg.pushName || ''), text: x.text, kind: x.kind, ts: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000), fromPhone: !!msg.key.fromMe && !self, self, lid: isLid(jid) ? jidToPhone(jid) : undefined })
+      } catch (e) { log.warn(e) }
     }
   })
   return st
@@ -142,11 +182,12 @@ async function drain(id) {
   while (st.queue.length) {
     const job = st.queue.shift()
     try {
-      const jid = phoneToJid(job.to)
+      const jid = toJid(job.to)
       await st.sock.presenceSubscribe(jid).catch(() => {})
       await st.sock.sendPresenceUpdate('composing', jid).catch(() => {})
       await new Promise((r) => setTimeout(r, st.pacer.delay()))
       const sent = await st.sock.sendMessage(jid, { text: job.text })
+      if (sent?.key?.id) { st.sent.add(sent.key.id); if (st.sent.size > 500) st.sent.delete(st.sent.values().next().value) }
       await st.sock.sendPresenceUpdate('paused', jid).catch(() => {})
       job.resolve({ msgId: sent?.key?.id })
     } catch (e) { job.reject(e) }
