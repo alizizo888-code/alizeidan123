@@ -311,6 +311,7 @@ final class Mutqan_OrderBot {
             if (get_transient('mq_ob_ask_' . md5($oid))) {
                 delete_transient('mq_ob_ask_' . md5($oid));
                 self::insert_msg($oid, 'ops', 'text', '🚗 الفني رد: هيوصل خلال حوالي ' . $min . ' دقيقة.');
+                if (class_exists('Mutqan_WA_Journey')) { Mutqan_WA_Journey::on_eta($oid, $min); }
             }
         } catch (Throwable $e) { error_log('[mutqan] orderbot eta: ' . $e->getMessage()); }
     }

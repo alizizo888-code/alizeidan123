@@ -395,6 +395,8 @@ final class Mutqan_WA {
         // raises its own alert. Only a conversation nobody automatic is handling rings the team.
         if ($botOff) { self::notify_admins('رسالة واتساب جديدة', $label . ': ' . mb_substr((string) ($e['text'] ?? ''), 0, 80), 'wa-' . $tid, 120); return ['ok' => true]; }
         self::put_thread($tid, ['lastIn' => mb_substr((string) ($e['text'] ?? ''), 0, 300)]);
+        // «حلقة الوصل»: a customer with an order on the go is talking about that order — confirm, follow, rate.
+        if (class_exists('Mutqan_WA_Journey') && Mutqan_WA_Journey::inbound($acct, $phone, (string) ($e['text'] ?? ''), $tid)) { return ['ok' => true]; }
         $out = Mutqan_WA_Bot::decide($cfg + Mutqan_WA_Bot::defaults(), $th, (string) ($e['text'] ?? ''), (int) ($e['ts'] ?? time()), (string) ($e['kind'] ?? 'text'));
         // The rules had nothing to say. If the model cannot be reached either, the bot falls back
         // on what the model has already answered before — which is the whole point of it learning.

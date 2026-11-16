@@ -46,6 +46,7 @@ final class Mutqan_WA_Central {
             $s['master'] = array_values(array_unique(array_filter(array_map([__CLASS__, 'intl'], (array) $list))));
         }
         if (isset($in['digest'])) { $s['digest'] = !empty($in['digest']) ? 1 : 0; }
+        if (isset($in['journey']) && class_exists('Mutqan_WA_Journey')) { Mutqan_WA_Journey::set_enabled(!empty($in['journey'])); }
         if (isset($in['dailyHour']) && is_numeric($in['dailyHour'])) { $s['dailyHour'] = max(0, min(23, (int) $in['dailyHour'])); }
         if (isset($in['n8nUrl'])) {
             $u = trim((string) $in['n8nUrl']);
@@ -62,7 +63,8 @@ final class Mutqan_WA_Central {
     public static function view() {
         $s = self::settings();
         return ['master' => $s['master'], 'digest' => (int) $s['digest'], 'dailyHour' => (int) $s['dailyHour'], 'n8nUrl' => $s['n8nUrl'], 'n8nSecret' => $s['n8nSecret'],
-            'n8nInbound' => rest_url(Mutqan_Rest::NS . '/n8n'), 'events' => $s['events'], 'lines' => self::lines()];
+            'n8nInbound' => rest_url(Mutqan_Rest::NS . '/n8n'), 'events' => $s['events'], 'lines' => self::lines(),
+            'journey' => class_exists('Mutqan_WA_Journey') ? (int) Mutqan_WA_Journey::enabled() : 0];
     }
 
     public static function intl($p) { return class_exists('Mutqan_WA') ? Mutqan_WA::intl((string) $p) : preg_replace('/\D/', '', (string) $p); }
