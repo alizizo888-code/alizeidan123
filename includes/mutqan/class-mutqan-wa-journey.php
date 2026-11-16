@@ -493,6 +493,7 @@ final class Mutqan_WA_Journey {
 
     /** The technician's estimate goes back to the customer on WhatsApp too (the app chat already has it). */
     public static function on_eta($orderId, $minutes) {
+        if (class_exists('Mutqan_Hub') && Mutqan_Hub::on()) { $o = Mutqan_Store::get_raw('orders', (string) $orderId); return $o ? Mutqan_Hub::event('order.eta', $o + ['id' => (string) $orderId], ['minutes' => (int) $minutes]) : false; }
         if (!self::enabled()) { return false; }
         $o = Mutqan_Store::get_raw('orders', (string) $orderId);
         if (!$o || empty($o['clientPhone'])) { return false; }
