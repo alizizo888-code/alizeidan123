@@ -381,10 +381,12 @@ final class Mutqan_WA {
         // useful to say to either of them. The number decides who this is.
         if (class_exists('Mutqan_WA_Desk') && Mutqan_WA_Desk::inbound($acct, $phone, (string) ($e['text'] ?? ''), $tid, $th)) { return ['ok' => true]; }
         $label = ($th['name'] ?? '') ?: $phone;
-        self::notify_admins('رسالة واتساب جديدة', $label . ': ' . mb_substr((string) ($e['text'] ?? ''), 0, 80), 'wa-' . $tid, 120);
         $cfg = Mutqan_Store::get_raw('wa_bot', 'cfg') ?: [];
         $acfg = Mutqan_Store::get_raw('wa_bot', 'acct:' . $acct) ?: [];
-        if ((isset($cfg['enabled']) && !$cfg['enabled']) || (isset($acfg['botEnabled']) && !$acfg['botEnabled'])) { return ['ok' => true]; }
+        $botOff = (isset($cfg['enabled']) && !$cfg['enabled']) || (isset($acfg['botEnabled']) && !$acfg['botEnabled']) || (int) ($th['bot']['pausedUntil'] ?? 0) > time();
+        // A message the bot is answering does not ring anybody: what needs a human (a complaint, a hand-off, a ready order)
+        // raises its own alert. Only a conversation nobody automatic is handling rings the team.
+        if ($botOff) { self::notify_admins('رسالة واتساب جديدة', $label . ': ' . mb_substr((string) ($e['text'] ?? ''), 0, 80), 'wa-' . $tid, 120); return ['ok' => true]; }
         self::put_thread($tid, ['lastIn' => mb_substr((string) ($e['text'] ?? ''), 0, 300)]);
         $out = Mutqan_WA_Bot::decide($cfg + Mutqan_WA_Bot::defaults(), $th, (string) ($e['text'] ?? ''), (int) ($e['ts'] ?? time()), (string) ($e['kind'] ?? 'text'));
         // The rules had nothing to say. If the model cannot be reached either, the bot falls back

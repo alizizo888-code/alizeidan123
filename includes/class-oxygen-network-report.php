@@ -86,8 +86,9 @@ final class Oxygen_Network_Report {
         $rows = self::collect($fetch);
         $text = self::format($rows, $own !== null ? $own : self::stats(), $hour);
         update_option(self::LAST, ['key' => $key, 'at' => time(), 'text' => $text, 'rows' => array_map(function ($r) { return ['name' => $r['name'], 'host' => $r['host'], 'ok' => (bool) $r['stats'], 'today' => $r['stats']['today'] ?? 0, 'total' => $r['stats']['total'] ?? 0]; }, $rows)], false);
-        if (class_exists('Mutqan_Telegram')) { try { Mutqan_Telegram::notify('تقرير شبكة المواقع', $text); } catch (Throwable $e) { /* optional */ } }
-        if (class_exists('Mutqan_WA')) { try { Mutqan_WA::notify_admins('تقرير شبكة المواقع', mb_substr($text, 0, 280), 'net-report-' . $key, 3000); } catch (Throwable $e) { /* optional */ } }
+        // Articles and the network's numbers are for the night report, not for a supervisor's phone during the day.
+        if (class_exists('Mutqan_WA_Central')) { Mutqan_WA_Central::defer('تقرير شبكة المواقع والمقالات', mb_substr($text, 0, 380), 'net-report', 'المواقع والمقالات'); }
+        elseif (class_exists('Mutqan_Telegram')) { try { Mutqan_Telegram::notify('تقرير شبكة المواقع', $text); } catch (Throwable $e) { /* optional */ } }
         return $text;
     }
 }

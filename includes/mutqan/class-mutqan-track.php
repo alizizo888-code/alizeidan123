@@ -45,9 +45,27 @@ final class Mutqan_Track {
      * Refused unless they have a job open right now: there is no reason to hold the position of
      * someone who is not working, and no screen asks for it.
      */
-    public static function ping($techId, $lat, $lng) {
+    const MAX_ACCURACY_M = 150;   // a reading vaguer than this (cell towers, indoors) is not a position worth drawing
+    const MAX_SPEED_KMH = 160;    // faster than this between two readings is a GPS jump, not a technician
+
+    /** Whether a reading is believable: precise enough, and not a jump across town in seconds. */
+    public static function plausible($techId, $lat, $lng, $acc = null) {
+        if ($acc !== null && is_numeric($acc) && (float) $acc > self::MAX_ACCURACY_M) { return 'low_accuracy'; }
+        $t = Mutqan_Store::get_raw('tech_profiles', (string) $techId);
+        if ($t && self::valid($t['lat'] ?? null, $t['lng'] ?? null) && !empty($t['atAt'])) {
+            $dt = max(1, time() - (int) $t['atAt']);
+            $km = Mutqan_Dispatch::meters((float) $t['lat'], (float) $t['lng'], (float) $lat, (float) $lng) / 1000;
+            if ($dt < 600 && $km > 0.3 && $km / ($dt / 3600) > self::MAX_SPEED_KMH) { return 'jump'; }
+        }
+        return '';
+    }
+
+    public static function ping($techId, $lat, $lng, $acc = null) {
         $techId = (string) $techId;
         if ($techId === '' || !self::valid($lat, $lng)) { return ['ok' => false, 'reason' => 'bad_position']; }
+        // The server is the one judge of a position: a vague or impossible reading is dropped here, for every app.
+        $why = self::plausible($techId, $lat, $lng, $acc);
+        if ($why !== '') { return ['ok' => false, 'reason' => $why]; }
         $open = Mutqan_Store::select('orders', ['technicianId' => $techId, 'status' => ['in' => self::OPEN]], ['limit' => 1], self::sys());
         $t = Mutqan_Store::get_raw('tech_profiles', $techId);
         if (!$t) { return ['ok' => false, 'reason' => $open ? 'unknown_tech' : 'no_open_job']; }

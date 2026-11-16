@@ -46,7 +46,7 @@ final class Mutqan_Ops {
         $op = (string) ($in['op'] ?? 'ask');
         if ($isTech && $op !== 'ask') { throw new Mutqan_Error('forbidden', 'غير مسموح.', 403); }
         if ($op === 'alerts') { return ['alerts' => self::alerts(), 'at' => gmdate('c')]; }
-        if ($op === 'pos') { return self::ping($p, $in['lat'] ?? null, $in['lng'] ?? null); }
+        if ($op === 'pos') { if (is_numeric($in['acc'] ?? null) && (float) $in['acc'] > Mutqan_Track::MAX_ACCURACY_M) { return ['ok' => false, 'reason' => 'low_accuracy']; } return self::ping($p, $in['lat'] ?? null, $in['lng'] ?? null); }
         // «الخريطة الحية»: every technician (code, colour, trail, speed, next job, ETA), operations staff and customers.
         if ($op === 'fleet') { return Mutqan_Route::fleet(); }
         if ($op === 'route_assign') {

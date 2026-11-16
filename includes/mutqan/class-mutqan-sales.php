@@ -600,6 +600,8 @@ final class Mutqan_Sales {
         if (get_transient('mq_sales_n_' . md5($key))) { return false; }
         set_transient('mq_sales_n_' . md5($key), 1, 20 * HOUR_IN_SECONDS);
         self::log_event($kind, $title . ' — ' . $body);
+        // Plans, summaries and thresholds are not urgent: they wait for the night report, the supervisor's phone stays quiet.
+        if (class_exists('Mutqan_WA_Central')) { Mutqan_WA_Central::defer($title, $body, 'sales|' . $key, 'العقل التجاري'); return true; }
         try {
             Mutqan_Store::insert('_push', ['target' => ['admins' => true], 'title' => $title, 'body' => mb_substr($body, 0, 300), 'url' => '#/staff/sales-brain', 'sound' => 'bell', 'priority' => 'normal', 'event' => 'sales_brain', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 3 * 86400)], self::sys());
         } catch (Throwable $e) { error_log('[mutqan] sales push ' . $e->getMessage()); }

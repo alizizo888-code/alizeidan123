@@ -221,6 +221,35 @@ final class Mutqan_WA_Central {
         return '📤 اتبعت للعميل ' . ((string) ($o['clientName'] ?? '') ?: '+' . $phone) . ' من خط «' . $acct . '».';
     }
 
+    /* ------------------------------------------------------------------ quiet hours for supervisors */
+
+    const NIGHT = 'mutqan_night_digest';
+
+    /**
+     * Not urgent, not for now: sales-brain plans, network/article reports, messages the bot is already answering. They
+     * wait for the night report instead of ringing a supervisor's phone. Same key twice = one line (the latest).
+     */
+    public static function defer($title, $body, $key = '', $cat = 'عام') {
+        $q = get_option(self::NIGHT, []); $q = is_array($q) ? $q : [];
+        $k = $key !== '' ? $key : md5($title . $body);
+        $q[$k] = ['t' => mb_substr((string) $title, 0, 120), 'b' => mb_substr((string) $body, 0, 400), 'c' => (string) $cat, 'at' => time(), 'n' => (int) ($q[$k]['n'] ?? 0) + 1];
+        if (count($q) > 200) { $q = array_slice($q, -200, null, true); }
+        update_option(self::NIGHT, $q, false);
+        return true;
+    }
+
+    /** The waiting lines, grouped by kind, for the night report; emptied once sent. */
+    public static function night_text($clear = false) {
+        $q = get_option(self::NIGHT, []); $q = is_array($q) ? $q : [];
+        if (!$q) { return ''; }
+        $by = [];
+        foreach ($q as $x) { $by[$x['c']][] = '• ' . $x['t'] . ($x['n'] > 1 ? ' (×' . $x['n'] . ')' : '') . ($x['b'] !== '' ? ': ' . mb_substr($x['b'], 0, 160) : ''); }
+        $out = ["🗂 *اتأجل لتقرير الليلة (" . count($q) . ")*"];
+        foreach ($by as $c => $lines) { $out[] = "\n*" . $c . "*\n" . implode("\n", array_slice($lines, 0, 15)) . (count($lines) > 15 ? "\n… و" . (count($lines) - 15) . ' كمان' : ''); }
+        if ($clear) { update_option(self::NIGHT, [], false); }
+        return implode("\n", $out);
+    }
+
     /* ------------------------------------------------------------------ daily report to the master */
 
     public static function daily() {
@@ -229,6 +258,10 @@ final class Mutqan_WA_Central {
         if ((int) wp_date('G') < (int) $s['dailyHour'] || $s['lastDaily'] === $today) { return false; }
         $s['lastDaily'] = $today; update_option(self::OPT, $s, false);
         $text = "📊 *تقرير اليوم* " . $today . "\n" . Mutqan_Quick::say('ops_overview', Mutqan_Ops::run_tool('ops_overview', [])) . "\n\n" . Mutqan_Quick::say('money_report', Mutqan_Ops::run_tool('money_report', ['days' => 1]));
+        $night = self::night_text(true);
+        if ($night !== '') { $text .= "\n\n" . $night; }
+        // One quiet line in the app too, instead of the day's scattered alerts.
+        try { Mutqan_Store::insert('_push', ['target' => ['admins' => true], 'title' => '🌙 تقرير الليلة جاهز', 'body' => 'ملخص اليوم واللي اتأجل من التنبيهات', 'url' => '#/staff/notifications', 'priority' => 'normal', 'event' => 'night_report', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 86400)], self::sys()); } catch (Throwable $e) { /* never block */ }
         if (!empty($s['events']['daily'])) { self::emit('daily', ['text' => $text, 'date' => $today]); }
         return self::to_master($text, 'daily-' . $today);
     }
