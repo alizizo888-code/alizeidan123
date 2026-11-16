@@ -74,6 +74,7 @@ final class Mutqan_Coach {
             case 'ticket_add': return self::ticket_add($in);
             case 'ticket_update': return self::ticket_update((string) ($in['id'] ?? ''), $in);
             case 'test_bot': return self::test_bot((string) ($in['text'] ?? ''));
+            case 'vps_enroll': return self::vps_enroll();
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة: ' . $op, 400);
     }
@@ -244,6 +245,23 @@ final class Mutqan_Coach {
         Mutqan_Agent::audit_public($name, $input, true, $p);
         $text = Mutqan_Quick::say($name, is_array($out) ? $out : []);
         return ['result' => mb_substr(wp_json_encode($out, JSON_UNESCAPED_UNICODE), 0, 12000), 'text' => $text];
+    }
+
+    /**
+     * The VPS gateway, enrolled by the operator over the API (Hostinger Docker Manager) — never a pasted command.
+     * One device named «سيرفر VPS (تلقائي)»: created once, given a fresh key on every enrollment (so a key seen anywhere
+     * stops working), and returned as the environment for wa-gateway/docker-compose.yml.
+     */
+    public static function vps_enroll() {
+        $name = 'سيرفر VPS (تلقائي)';
+        $id = '';
+        foreach (Mutqan_WA_Fleet::devices() as $did => $d) { if (($d['name'] ?? '') === $name) { $id = (string) $did; break; } }
+        $v = $id !== '' ? Mutqan_WA_Fleet::rotate_device($id) : Mutqan_WA_Fleet::register_device(['name' => $name, 'kind' => 'vps'], self::owner());
+        $d = Mutqan_WA_Fleet::devices()[$v['id']];
+        $env = "GATEWAY_TOKEN={$d['token']}\nWEBHOOK_URL=" . Mutqan_WA::hook_url() . "\nWEBHOOK_SECRET={$d['secret']}\nDEVICE_ID={$v['id']}\nSEND_DAILY_CAP=" . (int) Mutqan_WA_Fleet::settings()['dailyCap'] . "\n";
+        self::audit('vps_enroll', $v['id']);
+        return ['device' => $v['id'], 'name' => $name, 'environment' => $env,
+            'others' => array_values(array_map(function ($x) { return $x; }, array_diff(array_keys(Mutqan_WA_Fleet::devices()), [$v['id']])))];
     }
 
     /* ------------------------------------------------------------------ Claude Code stepping in */
