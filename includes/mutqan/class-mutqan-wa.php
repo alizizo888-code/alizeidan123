@@ -342,10 +342,12 @@ final class Mutqan_WA {
         if (Mutqan_Store::get_raw('wa_msgs', $id) !== null) { return false; }
         $tid = self::tid($acct, $phone);
         $at = gmdate('c', (int) $m['ts']);
-        Mutqan_Store::insert('wa_msgs', [
+        $media = self::save_media($m['media'] ?? null, (string) ($m['kind'] ?? ''), $id);
+        Mutqan_Store::insert('wa_msgs', array_filter([
             'threadId' => $tid, 'accountId' => $acct, 'phone' => $phone, 'dir' => $m['dir'], 'text' => mb_substr((string) $m['text'], 0, 4000),
             'kind' => $m['kind'] ?? 'text', 'at' => $at, 'via' => $m['via'] ?? 'customer', 'by' => $m['by'] ?? '',
-        ], $id, ['expiresAt' => gmdate('c', time() + 180 * 86400)], $sys);
+            'mediaUrl' => $media['url'] ?? null, 'mime' => $media['mime'] ?? null, 'thumb' => $media['thumb'] ?? null,
+        ], function ($v) { return $v !== null; }), $id, ['expiresAt' => gmdate('c', time() + 180 * 86400)], $sys);
         $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: [];
         $patch = ['lastText' => mb_substr((string) $m['text'], 0, 120) ?: ('[' . ($m['kind'] ?? 'text') . ']'), 'lastAt' => $at, 'lastDir' => $m['dir']];
         if ($m['dir'] === 'in') { $patch['unread'] = (int) ($th['unread'] ?? 0) + 1; $patch['status'] = 'open'; if (!empty($m['name'])) { $patch['name'] = mb_substr($m['name'], 0, 60); } }
@@ -360,6 +362,45 @@ final class Mutqan_WA {
         $seen = get_option(self::SEEN, []);
         foreach ((is_array($seen) ? $seen : []) as $r) { $p = preg_replace('/\D/', '', (string) ($r['phone'] ?? '')); if ($p !== '' && substr($p, -9) === $k) { return true; } }
         return false;
+    }
+
+    const MEDIA_TYPES = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif', 'audio/ogg' => 'ogg', 'audio/mpeg' => 'mp3', 'audio/mp4' => 'm4a', 'video/mp4' => 'mp4', 'application/pdf' => 'pdf'];
+
+    /** A picture / voice note / file a customer sent, kept on this site so the conversation shows the real thing. */
+    public static function save_media($media, $kind, $id) {
+        if (!is_array($media)) { return null; }
+        $mime = strtolower(trim(explode(';', (string) ($media['mime'] ?? ''))[0]));
+        $out = ['mime' => $mime];
+        $thumb = (string) ($media['thumb'] ?? '');
+        if ($thumb !== '' && strlen($thumb) < 40000 && preg_match('#^[A-Za-z0-9+/=]+$#', $thumb)) { $out['thumb'] = 'data:image/jpeg;base64,' . $thumb; }
+        $data = (string) ($media['data'] ?? '');
+        $ext = self::MEDIA_TYPES[$mime] ?? '';
+        if ($data !== '' && $ext !== '' && strlen($data) < 2200000) {
+            $bin = base64_decode($data, true);
+            if ($bin !== false && $bin !== '') {
+                $up = wp_upload_dir(); $dir = rtrim($up['basedir'], '/') . '/mutqan-wa/' . gmdate('Y/m');
+                if (wp_mkdir_p($dir)) {
+                    if (!file_exists(rtrim($up['basedir'], '/') . '/mutqan-wa/index.html')) { @file_put_contents(rtrim($up['basedir'], '/') . '/mutqan-wa/index.html', ''); }
+                    $name = substr(hash('sha256', $id . wp_salt()), 0, 24) . '.' . $ext;
+                    if (@file_put_contents($dir . '/' . $name, $bin) !== false) { $out['url'] = rtrim($up['baseurl'], '/') . '/mutqan-wa/' . gmdate('Y/m') . '/' . $name; }
+                }
+            }
+        }
+        return isset($out['url']) || isset($out['thumb']) ? $out : null;
+    }
+
+    /** The customer's WhatsApp profile picture, copied here (WhatsApp's own links expire within days). */
+    public static function save_avatar($tid, $url) {
+        $url = (string) $url;
+        if (!preg_match('#^https://[a-z0-9.-]*(whatsapp\.net|fbcdn\.net|whatsapp\.com)/#i', $url)) { return; }
+        $r = wp_remote_get($url, ['timeout' => 6]);
+        if (is_wp_error($r) || (int) wp_remote_retrieve_response_code($r) !== 200) { return; }
+        $bin = (string) wp_remote_retrieve_body($r);
+        if ($bin === '' || strlen($bin) > 600000) { return; }
+        $up = wp_upload_dir(); $dir = rtrim($up['basedir'], '/') . '/mutqan-wa/avatars';
+        if (!wp_mkdir_p($dir)) { return; }
+        $name = substr(hash('sha256', $tid . wp_salt()), 0, 24) . '.jpg';
+        if (@file_put_contents($dir . '/' . $name, $bin) !== false) { self::put_thread($tid, ['avatar' => rtrim($up['baseurl'], '/') . '/mutqan-wa/avatars/' . $name . '?v=' . time()]); }
     }
 
     /* ---------------------------------------------------------------- webhook from the gateway */
@@ -383,13 +424,14 @@ final class Mutqan_WA {
         $phone = preg_replace('/\D/', '', (string) ($e['phone'] ?? ''));
         if (strlen($phone) < 8 || strlen($phone) > 16) { return ['ok' => true]; }
         $dir = ($e['direction'] ?? '') === 'out' ? 'out' : 'in';
-        $isNew = self::store_message($acct, $phone, ['msgId' => (string) ($e['msgId'] ?? wp_generate_uuid4()), 'dir' => $dir, 'text' => (string) ($e['text'] ?? ''), 'kind' => (string) ($e['kind'] ?? 'text'), 'ts' => (int) ($e['ts'] ?? time()), 'name' => (string) ($e['name'] ?? ''), 'via' => $dir === 'out' ? 'phone' : 'customer']);
+        $isNew = self::store_message($acct, $phone, ['msgId' => (string) ($e['msgId'] ?? wp_generate_uuid4()), 'dir' => $dir, 'text' => (string) ($e['text'] ?? ''), 'kind' => (string) ($e['kind'] ?? 'text'), 'ts' => (int) ($e['ts'] ?? time()), 'name' => (string) ($e['name'] ?? ''), 'via' => $dir === 'out' ? 'phone' : 'customer', 'media' => $e['media'] ?? null]);
         if (!$isNew) { return ['ok' => true]; }
         // One of OUR OWN linked numbers writing to another of ours is never a customer and never gets an automatic answer:
         // two lines answering each other is a loop that gets both numbers banned. (The owner's «message yourself» chat is
         // marked self and still goes through.)
         if ($dir === 'in' && empty($e['self']) && self::is_own_number($phone) && !(class_exists('Mutqan_WA_Central') && Mutqan_WA_Central::is_master($phone))) { return ['ok' => true, 'own' => true]; }
         $tid = self::tid($acct, $phone);
+        if ($dir === 'in' && !empty($e['avatar'])) { try { self::save_avatar($tid, (string) $e['avatar']); } catch (Throwable $ex) { error_log('[mutqan] avatar ' . $ex->getMessage()); } }
         if ($dir === 'in' && class_exists('Mutqan_WA_Fleet')) { Mutqan_WA_Fleet::on_incoming($acct, $phone, (string) ($e['text'] ?? ''), $tid); }
         // «السنترال»: the identity card (site, domain, company, line) goes on the conversation at its first message.
         if ($dir === 'in' && class_exists('Mutqan_WA_Central')) { try { Mutqan_WA_Central::on_incoming($acct, $phone, (string) ($e['text'] ?? ''), $tid); } catch (Throwable $ex) { error_log('[mutqan] central card ' . $ex->getMessage()); } }
@@ -427,34 +469,42 @@ final class Mutqan_WA {
         }
         // «حلقة الوصل»: a customer with an order on the go is talking about that order — confirm, follow, rate.
         if (class_exists('Mutqan_WA_Journey') && Mutqan_WA_Journey::inbound($acct, $phone, (string) ($e['text'] ?? ''), $tid)) { return ['ok' => true]; }
-        // The reception bot speaks as the company the customer came through (the card), never as a generic brand.
-        $bcfg = $cfg + Mutqan_WA_Bot::defaults();
-        $card = (array) ((Mutqan_Store::get_raw('wa_threads', $tid) ?: [])['card'] ?? ($th['card'] ?? []));
-        if (!empty($card['site']) && $card['site'] !== 'غير محدد') { $bcfg['brand'] = (string) $card['site']; }
-        // The first words: the business of the site he came from, his article — or, for an old customer, his last job.
-        if (class_exists('Mutqan_Customers')) { $bcfg['welcome'] = Mutqan_Customers::welcome($phone, $card); }
-        $out = Mutqan_WA_Bot::decide($bcfg, $th, (string) ($e['text'] ?? ''), (int) ($e['ts'] ?? time()), (string) ($e['kind'] ?? 'text'));
-        // The rules had nothing to say. If the model cannot be reached either, the bot falls back
-        // on what the model has already answered before — which is the whole point of it learning.
-        if (empty($out['replies']) && class_exists('Mutqan_Brain')) {
-            $said = Mutqan_Brain::fallback((string) ($e['text'] ?? ''));
-            if ($said !== '') { $out['replies'] = [$said]; }
+        // «موظف الاستقبال الذكي» answers (Mutqan_WA_AI). It runs once the gateway has its answer, so a slow model never
+        // holds the line; the reply leaves from the queue on the gateway's next check-in.
+        $job = function () use ($acct, $phone, $tid, $e, $label, $cfg) { self::reception($acct, $phone, $tid, $e, $label, $cfg); };
+        if (function_exists('fastcgi_finish_request') && function_exists('add_action')) {
+            add_action('shutdown', function () use ($job) { @fastcgi_finish_request(); $job(); }, 50);
+        } else { $job(); }
+        return ['ok' => true];
+    }
+
+    /** The answer to one customer message: the AI receptionist (or, only if the owner switched it off, the old rule bot). */
+    public static function reception($acct, $phone, $tid, $e, $label, $cfg) {
+        $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: [];
+        $card = (array) ($th['card'] ?? []);
+        $text = (string) ($e['text'] ?? '');
+        $ts = (int) ($e['ts'] ?? time());
+        if (class_exists('Mutqan_WA_AI') && Mutqan_WA_AI::enabled()) {
+            $out = Mutqan_WA_AI::decide($th, $text, $card, $phone, $ts, $tid);
+        } else {
+            $bcfg = $cfg + Mutqan_WA_Bot::defaults();
+            if (!empty($card['site']) && $card['site'] !== 'غير محدد') { $bcfg['brand'] = (string) $card['site']; }
+            if (class_exists('Mutqan_Customers')) { $bcfg['welcome'] = Mutqan_Customers::welcome($phone, $card); }
+            $out = Mutqan_WA_Bot::decide($bcfg, $th, $text, $ts, (string) ($e['kind'] ?? 'text'));
+            if (empty($out['replies']) && class_exists('Mutqan_Brain')) { $said = Mutqan_Brain::fallback($text); if ($said !== '') { $out['replies'] = [$said]; } }
         }
-        if ($out['patch']) { self::put_thread($tid, $out['patch']); }
+        if (!empty($out['patch'])) { self::put_thread($tid, $out['patch']); }
         if (!empty($out['miss'])) { self::learn_miss($out['miss']); }
-        foreach ($out['replies'] as $txt) {
+        foreach ((array) $out['replies'] as $txt) {
             try { self::send($acct, $phone, $txt, 'bot'); } catch (Throwable $ex) { error_log('[mutqan] wa bot send: ' . $ex->getMessage()); break; }
         }
-        if ($out['lead']) {
-            Mutqan_Store::insert('wa_leads', $out['lead'] + ['numberId' => $acct, 'phone' => $phone, 'at' => gmdate('c'), 'source' => 'bot'], null, [], self::sys());
-            // A customer who finished giving their details has placed an order. Until now that only
-            // landed in wa_leads, which the operations room does not read, so the order was invisible
-            // and somebody had to retype it by hand. Register it as a real order instead.
+        if (!empty($out['lead'])) {
+            Mutqan_Store::insert('wa_leads', $out['lead'] + ['numberId' => $acct, 'phone' => $phone, 'at' => gmdate('c'), 'source' => 'ai'], null, [], self::sys());
+            // A customer who finished giving their details has placed an order: a real order, which «حلقة الوصل» confirms.
             try { self::lead_to_order($acct, $phone, $out['lead'], $tid); }
             catch (Throwable $ex) { error_log('[mutqan] wa lead_to_order: ' . $ex->getMessage()); }
         }
-        if ($out['notify']) { self::notify_admins('واتساب — يحتاج متابعة', $out['notify'] . ' (' . $label . ')', 'wa-n-' . $tid . '-' . substr(md5($out['notify']), 0, 6), 60); }
-        return ['ok' => true];
+        if (!empty($out['notify'])) { self::notify_admins('واتساب — يحتاج متابعة', $out['notify'] . ' (' . $label . ')', 'wa-n-' . $tid . '-' . substr(md5($out['notify']), 0, 6), 60); }
     }
 
 
