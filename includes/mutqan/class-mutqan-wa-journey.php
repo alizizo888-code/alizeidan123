@@ -194,6 +194,8 @@ final class Mutqan_WA_Journey {
         return false;
     }
 
+    const LABEL_ST = ['accepted' => 'قبل الطلب', 'en_route' => 'في الطريق', 'nearby' => 'قرّب', 'arrived' => 'وصل', 'in_progress' => 'بيشتغل'];
+
     private static function on_confirm_stage($o, $text, $phone) {
         $patch = []; $got = [];
         if (class_exists('Mutqan_OrderBot') && Mutqan_OrderBot::intent($text) === 'cancel') {
@@ -243,6 +245,16 @@ final class Mutqan_WA_Journey {
             return 'وصل اللوكيشن ✅' . (!empty($o['technicianId']) ? ' وبعته للفني.' : '');
         }
         $intent = Mutqan_OrderBot::intent($text);
+        if ($intent === 'cancel') {
+            // On the way or not, the customer said «cancel»: the room decides, the technician holds, and nothing is cancelled behind anyone's back.
+            Mutqan_Store::update('orders', $o['id'], ['cancelRequest' => ['at' => gmdate('c'), 'text' => mb_substr($text, 0, 200), 'status' => $st]], self::sys());
+            $moving = in_array($st, ['accepted', 'en_route', 'nearby', 'arrived', 'in_progress'], true);
+            if (!empty($o['technicianId'])) { Mutqan_OrderBot::tell_tech($o, '⏸ العميل طلب إلغاء طلب #' . self::num($o) . ($moving ? ' — استنى مكانك' : '') . ' لحد ما العمليات تأكد. هنبلغك حالًا.'); }
+            self::tell_room('❌ *العميل عايز يلغي طلب #' . self::num($o) . '*' . ($moving ? ' — والفني ' . (string) ($o['technicianName'] ?? '') . ' ' . (self::LABEL_ST[$st] ?? $st) : '') . "\n💬 «" . mb_substr($text, 0, 160) . "»\n👤 " . ((string) ($o['clientName'] ?? '') ?: '—') . ' — ' . (string) ($o['clientPhone'] ?? '')
+                . "\n\nتأكّد الإلغاء: *الغي " . self::num($o) . "* (هسأله عن السبب وأحاول أرجّعه) · أو كلّمه: *رد " . self::num($o) . " نص الرسالة*", 'jr-cancel-' . $o['id'] . '-' . md5($text), $o);
+            self::step($o, 'wa_cancel_request', 'العميل طلب الإلغاء على واتساب: ' . mb_substr($text, 0, 80));
+            return "وصلني طلب الإلغاء ✅ وبلّغت العمليات" . (!empty($o['technicianId']) ? ' والفني' : '') . " حالًا.\nلو في حاجة نقدر نعملها عشانك (موعد تاني، السعر، فني تاني) قولّي وأنا أوصّلها.";
+        }
         // A plain message to the technician («هات معاك سلم») is still a request for him.
         if ($intent === 'general' && !empty($o['technicianId']) && mb_strlen($text) > 8 && !self::is_yes($text)) { $intent = 'request'; }
         $did = Mutqan_OrderBot::act($intent, $o, $text);
@@ -445,6 +457,11 @@ final class Mutqan_WA_Journey {
                     return true;
                 case 'cancelled':
                     $byCustomer = is_array($p) && class_exists('Mutqan_Policy') && !Mutqan_Policy::is_staff($p);
+                    // The customer asked first (on WhatsApp or in the app) and the room confirmed: it is still his cancellation — ask him why.
+                    if (!$byCustomer && !empty($doc['cancelRequest']['at']) && time() - (strtotime((string) $doc['cancelRequest']['at']) ?: 0) < 2 * 86400) { $byCustomer = true; }
+                    if (!empty($doc['technicianId']) && in_array($was, ['assigned', 'accepted', 'en_route', 'nearby', 'arrived', 'in_progress'], true) && class_exists('Mutqan_OrderBot')) {
+                        Mutqan_OrderBot::tell_tech($doc, '❌ طلب #' . $n . ' اتلغى' . (in_array($was, ['en_route', 'nearby'], true) ? ' — ارجع، مش محتاج تكمّل الطريق' : '') . '. شكرًا ليك 🙏');
+                    }
                     self::tell_room('❌ اتلغى طلب #' . $n . ' — ' . $who . ($byCustomer ? "\n🔁 العميل لغاه بنفسه — بسأله عن السبب وبحاول أرجّعه، وهبلغك بالنتيجة." : ''), 'jr-x-' . $doc['id'], $doc);
                     if ($phone !== '' && $byCustomer) { self::winback_start($doc); }
                     elseif ($phone !== '') { $j = self::current($phone); if ($j && $j['o'] === $doc['id']) { self::drop($phone); } }

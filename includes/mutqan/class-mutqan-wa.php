@@ -252,6 +252,7 @@ final class Mutqan_WA {
      * nothing above this line needs to know where the gateway lives.
      */
     public static function send($acct, $phone, $text, $via, $by = '') {
+        $text = preg_replace('/(الفن[يى])\s+(?=الفن[يى]\s)/u', '', (string) $text);   // «الفني الفني علي» — names that already start with «الفني»
         $c = self::cfg();
         if ($c['url'] === '') { return self::queue($acct, $phone, $text, $via, $by); }
         $r = self::gw('POST', '/sessions/' . rawurlencode($acct) . '/send', ['to' => $phone, 'text' => $text]);

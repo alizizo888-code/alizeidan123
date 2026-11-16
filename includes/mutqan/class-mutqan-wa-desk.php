@@ -78,7 +78,7 @@ final class Mutqan_WA_Desk {
         $t = (string) get_option('mutqan_test_customer', '');
         return $t !== '' && self::key($t) === self::key($phone);
     }
-    const ROOM_WORDS = '/^\s*(اعتمد|وزع|وزّع|اسند|أسند|وجه|وجّه|حول|حوّل|اسحب|فك|رد\s+#?\d|الطلبات|الملغي|رجع|تقرير|الوضع|ملخص|الفنيين|التنبيهات|فين الفنيين|فلوس|مساعدة|الاوامر|الأوامر)/u';
+    const ROOM_WORDS = '/^\s*(اعتمد|وزع|وزّع|اسند|أسند|وجه|وجّه|حول|حوّل|اسحب|فك|رد\s+#?\d|(?:الغي|ألغي|الغاء|إلغاء|كنسل)\s*(?:ال)?(?:طلب\s*)?#?\d{3,}|الطلبات|الملغي|رجع|تقرير|الوضع|ملخص|الفنيين|التنبيهات|فين الفنيين|فلوس|مساعدة|الاوامر|الأوامر)/u';
 
     public static function inbound($acct, $phone, $text, $tid, $th) {
         $who = self::identify($phone);
@@ -108,10 +108,17 @@ final class Mutqan_WA_Desk {
         return trim(preg_replace('/\s+/u', ' ', $s));
     }
 
+    // Said on their own (the whole message), these finish the job. Never as the start of a sentence: «تم استلام…» is not done.
+    const DONE_ALONE = ['تم', 'خلاص', 'تم الشغل', 'تم العمل', 'خلصنا', 'تمت', 'تمت المهمه', 'الشغل خلص', 'انتهي'];
+    // A technician writing one of these is not chatting: the room has to hear it now.
+    const PROBLEM = '/(مشكل|عطل|محتاج|محتاجين|قطع|غيار|مش هقدر|مقدرتش|ماقدرتش|متاخر|هتاخر|هتأخر|زحمه|زحمة|مش موجود|مش بيرد|ما بيردش|رافض|رفض|السعر|غالي|اتخانق|زعلان|مش راضي|حادث|خطر|ضرر|كسر|اتكسر|ريحه|حريق|ماس|كهربا)/u';
+
     /** Which step a sentence means, or '' when it is not one of them. */
     public static function step_of($text) {
         $t = self::fold(mb_strtolower(trim((string) $text)));
         if ($t === '') { return ''; }
+        $bare = trim(preg_replace('/[!.،,؟?✅👍🙏\s]+/u', ' ', $t));
+        foreach (self::DONE_ALONE as $w) { if ($bare === self::fold($w)) { return 'completed'; } }
         $best = ''; $len = 0;
         foreach (self::STEPS as $status => $words) {
             foreach ($words as $w) {
@@ -148,6 +155,11 @@ final class Mutqan_WA_Desk {
     private static function tech_help($who, $jobs, $text) {
         if ($text !== '' && $jobs) {   // free text on an open job is a note, not chatter
             self::note($jobs[0], $who['name'] . ': ' . mb_substr($text, 0, 300));
+            if (preg_match(self::PROBLEM, self::fold($text)) && class_exists('Mutqan_WA_Central')) {
+                $o = $jobs[0];
+                Mutqan_WA_Central::to_master("⚠️ *الفني " . preg_replace('/^الفن[يى]\s+/u', '', $who['name']) . " — طلب #" . self::num($o) . "*\n💬 «" . mb_substr($text, 0, 300) . "»\n👤 " . ((string) ($o['clientName'] ?? '') ?: '—') . ' — ' . (string) ($o['clientPhone'] ?? '') . "\n\nكلّم العميل: *رد " . self::num($o) . " نص الرسالة* · تسحبه: *اسحب " . self::num($o) . "* · تلغيه: *الغي " . self::num($o) . "*", 'tech-problem-' . $o['id'] . '-' . md5($text), 'tech', $o);
+                return '📝 سجلتها على طلب ' . self::num($o) . " وبلّغت غرفة العمليات حالًا ✅\nكمّل مع العميل لحد ما يوصلك ردهم.";
+            }
             return '📝 تم تسجيل ملاحظتك على طلب ' . self::num($jobs[0]) . '.';
         }
         $lines = ['*أهلًا ' . $who['name'] . '*'];
@@ -172,6 +184,7 @@ final class Mutqan_WA_Desk {
             return self::assign_by_name(trim($m[1]), trim($m[2]), $who);
         }
         if (preg_match('/(?:اسحب|ارجع|فك)\s*(?:ال)?(?:طلب\s*)?#?(\d{3,})/u', $t, $m)) { return self::unassign(trim($m[1]), $who); }
+        if (preg_match('/^\s*(?:الغي|ألغي|إلغي|الغى|ألغى|الغاء|إلغاء|كنسل)\s*(?:ال)?(?:طلب\s*)?(?:رقم\s*)?#?(\d{3,})\s*(.*)$/u', $t, $m)) { return self::cancel_by_room(trim($m[1]), trim($m[2]), $who); }
         // The master's own words: «رد 1234 …» from the customer's own line, «اعتمد 1234» to the right technician.
         if (class_exists('Mutqan_WA_Central') && in_array($who['role'] ?? '', ['owner', 'operations'], true)) {
             $mc = Mutqan_WA_Central::master_command($t, ['name' => (string) ($who['name'] ?? 'الإدارة')]);
@@ -259,6 +272,18 @@ final class Mutqan_WA_Desk {
         Mutqan_Store::update('orders', (string) $order['id'], ['technicianId' => (string) $tech['id'], 'technicianName' => self::tech_name($tech), 'status' => 'assigned', 'assignedAt' => gmdate('c')], self::sys());
         $has = trim((string) ($tech['phone'] ?? '')) !== '';
         return '✅ طلب ' . self::num($order) . ' اتوجّه لـ *' . self::tech_name($tech) . '*' . ($has ? ' واتبعتله على الواتساب.' : ' (متبعتش واتساب — الرقم مش مسجّل).');
+    }
+
+    /** «الغي 1002 [السبب]» — the order is cancelled; the store's hooks tell the technician and the customer. */
+    private static function cancel_by_room($num, $why, $who) {
+        $order = self::find_order($num);
+        if (!$order) { return '❌ مالقيتش طلب رقمه ' . $num . '.'; }
+        if (in_array((string) ($order['status'] ?? ''), ['completed', 'cancelled'], true)) { return 'ℹ️ طلب ' . self::num($order) . ' ' . self::status_label($order) . ' بالفعل.'; }
+        $patch = ['status' => 'cancelled', 'cancelledAt' => gmdate('c'), 'cancelledBy' => 'operations'];
+        if ($why !== '') { $patch['cancelNote'] = mb_substr($why, 0, 200); }
+        Mutqan_Store::update('orders', (string) $order['id'], $patch, self::sys());
+        $asked = !empty($order['cancelRequest']);
+        return '❌ طلب ' . self::num($order) . ' اتلغى' . (!empty($order['technicianId']) ? ' والفني ' . (string) ($order['technicianName'] ?? '') . ' اتبلغ' : '') . ($asked ? '، والعميل اتسأل عن السبب وبحاول أرجّعه.' : '.');
     }
 
     private static function unassign($num, $who) {
