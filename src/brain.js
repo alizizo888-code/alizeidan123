@@ -30,7 +30,7 @@ export const DEFAULTS = {
 export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), log = () => {} }) {
   // «الفني الفني علي»: a technician whose name already starts with «الفني» is named once.
   const send = (phone, text, o) => rawSend(phone, String(text).replace(/(الفن[يى])\s+(?=الفن[يى]\s)/g, ''), o)
-  const cfg = () => ({ ...DEFAULTS, ...(store.get('settings', {}) || {}) })
+  const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; if (!c.testPhone) c.testPhone = (store.get('wpConfig', {}) || {}).testCustomer || ''; return c }
   const who$ = new Map()   // phone → {at, who}: one question to the website per person per ten minutes
 
   /* ------------------------------------------------------------------ sending */

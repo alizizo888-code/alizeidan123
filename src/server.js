@@ -103,6 +103,10 @@ setInterval(pump, 2000)
 
 const brain = createBrain({ store, wp, send, log })
 
+// The site's own settings the hub follows (the test phone), refreshed every ten minutes.
+const syncConfig = async () => { if (!store.get('pair')?.secret) return; try { const c = await wp('config', {}); if (c) store.set('wpConfig', c) } catch (e) { log('warn', 'config: ' + e.message) } }
+setTimeout(syncConfig, 3000); setInterval(syncConfig, 600000).unref?.()
+
 // A report the website could not deliver (the hub was restarting) waits there; collected every half minute.
 setInterval(async () => {
   if (!store.get('pair')?.secret) return
@@ -207,7 +211,7 @@ const server = http.createServer(async (req, res) => {
       if (!PAIR_TOKEN || !safeEq(String(b.pairToken || ''), PAIR_TOKEN)) return json(res, 401, { error: 'bad token' })
       if (!/^https:\/\//.test(String(b.url || '')) || String(b.secret || '').length < 32) return json(res, 400, { error: 'bad pair' })
       store.set('pair', { url: String(b.url), secret: String(b.secret), at: Date.now() })
-      log('pair', 'اترابط مع ' + b.url)
+      log('pair', 'اترابط مع ' + b.url); setTimeout(syncConfig, 2000)
       return json(res, 200, { ok: true })
     }
     if (route === 'POST /api/login') {
