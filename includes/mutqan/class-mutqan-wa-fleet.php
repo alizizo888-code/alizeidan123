@@ -88,8 +88,18 @@ final class Mutqan_WA_Fleet {
         $d = self::devices();
         if (count($d) >= 20) { throw new Mutqan_Error('too_many', 'وصلت للحد الأقصى للأجهزة (20). ألغِ جهازًا قديمًا أولًا.', 400); }
         $id = 'd' . substr(bin2hex(random_bytes(4)), 0, 6);
-        $d[$id] = ['name' => $name, 'kind' => ($in['kind'] ?? '') === 'vps' ? 'vps' : 'phone', 'secret' => bin2hex(random_bytes(24)), 'token' => bin2hex(random_bytes(16)), 'enabled' => 1,
+        // Server only: the phone/Termux gateway kept falling over, so every device is now a server.
+        $d[$id] = ['name' => $name, 'kind' => 'vps', 'secret' => bin2hex(random_bytes(24)), 'token' => bin2hex(random_bytes(16)), 'enabled' => 1,
             'createdAt' => gmdate('c'), 'by' => (string) ($p['name'] ?? ($p['id'] ?? '')), 'lastSeen' => 0, 'agent' => mb_substr((string) ($in['agent'] ?? ''), 0, 120)];
+        self::put_devices($d);
+        return self::device_view($id, true);
+    }
+
+    /** A new key for a device whose key was seen (a screenshot, a shared screen). Its numbers stay; paste the new command. */
+    public static function rotate_device($id) {
+        $d = self::devices();
+        if (!isset($d[$id])) { throw new Mutqan_Error('not_found', 'الجهاز غير موجود.', 404); }
+        $d[$id]['secret'] = bin2hex(random_bytes(24)); $d[$id]['token'] = bin2hex(random_bytes(16)); $d[$id]['kind'] = 'vps';
         self::put_devices($d);
         return self::device_view($id, true);
     }
@@ -109,7 +119,7 @@ final class Mutqan_WA_Fleet {
         $s = self::settings();
         $dir = $s['subdir'] !== '' ? 'mq-wa/' . $s['subdir'] : 'mq-wa';
         $env = "GATEWAY_TOKEN={$d['token']}\nWEBHOOK_URL=" . Mutqan_WA::hook_url() . "\nWEBHOOK_SECRET={$d['secret']}\nDEVICE_ID={$id}\nDATA_DIR=./data\nSEND_DAILY_CAP={$s['dailyCap']}\n";
-        if (($d['kind'] ?? '') === 'vps') { return self::setup_vps($id, $d, $s, $dir, $env); }
+        return self::setup_vps($id, $d, $s, $dir, $env);      // every device (old phone ones too) gets the server installer
         return "pkg update -y && pkg install -y nodejs-lts git\n"
             . "git clone --depth 1 -b {$s['branch']} {$s['repo']} mq-wa || (cd mq-wa && git pull)\n"
             . "cd {$dir} && npm ci --omit=dev\n"
@@ -143,7 +153,7 @@ final class Mutqan_WA_Fleet {
         $d = self::devices()[$id] ?? null;
         if (!$d) { return null; }
         $nums = array_values(array_filter(self::numbers(), function ($n) use ($id) { return $n['device'] === $id; }));
-        $v = ['id' => $id, 'name' => $d['name'], 'kind' => (string) ($d['kind'] ?? 'phone'), 'enabled' => !empty($d['enabled']), 'createdAt' => $d['createdAt'], 'by' => $d['by'] ?? '',
+        $v = ['id' => $id, 'name' => $d['name'], 'kind' => 'vps', 'enabled' => !empty($d['enabled']), 'createdAt' => $d['createdAt'], 'by' => $d['by'] ?? '',
             'lastSeen' => (int) $d['lastSeen'], 'online' => (int) $d['lastSeen'] > 0 && time() - (int) $d['lastSeen'] < self::ONLINE,
             'seenAgo' => (int) $d['lastSeen'] ? time() - (int) $d['lastSeen'] : null, 'numbers' => count($nums),
             'pending' => count((array) ((get_option(self::CMDS, [])[$id] ?? [])))];
@@ -426,6 +436,7 @@ final class Mutqan_WA_Fleet {
             case 'fleet_register': return self::register_device($in, $p);
             case 'fleet_device': $v = self::device_view((string) ($in['id'] ?? ''), true); if (!$v) { throw new Mutqan_Error('not_found', 'الجهاز غير موجود.', 404); } return $v;
             case 'fleet_revoke': return self::revoke_device((string) ($in['id'] ?? ''));
+            case 'fleet_rotate': return self::rotate_device((string) ($in['id'] ?? ''));
             case 'fleet_add': return self::add_number($in);
             case 'fleet_remove': return self::remove_number((string) ($in['id'] ?? ''));
             case 'fleet_restart': return self::restart_number((string) ($in['id'] ?? ''));

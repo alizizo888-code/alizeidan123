@@ -632,7 +632,7 @@ final class Mutqan_Rest {
         if (($p['kind'] ?? 'guest') !== 'user' || $id === '') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
         $b = json_decode((string) $req->get_body(), true);
         $b = is_array($b) ? $b : [];
-        return Mutqan_Track::ping($id, $b['lat'] ?? null, $b['lng'] ?? null);
+        return Mutqan_Track::ping($id, $b['lat'] ?? null, $b['lng'] ?? null, $b['acc'] ?? null);
     }
 
     public static function h_geocode($req, $p) {
