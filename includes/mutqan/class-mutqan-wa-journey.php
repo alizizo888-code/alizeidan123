@@ -150,6 +150,7 @@ final class Mutqan_WA_Journey {
         try {
             if ($j['s'] === 'confirm') { $reply = self::on_confirm_stage($o, $text, $phone); }
             elseif ($j['s'] === 'rate') { $reply = self::on_rate_stage($o, $text, $phone); }
+            elseif ($j['s'] === 'winback' || $j['s'] === 'winback_time') { $reply = self::on_winback_stage($o, $text, $phone, $j['s']); }
             else { $reply = self::on_live_stage($o, $text); }
         } catch (Throwable $e) { error_log('[mutqan] journey inbound ' . $e->getMessage()); return false; }
         if ($reply === null) { return false; }
@@ -271,9 +272,140 @@ final class Mutqan_WA_Journey {
         return 'قيّم الخدمة برقم من 1 لـ 5 ⭐ (5 = ممتازة).';
     }
 
+    /* ------------------------------------------------------------------ 4. the customer cancelled: ask why, try to keep him */
+
+    const WB_REASONS = [
+        'price' => ['1', '١', 'سعر', 'السعر', 'غالي', 'غاليه', 'مكلف', 'فلوس', 'الفلوس'],
+        'time' => ['2', '٢', 'موعد', 'الموعد', 'الوقت', 'مش فاضي', 'مسافر', 'مشغول', 'وقت تاني', 'بعدين', 'تأجيل', 'تاجيل', 'اجل', 'أجل'],
+        'late' => ['3', '٣', 'اتاخر', 'اتأخر', 'تاخير', 'تأخير', 'متاخر', 'محدش رد', 'ما حد رد', 'ماحد رد', 'محدش جه', 'ما جا', 'مجاش', 'بطيء'],
+        'other_co' => ['4', '٤', 'حد تاني', 'شركه تانيه', 'شركة تانية', 'غيركم', 'لقيت', 'اتصلح', 'اشتغل', 'مش محتاج', 'ما احتاج', 'خلاص', 'استغنيت'],
+    ];
+    const WB_LABEL = ['price' => 'السعر', 'time' => 'الموعد مش مناسب', 'late' => 'التأخير / محدش رد', 'other_co' => 'لقى بديل / مش محتاج', 'other' => 'سبب تاني'];
+    const BACK = ['رجعه', 'رجّعه', 'رجعو', 'ارجعه', 'رجع الطلب', 'ارجع الطلب', 'كمل', 'كمّل', 'كملوا', 'موافق', 'تمام', 'ماشي', 'اوكي', 'ok', 'نعم', 'ايوه', 'ابغاه', 'ابغى', 'عايزه', 'خلاص رجعه'];
+
+    public static function winback_offer_pct() {
+        $P = class_exists('Mutqan_Sales') ? (array) (Mutqan_Sales::settings()['pricing'] ?? []) : [];
+        $max = (float) ($P['maxDiscountPct'] ?? 10);
+        $want = max((float) ($P['offPeakPct'] ?? 5), 10);
+        return (int) max(0, min($max, $want));
+    }
+
+    public static function winback_start($doc) {
+        $name = trim((string) ($doc['clientName'] ?? ''));
+        $L = ['أهلًا' . ($name !== '' ? ' ' . $name : '') . ' 🌷', 'لاحظنا إنك لغيت طلبك رقم *' . self::num($doc) . '*' . (($s = self::summary($doc)) ? ' (' . preg_replace('/^🛠 الخدمة: /u', '', $s[0]) . ')' : '') . '.', 'يهمنا نعرف السبب عشان نخدمك أحسن — اختار رقم:',
+            '1️⃣ السعر', '2️⃣ الموعد مش مناسب', '3️⃣ اتأخرنا عليك / محدش رد', '4️⃣ لقيت بديل أو مش محتاج', '5️⃣ سبب تاني (اكتبه)', '', 'ولو غيرت رأيك اكتب *رجّعه* ✅ ونكمّل بنفس البيانات من غير ما تعيد أي حاجة.'];
+        self::tell_customer($doc, implode("\n", $L));
+        self::put($doc['clientPhone'], $doc['id'], 'winback');
+        self::step($doc, 'wa_winback', 'اتسأل العميل عن سبب الإلغاء وعرضنا نرجّع الطلب');
+    }
+
+    private static function wb_reason($text) {
+        $n = ' ' . self::norm($text) . ' ';
+        foreach (self::WB_REASONS as $k => $words) {
+            foreach ($words as $w) {
+                $w = self::norm($w);
+                if (preg_match('/^\d$|^[١-٩]$/u', $w)) { if (preg_match('/(^|\s)' . $w . '(\s|$)/u', trim($n))) { return $k; } continue; }
+                if (mb_strpos($n, $w) !== false) { return $k; }
+            }
+        }
+        if (preg_match('/(^|\s)(5|٥)(\s|$)/u', trim($n))) { return 'other'; }
+        return '';
+    }
+    private static function wants_back($text) {
+        $n = trim(self::norm(preg_replace('/[!.،,؟?]+/u', ' ', $text)));
+        foreach (self::BACK as $w) { $w = self::norm($w); if ($n === $w || (mb_strlen($n) <= 25 && mb_strpos($n, $w) !== false)) { return true; } }
+        return false;
+    }
+
+    private static function reopen($o, $phone, $extra, $why) {
+        $wb = (array) ($o['winback'] ?? []);
+        $patch = array_merge(['status' => 'new', 'technicianId' => null, 'technicianName' => null, 'customerConfirmed' => true, 'confirmedAt' => gmdate('c'), 'confirmedVia' => 'whatsapp',
+            'winback' => array_merge($wb, ['won' => true, 'at' => gmdate('c')])], $extra);
+        Mutqan_Store::update('orders', $o['id'], $patch, self::sys());
+        $o = array_merge($o, $patch);
+        self::put($phone, $o['id'], 'live');
+        self::step($o, 'wa_winback_won', 'العميل رجّع الطلب على واتساب' . ($why !== '' ? ' — ' . $why : ''));
+        $room = ['♻️ *العميل رجّع طلب #' . self::num($o) . '* بعد ما لغاه', '👤 ' . ((string) ($o['clientName'] ?? '') ?: '—') . ' — ' . (string) $o['clientPhone']];
+        if (!empty($wb['reason'])) { $room[] = '❓ سبب الإلغاء كان: ' . (self::WB_LABEL[$wb['reason']] ?? $wb['reason']) . (!empty($wb['text']) ? ' — «' . $wb['text'] . '»' : ''); }
+        if ($why !== '') { $room[] = '🎯 ' . $why; }
+        $room = array_merge($room, self::summary($o));
+        $room[] = ''; $room[] = 'وزّعه: *اعتمد ' . self::num($o) . '* أو *اسند طلب ' . self::num($o) . ' لمحمود*';
+        self::tell_room(implode("\n", $room), 'jr-wb-' . $o['id'] . '-' . time());
+        if (class_exists('Mutqan_Dispatch') && Mutqan_Dispatch::is_auto()) { try { Mutqan_Dispatch::dispatch(Mutqan_Store::get_raw('orders', $o['id']) + ['id' => $o['id']]); } catch (Throwable $e) { error_log('[mutqan] winback dispatch ' . $e->getMessage()); } }
+        return "رجّعنا طلبك ✅ بنفس البيانات" . ($why !== '' ? ' (' . $why . ')' : '') . ".\nهنبلغك هنا أول ما الفني يستلم ويتحرك. شكرًا لثقتك 🌷";
+    }
+
+    private static function on_winback_stage($o, $text, $phone, $stage) {
+        $wb = (array) ($o['winback'] ?? []);
+        if ($stage === 'winback_time') {
+            if (self::looks_like_time($text) || mb_strlen($text) >= 3 && !self::wants_back($text)) { return self::reopen($o, $phone, ['preferredTime' => mb_substr($text, 0, 120), 'appointmentAt' => null], 'على موعد جديد: ' . mb_substr($text, 0, 60)); }
+            if (self::wants_back($text)) { return 'اكتب الوقت اللي يناسبك (مثال: بكرة العصر) وأرجّع الطلب عليه.'; }
+        }
+        if (self::wants_back($text) && empty($wb['reason'])) { return self::reopen($o, $phone, [], ''); }
+        if (self::wants_back($text) && !empty($wb['offerPct'])) { return self::reopen($o, $phone, ['winbackDiscountPct' => (int) $wb['offerPct'], 'note' => trim((string) ($o['note'] ?? '') . "\nخصم استرجاع " . (int) $wb['offerPct'] . '% (واتساب)')], 'بخصم ' . (int) $wb['offerPct'] . '%'); }
+        if (self::wants_back($text) && ($wb['reason'] ?? '') === 'late') { return self::reopen($o, $phone, ['priority' => 'high'], 'بأولوية وأقرب فني'); }
+        if (self::wants_back($text)) { return self::reopen($o, $phone, [], ''); }
+        $reason = self::wb_reason($text);
+        if ($reason === '' && !empty($wb['reason'])) {
+            // More words after the reason: kept for the owner.
+            $wb['text'] = trim(($wb['text'] ?? '') . ' ' . mb_substr($text, 0, 200));
+            Mutqan_Store::update('orders', $o['id'], ['winback' => $wb], self::sys());
+            self::tell_room('💬 العميل (طلب #' . self::num($o) . ' الملغي): «' . mb_substr($text, 0, 200) . '»', 'jr-wbt-' . $o['id'] . '-' . md5($text));
+            return 'وصل كلامك للإدارة 🙏 ولو حابب نرجّع الطلب في أي وقت اكتب *رجّعه*.';
+        }
+        if ($reason === '') { $reason = 'other'; }
+        $wb = array_merge($wb, ['reason' => $reason, 'text' => preg_match('/[\p{L}]{3,}/u', $text) ? mb_substr($text, 0, 200) : '', 'askedAt' => $wb['askedAt'] ?? gmdate('c')]);
+        $reply = '';
+        switch ($reason) {
+            case 'price':
+                $pct = self::winback_offer_pct();
+                $wb['offerPct'] = $pct;
+                $reply = $pct > 0 ? "مقدّرين ده 🙏 عشانك هنعملك *خصم " . $pct . "%* على نفس الطلب، والسعر النهائي يتأكد لك قبل التنفيذ ومفيش أي حاجة من غير موافقتك.\nاكتب *رجّعه* ✅ ونكمّل فورًا." : "مقدّرين ده 🙏 السعر بيتأكد لك قبل التنفيذ ومفيش أي حاجة من غير موافقتك، والفني بيعاين الأول.\nاكتب *رجّعه* ✅ لو حابب نكمّل.";
+                break;
+            case 'time':
+                $reply = "ولا يهمك 🌷 قولّي الوقت اللي يناسبك (مثال: بكرة العصر، أو الخميس الساعة 6) وأرجّع الطلب عليه على طول من غير أي إجراءات.";
+                self::put($phone, $o['id'], 'winback_time');
+                break;
+            case 'late':
+                $reply = "حقك علينا 🙏 آسفين على التأخير.\nلو رجّعنا الطلب هيكون *بأولوية* مع أقرب فني متاح، وهتتابع مكانه من هنا لحظة بلحظة.\nاكتب *رجّعه* ✅";
+                break;
+            case 'other_co':
+                $reply = "تمام، يسعدنا إن مشكلتك اتحلت 🌷\nلو احتجت أي خدمة بعد كده ابعتلنا هنا كلمة واحدة ونرتب لك كل حاجة بسرعة.";
+                break;
+            default:
+                $reply = "شكرًا إنك قلتلنا 🙏 وصلت ملاحظتك للمسؤول.\nولو حابب نرجّع الطلب بنفس البيانات اكتب *رجّعه* ✅";
+        }
+        Mutqan_Store::update('orders', $o['id'], ['winback' => $wb, 'cancelReason' => self::WB_LABEL[$reason] . ($wb['text'] !== '' ? ' — ' . $wb['text'] : '')], self::sys());
+        self::step($o, 'wa_cancel_reason', 'سبب الإلغاء: ' . self::WB_LABEL[$reason]);
+        self::tell_room('❓ *سبب إلغاء طلب #' . self::num($o) . '*: ' . self::WB_LABEL[$reason] . ($wb['text'] !== '' ? "\n💬 «" . $wb['text'] . '»' : '') . ($reason === 'price' && !empty($wb['offerPct']) ? "\n🎯 عرضت عليه خصم " . $wb['offerPct'] . '%' : ($reason === 'time' ? "\n🎯 بسأله عن موعد جديد" : ($reason === 'late' ? "\n🎯 عرضت عليه أولوية وأقرب فني" : ''))) . "\n\nتكلّمه بنفسك: *رد " . self::num($o) . ' نص الرسالة*', 'jr-wbr-' . $o['id'] . '-' . $reason);
+        if ($reason === 'other_co') { self::drop($phone); }
+        return $reply;
+    }
+
+    /** The owner brings a cancelled order back: «رجع 7001». */
+    public static function owner_reopen($o) {
+        $o['id'] = (string) $o['id'];
+        Mutqan_Store::update('orders', $o['id'], ['status' => 'new', 'technicianId' => null, 'technicianName' => null], self::sys());
+        if (!empty($o['clientPhone'])) { self::put($o['clientPhone'], $o['id'], 'live'); self::tell_customer($o, 'رجّعنا طلبك رقم *' . self::num($o) . '* ✅ بنفس البيانات، وهنبلغك أول ما الفني يتحرك.'); }
+        self::step($o, 'reopen', 'المالك رجّع الطلب من واتساب');
+        return '♻️ الطلب #' . self::num($o) . ' رجع «جديد»' . (!empty($o['clientPhone']) ? ' واتبلغ العميل' : '') . '. وزّعه: *اعتمد ' . self::num($o) . '*';
+    }
+
+    /** Today's cancellations and why, for the owner («الملغي»). */
+    public static function cancelled_today() {
+        $since = time() - 86400;
+        $rows = Mutqan_Store::select('orders', ['status' => 'cancelled'], ['order' => 'updatedAt', 'limit' => 30], self::sys());
+        $L = [];
+        foreach ($rows as $o) {
+            $at = strtotime((string) ($o['updatedAt'] ?? '')) ?: 0; if ($at && $at < $since) { continue; }
+            $L[] = '• #' . self::num($o) . ' ' . ((string) ($o['clientName'] ?? '') ?: (string) ($o['clientPhone'] ?? '—')) . ' — ' . ((string) ($o['cancelReason'] ?? '') ?: 'لسه ما قالش السبب');
+        }
+        return $L ? "❌ *الملغي آخر 24 ساعة (" . count($L) . ")*\n" . implode("\n", $L) . "\n\nترجّع واحد: *رجع 7001*" : '✅ مفيش طلبات ملغية آخر 24 ساعة.';
+    }
+
     /* ------------------------------------------------------------------ the order moves: the owner hears, the customer is asked */
 
-    public static function on_status($doc, $old) {
+    public static function on_status($doc, $old, $p = null) {
         try {
             if (!self::enabled() || !is_array($doc) || empty($doc['id'])) { return false; }
             $st = (string) ($doc['status'] ?? ''); $was = (string) ($old['status'] ?? '');
@@ -299,8 +431,10 @@ final class Mutqan_WA_Journey {
                     }
                     return true;
                 case 'cancelled':
-                    if ($phone !== '') { $j = self::current($phone); if ($j && $j['o'] === $doc['id']) { self::drop($phone); } }
-                    self::tell_room('❌ اتلغى طلب #' . $n . ' — ' . $who, 'jr-x-' . $doc['id']);
+                    $byCustomer = is_array($p) && class_exists('Mutqan_Policy') && !Mutqan_Policy::is_staff($p);
+                    self::tell_room('❌ اتلغى طلب #' . $n . ' — ' . $who . ($byCustomer ? "\n🔁 العميل لغاه بنفسه — بسأله عن السبب وبحاول أرجّعه، وهبلغك بالنتيجة." : ''), 'jr-x-' . $doc['id']);
+                    if ($phone !== '' && $byCustomer) { self::winback_start($doc); }
+                    elseif ($phone !== '') { $j = self::current($phone); if ($j && $j['o'] === $doc['id']) { self::drop($phone); } }
                     return true;
             }
         } catch (Throwable $e) { error_log('[mutqan] journey status ' . $e->getMessage()); }
@@ -311,7 +445,18 @@ final class Mutqan_WA_Journey {
     public static function on_assigned($doc) {
         try {
             if (!self::enabled() || empty($doc['id']) || empty($doc['technicianId'])) { return false; }
-            self::tell_room('📤 طلب #' . self::num($doc) . ' اتسند للفني ' . (string) ($doc['technicianName'] ?? '') . (!empty($doc['customerConfirmed']) ? '' : "\n⏳ العميل لسه ما أكدش على واتساب"), 'jr-as-' . $doc['id'] . '-' . $doc['technicianId']);
+            $t = Mutqan_Store::get_raw('tech_profiles', (string) $doc['technicianId']) ?: [];
+            $noPhone = trim((string) ($t['phone'] ?? ($doc['technicianPhone'] ?? ''))) === '';
+            $head = '📤 طلب #' . self::num($doc) . ' اتسند للفني ' . (string) ($doc['technicianName'] ?? ($t['displayName'] ?? ''));
+            if ($noPhone || !empty($t['isSite'])) {
+                // Nobody's phone will ring for this one: the room gets the whole job card to review and pass on by hand.
+                $card = class_exists('Mutqan_WA_Desk') ? Mutqan_WA_Desk::job_card($doc) : '';
+                $card = preg_replace('/\n*رد بكلمة:.*$/su', '', (string) $card);
+                $why = !empty($t['isSite']) ? '«فني الموقع» حساب عام' : 'الفني ده ما لوش رقم واتساب في ملفه';
+                self::tell_room("⚠️ *راجع وابعت بنفسك* — " . $why . "\n" . $head . "\n\n" . $card . (empty($doc['clientPhone']) ? "\n\n📵 الطلب من غير رقم عميل — كلّمه من بيانات الطلب في التطبيق." : '') . "\n\nوزّعه على فني: *اسند طلب " . self::num($doc) . " لمحمود*", 'jr-as-' . $doc['id'] . '-' . $doc['technicianId']);
+                return true;
+            }
+            self::tell_room($head . (!empty($doc['customerConfirmed']) ? '' : "\n⏳ العميل لسه ما أكدش على واتساب"), 'jr-as-' . $doc['id'] . '-' . $doc['technicianId']);
             return true;
         } catch (Throwable $e) { error_log('[mutqan] journey assigned ' . $e->getMessage()); return false; }
     }
