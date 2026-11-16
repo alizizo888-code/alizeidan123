@@ -417,7 +417,12 @@ final class Mutqan_WA {
             set_transient('mq_wa_st_' . $acct, ['status' => (string) ($e['status'] ?? ''), 'at' => time()], DAY_IN_SECONDS);
             if (($e['status'] ?? '') === 'open') { update_option('mutqan_wa_last_acct', $acct, false); }
             self::remember_session($acct, $e, $dev);
-            if (in_array($e['status'] ?? '', ['logged_out', 'closed'], true)) { self::notify_admins('تنبيه واتساب', 'الرقم «' . $acct . '» انقطع اتصاله — افتح صندوق الواتساب لإعادة الربط.', 'wa-down-' . $acct); }
+            // WhatsApp drops a linked device for a few seconds now and then and the gateway reconnects by itself: that
+            // is not news. Only a number that was logged out, or is still down five minutes later, rings anybody.
+            $st = (string) ($e['status'] ?? '');
+            if ($st === 'logged_out') { self::notify_admins('تنبيه واتساب', 'الرقم «' . self::acct_label($acct) . '» اتفصل من الواتساب (تسجيل خروج) — اربطه تاني بالـQR.', 'wa-out-' . $acct, 6 * 3600); }
+            elseif ($st === 'closed') { if (!get_transient('mq_wa_down_' . $acct)) { set_transient('mq_wa_down_' . $acct, time(), DAY_IN_SECONDS); } }
+            elseif ($st === 'open') { delete_transient('mq_wa_down_' . $acct); }
             return ['ok' => true];
         }
         if (($e['type'] ?? '') !== 'message') { return ['ok' => true]; }
@@ -634,6 +639,23 @@ final class Mutqan_WA {
             $cur = Mutqan_Store::get_raw('wa_bot', $id);
             Mutqan_Store::upsert('wa_bot', ['kind' => 'miss', 'q' => $q, 'count' => (int) ($cur['count'] ?? 0) + 1, 'at' => gmdate('c')], $id, [], self::sys());
         } catch (Throwable $e) { error_log('[mutqan] wa miss: ' . $e->getMessage()); }
+    }
+
+    /** The name the owner gave a number, never its internal id. */
+    public static function acct_label($acct) {
+        if (class_exists('Mutqan_WA_Fleet')) { foreach (Mutqan_WA_Fleet::numbers() as $n) { if ($n['id'] === $acct) { $lb = (string) $n['label'] !== '' && $n['label'] !== $acct ? $n['label'] : ''; $ph = !empty($n['phone']) ? '+' . $n['phone'] : ''; return trim($lb . ' ' . $ph) ?: (string) $acct; } } }
+        return (string) $acct;
+    }
+
+    /** Called on every gateway check-in: a number still down after five minutes is worth one alert (then quiet for 6 h). */
+    public static function down_check() {
+        $seen = get_option(self::SEEN, []);
+        foreach ((is_array($seen) ? $seen : []) as $acct => $r) {
+            $since = (int) get_transient('mq_wa_down_' . $acct);
+            if (!$since) { continue; }
+            if (($r['status'] ?? '') === 'open') { delete_transient('mq_wa_down_' . $acct); continue; }
+            if (time() - $since >= 300) { self::notify_admins('تنبيه واتساب', 'الرقم «' . self::acct_label($acct) . '» مفصول من ' . (int) floor((time() - $since) / 60) . ' دقيقة — افتح «الأرقام» وأعد ربطه لو ما رجعش.', 'wa-down-' . $acct, 6 * 3600); }
+        }
     }
 
     public static function notify_admins($title, $body, $key, $every = 600) {

@@ -179,6 +179,7 @@ final class Mutqan_WA_Fleet {
         $d[$dev]['lastSeen'] = time();
         if (is_array($report) && $report) { $d[$dev]['sessions'] = array_slice(array_map(function ($s) { return ['id' => (string) ($s['id'] ?? ''), 'status' => (string) ($s['status'] ?? ''), 'phone' => (string) ($s['phone'] ?? '')]; }, $report), 0, 20); }
         self::put_devices($d);
+        if (!get_transient('mq_wa_downchk') && class_exists('Mutqan_WA')) { set_transient('mq_wa_downchk', 1, 60); Mutqan_WA::down_check(); }
     }
 
     /* ------------------------------------------------------------------ numbers and their jobs */
@@ -393,13 +394,13 @@ final class Mutqan_WA_Fleet {
                 $ago = (int) $d['lastSeen'] ? time() - (int) $d['lastSeen'] : null;
                 if (!empty($d['enabled']) && $ago !== null && $ago > self::OFFLINE_ALERT) {
                     $issues[] = 'الجهاز «' . $d['name'] . '» ما اتصلش من ' . (int) floor($ago / 60) . ' دقيقة — افتحه وتأكد إن الوسيط شغال.';
-                    if (!empty($s['healthAlerts'])) { Mutqan_WA::notify_admins('جهاز واتساب متوقف', end($issues), 'fleet-dev-' . $id, 7200); }
+                    if (!empty($s['healthAlerts'])) { Mutqan_WA::notify_admins('جهاز واتساب متوقف', end($issues), 'fleet-dev-' . $id, 6 * 3600); }
                 }
             }
             foreach (self::numbers() as $n) {
                 if (in_array($n['status'], ['logged_out', 'stopped'], true) && $n['device'] !== '') {
                     $issues[] = 'الرقم «' . $n['label'] . '» (' . (self::ROLES[$n['role']]['label'] ?? $n['role']) . ') غير متصل.';
-                    if (!empty($s['healthAlerts'])) { Mutqan_WA::notify_admins('رقم واتساب غير متصل', end($issues), 'fleet-num-' . $n['id'], 7200); }
+                    if (!empty($s['healthAlerts'])) { Mutqan_WA::notify_admins('رقم واتساب غير متصل', end($issues), 'fleet-num-' . $n['id'], 6 * 3600); }
                 }
             }
             $missing = array_diff(['customers', 'technicians'], array_map(function ($n) { return $n['role']; }, array_filter(self::numbers(), function ($n) { return $n['status'] === 'open'; })));
