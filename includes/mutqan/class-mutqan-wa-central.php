@@ -144,6 +144,7 @@ final class Mutqan_WA_Central {
         $lines = ['✅ *أوردر جاهز #' . $n . '*', '🌐 من موقع: ' . $site . (!empty($card['domain']) ? ' (' . $card['domain'] . ')' : '')];
         if (!empty($card['line']['label'])) { $lines[] = '📞 الخط: ' . $card['line']['label'] . (!empty($card['line']['phone']) ? ' +' . $card['line']['phone'] : ''); }
         $lines[] = '👤 العميل: ' . ((string) ($o['clientName'] ?? '') ?: '—') . (!empty($o['clientPhone']) ? ' — ' . $o['clientPhone'] : '');
+        if (!empty($o['clientPhone']) && class_exists('Mutqan_Customers')) { $lines[] = '🧾 ' . Mutqan_Customers::brief($o['clientPhone']); }
         $svc = (string) ($o['serviceLabel'] ?? ($o['service'] ?? ''));
         if ($svc !== '') { $lines[] = '🛠 العطل/الخدمة: ' . $svc; }
         if (!empty($o['note'])) { $lines[] = '📝 ' . mb_substr((string) $o['note'], 0, 200); }
