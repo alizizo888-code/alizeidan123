@@ -1,0 +1,43 @@
+# «مركز الواتساب» on the VPS (Hostinger Docker Manager). Deployed under the project name «mutqan-wa», so it takes the
+# old gateway's place and reads its volume once (OLD_DIR): numbers already linked there carry over without a new scan.
+# Code comes from the public deploy branch «wa-hub» (no secrets in it); PAIR_TOKEN is set in the project's environment.
+# Reached through the VPS's Traefik (the n8n stack) with a free Let's Encrypt certificate.
+services:
+  wa:
+    image: node:22-bookworm
+    restart: always
+    working_dir: /app
+    environment:
+      - PAIR_TOKEN=${PAIR_TOKEN}
+      - DATA_DIR=/data
+      - OLD_DIR=/old
+      - SEND_DAILY_CAP=${SEND_DAILY_CAP:-300}
+      - TZ=Asia/Riyadh
+      - NODE_NO_WARNINGS=1
+    command: >
+      sh -c "([ -d /app/.git ] || git clone -q --depth 1 -b wa-hub https://github.com/alizizo888-code/alizeidan123.git /app)
+      && (git -C /app fetch -q --depth 1 origin wa-hub && git -C /app reset -q --hard origin/wa-hub || true)
+      && npm ci --omit=dev --no-audit --no-fund && exec node --no-warnings src/server.js"
+    volumes:
+      - hub_app:/app
+      - hub_data:/data
+      - wa_data:/old:ro
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=n8n_default
+      - traefik.http.routers.wahub.rule=Host(`${HUB_DOMAIN}`)
+      - traefik.http.routers.wahub.entrypoints=web,websecure
+      - traefik.http.routers.wahub.tls=true
+      - traefik.http.routers.wahub.tls.certresolver=mytlschallenge
+      - traefik.http.services.wahub.loadbalancer.server.port=8787
+    networks: [default, edge]
+    mem_limit: 600m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+volumes:
+  hub_app: {}
+  hub_data: {}
+  wa_data: {}
+networks:
+  edge: { external: true, name: n8n_default }

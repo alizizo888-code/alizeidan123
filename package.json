@@ -1,0 +1,14 @@
+{
+  "name": "mutqan-wa-hub",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WhatsApp hub on the VPS: QR-linked lines, one inbox, auto-replies, order conversations, technicians and the operations room",
+  "scripts": { "start": "node --no-warnings src/server.js", "test": "node --no-warnings test/brain.test.mjs" },
+  "engines": { "node": ">=22.5" },
+  "dependencies": {
+    "@whiskeysockets/baileys": "6.7.24",
+    "pino": "9.9.0",
+    "qrcode": "1.5.4"
+  }
+}

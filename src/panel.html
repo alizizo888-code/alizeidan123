@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>مركز الواتساب</title>
+<style>
+:root{--bg:#0b1014;--card:#121a20;--line:#1f2a33;--txt:#e7eef3;--mut:#8aa0b0;--acc:#25d366;--warn:#f5a524;--bad:#f0506e;--in:#16222b;--out:#0f3d2c}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--acc);color:#04130b;border:0;border-radius:10px;padding:9px 14px;font-weight:800;cursor:pointer}
+button.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}button.bad{background:var(--bad);color:#fff}
+input,select,textarea{background:#0e151a;border:1px solid var(--line);border-radius:10px;padding:9px 11px;width:100%}
+textarea{min-height:90px;resize:vertical}
+header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+header h1{font-size:17px;margin:0;flex:1}
+nav{display:flex;gap:6px;padding:8px 16px;border-bottom:1px solid var(--line);overflow-x:auto}
+nav button{background:transparent;color:var(--mut);border:1px solid var(--line);white-space:nowrap}nav button.on{background:var(--acc);color:#04130b;border-color:var(--acc)}
+main{padding:16px;max-width:1200px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.grow{flex:1;min-width:0}
+.pill{display:inline-block;font-size:12px;font-weight:800;border-radius:99px;padding:2px 9px;background:#22303a;color:var(--mut)}
+.pill.ok{background:#0f3d2c;color:#7ff0ad}.pill.warn{background:#3b2c0b;color:#ffd27a}.pill.bad{background:#3d121b;color:#ff9fb1}
+.mut{color:var(--mut);font-size:13px}
+.chats{display:grid;grid-template-columns:340px 1fr;gap:12px;height:calc(100vh - 150px)}
+@media(max-width:760px){.chats{grid-template-columns:1fr;height:auto}.chats.open .list{display:none}.chats:not(.open) .conv{display:none}}
+.list{overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.item{padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer}.item:hover,.item.on{background:#16212a}
+.item b{display:block}.item .mut{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;min-height:400px}
+.msgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:6px}
+.b{max-width:80%;padding:8px 11px;border-radius:12px;white-space:pre-wrap;word-break:break-word}
+.b.in{background:var(--in);align-self:flex-start}.b.out{background:var(--out);align-self:flex-end}
+.b small{display:block;color:var(--mut);font-size:11px;margin-top:3px}
+.compose{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}.compose textarea{min-height:44px;height:44px}
+.qr{background:#fff;border-radius:12px;padding:8px;width:260px;max-width:100%}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
+.login{max-width:380px;margin:12vh auto}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px solid var(--line);padding:6px;text-align:right;vertical-align:top}
+.badge{background:var(--bad);color:#fff;border-radius:99px;padding:0 7px;font-size:12px;font-weight:800;margin-inline-start:4px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const $ = (s, el = document) => el.querySelector(s)
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const api = async (p, b) => { const r = await fetch(p, b ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) } : {}); const j = await r.json().catch(() => ({})); if (r.status === 401 && p !== '/api/login') { boot(); throw new Error('سجّل الدخول') } if (!r.ok) throw new Error(j.error || 'خطأ'); return j }
+const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? 'دلوقتي' : s < 3600 ? Math.round(s / 60) + ' د' : s < 86400 ? Math.round(s / 3600) + ' س' : new Date(t).toLocaleDateString('ar-EG') }
+const ST = { open: ['متصل', 'ok'], qr: ['امسح الكود', 'warn'], connecting: ['بيتصل…', 'warn'], closed: ['مقطوع — بيحاول تاني', 'bad'], logged_out: ['اتفصل — اربطه تاني', 'bad'], stopped: ['متوقف', 'bad'] }
+let S = { tab: 'chats', state: null, chats: [], pk: '', filter: '', timer: 0 }
+
+async function boot() {
+  clearInterval(S.timer)
+  const me = await api('/api/me').catch(() => ({ in: false }))
+  if (!me.in) return loginView(me.first)
+  S.timer = setInterval(refresh, 4000); refresh()
+}
+function loginView(first) {
+  $('#app').innerHTML = `<div class="login card"><h2 style="margin-top:0">مركز الواتساب</h2>
+    <p class="mut">${first ? 'أول مرة: اختار كلمة سر للوحة (6 حروف على الأقل). احفظها عندك.' : 'اكتب كلمة السر.'}</p>
+    <input id="pw" type="password" autocomplete="${first ? 'new-password' : 'current-password'}" placeholder="كلمة السر">
+    <div class="row" style="margin-top:10px"><button id="go">${first ? 'احفظ وادخل' : 'دخول'}</button><span id="err" class="mut"></span></div></div>`
+  const go = async () => { try { await api('/api/login', { password: $('#pw').value }); boot() } catch (e) { $('#err').textContent = e.message } }
+  $('#go').onclick = go; $('#pw').onkeydown = (e) => { if (e.key === 'Enter') go() }
+}
+async function refresh() {
+  try {
+    S.state = await api('/api/state')
+    if (S.tab === 'chats') { S.chats = (await api('/api/chats?filter=' + S.filter)).chats; if (S.pk) S.conv = await api('/api/chat?pk=' + encodeURIComponent(S.pk)) }
+    if (S.tab === 'log') S.log = await api('/api/log')
+    render()
+  } catch (e) { console.warn(e) }
+}
+function shell(inner) {
+  const st = S.state || {}
+  const tabs = [['chats', 'المحادثات' + (st.human ? `<span class="badge">${st.human}</span>` : '')], ['lines', 'الأرقام'], ['settings', 'الإعدادات'], ['log', 'السجل']]
+  return `<header><h1>💬 مركز الواتساب</h1><span class="pill ${st.paired ? 'ok' : 'bad'}">${st.paired ? 'مربوط بالموقع' : 'مش مربوط بالموقع'}</span>${st.waiting ? `<span class="pill warn">${st.waiting} في الطابور</span>` : ''}<button class="ghost" onclick="logout()">خروج</button></header>
+  <nav>${tabs.map(([k, l]) => `<button class="${S.tab === k ? 'on' : ''}" onclick="go('${k}')">${l}</button>`).join('')}</nav><main>${inner}</main>`
+}
+window.go = (t) => { S.tab = t; S.pk = ''; refresh() }
+window.logout = async () => { await api('/api/logout', {}); boot() }
+
+function render() {
+  const keep = document.activeElement && document.activeElement.id ? { id: document.activeElement.id, v: document.activeElement.value, s: document.activeElement.selectionStart } : null
+  if (S.tab === 'settings' && $('#settingsForm')) return   // never wipe a form being edited
+  $('#app').innerHTML = shell(S.tab === 'chats' ? chatsView() : S.tab === 'lines' ? linesView() : S.tab === 'settings' ? settingsView() : logView())
+  if (keep) { const el = document.getElementById(keep.id); if (el) { el.value = keep.v; el.focus(); try { el.setSelectionRange(keep.s, keep.s) } catch {} } }
+  const m = $('.msgs'); if (m) m.scrollTop = m.scrollHeight
+}
+
+function chatsView() {
+  const f = [['', 'الكل'], ['human', 'محتاج موظف'], ['unread', 'غير مقروء'], ['team', 'الفريق والفنيين']]
+  const list = S.chats.map((c) => `<div class="item ${c.pk === S.pk ? 'on' : ''}" onclick="openChat('${c.pk}')">
+    <div class="row"><b class="grow">${esc(c.name || c.phone)}</b>${c.unread ? `<span class="badge">${c.unread}</span>` : ''}<span class="mut">${ago(c.lastAt)}</span></div>
+    <div class="mut">${c.needsHuman ? '🙋 ' : ''}${c.kind !== 'customer' ? '👷 ' : ''}${esc(c.lastText)}</div></div>`).join('') || '<div class="item mut">مفيش محادثات لسه.</div>'
+  const cv = S.conv && S.conv.chat
+  const conv = cv ? `<div class="row" style="padding:10px;border-bottom:1px solid var(--line)">
+      <button class="ghost" onclick="openChat('')">→</button>
+      <div class="grow"><b>${esc(cv.name || cv.phone)}</b> <span class="mut">${esc(cv.phone)}</span>${cv.stage ? ` <span class="pill">${esc(cv.stage)}${cv.orderId ? ' · طلب' : ''}</span>` : ''}</div>
+      <button class="ghost" onclick="chatSet({bot:${cv.botOff > Date.now() ? 1 : 0}})">${cv.botOff > Date.now() ? '▶️ شغّل الرد الآلي' : '⏸ وقّف الرد الآلي'}</button>
+      ${cv.needsHuman ? `<button class="ghost" onclick="chatSet({done:1})">✔️ اتحل</button>` : ''}
+      <a href="https://wa.me/${esc(cv.phone)}" target="_blank" rel="noreferrer"><button class="ghost">واتساب</button></a></div>
+    <div class="msgs">${S.conv.msgs.map((m) => `<div class="b ${m.dir}">${esc(m.text)}<small>${m.dir === 'out' ? esc(m.by || '') + ' · ' : ''}${new Date(m.at).toLocaleString('ar-EG', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'numeric' })}</small></div>`).join('')}</div>
+    <div class="compose"><textarea id="reply" placeholder="اكتب ردك…"></textarea><button onclick="sendReply()">إرسال</button></div>`
+    : '<div class="msgs mut" style="align-items:center;justify-content:center">اختار محادثة.</div>'
+  return `<div class="row" style="margin-bottom:10px">${f.map(([k, l]) => `<button class="${S.filter === k ? '' : 'ghost'}" onclick="setFilter('${k}')">${l}</button>`).join('')}
+    <span class="grow"></span><button class="ghost" onclick="newMsg()">✉️ رسالة لرقم جديد</button></div>
+    <div class="chats ${S.pk ? 'open' : ''}"><div class="list">${list}</div><div class="conv">${conv}</div></div>`
+}
+window.setFilter = (k) => { S.filter = k; refresh() }
+window.openChat = async (pk) => { S.pk = pk; S.conv = pk ? await api('/api/chat?pk=' + encodeURIComponent(pk)) : null; render() }
+window.chatSet = async (f) => { await api('/api/chat', { pk: S.pk, ...f }); refresh() }
+window.sendReply = async () => { const t = $('#reply').value.trim(); if (!t) return; await api('/api/send', { pk: S.pk, text: t }); $('#reply').value = ''; refresh() }
+window.newMsg = async () => { const p = prompt('رقم العميل:'); if (!p) return; const t = prompt('الرسالة:'); if (!t) return; try { await api('/api/send', { phone: p, text: t }); refresh() } catch (e) { alert(e.message) } }
+
+function linesView() {
+  const L = (S.state?.lines || []).map((l) => { const [lab, cls] = ST[l.status] || [l.status, '']
+    return `<div class="card"><div class="row"><b class="grow">${esc(l.label)} ${l.phone ? `<span class="mut">${esc(l.phone)}</span>` : ''}</b><span class="pill ${cls}">${lab}</span></div>
+      <div class="row mut" style="margin-top:6px">الدور: <select onchange="lineSet('${l.id}',{role:this.value})"><option value="customers" ${l.role === 'customers' ? 'selected' : ''}>العملاء والطلبات</option><option value="team" ${l.role === 'team' ? 'selected' : ''}>الفريق والفنيين والغرفة</option></select>
+      <span>اتبعت النهارده: ${l.sentToday}/${l.cap}</span></div>
+      ${l.qr ? `<p class="mut">من موبايل الرقم: واتساب ← ⋮ ← الأجهزة المرتبطة ← ربط جهاز، وامسح الكود ده:</p><img class="qr" src="${l.qr}" alt="QR">` : ''}
+      <div class="row" style="margin-top:8px"><button class="ghost" onclick="lineAct('restart','${l.id}')">🔄 إعادة اتصال</button><button class="bad" onclick="lineDel('${l.id}')">فصل وحذف</button></div></div>` }).join('')
+  return `<div class="card"><b>ربط رقم جديد</b><p class="mut">اكتب اسم للرقم واختار دوره، وبعدين امسح الكود اللي هيظهر من موبايل الرقم.</p>
+    <div class="row"><input id="nl" class="grow" placeholder="مثال: خط العملاء 0549…"><select id="nr" style="width:auto"><option value="customers">العملاء والطلبات</option><option value="team">الفريق والفنيين والغرفة</option></select><button onclick="lineAdd()">ربط بالـQR</button></div></div>${L || '<p class="mut">مفيش أرقام مربوطة لسه.</p>'}`
+}
+window.lineAdd = async () => { await api('/api/lines/add', { label: $('#nl').value || 'رقم جديد', role: $('#nr').value }); setTimeout(refresh, 1500) }
+window.lineSet = async (id, f) => { await api('/api/lines/update', { id, ...f }); refresh() }
+window.lineAct = async (op, id) => { await api('/api/lines/' + op, { id }); setTimeout(refresh, 1500) }
+window.lineDel = async (id) => { if (!confirm('الرقم هيتفصل من المركز. متأكد؟')) return; await api('/api/lines/remove', { id }); refresh() }
+
+function settingsView() {
+  const s = S.state?.settings || {}
+  const ag = (s.agents || []).map((a) => a.name + ' - ' + a.phone).join('\n')
+  return `<form id="settingsForm" class="card" onsubmit="saveSettings(event)">
+    <div class="grid2">
+      <div><label>رقم غرفة العمليات (بيوصله كل تقرير وأوامره بتشتغل منه)</label><input name="roomPhone" value="${esc(s.roomPhone)}"></div>
+      <div><label>رقم التجربة (يبقى عميل وغرفة في نفس الوقت — سيبه فاضي لو مش بتجرّب)</label><input name="testPhone" value="${esc(s.testPhone)}"></div>
+      <div><label>اسم الشركة في الرسايل</label><input name="siteName" value="${esc(s.siteName)}"></div>
+      <div class="row"><div class="grow"><label>مواعيد العمل من</label><input name="hoursFrom" type="number" min="0" max="23" value="${esc(s.hoursFrom)}"></div><div class="grow"><label>لحد (24 = طول الليل)</label><input name="hoursTo" type="number" min="1" max="24" value="${esc(s.hoursTo)}"></div></div>
+    </div>
+    <label>الموظفين اللي بتتوزع عليهم المحادثات (سطر لكل موظف: الاسم - الرقم)</label><textarea name="agents" placeholder="أحمد - 0501234567">${esc(ag)}</textarea>
+    <div class="row"><label class="row"><input type="checkbox" name="autoReply" style="width:auto" ${s.autoReply ? 'checked' : ''}> الرد الآلي شغال</label>
+      <label class="row"><input type="checkbox" name="notifyAgents" style="width:auto" ${s.notifyAgents ? 'checked' : ''}> بلّغ الموظف على واتساب لما عميل يحتاجه</label></div>
+    <label>رسالة الترحيب ({site} = اسم الشركة)</label><textarea name="welcome">${esc(s.welcome)}</textarea>
+    <label>رسالة برا مواعيد العمل</label><textarea name="afterHours">${esc(s.afterHours)}</textarea>
+    <label>رد «الأسعار»</label><textarea name="prices">${esc(s.prices)}</textarea>
+    <div class="row" style="margin-top:12px"><button>حفظ</button><span id="saved" class="mut"></span></div></form>
+    <div class="card"><b>كلمة سر اللوحة</b><div class="row" style="margin-top:8px"><input id="np" type="password" class="grow" placeholder="كلمة سر جديدة" autocomplete="new-password"><button class="ghost" onclick="setPw()">غيّر</button></div></div>`
+}
+window.saveSettings = async (e) => {
+  e.preventDefault(); const f = new FormData(e.target)
+  const agents = String(f.get('agents') || '').split('\n').map((l) => l.split(/\s*[-–:،,]\s*/)).filter((p) => p[0] && p[0].trim()).map(([name, phone]) => ({ name: name.trim(), phone: (phone || '').trim() }))
+  const b = { roomPhone: f.get('roomPhone'), testPhone: f.get('testPhone'), siteName: f.get('siteName'), hoursFrom: Number(f.get('hoursFrom')), hoursTo: Number(f.get('hoursTo')), agents, autoReply: !!f.get('autoReply'), notifyAgents: !!f.get('notifyAgents'), welcome: f.get('welcome'), afterHours: f.get('afterHours'), prices: f.get('prices') }
+  try { await api('/api/settings', b); $('#saved').textContent = 'اتحفظ ✓' } catch (err) { $('#saved').textContent = err.message }
+}
+window.setPw = async () => { try { await api('/api/password', { password: $('#np').value }); $('#np').value = ''; alert('اتغيرت ✓') } catch (e) { alert(e.message) } }
+
+function logView() {
+  const l = S.log || { log: [], outbox: [] }
+  const SO = { sent: ['اتبعتت', 'ok'], wait: ['مستنية', 'warn'], failed: ['فشلت', 'bad'], expired: ['اتلغت (اتأخرت)', 'bad'] }
+  return `<div class="card"><b>آخر الرسايل الخارجة</b><table><tr><th>الوقت</th><th>لـ</th><th>النوع</th><th>الحالة</th><th>الرسالة</th></tr>
+    ${l.outbox.map((o) => `<tr><td>${ago(o.at)}</td><td>${esc(o.phone)}</td><td>${esc(o.purpose)}</td><td><span class="pill ${(SO[o.state] || [])[1] || ''}">${(SO[o.state] || [o.state])[0]}</span> ${esc(o.err)}</td><td>${esc(String(o.text).slice(0, 90))}</td></tr>`).join('')}</table></div>
+    <div class="card"><b>السجل</b><table>${l.log.map((x) => `<tr><td>${ago(x.at)}</td><td>${esc(x.kind)}</td><td>${esc(x.text)}</td></tr>`).join('')}</table></div>`
+}
+boot()
+</script>
+</body>
+</html>
