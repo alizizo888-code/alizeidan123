@@ -350,6 +350,15 @@ final class Mutqan_WA {
         return true;
     }
 
+    /** True when this phone is one of the numbers linked to the system (any device, any lane). */
+    public static function is_own_number($phone) {
+        $k = substr(preg_replace('/\D/', '', (string) $phone), -9);
+        if (strlen($k) < 9) { return false; }
+        $seen = get_option(self::SEEN, []);
+        foreach ((is_array($seen) ? $seen : []) as $r) { $p = preg_replace('/\D/', '', (string) ($r['phone'] ?? '')); if ($p !== '' && substr($p, -9) === $k) { return true; } }
+        return false;
+    }
+
     /* ---------------------------------------------------------------- webhook from the gateway */
 
     public static function webhook($raw, $sig) {
@@ -373,6 +382,10 @@ final class Mutqan_WA {
         $dir = ($e['direction'] ?? '') === 'out' ? 'out' : 'in';
         $isNew = self::store_message($acct, $phone, ['msgId' => (string) ($e['msgId'] ?? wp_generate_uuid4()), 'dir' => $dir, 'text' => (string) ($e['text'] ?? ''), 'kind' => (string) ($e['kind'] ?? 'text'), 'ts' => (int) ($e['ts'] ?? time()), 'name' => (string) ($e['name'] ?? ''), 'via' => $dir === 'out' ? 'phone' : 'customer']);
         if (!$isNew) { return ['ok' => true]; }
+        // One of OUR OWN linked numbers writing to another of ours is never a customer and never gets an automatic answer:
+        // two lines answering each other is a loop that gets both numbers banned. (The owner's «message yourself» chat is
+        // marked self and still goes through.)
+        if ($dir === 'in' && empty($e['self']) && self::is_own_number($phone) && !(class_exists('Mutqan_WA_Central') && Mutqan_WA_Central::is_master($phone))) { return ['ok' => true, 'own' => true]; }
         $tid = self::tid($acct, $phone);
         if ($dir === 'in' && class_exists('Mutqan_WA_Fleet')) { Mutqan_WA_Fleet::on_incoming($acct, $phone, (string) ($e['text'] ?? ''), $tid); }
         // «السنترال»: the identity card (site, domain, company, line) goes on the conversation at its first message.
@@ -687,6 +700,7 @@ final class Mutqan_WA_Bot {
         $h = $c['hours'];
         $names = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
         $days = count($h['days']) >= 7 ? 'كل يوم' : implode('، ', array_map(function ($i) use ($names) { return $names[(int) $i] ?? ''; }, $h['days']));
+        if (trim((string) ($h['start'] ?? '')) === '' || trim((string) ($h['end'] ?? '')) === '') { return "🕒 إحنا متاحين لاستقبال طلبك هنا في أي وقت، والموظف بيأكد لك الموعد المتاح."; }
         return "🕒 مواعيد العمل: {$days} من {$h['start']} إلى {$h['end']}\n" . (self::open_now($h, $ts) ? 'نحن متواجدون الآن ✅' : 'نحن خارج أوقات الدوام حاليًا.');
     }
 
