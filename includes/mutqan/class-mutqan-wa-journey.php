@@ -89,7 +89,7 @@ final class Mutqan_WA_Journey {
 
     private static function site_name($o) {
         $card = (array) ($o['card'] ?? []);
-        if (!empty($card['site'])) { return (string) $card['site']; }
+        if (!empty($card['site']) && $card['site'] !== 'غير محدد') { return (string) $card['site']; }
         return class_exists('Mutqan_WA_Central') ? (string) (Mutqan_WA_Central::site((string) ($o['brand'] ?? ''))['name'] ?? '') : '';
     }
 

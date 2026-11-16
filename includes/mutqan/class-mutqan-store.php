@@ -390,6 +390,8 @@ final class Mutqan_Store {
         $coll = self::valid_coll($coll);
         if (!$private) { Mutqan_Policy::require_can('insert', $coll, $p, null, $data); }
         if (!$private) { $data = Mutqan_Policy::sanitize_insert($coll, $data, $p); }
+        // Every order gets a short number people can say and type («طلب 1004»), whichever door it came through.
+        if ($coll === 'orders' && is_array($data) && trim((string) ($data['number'] ?? '')) === '') { $data['number'] = (string) self::next_order_number(); }
         list($data, $json) = self::clean_data($data);
         $id = ($id !== null && $id !== '') ? self::valid_id($id) : wp_generate_uuid4();
         if (!$private) { Mutqan_Policy::check_insert_id($coll, $id, $p); }
@@ -410,6 +412,16 @@ final class Mutqan_Store {
         if ($coll === '_push' && class_exists('Mutqan_WebPush')) { Mutqan_WebPush::queue($doc); }
         if ($coll === 'orders' && class_exists('Mutqan_Sales')) { Mutqan_Sales::on_order($doc); }
         return self::for_reader($coll, $doc, $p);
+    }
+
+    /** 1001, 1002, … — one counter for the whole system. */
+    public static function next_order_number() {
+        global $wpdb;
+        $n = (int) get_option('mutqan_order_seq', 1000);
+        if ($n < 1000) { $n = 1000; }
+        $n++;
+        update_option('mutqan_order_seq', $n, false);
+        return $n;
     }
 
     public static function update($coll, $id, $patch, $p) {

@@ -459,7 +459,7 @@ final class Mutqan_WA {
         $label = ($th['name'] ?? '') ?: $phone;
         $cfg = Mutqan_Store::get_raw('wa_bot', 'cfg') ?: [];
         $acfg = Mutqan_Store::get_raw('wa_bot', 'acct:' . $acct) ?: [];
-        $botOff = (isset($cfg['enabled']) && !$cfg['enabled']) || (isset($acfg['botEnabled']) && !$acfg['botEnabled']) || (int) ($th['bot']['pausedUntil'] ?? 0) > time();
+        $botOff = (isset($cfg['enabled']) && !$cfg['enabled']) || (isset($acfg['botEnabled']) && !$acfg['botEnabled']) || ((int) ($th['bot']['pausedUntil'] ?? 0) > time() && !(class_exists('Mutqan_WA_Desk') && Mutqan_WA_Desk::is_test_phone($phone)));
         // A message the bot is answering does not ring anybody: what needs a human (a complaint, a hand-off, a ready order)
         // raises its own alert. Only a conversation nobody automatic is handling rings the team.
         if ($botOff) { self::notify_admins('رسالة واتساب جديدة', $label . ': ' . mb_substr((string) ($e['text'] ?? ''), 0, 80), 'wa-' . $tid, 120); return ['ok' => true]; }
@@ -567,6 +567,8 @@ final class Mutqan_WA {
             'service' => mb_substr($service, 0, 120),
             'address' => mb_substr($area, 0, 160),
             'note' => mb_substr((string) ($lead['note'] ?? ''), 0, 300),
+            // The time the customer gave is the order's time, not a note: «حلقة الوصل» then does not ask for it again.
+            'preferredTime' => mb_substr(trim((string) ($lead['time'] ?? '')), 0, 120),
             'waThread' => $tid,
             'waAccount' => $acct,
             // The identity card: which site and line this customer came through, so nobody mixes company A with B.

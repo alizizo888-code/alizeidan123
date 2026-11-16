@@ -94,7 +94,7 @@ final class Mutqan_WA_AI {
         $lead = array_merge((array) ($ai['lead'] ?? []), $lead);
         $done = !empty($j['complete']) && trim((string) ($lead['service'] ?? '')) !== '';
         if ($done) {
-            $out['lead'] = ['service' => $lead['service'], 'area' => (string) ($lead['area'] ?? ''), 'name' => (string) ($lead['name'] ?? ''), 'note' => trim((string) ($lead['note'] ?? '') . (!empty($lead['time']) ? ' — الوقت: ' . $lead['time'] : ''))];
+            $out['lead'] = ['service' => $lead['service'], 'area' => (string) ($lead['area'] ?? ''), 'name' => (string) ($lead['name'] ?? ''), 'note' => trim((string) ($lead['note'] ?? '')), 'time' => (string) ($lead['time'] ?? '')];
             $lead = [];
         }
         if (!empty($j['handoff'])) {
