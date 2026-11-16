@@ -405,6 +405,7 @@ final class Mutqan_Store {
         // Every order, whichever door it came through, is dispatched here when the room is on «آلي».
         if ($coll === 'orders' && class_exists('Mutqan_Dispatch')) { $doc = Mutqan_Dispatch::on_created($doc); }
         if ($coll === 'orders' && class_exists('Mutqan_WA_Central')) { Mutqan_WA_Central::order_ready($doc); }   // the master's «أوردر جاهز» + n8n
+        if ($coll === 'orders' && class_exists('Mutqan_WA_Journey')) { Mutqan_WA_Journey::on_created($doc); }   // «حلقة الوصل»: confirm it with the customer on WhatsApp
         // Every alert also goes out as a real background notification to the devices it is for.
         if ($coll === '_push' && class_exists('Mutqan_WebPush')) { Mutqan_WebPush::queue($doc); }
         if ($coll === 'orders' && class_exists('Mutqan_Sales')) { Mutqan_Sales::on_order($doc); }
@@ -439,6 +440,8 @@ final class Mutqan_Store {
         }
         // The customer hears every move of his order on WhatsApp, with the facts and the link back to it.
         if ($coll === 'orders' && array_key_exists('status', $patch) && class_exists('Mutqan_OrderBot')) { Mutqan_OrderBot::on_status($doc, $old); }
+        if ($coll === 'orders' && array_key_exists('status', $patch) && class_exists('Mutqan_WA_Journey')) { Mutqan_WA_Journey::on_status($doc, $old); }
+        if ($coll === 'orders' && !empty($patch['technicianId']) && ($patch['technicianId'] ?? null) !== ($old['technicianId'] ?? null) && class_exists('Mutqan_WA_Journey')) { Mutqan_WA_Journey::on_assigned($doc); }
         if ($coll === 'orders' && array_key_exists('technicianId', $patch)
             && ($patch['technicianId'] ?? null) !== ($old['technicianId'] ?? null) && !empty($patch['technicianId'])
             && class_exists('Mutqan_WA_Desk')) {
