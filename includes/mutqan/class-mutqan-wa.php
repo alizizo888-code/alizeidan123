@@ -130,6 +130,9 @@ final class Mutqan_WA {
         switch ($op) {
             // «ربط بلمسة»: one field (the number), the right device is chosen, the QR shows up on this screen.
             case 'link': return self::link($in);
+            case 'contacts_export': if (!in_array(($p['role'] ?? ''), ['owner', 'operations'], true)) { throw new Mutqan_Error('forbidden', 'للمالك والعمليات.', 403); } return Mutqan_Customers::export_csv(!isset($in['techs']) || !empty($in['techs']));
+            case 'followups_get': return Mutqan_Customers::settings();
+            case 'followups_set': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } $s = Mutqan_Customers::settings(); foreach (['enabled', 'perDay', 'hour', 'maintenanceDays', 'warrantyDays'] as $k) { if (isset($in[$k]) && is_numeric($in[$k])) { $s[$k] = (int) $in[$k]; } } $s['perDay'] = max(0, min(60, $s['perDay'])); update_option(Mutqan_Customers::OPT, $s, false); return $s;
             case 'central_get': if (($p['role'] ?? '') !== 'owner' && ($p['role'] ?? '') !== 'operations') { throw new Mutqan_Error('forbidden', 'للمالك والعمليات.', 403); } $v = Mutqan_WA_Central::view(); if (($p['role'] ?? '') !== 'owner') { unset($v['n8nSecret']); } return $v;
             case 'central_set': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return Mutqan_WA_Central::save($in);
             case 'central_test': if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'للمالك فقط.', 403); } return ['sent' => Mutqan_WA_Central::to_master("✅ تجربة: الماستر متوصل بالسنترال — أي أوردر جاهز من أي موقع هيوصلك هنا.\nجرّب ترد: *الوضع* أو *التنبيهات*.")];
@@ -408,12 +411,28 @@ final class Mutqan_WA {
         // raises its own alert. Only a conversation nobody automatic is handling rings the team.
         if ($botOff) { self::notify_admins('رسالة واتساب جديدة', $label . ': ' . mb_substr((string) ($e['text'] ?? ''), 0, 80), 'wa-' . $tid, 120); return ['ok' => true]; }
         self::put_thread($tid, ['lastIn' => mb_substr((string) ($e['text'] ?? ''), 0, 300)]);
+        $txt = (string) ($e['text'] ?? '');
+        if (class_exists('Mutqan_Customers')) {
+            // «إيقاف»: no more regular messages to this number, ever, until he writes again to ask.
+            if (Mutqan_Customers::is_stop($txt)) { Mutqan_Customers::set_optout($phone, true); try { self::send($acct, $phone, 'تم ✅ مش هنبعتلك رسائل دورية تاني. ولو احتجتنا اكتب هنا في أي وقت.', 'bot'); } catch (Throwable $ex) {} return ['ok' => true]; }
+            // «طرق الدفع» «العروض» «الضمان» «الصور» — answered from the system, in the name of his site.
+            $topic = Mutqan_Customers::topic($txt);
+            if ($topic !== '') { try { self::send($acct, $phone, Mutqan_Customers::info($topic, 'customer', (string) ((Mutqan_Store::get_raw('wa_threads', $tid) ?: [])['card']['brand'] ?? '')), 'bot'); } catch (Throwable $ex) {} return ['ok' => true]; }
+            // A technician who is not on file yet: the room adds his number, he is told what to do.
+            if (preg_match('/(انا|أنا)\s*(فني|فنى)|فني تبعكم|فنى تبعكم|بشتغل معاكم|اشتغل معاكم/u', $txt)) {
+                if (class_exists('Mutqan_WA_Central')) { Mutqan_WA_Central::to_master("رقم بيقول إنه فني ومش متسجل:\n📱 +" . self::intl($phone) . (!empty($th['name']) ? ' — ' . $th['name'] : '') . "\n💬 «" . mb_substr($txt, 0, 160) . "»\n\nضيف رقمه في ملف الفني في التطبيق عشان الطلبات توصله هنا.", 'tech-unknown-' . substr(self::intl($phone), -9), 'review'); }
+                try { self::send($acct, $phone, "أهلًا بيك 👷 رقمك لسه مش متسجل عندنا كفني.\nبلّغت العمليات وهيضيفوه في ملفك، وبعدها الطلبات والتفاصيل هتوصلك هنا، وتقدر ترد بـ *قبلت* · *في الطريق* · *وصلت* · *تم*.", 'bot'); } catch (Throwable $ex) {}
+                return ['ok' => true];
+            }
+        }
         // «حلقة الوصل»: a customer with an order on the go is talking about that order — confirm, follow, rate.
         if (class_exists('Mutqan_WA_Journey') && Mutqan_WA_Journey::inbound($acct, $phone, (string) ($e['text'] ?? ''), $tid)) { return ['ok' => true]; }
         // The reception bot speaks as the company the customer came through (the card), never as a generic brand.
         $bcfg = $cfg + Mutqan_WA_Bot::defaults();
         $card = (array) ((Mutqan_Store::get_raw('wa_threads', $tid) ?: [])['card'] ?? ($th['card'] ?? []));
         if (!empty($card['site']) && $card['site'] !== 'غير محدد') { $bcfg['brand'] = (string) $card['site']; }
+        // The first words: the business of the site he came from, his article — or, for an old customer, his last job.
+        if (class_exists('Mutqan_Customers')) { $bcfg['welcome'] = Mutqan_Customers::welcome($phone, $card); }
         $out = Mutqan_WA_Bot::decide($bcfg, $th, (string) ($e['text'] ?? ''), (int) ($e['ts'] ?? time()), (string) ($e['kind'] ?? 'text'));
         // The rules had nothing to say. If the model cannot be reached either, the bot falls back
         // on what the model has already answered before — which is the whole point of it learning.

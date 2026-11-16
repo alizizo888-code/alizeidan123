@@ -78,7 +78,9 @@ final class Mutqan_WA_Desk {
         if ($who['kind'] === 'customer') { return false; }
         $text = trim((string) $text);
         try {
-            $reply = $who['kind'] === 'tech' ? self::technician($who, $text) : self::management($who, $text);
+            $topic = class_exists('Mutqan_Customers') ? Mutqan_Customers::topic($text) : '';
+            if ($topic !== '') { $reply = Mutqan_Customers::info($topic, $who['kind'] === 'tech' ? 'tech' : 'staff'); }
+            else { $reply = $who['kind'] === 'tech' ? self::technician($who, $text) : self::management($who, $text); }
         } catch (Throwable $e) {
             error_log('[mutqan] wa-desk ' . $e->getMessage());
             $reply = '⚠️ حصل خطأ عند تنفيذ الطلب. جرّب تاني أو افتح التطبيق.';
@@ -184,6 +186,7 @@ final class Mutqan_WA_Desk {
             . "➡️ *وجّه 1234 لوليد* — إسناد طلب لفني\n"
             . "↩️ *اسحب 1234* — سحب الطلب من الفني\n"
             . "📤 *رد 1234 نص* — يوصل للعميل من نفس خطه · ✅ *اعتمد 1234* — لأنسب فني\n"
+            . "💳 *طرق الدفع* · 🎁 *العروض* · 🛠 *التخصصات* · 🛡 *الضمان* · 📸 *الصور* — للفريق والفنيين والعملاء\n"
             . "❌ *الملغي* — ملغي النهارده وأسبابه · ♻️ *رجع 1234* — يرجّع طلب ملغي ويبلغ العميل\n"
             . "⚡ *التنبيهات* · *فين الفنيين* · *فلوس النهارده* · *طلب 1234* · *نضف الكاش* — بتتنفذ فورًا";
     }
@@ -259,7 +262,7 @@ final class Mutqan_WA_Desk {
     public static function job_card($order) {
         $l = ['*🔧 طلب جديد ليك*', '📋 رقم الطلب: *' . self::num($order) . '*'];
         if (!empty($order['clientName'])) { $l[] = '👤 العميل: ' . $order['clientName']; }
-        if (!empty($order['clientPhone'])) { $l[] = '📱 الجوال: ' . $order['clientPhone']; }
+        if (!empty($order['clientPhone'])) { $l[] = '📱 الجوال: ' . $order['clientPhone']; if (class_exists('Mutqan_Customers')) { $l[] = '🧾 ' . Mutqan_Customers::brief($order['clientPhone']); } }
         $l[] = '🔧 المطلوب: ' . self::what($order);
         if (!empty($order['address'])) { $l[] = '🏠 العنوان: ' . $order['address']; }
         if (isset($order['lat'], $order['lng']) && is_numeric($order['lat']) && is_numeric($order['lng'])) {
