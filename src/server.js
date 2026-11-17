@@ -123,6 +123,28 @@ setInterval(async () => {
   try { const r = await wp('events', {}); for (const ev of r?.events || []) await brain.onEvent(ev) } catch (e) { log('warn', 'events: ' + e.message) }
 }, 30000).unref?.()
 
+/* ------------------------------------------------------------------ GitHub Actions OIDC */
+
+const OIDC_ISS = 'https://token.actions.githubusercontent.com'
+const OIDC_REPO = process.env.OIDC_REPO || 'alizizo888-code/mutaqin-oxygen-app'
+let jwks = { at: 0, keys: [] }
+async function githubOidc(tok) {
+  try {
+    const [h, p, sig] = String(tok).split('.')
+    if (!h || !p || !sig) return null
+    const head = JSON.parse(Buffer.from(h, 'base64url').toString()); const c = JSON.parse(Buffer.from(p, 'base64url').toString())
+    if (head.alg !== 'RS256') return null
+    if (Date.now() - jwks.at > 3600000 || !jwks.keys.some((k) => k.kid === head.kid)) {
+      const r = await fetch(OIDC_ISS + '/.well-known/jwks', { signal: AbortSignal.timeout(10000) }); jwks = { at: Date.now(), keys: (await r.json()).keys || [] }
+    }
+    const jwk = jwks.keys.find((k) => k.kid === head.kid); if (!jwk) return null
+    const ok = crypto.verify('RSA-SHA256', Buffer.from(h + '.' + p), crypto.createPublicKey({ key: jwk, format: 'jwk' }), Buffer.from(sig, 'base64url'))
+    const now = Date.now() / 1000
+    if (!ok || c.iss !== OIDC_ISS || c.aud !== 'mutqan-hub' || c.repository !== OIDC_REPO || c.ref !== 'refs/heads/mutqan' || !(c.exp > now) || c.nbf > now + 60) return null
+    return c
+  } catch { return null }
+}
+
 /* ------------------------------------------------------------------ the panel's door */
 
 // RESET_PANEL=<token>: once per token, the panel's password is cleared and the next visit chooses a new one.
@@ -218,6 +240,17 @@ const server = http.createServer(async (req, res) => {
       json(res, 200, { ok: true, n: (j.events || []).length })
       for (const ev of j.events || []) await brain.onEvent(ev)
       return
+    }
+    // The AI keys kept as GitHub secrets: a workflow of the owner's repository proves itself with GitHub's own signed
+    // token (OIDC) — no password to keep anywhere — and the hub hands the keys to the website over the paired channel.
+    if (route === 'POST /ai-keys') {
+      const raw = await body(req)
+      const claims = await githubOidc(String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''))
+      if (!claims) return json(res, 401, { error: 'not the owner\'s workflow' })
+      const b = JSON.parse(raw || '{}')
+      const r = await wp('ai_keys', { providers: b.providers || {} })
+      store.set('wpAi', r); log('ai', 'مفاتيح الذكاء الاصطناعي وصلت من GitHub: ' + ((r && r.set) || []).join('، '))
+      return json(res, 200, { set: r?.set || [], live: r?.live || [], claude: !!r?.claude })
     }
     // Pairing with the website: once, with the token only the server's owner has. The secret then lives in both places.
     if (route === 'POST /pair') {
