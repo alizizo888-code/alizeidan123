@@ -325,11 +325,87 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
       if (ai.complete && ai.lead && ai.lead.service) return createFrom(store.chat(c.pk), line, phone, { service: [ai.lead.service, ai.lead.note, ai.lead.price ? 'السعر المتفق: ' + ai.lead.price : ''].filter(Boolean).join(' — '), place: ai.lead.area || '', time: ai.lead.time || (open ? 'أقرب وقت' : 'بكرة الصبح'), name: ai.lead.name || name }, true)
       return
     }
-    // No AI: the hub's own rules.
+    // No AI: the hub's own rules — the price and the bargaining first, from the owner's own price lists.
+    const deal = await negotiate(c, line, phone, text)
+    if (deal) return
     if (n === '2') return say(phone, line, await infoOr('الأسعار', C.prices))
     if (n === '1' || SERVICE_WORDS.some((w) => n.includes(T.norm(w))) || (c.stage === 'lead')) return lead(c, line, phone, n === '1' ? '' : text, name, c.stage !== 'lead')
     try { const r = await wp('info', { text }); if (r && r.text) return say(phone, line, r.text) } catch {}
     return notifyHuman(c, text, false)
+  }
+
+  /* ------------------------------------------------------------------ the price and the bargaining */
+
+  const dealOf = (q) => ({ spec: q.spec, label: q.label, fixed: !!q.fixed, total: q.total || q.from, floor: q.floor || q.total || q.from, offer: q.total || q.from, round: 0, acQuote: q.acQuote || null, at: now() })
+  function quoteText(q) {
+    if (q.fixed) return '💰 ' + q.label + ': *' + q.total + ' ر.س*\nشامل الغسيل الكامل للوحدة الداخلية والخارجية ✅ والمعاينة مجانية.'
+    return '💰 ' + q.label + ' تبدأ من *' + (q.from || q.total) + ' ر.س*\n' + (q.inspect || 'والسعر النهائي بعد المعاينة.')
+  }
+  const r5 = (v) => Math.max(5, Math.round(v / 5) * 5)
+
+  /** The next thing the order still needs, as one short question — or null when it is complete. */
+  function nextAsk(L) {
+    if (!L.service) return 'اكتب الخدمة اللي محتاجها بالتفصيل (نوع وعدد الأجهزة).'
+    if (L.lat === undefined && !L.place) return '📍 ابعتلي الحي أو اللوكيشن ونثبت الحجز.'
+    if (!L.time) return isOpen() ? '📅 الموعد المناسب ليك إمتى؟' : '🌙 إحنا دلوقتي برا مواعيد العمل؛ نحجزلك *بكرة الصبح من الساعة ' + cfg().hoursFrom + '*؟'
+    return null
+  }
+
+  /**
+   * «بكام؟» / «غالي» / «خليها 150» — the price from the owner's lists, then down in steps to his floor and no further:
+   * first a step, then the floor as the last word, then an apology and the support team (special offers for valued
+   * customers). A price he names at or above what is on the table is taken; once we moved, anything at the floor is.
+   */
+  async function negotiate(c, line, phone, text) {
+    let L = {}; try { L = JSON.parse(c.lead || '{}') } catch {}
+    let d = L.deal || null
+    const ask = T.isPriceAsk(text); const haggle = T.isHaggle(text); const offered = T.moneyIn(text)
+    const save = () => store.touchChat(c.pk, { lead: JSON.stringify(L), stage: 'lead', stageAt: now(), orderId: '' })
+    const reply = (msg) => { const nx = nextAsk(L); say(phone, line, msg + (nx ? '\n\n' + nx : '\n\nاكتب *تمام* ونسجّل طلبك حالًا ✅')); return true }
+
+    if (ask && (!d || SERVICE_WORDS.some((w) => T.norm(text).includes(T.norm(w))))) {
+      let q = null; try { q = await wp('quote', { text: text + ' ' + (L.service || '') }) } catch {}
+      if (q && !(q.total || q.from)) q = null
+      if (!q) {
+        if (!d) { const own = await infoOr(text, ''); if (own) { say(phone, line, own); return true } say(phone, line, 'أسعارنا بتتحدد حسب نوع الخدمة وعدد الأجهزة 🌷 قولّي الخدمة اللي محتاجها بالتفصيل (مثال: غسيل 2 مكيف سبليت) وأقولك السعر على طول.'); return true }
+      } else {
+        d = L.deal = dealOf(q)
+        L.service = q.label   // «غسيل 2 مكيف سبليت», not «بكام…؟»
+        save(); return reply(quoteText(q))
+      }
+    }
+    if (!d) return false
+    if (d.agreed) {
+      if (haggle || offered) { say(phone, line, 'اتفقنا قبل كده على *' + d.agreed + ' ر.س* 🌷 وده أفضل سعر ممكن مع الضمان.'); return true }
+      return false
+    }
+    const agree = (v, why) => {
+      d.agreed = v; d.offer = v; L.deal = d; save()
+      toRoom('🤝 *اتفاق سعر* — ' + (c.name || 'بدون اسم') + ' — ' + c.phone + '\n' + d.label + ': ' + v + ' ر.س' + (v < d.total ? ' (بدل ' + d.total + ')' : ''), 'deal-' + c.pk + '-' + v)
+      return reply((why || 'اتفقنا ✅') + ' *' + v + ' ر.س* لـ' + d.label + '.')
+    }
+    if (offered) {
+      if (offered >= d.offer) return agree(d.offer, 'تمام، نثبّتلك')
+      if (offered >= d.floor && d.round >= 1) return agree(r5(offered) > d.offer ? d.offer : Math.max(d.floor, r5(offered)), 'عشان خاطرك 🌷 اتفقنا على')
+    }
+    if (!haggle && !offered) {
+      if (T.isYes(text) && !(L.askedMorning && !L.time) && now() - (d.at || 0) < 6 * 3600000) return agree(d.offer, 'تمام 🌷 اتفقنا على')
+      return false
+    }
+    // He wants less.
+    const step = r5((d.total - d.floor) / 2)
+    if (d.round === 0 && d.total - d.floor >= 10) {
+      d.offer = Math.max(d.floor, d.total - step); d.round = 1; L.deal = d; save()
+      return reply('عشانك 🌷 نخليها *' + d.offer + ' ر.س* بدل ' + d.total + '، بنفس الجودة والضمان.')
+    }
+    if (d.round <= 1) {
+      d.offer = d.floor; d.round = 2; L.deal = d; save()
+      return reply('آخر كلام يا غالي: *' + d.floor + ' ر.س* — وده أقل سعر نقدر نقدمه مع الحفاظ على جودة الشغل والضمان ✅')
+    }
+    d.round++; L.deal = d; save()
+    toRoom('💬 عميل بيفاصل تحت أقل سعر — ' + (c.name || 'بدون اسم') + ' — ' + c.phone + '\n' + d.label + ': عرضنا ' + d.floor + ' ر.س' + (offered ? '، وهو عايز ' + offered : '') + '\nكلّمه: *عميل ' + c.phone + ' النص*', 'haggle-' + c.pk + '-' + Math.floor(now() / 3600000))
+    say(phone, line, 'والله ده أقل سعر عندنا 🙏 جودة الشغل والضمان ما نقدرش نتنازل عنهم.\nبلّغت الدعم الفني، وعندهم أحيانًا عروض خاصة للعملاء المميزين — هيتواصلوا معاك حالًا.\nولو حابب نثبّت على *' + d.floor + ' ر.س* اكتب *تمام* ✅')
+    return true
   }
 
   async function infoOr(text, fallback) { try { const r = await wp('info', { text }); if (r && r.text) return r.text } catch {} return fallback }
@@ -354,7 +430,7 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
   /** «عايز أغسل مكيفين في العزيزية بكرة» — the order is built from the chat and handed to the website. */
   async function lead(c, line, phone, text, name, start = false) {
     let L = {}; try { L = JSON.parse(c.lead || '{}') } catch {}
-    if (start || !c.stage || c.stage !== 'lead') L = {}
+    if (start || !c.stage || c.stage !== 'lead') L = L.deal ? { deal: L.deal, service: L.service } : {}
     if (L.askedMorning && !L.time && T.isYes(text)) { L.time = 'بكرة الصبح من الساعة ' + cfg().hoursFrom; text = '' }
     const cc = T.coords(text)
     if (cc) { L.lat = cc[0]; L.lng = cc[1] }
@@ -368,7 +444,12 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
     if (L.service && !L.time && T.looksLikeTime(L.service)) L.time = L.service
     store.touchChat(c.pk, { lead: JSON.stringify(L), stage: 'lead', stageAt: now(), orderId: '' })
     if (!L.service) return say(phone, line, 'تمام 🌷 اكتب الخدمة اللي محتاجها (مثال: غسيل 2 مكيف سبليت، أو تسريب مياه).')
-    if (L.lat === undefined && !L.place) return say(phone, line, '📍 ابعت موقعك من واتساب (📎 ← الموقع) أو اكتب الحي والعنوان.')
+    let priced = ''
+    if (!L.deal) {
+      let q = null; try { q = await wp('quote', { text: L.service }) } catch {}
+      if (q && q.fixed && q.total) { L.deal = dealOf(q); store.touchChat(c.pk, { lead: JSON.stringify(L) }); priced = quoteText(q) + '\n\n' }
+    }
+    if (L.lat === undefined && !L.place) return say(phone, line, priced + '📍 ابعت موقعك من واتساب (📎 ← الموقع) أو اكتب الحي والعنوان.')
     if (!L.time) {
       if (!isOpen()) {
         if (!L.askedMorning) {
@@ -385,7 +466,9 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
   async function createFrom(c, line, phone, L, fromAi = false) {
     const name = L.name || c.name || ''
     try {
-      const o = await wp('create', { phone: T.intl(phone), name, service: L.service, address: L.place || '', lat: L.lat ?? null, lng: L.lng ?? null, time: L.time, line })
+      const d = L.deal || {}
+      const price = d.agreed || (d.fixed ? d.offer : null)
+      const o = await wp('create', { phone: T.intl(phone), name, service: L.service, address: L.place || '', lat: L.lat ?? null, lng: L.lng ?? null, time: L.time, line, price: price || null, acQuote: d.acQuote || null, spec: d.spec || '' })
       store.touchChat(c.pk, { lead: '', stage: 'confirm', orderId: o?.id || '', stageAt: now() })
       // The website reports the new order and the confirmation goes out from created().
     } catch (e) {

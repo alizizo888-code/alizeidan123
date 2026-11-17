@@ -42,7 +42,7 @@ export function coords(text) {
 const TIME_WORDS = ['اليوم', 'النهارده', 'النهاردة', 'الليلة', 'بكرة', 'بكره', 'باكر', 'بعد بكرة', 'الصبح', 'الصباح', 'الظهر', 'العصر', 'المغرب', 'العشاء', 'العشا', 'بالليل', 'الساعة', 'الساعه', 'دلوقتي', 'الحين', 'حالا', 'الان', 'الآن', 'السبت', 'الاحد', 'الأحد', 'الاثنين', 'الإثنين', 'الثلاثاء', 'الاربعاء', 'الأربعاء', 'الخميس', 'الجمعة', 'صباحا', 'مساء', 'اقرب وقت', 'أقرب وقت']
 export function looksLikeTime(text) {
   const n = ' ' + norm(text) + ' '
-  if (/\d{1,2}\s*(:\d{2})?/.test(n) && /(ساعه|ص |م |am|pm|:|بعد|قبل|يوم|بكره|اليوم)/.test(n)) return true
+  if (/\d{1,2}\s*(:\d{2})?/.test(n) && /(ساعه|\sص\s|\sم\s|am|pm|:|بعد|قبل|يوم|بكره|اليوم)/.test(n)) return true
   return TIME_WORDS.some((w) => { const x = norm(w); return x.length > 3 && n.includes(x) })
 }
 
@@ -165,3 +165,17 @@ export function summary(o) {
   return L
 }
 export const num = (o) => String(o.number || String(o.id || '').slice(-5))
+
+/* ------------------------------------------------------------------ prices and bargaining */
+
+export const isPriceAsk = (t) => /(بكام|بكم|كام السعر|كم السعر|كم سعر|كام سعر|السعر|سعر|الاسعار|اسعار|تكلفه|التكلفه|كم تاخذ|كم ياخذ|كم الحساب|كم المبلغ|الحساب كام|عرض سعر)/.test(norm(t))
+export const isHaggle = (t) => /(غالي|غاليه|غالى|كتير|كثير|نزل|نزّل|خصم|تخفيض|ارخص|اقل|اخر سعر|اخر كلام|نهايه السعر|عرض|ينفع ب|ممكن ب|تقدر ب|خليها|خليه ب|مش معقول|مبالغ|زياده|كتيره|فوق طاقتي|ميزانيتي|ما معي|معايا بس|مفيش غير)/.test(norm(t))
+/** A price the customer names: «ب 150», «150 ريال», «خليها 120». Quantities («2 مكيف») are not prices. */
+export function moneyIn(t) {
+  const n = norm(t)
+  const m = n.match(/(?:^|\s|ب)(\d{2,5})(?!\d)\s*(?:ريال|ر\.?س|sar)?/)
+  if (!m) return null
+  const v = Number(m[1])
+  if (new RegExp(m[1] + '\\s*(مكيف|جهاز|وحده|غرف|سبليت|شباك|ساعه|الساعه|دقيقه|يوم)').test(n)) return null
+  return v >= 20 ? v : null
+}

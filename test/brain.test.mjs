@@ -40,9 +40,10 @@ const wp = async (op, b) => {
   if (op === 'reopen') { const o = orders[b.id]; Object.assign(o, b.patch, { status: 'new', techId: null, techName: null }); return view(o) }
   if (op === 'approve') { const o = orders[b.id]; Object.assign(o, { techId: 't1', techName: 'الفني علي', status: 'assigned' }); emit('order.assigned', o); return { text: '✅ اتسند للفني علي' } }
   if (op === 'eta_ask') return { result: 'asked' }
-  if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء' }; orders[o.id] = o; emit('order.created', o); return view(o) }
+  if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; emit('order.created', o); return view(o) }
   if (op === 'report') return { text: '📋 تقرير' }
   if (op === 'info') return /سعر|اسعار/.test(b.text) ? { text: 'أسعار المالك' } : null
+  if (op === 'quote') { const n = T.norm(b.text); if (!/مكيف|سبليت|تسريب|سباك/.test(n)) return null; const q = /مكيفين|2/.test(n) ? 2 : 1; return /غسيل|اغسل/.test(n) ? { spec: 'ac', fixed: true, label: 'غسيل ' + q + ' مكيف سبليت', qty: q, total: q === 2 ? 140 : 100, floor: q === 2 ? 125 : 89, acQuote: { mode: 'wash', type: 'سبليت', qty: q } } : { spec: 'plumbing', fixed: false, label: 'سباكة', from: 120, total: 120, floor: 100 } }
   if (op === 'greet') return T.pkey(b.phone) === T.pkey(OLDC) ? { site: 'رعد السماء', kind: 'returning', name: 'أبو فهد', lastService: 'غسيل مكيفين', lastDays: 40, fromUs: false } : { site: 'رعد السماء', kind: 'new', fromUs: /#raad|من موقع/.test(b.text) }
   if (op === 'converse') return AI.on ? { reply: 'أكيد، غسيل المكيف السبليت بـ 120 ر.س للجهاز. في أي حي؟', lead: { service: 'غسيل 2 سبليت', area: AI.area || '', time: AI.time || '' }, complete: !!(AI.area && AI.time) } : null
   return { ok: true }
@@ -167,10 +168,36 @@ m = await say(AIC, 'في الزاهر بكرة العصر')
 t('…and when it has everything, the order is created and confirmed', Object.values(orders).some((o) => T.pkey(o.clientPhone) === T.pkey(AIC) && o.address === 'الزاهر') && /وصلنا طلبك رقم/.test(to(m, AIC)), JSON.stringify(m))
 AI.on = false
 
+
+// ===== J. prices and bargaining, from the owner's lists, down to his floor and no further =====
+transcript.push('\n### ح) الأسعار والفصال')
+const HAG = '966500000060'
+m = await say(HAG, 'السلام عليكم')
+m = await say(HAG, 'بكام غسيل 2 مكيف سبليت؟')
+t('price: the owner\'s list price and the next question', /غسيل 2 مكيف سبليت: \*140 ر\.س\*/.test(to(m, HAG)) && /الحي أو اللوكيشن/.test(to(m, HAG)), to(m, HAG))
+m = await say(HAG, 'غالي شوية')
+t('first «غالي»: one step down', /\*130 ر\.س\* بدل 140/.test(to(m, HAG)), to(m, HAG))
+m = await say(HAG, 'لا كتير نزل كمان')
+t('second: the floor, as the last word', /آخر كلام يا غالي: \*125 ر\.س\*/.test(to(m, HAG)), to(m, HAG))
+m = await say(HAG, 'خليها 100')
+t('below the floor: apology, support, room told', /أقل سعر عندنا/.test(to(m, HAG)) && /بيفاصل تحت أقل سعر/.test(to(m, ROOM)), JSON.stringify(m))
+m = await say(HAG, 'تمام')
+t('«تمام» settles on the floor and the room hears the deal', /اتفقنا على \*125 ر\.س\*/.test(to(m, HAG)) && /اتفاق سعر/.test(to(m, ROOM)), JSON.stringify(m))
+m = await say(HAG, 'حي الشوقية'); m = await say(HAG, 'بكرة العصر')
+const hagOrder = Object.values(orders).find((o) => T.pkey(o.clientPhone) === T.pkey(HAG))
+t('…the order carries the agreed price', hagOrder && hagOrder.agreedPrice === 125 && hagOrder.service === 'غسيل 2 مكيف سبليت', hagOrder)
+const HAG2 = '966500000061'
+await say(HAG2, 'السلام عليكم'); await say(HAG2, 'كم سعر غسيل مكيف سبليت')
+m = await say(HAG2, 'ب 95 ينفع؟')
+t('a price he names below the first step is countered, not taken', /\*95 ر\.س\* بدل 100|\*94|بدل 100/.test(to(m, HAG2)) || /آخر كلام/.test(to(m, HAG2)), to(m, HAG2))
+m = await say(HAG2, '90 وخلاص')
+t('…after we moved, a price at or above the floor is taken', /اتفقنا على \*90 ر\.س\*/.test(to(m, HAG2)), to(m, HAG2))
+
 // ===== text helpers =====
 t('stepOf: «وصلت 1002»', T.stepOf('وصلت 1002') === 'arrived')
 t('stepOf: «تم استلام…» is not done', T.stepOf('تم استلام الطلب') !== 'completed')
 t('intl: 05… → 9665…', T.intl('0536554731') === '966536554731')
+t('moneyIn: «2 مكيف» is not a price', T.moneyIn('عندي 20 مكيف') === null && T.moneyIn('خليها 150') === 150)
 t('roomCommand: وجّه 1002 لمحمود', T.roomCommand('وجّه 1002 لمحمود')?.name === 'محمود')
 
 if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join('\n'))
