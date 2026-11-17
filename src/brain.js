@@ -90,7 +90,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     // The room hears about every order at once, whatever happens with the customer.
     const head = '🆕 *طلب جديد #' + T.num(o) + '*' + (o.site ? ' — ' + o.site : '')
     toRoom([head, '👤 ' + (o.clientName || 'بدون اسم') + (o.clientPhone ? ' — ' + o.clientPhone : ' — ⏳ مستني تأكيده من واتساب'), ...T.summary(o), '', o.techName ? '👷 اتسند آليًا لـ ' + o.techName : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'].join('\n'), 'new-' + o.id)
-    // Sent from the site's confirm button: his own WhatsApp message is on its way, and that is his confirmation.
+    // From the site's order button: the site sends him the full order card itself — no «اكتب تأكيد» for him.
+    if (o.clientPhone && ['site', 'mutqan_ai'].includes(o.source)) { setStage(o.clientPhone, o.id, 'live'); return }
     if (!o.clientPhone || o.customerConfirmed || o.waClaim || ['test', 'import'].includes(o.source)) return
     const miss = T.missing(o)
     const L = ['أهلًا' + (o.clientName ? ' ' + o.clientName : '') + ' 👋', 'معاك خدمة عملاء' + (o.site ? ' *' + o.site + '*' : '') + '، وصلنا طلبك رقم *' + T.num(o) + '*:', ...T.summary(o)]

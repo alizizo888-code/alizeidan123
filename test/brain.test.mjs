@@ -202,6 +202,16 @@ t('moneyIn: «2 مكيف» is not a price', T.moneyIn('عندي 20 مكيف') ==
 t('roomCommand: وجّه 1002 لمحمود', T.roomCommand('وجّه 1002 لمحمود')?.name === 'محمود')
 
 if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join('\n'))
+// ===== Y. an order from the site's button: the site sends the full card itself; the hub does not ask «تأكيد» =====
+{
+  const SC = '966500000088'
+  orders.os = { id: 'os', number: 1888, status: 'new', clientPhone: SC, clientName: 'علي', service: 'غسيل مكيف', site: 'متقن', source: 'site', lat: 21.4, lng: 39.8, preferredTime: 'أقرب وقت' }
+  emit('order.created', orders.os); await flush(); const m = take()
+  t('site order: room hears it, the customer gets no «اكتب تأكيد» from the hub', /طلب جديد #1888/.test(to(m, ROOM)) && !to(m, SC), JSON.stringify(m))
+  const r = await say(SC, 'الفني هيوصل امتى؟')
+  t('…and his reply is about that order', !/مرحبًا بكم/.test(to(r, SC)), JSON.stringify(r))
+}
+
 // ===== Z. the site's confirm button opens WhatsApp with the order: sending it is the confirmation =====
 {
   const CL = '966500000077'
