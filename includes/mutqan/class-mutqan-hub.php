@@ -190,6 +190,8 @@ final class Mutqan_Hub {
                 $t = Mutqan_Customers::topic((string) ($in['text'] ?? ''));
                 return $t !== '' ? ['text' => Mutqan_Customers::info($t, 'customer')] : null;
             }
+            case 'greet': return self::greet((string) ($in['phone'] ?? ''), (string) ($in['text'] ?? ''), (string) ($in['brand'] ?? ''));
+            case 'converse': return self::converse($in);
             case 'events': return ['events' => self::take_queue()];
             case 'ping': return ['ok' => true, 'site' => home_url('/')];
             // «رقم التجربة» set on the site (one phone that is both a customer and the room) is the hub's too.
@@ -258,6 +260,65 @@ final class Mutqan_Hub {
         $doc = Mutqan_Store::insert('orders', $order, null, [], self::sys());
         if (class_exists('Mutqan_WA') && !empty($doc['id'])) { Mutqan_WA::add_step((string) $doc['id'], 'wa_in', 'وصل الطلب من واتساب', 'مركز الواتساب'); }
         return self::view(Mutqan_Store::get_raw('orders', (string) $doc['id']) + ['id' => (string) $doc['id']]);
+    }
+
+    /* ------------------------------------------------------------------ the first message and the conversation */
+
+    /**
+     * Who this customer is and where he came from: the site (by the «#code» our sites put in their WhatsApp links, else
+     * the line's own site), the article he was reading, and his history with us (new, returning, VIP).
+     */
+    public static function greet($phone, $text, $lineBrand = '') {
+        $brand = '';
+        if (preg_match_all('/#([a-z][a-z0-9]{1,23})\b/i', $text, $m)) {
+            foreach ($m[1] as $code) { $code = strtolower($code); if (class_exists('Oxygen_Network') && Oxygen_Network::valid($code)) { $brand = $code; break; } }
+        }
+        $fromUs = $brand !== '' || preg_match('/(من موقع|من موقعكم|شفت اعلان|شفت إعلان|بخصوص:|من جوجل|من قوقل|من التيك|من تيك توك|سناب|انستا|حولني|حوّلني|كلمني|من طرف)/u', $text);
+        if ($brand === '') { $brand = $lineBrand; }
+        $site = class_exists('Mutqan_Customers') ? Mutqan_Customers::business($brand !== '' ? $brand : 'oxygen') : 'أكسجين';
+        $src = class_exists('Mutqan_WA_Central') ? Mutqan_WA_Central::source($text) : [];
+        $p = class_exists('Mutqan_Customers') ? Mutqan_Customers::profile($phone) : null;
+        return ['brand' => $brand, 'site' => $site, 'fromUs' => (bool) $fromUs, 'source' => (string) ($src['title'] ?? ''),
+            'kind' => (string) ($p['kind'] ?? 'new'), 'name' => (string) ($p['name'] ?? ''), 'orders' => (int) ($p['orders'] ?? 0),
+            'lastService' => mb_substr((string) ($p['lastService'] ?? ''), 0, 60), 'lastDays' => !empty($p['lastAt']) ? max(1, (int) floor((time() - (int) $p['lastAt']) / 86400)) : 0,
+            'warrantyLeft' => !empty($p['warranty']['active']) ? (int) $p['warranty']['left'] : 0, 'brief' => class_exists('Mutqan_Customers') ? Mutqan_Customers::brief($phone) : ''];
+    }
+
+    /**
+     * One turn of the conversation, answered by the site's own AI (the owner's free providers, his facts and FAQ, the
+     * sales brain with prices, floor and free slots). No provider configured → null, and the hub uses its own rules.
+     */
+    public static function converse($in) {
+        if (!class_exists('Mutqan_AI') || !Mutqan_AI::any_enabled()) { return null; }
+        $phone = (string) ($in['phone'] ?? '');
+        $site = (string) ($in['site'] ?? 'أكسجين');
+        $hist = array_slice(array_map(static function ($h) { return mb_substr((string) $h, 0, 400); }, (array) ($in['history'] ?? [])), -14);
+        $lead = (array) ($in['lead'] ?? []);
+        $tone = class_exists('Mutqan_WA_AI') ? (string) Mutqan_WA_AI::settings()['tone'] : 'سعودية بيضاء ودودة ومختصرة';
+        $specs = class_exists('Mutqan_Rest') ? implode('، ', array_values(Mutqan_Rest::SPEC_LABELS)) : 'التكييف، غرف التبريد والتجميد، السباكة، الكهرباء، النجارة';
+        $after = !empty($in['afterHours']);
+        $emg = (string) ($in['emergencyPhone'] ?? '');
+        $P = "أنت موظف خدمة عملاء محترف في «{$site}» للصيانة والمقاولات العامة (مكة المكرمة وجدة)، بترد على واتساب باسم الشركة.\n"
+            . "اكتب بلهجة {$tone}: رسالة قصيرة أو اتنين، بأدب واحترام، زي موظف حقيقي، من غير قوائم أرقام ومن غير ما تقول إنك بوت أو ذكاء اصطناعي.\n"
+            . "## الشركة\nالخدمات: {$specs}. صيانة وإصلاح جميع أنواع المكيفات، وغرف التبريد والتجميد، وكمان سباكة ونجارة وكهرباء وغيرها.\n"
+            . "مواعيد العمل: من " . (int) ($in['hoursFrom'] ?? 8) . " لحد " . (int) ($in['hoursTo'] ?? 24) . ". " . ($after ? "دلوقتي برا مواعيد العمل: احجز له أقرب موعد الصبح، إلا لو الموضوع طارئ وخطير (تسريب مياه كبير، ماس أو ريحة حريق، غرفة تبريد فيها بضاعة هتبوظ) — ساعتها اطلب منه يتصل فورًا على {$emg}.\n" : "\n")
+            . "## العميل\n" . (string) ($in['brief'] ?? 'عميل جديد') . (!empty($in['source']) ? "\nجه من صفحة: «" . mb_substr((string) $in['source'], 0, 90) . "»" : '') . "\n"
+            . "## اللي اتجمع من الطلب\n" . ($lead ? wp_json_encode($lead, JSON_UNESCAPED_UNICODE) : 'لا شيء') . "\n"
+            . "## المحادثة\n" . implode("\n", $hist) . "\nالعميل (آخر رسالة): " . mb_substr((string) ($in['text'] ?? ''), 0, 600) . "\n\n"
+            . "## المطلوب\n"
+            . "- افهم نوع الخدمة، وجاوب سؤاله بالظبط. اجمع بالتدريج (سؤال واحد في كل رسالة): الخدمة والتفاصيل (نوع وعدد الأجهزة)، الحي، الوقت المناسب، والاسم.\n"
+            . "- الأسعار: من معلومات الشركة بس. لو فاصل في السعر نزّل بالتدريج لحد أقل سعر مسموح بس، وبعدها اعتذر بلطف واعرض قيمة الخدمة والضمان. ما تخترعش خصم ولا سعر.\n"
+            . "- أول ما يبقى عندك الخدمة والحي والوقت: complete=true وقوله إن الطلب اتسجل وهيوصله التأكيد حالًا.\n"
+            . "- شكوى، استرجاع فلوس، زعل شديد، أو قرار مش بتاعك: handoff=true.\n"
+            . "- رد بالـJSON ده بس:\n"
+            . '{"reply":"","lead":{"service":"","area":"","time":"","name":"","note":"","price":""},"complete":false,"handoff":false,"handoff_reason":""}';
+        try { $r = Mutqan_AI::run($P, ['json' => true, 'kb' => true, 'temperature' => 0.4, 'tier' => 'low', 'feature' => 'wa_hub', 'budget' => 25, 'sales' => ['phone' => $phone]], self::sys()); }
+        catch (Throwable $e) { error_log('[mutqan] hub converse ' . $e->getMessage()); return null; }
+        $j = is_array($r['json'] ?? null) ? $r['json'] : null;
+        $reply = trim((string) ($j['reply'] ?? ''));
+        if ($reply === '') { return null; }
+        $l = array_filter(array_map(static function ($v) { return trim(mb_substr((string) $v, 0, 160)); }, (array) ($j['lead'] ?? [])), 'strlen');
+        return ['reply' => mb_substr($reply, 0, 1200), 'lead' => array_merge($lead, $l), 'complete' => !empty($j['complete']), 'handoff' => !empty($j['handoff']), 'reason' => mb_substr((string) ($j['handoff_reason'] ?? ''), 0, 140), 'provider' => (string) ($r['provider'] ?? '')];
     }
 
     /* ------------------------------------------------------------------ pairing (the owner, once) */
