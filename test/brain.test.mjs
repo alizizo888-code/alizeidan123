@@ -5,7 +5,7 @@ import * as T from '../src/text.js'
 import fs from 'node:fs'
 
 let pass = 0; let fail = 0
-const t = (name, ok, extra = '') => { if (ok) pass++; else { fail++; console.log('✗ ' + name + (extra ? '\n   ' + String(extra).slice(0, 600) : '')) } }
+const t = (name, ok, extra = '') => { if (ok) { pass++; console.log('PASS wa-hub: ' + name) } else { fail++; console.log('FAIL wa-hub: ' + name + (extra ? '\n   ' + String(extra).slice(0, 600) : '')) } }
 
 const ROOM = '966536554731'; const CUST = '966500000001'; const TECH = '966549648890'; const NEW = '966500000009'; const OLDC = '966500000020'; const FRIEND = '966500000030'; const LATE = '966500000040'; const AIC = '966500000050'
 const AI = { on: false }
@@ -47,7 +47,12 @@ const wp = async (op, b) => {
   if (op === 'converse') return AI.on ? { reply: 'أكيد، غسيل المكيف السبليت بـ 120 ر.س للجهاز. في أي حي؟', lead: { service: 'غسيل 2 سبليت', area: AI.area || '', time: AI.time || '' }, complete: !!(AI.area && AI.time) } : null
   return { ok: true }
 }
-brain = createBrain({ store, wp, send })
+// Held turns run when the test says so, not on a clock: no timing, no flakiness.
+const timers = new Map(); let tid = 0
+const later = (fn) => { const id = ++tid; timers.set(id, fn); return id }
+const cancel = (id) => timers.delete(id)
+const sleep = async () => { const fns = [...timers.values()]; timers.clear(); for (const f of fns) { await f(); } await flush(); await new Promise((r) => setImmediate(r)); await flush() }
+brain = createBrain({ store, wp, send, later, cancel })
 const say = async (phone, text, label) => { transcript.push((label || toWho(phone)) + ': ' + text); await brain.inbound({ line: 'l1', phone, text }); await flush(); return take() }
 
 // ===== A. the order lands: confirm on WhatsApp =====
@@ -128,7 +133,6 @@ t('an old customer is welcomed back by name with his last job', /أهلًا بع
 brain.contact(FRIEND, 'خالي محمد')
 m = await say(FRIEND, 'إزيك يا علي عامل ايه')
 t('a name saved in the phone, not from our sites: left alone', !to(m, FRIEND) && store.chat(T.pkey(FRIEND)).kind === 'personal', JSON.stringify(m))
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 m = await say(NEW.replace(/9$/, '8'), 'عايز اغسل مكيف سبليت')
 t('a full request: welcome at once, the rest waits for a person', /مرحبًا بكم/.test(m.map((x) => x.text).join()) && !/ابعت موقعك/.test(m.map((x) => x.text).join()), JSON.stringify(m))
 await brain.inbound({ line: 'l1', phone: NEW.replace(/9$/, '8'), text: 'أهلا بيك يا فندم، في أي حي؟', fromMe: true })

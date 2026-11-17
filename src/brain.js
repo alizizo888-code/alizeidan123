@@ -32,7 +32,7 @@ export const DEFAULTS = {
   prices: 'أسعارنا بتتحدد حسب نوع الجهاز والعدد، والمعاينة مجانية لحد جهازين.\nابعت نوع الخدمة وعدد الأجهزة والحي، ونبعتلك السعر على طول 🌷',
 }
 
-export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), log = () => {} }) {
+export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), log = () => {}, later = (fn, ms) => setTimeout(fn, ms), cancel = (h) => clearTimeout(h) }) {
   // «الفني الفني علي»: a technician whose name already starts with «الفني» is named once.
   const send = (phone, text, o) => rawSend(phone, String(text).replace(/(الفن[يى])\s+(?=الفن[يى]\s)/g, ''), o)
   const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; if (!c.testPhone) c.testPhone = (store.get('wpConfig', {}) || {}).testCustomer || ''; if (/1️⃣ طلب خدمة/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome; return c }
@@ -181,15 +181,15 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
   const held = new Map()   // pk → {timer, texts:[], at}
   function holdThen(pk, text, ms, fn) {
     const h = held.get(pk) || { texts: [], at: now() }
-    clearTimeout(h.timer)
+    if (h.timer) cancel(h.timer)
     h.texts.push(text)
-    h.timer = setTimeout(() => {
+    h.timer = later(() => {
       held.delete(pk)
       const c = store.chat(pk)
-      if (c && (c.humanAt || 0) > h.at) return   // a person answered meanwhile: the bot keeps out
-      fn(h.texts.join('\n')).catch?.((e) => log('error', 'held: ' + (e?.message || e)))
+      if (c && (c.humanAt || 0) >= h.at) return   // a person answered meanwhile: the bot keeps out
+      return Promise.resolve(fn(h.texts.join('\n'))).catch((e) => log('error', 'held: ' + (e?.message || e)))
     }, ms)
-    if (h.timer.unref) h.timer.unref()
+    if (h.timer && h.timer.unref) h.timer.unref()
     held.set(pk, h)
   }
   const humanActive = (c, within) => c && c.humanAt && now() - c.humanAt < within
