@@ -269,7 +269,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     setStage(phone, o.id, 'live')
     if (!o.first) { say(phone, line, 'طلبك رقم *' + T.num(o) + '* واصلنا ومأكد ✅ — هنبلغك هنا بكل جديد.'); return true }
     const C = cfg()
-    const L = ['أهلًا' + (o.clientName || name ? ' ' + (o.clientName || name) : '') + ' 🌷', 'تم تأكيد طلبك رقم *' + T.num(o) + '*' + (o.site ? ' في *' + o.site + '*' : '') + ' ✅', ...T.summary(o), '', isOpen() ? 'جاري تجهيز الفني، وهنبلغك هنا أول ما يتحرك 🚗' : 'إحنا دلوقتي برا مواعيد العمل، وطلبك متسجل لأقرب موعد الصبح 🌙\nلو الموضوع طارئ اتصل مباشرة على *' + C.emergencyPhone + '*.']
+    const L = o.card ? [o.card, ''] : ['أهلًا' + (o.clientName || name ? ' ' + (o.clientName || name) : '') + ' 🌷', 'تم تأكيد طلبك رقم *' + T.num(o) + '*' + (o.site ? ' في *' + o.site + '*' : '') + ' ✅', ...T.summary(o), ''];
+    L.push(isOpen() ? 'جاري تجهيز الفني، وهنبلغك هنا أول ما يتحرك 🚗' : 'إحنا دلوقتي برا مواعيد العمل، وطلبك متسجل لأقرب موعد الصبح 🌙\nلو الموضوع طارئ اتصل مباشرة على *' + C.emergencyPhone + '*.')
     if (o.url) L.push('🔗 تابع طلبك: ' + o.url)
     toCustomer({ ...o, waLine: line }, L.join('\n'), 'claim-' + o.id)
     toRoom('✅ العميل أكد طلب #' + T.num(o) + ' من واتساب — ' + T.intl(phone) + (name ? ' (' + name + ')' : ''), 'claim-' + o.id)
