@@ -112,7 +112,7 @@ setInterval(pump, 2000)
 const brain = createBrain({ store, wp, send, log })
 
 // The site's own settings the hub follows (the test phone), refreshed every ten minutes.
-const syncConfig = async () => { if (!store.get('pair')?.secret) return; try { const c = await wp('config', {}); if (c) store.set('wpConfig', c) } catch (e) { log('warn', 'config: ' + e.message) } }
+const syncConfig = async () => { if (!store.get('pair')?.secret) return; try { const c = await wp('config', {}); if (c) store.set('wpConfig', c) } catch (e) { log('warn', 'config: ' + e.message) } try { const a = await wp('ai', {}); if (a) store.set('wpAi', a) } catch {} }
 setTimeout(syncConfig, 3000); setInterval(syncConfig, 600000).unref?.()
 
 setInterval(() => brain.daily().catch(() => {}), 60000).unref?.()
@@ -203,7 +203,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, 'http://x')
     const route = req.method + ' ' + u.pathname
-    if (route === 'GET /health') return json(res, 200, { ok: true, lines: lineViews().map((l) => ({ label: l.label, status: l.status })) })
+    if (route === 'GET /health') { const ai = store.get('wpAi') || {}; return json(res, 200, { ok: true, lines: lineViews().map((l) => ({ label: l.label, status: l.status })), ai: { live: ai.live || [], claude: !!ai.claude } }) }
     if (route === 'GET /' || route === 'GET /index.html') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer' })
       return res.end(fs.readFileSync(path.join(HERE, 'panel.html')))
