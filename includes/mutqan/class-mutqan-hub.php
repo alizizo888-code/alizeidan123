@@ -150,10 +150,21 @@ final class Mutqan_Hub {
      * written on the order at creation keeps anyone else from taking an order by its number.
      */
     private static function claim($in) {
-        $o = self::order_by(['number' => (string) ($in['number'] ?? '')]);
-        $code = preg_replace('/\D/', '', (string) ($in['code'] ?? ''));
         $phone = preg_replace('/\D/', '', (string) ($in['phone'] ?? ''));
-        if (!$o || $code === '' || strlen($phone) < 9 || !hash_equals((string) ($o['claimCode'] ?? ''), $code)) { return null; }
+        if (!empty($in['seal'])) {
+            // The site's own order message («🔔 طلب جديد … ✅ للتحقق من صحة الطلب: …/v/CODE-chk»): its seal names the order.
+            $o = null;
+            if (class_exists('Mutqan_Shop') && strlen($phone) >= 9) {
+                list($st, $f) = Mutqan_Shop::seal_check((string) $in['seal']);
+                $ref = $st === 'verified' ? (string) ($f['ref'] ?? '') : '';
+                if ($ref !== '') { foreach (Mutqan_Store::select('orders', [], ['limit' => 300, 'order' => 'desc'], self::sys()) as $r) { if (substr((string) $r['id'], -5) === $ref) { $o = $r; break; } } }
+            }
+            if (!$o) { return null; }
+        } else {
+            $o = self::order_by(['number' => (string) ($in['number'] ?? '')]);
+            $code = preg_replace('/\D/', '', (string) ($in['code'] ?? ''));
+            if (!$o || $code === '' || strlen($phone) < 9 || !hash_equals((string) ($o['claimCode'] ?? ''), $code)) { return null; }
+        }
         $had = preg_replace('/\D/', '', (string) ($o['clientPhone'] ?? ''));
         if ($had !== '' && substr($had, -9) !== substr($phone, -9)) { return null; }
         $first = empty($o['customerConfirmed']);
