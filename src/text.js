@@ -168,7 +168,11 @@ export function summary(o) {
 export function claimOf(text) {
   const t = String(text || '').replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
   const m = t.match(/طلب[يى]?\s*(?:رقم)?\s*#?(\d{3,})[\s\S]*?رمز\s*(?:ال)?(?:طلب)?\s*[:：]?\s*(\d{4})/)
-  return m ? { num: m[1], code: m[2] } : null
+  if (m) return { num: m[1], code: m[2] }
+  // The site's own order message: «🔔 طلب جديد — … رقم الطلب: #5bfb9 … /v/6KHZCYHR-f4ab50»
+  const s = /طلب جديد/.test(t) && t.match(/\/v\/([A-Z0-9]{8}(?:-[a-f0-9]{6})?)/)
+  if (s) { const r = t.match(/رقم الطلب:\s*#([0-9a-z]{5})/i); return { seal: s[1], ref: r ? r[1] : '' } }
+  return null
 }
 
 export const num = (o) => String(o.number || String(o.id || '').slice(-5))

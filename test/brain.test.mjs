@@ -41,7 +41,7 @@ const wp = async (op, b) => {
   if (op === 'approve') { const o = orders[b.id]; Object.assign(o, { techId: 't1', techName: 'الفني علي', status: 'assigned' }); emit('order.assigned', o); return { text: '✅ اتسند للفني علي' } }
   if (op === 'eta_ask') return { result: 'asked' }
   if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; emit('order.created', o); return view(o) }
-  if (op === 'claim') { const o = byNum(b.number); if (!o || o.claimCode !== b.code) return null; const first = !o.customerConfirmed; Object.assign(o, { clientPhone: b.phone, customerConfirmed: true }); return { first, card: first ? '🔔 *طلب جديد — رعد السماء*\nرقم الطلب: #' + o.number : '', ...view(o) } }
+  if (op === 'claim') { const o = b.seal ? Object.values(orders).find((x) => b.seal.startsWith(x.seal || '#')) : byNum(b.number); if (!o || o.claimCode !== b.code) return null; const first = !o.customerConfirmed; Object.assign(o, { clientPhone: b.phone, customerConfirmed: true }); return { first, card: first ? '🔔 *طلب جديد — رعد السماء*\nرقم الطلب: #' + o.number : '', ...view(o) } }
   if (op === 'report') return { text: '📋 تقرير' }
   if (op === 'info') return /سعر|اسعار/.test(b.text) ? { text: 'أسعار المالك' } : null
   if (op === 'quote') { const n = T.norm(b.text); if (!/مكيف|سبليت|تسريب|سباك/.test(n)) return null; const q = /مكيفين|2/.test(n) ? 2 : 1; return /غسيل|اغسل/.test(n) ? { spec: 'ac', fixed: true, label: 'غسيل ' + q + ' مكيف سبليت', qty: q, total: q === 2 ? 140 : 100, floor: q === 2 ? 125 : 89, acQuote: { mode: 'wash', type: 'سبليت', qty: q } } : { spec: 'plumbing', fixed: false, label: 'سباكة', from: 120, total: 120, floor: 100 } }
@@ -230,6 +230,14 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   t('the WhatsApp message from the confirm button claims and confirms the order', T.pkey(orders.oc.clientPhone) === T.pkey(CL) && orders.oc.customerConfirmed && to(m, CL).includes('طلب جديد — رعد السماء') && to(m, CL).includes('#1777') && /أكد طلب #1777 من واتساب/.test(to(m, ROOM)) && !/مرحبًا بكم/.test(to(m, CL)), JSON.stringify(m))
   const again = await say(CL, 'أكدت طلبي رقم #1777 ✅\nرمز الطلب: 4821')
   t('sending it twice only says it is already confirmed', /واصلنا ومأكد/.test(to(again, CL)) && !to(again, ROOM), JSON.stringify(again))
+}
+
+// ===== W. the site's own order message (with its verification link) arrives from the customer =====
+{
+  const SW = '966500000066'
+  orders.ow = { id: 'xx5bfb9', number: 1555, status: 'new', clientPhone: '', service: 'غسيل مكيف', site: 'متقن', seal: '6KHZCYHR' }
+  const m = await say(SW, '🔔 *طلب جديد — متقن*\nرقم الطلب: #5bfb9\n🛠️ الخدمة: صيانة وتكييف\n📍 الموقع: https://maps.google.com/?q=21.4,39.8\n✅ للتحقق من صحة الطلب (توثيق): https://mutqan.oxygen11.com/v/6KHZCYHR-f4ab50')
+  t('the site order message binds his number, gets a receipt (no welcome), the room is told', T.pkey(orders.ow.clientPhone) === T.pkey(SW) && /تم استلام طلبك رقم \*1555\*/.test(to(m, SW)) && !/مرحبًا بكم/.test(to(m, SW)) && /أكد طلب #1555 من واتساب/.test(to(m, ROOM)), JSON.stringify(m))
 }
 
 console.log(`wa-hub brain: ${pass} passed, ${fail} failed`)

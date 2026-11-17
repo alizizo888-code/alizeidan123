@@ -266,13 +266,14 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   async function claimed(c, line, phone, text, name) {
     const m = T.claimOf(text); if (!m) return false
     let o = null
-    try { o = await wp('claim', { number: m.num, code: m.code, phone: T.intl(phone), name }) } catch (e) { log('warn', 'claim: ' + e.message) }
+    try { o = await wp('claim', m.seal ? { seal: m.seal, phone: T.intl(phone), name } : { number: m.num, code: m.code, phone: T.intl(phone), name }) } catch (e) { log('warn', 'claim: ' + e.message) }
     if (!o) return false
     store.touchChat(c.pk, { welcomedAt: now() })
     setStage(phone, o.id, 'live')
     if (!o.first) { say(phone, line, 'طلبك رقم *' + T.num(o) + '* واصلنا ومأكد ✅ — هنبلغك هنا بكل جديد.'); return true }
     const C = cfg()
-    const L = o.card ? [o.card, ''] : ['أهلًا' + (o.clientName || name ? ' ' + (o.clientName || name) : '') + ' 🌷', 'تم تأكيد طلبك رقم *' + T.num(o) + '*' + (o.site ? ' في *' + o.site + '*' : '') + ' ✅', ...T.summary(o), ''];
+    // He just sent us the order text himself: a short receipt, not the same card back.
+    const L = m.seal ? ['تم استلام طلبك رقم *' + T.num(o) + '* ✅ شكرًا لك' + (o.site ? ' في *' + o.site + '*' : '') + '.', ''] : o.card ? [o.card, ''] : ['أهلًا' + (o.clientName || name ? ' ' + (o.clientName || name) : '') + ' 🌷', 'تم تأكيد طلبك رقم *' + T.num(o) + '*' + (o.site ? ' في *' + o.site + '*' : '') + ' ✅', ...T.summary(o), ''];
     L.push(isOpen() ? 'جاري تجهيز الفني، وهنبلغك هنا أول ما يتحرك 🚗' : 'إحنا دلوقتي برا مواعيد العمل، وطلبك متسجل لأقرب موعد الصبح 🌙\nلو الموضوع طارئ اتصل مباشرة على *' + C.emergencyPhone + '*.')
     if (o.url) L.push('🔗 تابع طلبك: ' + o.url)
     toCustomer({ ...o, waLine: line }, L.join('\n'), 'claim-' + o.id)
