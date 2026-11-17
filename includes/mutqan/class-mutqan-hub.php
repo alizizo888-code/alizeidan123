@@ -63,7 +63,7 @@ final class Mutqan_Hub {
             'rating' => $o['rating'] ?? null, 'winbackPct' => class_exists('Mutqan_WA_Journey') ? Mutqan_WA_Journey::winback_offer_pct() : 10,
             'facts' => $f, 'statusText' => $f && class_exists('Mutqan_OrderBot') ? Mutqan_OrderBot::status_text($f) : '',
             'jobCard' => class_exists('Mutqan_WA_Desk') ? Mutqan_WA_Desk::job_card($o) : '',
-            'url' => class_exists('Mutqan_OrderBot') ? Mutqan_OrderBot::order_url($id) : '', 'staffUrl' => home_url('/app/#/staff/order/' . rawurlencode($id)),
+            'url' => class_exists('Mutqan_OrderBot') ? Mutqan_OrderBot::order_url($id) : '', 'staffUrl' => home_url('/app/#/staff/order/' . rawurlencode($id)), 'waClaim' => !empty($o['claimCode']) && empty($o['customerConfirmed']),
         ];
     }
 
@@ -143,6 +143,24 @@ final class Mutqan_Hub {
         return null;
     }
 
+    /**
+     * «أكدت طلبي رقم #1234 … رمز الطلب: 4821» — the customer pressed confirm on the site and WhatsApp sent this from his
+     * own number: that number becomes the order's, and the message itself is his confirmation. The four-digit code
+     * written on the order at creation keeps anyone else from taking an order by its number.
+     */
+    private static function claim($in) {
+        $o = self::order_by(['number' => (string) ($in['number'] ?? '')]);
+        $code = preg_replace('/\D/', '', (string) ($in['code'] ?? ''));
+        $phone = preg_replace('/\D/', '', (string) ($in['phone'] ?? ''));
+        if (!$o || $code === '' || strlen($phone) < 9 || !hash_equals((string) ($o['claimCode'] ?? ''), $code)) { return null; }
+        $had = preg_replace('/\D/', '', (string) ($o['clientPhone'] ?? ''));
+        if ($had !== '' && substr($had, -9) !== substr($phone, -9)) { return null; }
+        $first = empty($o['customerConfirmed']);
+        $o = Mutqan_Store::update('orders', $o['id'], ['clientPhone' => '+' . $phone, 'customerConfirmed' => true, 'confirmedAt' => gmdate('c'), 'confirmedVia' => 'whatsapp'], self::sys());
+        if ($first && class_exists('Mutqan_WA')) { Mutqan_WA::add_step($o['id'], 'wa_confirmed', 'العميل أكد الطلب من واتساب', 'مركز الواتساب'); }
+        return ['first' => $first] + self::view(Mutqan_Store::get_raw('orders', (string) $o['id']) + ['id' => (string) $o['id']]);
+    }
+
     private static function need($in) { $o = self::order_by($in); if (!$o) { throw new Mutqan_Error('not_found', 'الطلب مش موجود.', 404); } return $o; }
 
     public static function op($op, $in) {
@@ -156,6 +174,7 @@ final class Mutqan_Hub {
                 return self::view(Mutqan_Store::get_raw('orders', (string) $o['id']) + ['id' => (string) $o['id']]);
             }
             case 'step': { $o = self::need($in); if (class_exists('Mutqan_WA')) { Mutqan_WA::add_step($o['id'], (string) ($in['kind'] ?? 'wa'), (string) ($in['text'] ?? ''), (string) ($in['by'] ?? 'مركز الواتساب')); } return ['ok' => true]; }
+            case 'claim': return self::claim($in);
             case 'who': return self::who((string) ($in['phone'] ?? ''));
             case 'report': {
                 $w = (string) ($in['what'] ?? 'report');
