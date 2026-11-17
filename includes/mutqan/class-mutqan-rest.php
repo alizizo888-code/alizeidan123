@@ -85,6 +85,12 @@ final class Mutqan_Rest {
                 $res->header('Cache-Control', 'no-store');
                 return $res;
             }]);
+        // The free AI providers' keys (GitHub secrets) handed over by a workflow signed in as an administrator.
+        register_rest_route(self::NS, '/ai-keys', ['methods' => ['GET', 'POST'], 'permission_callback' => function () { return current_user_can('manage_options'); },
+            'callback' => function ($req) {
+                try { $out = $req->get_method() === 'POST' ? Mutqan_Hub::save_ai_keys((array) $req->get_json_params()) : Mutqan_Hub::ai_status(); return new WP_REST_Response(['data' => $out], 200); }
+                catch (Mutqan_Error $e) { return new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+            }]);
         register_rest_route(self::NS, '/wa-hook', ['methods' => 'POST', 'permission_callback' => '__return_true',
             'callback' => function ($req) {
                 try { $out = Mutqan_WA::webhook((string) $req->get_body(), (string) $req->get_header('x-mq-signature')); $res = new WP_REST_Response(['data' => $out], 200); }
