@@ -99,6 +99,13 @@ final class Mutqan_Shop {
     }
     /** Server-side seal for a freshly stored order: the owner's alert carries the same verification link the customer's message has. */
     public static function seal_for_order($doc, $price) {
+        // One seal per order: the room's card and the customer's card carry the same code.
+        if (!empty($doc['id'])) { $raw = Mutqan_Store::get_raw('orders', (string) $doc['id']); if (is_array($raw) && !empty($raw['sealUrl'])) { return (string) $raw['sealUrl']; } }
+        $url = self::seal_for_order_new($doc, $price);
+        if ($url !== '' && !empty($doc['id'])) { try { Mutqan_Store::update('orders', (string) $doc['id'], ['sealUrl' => $url], self::sys()); } catch (Throwable $e) { /* the card still carries it */ } }
+        return $url;
+    }
+    private static function seal_for_order_new($doc, $price) {
         $f = ['service' => mb_substr(wp_strip_all_tags((string) ($doc['specialtyLabel'] ?? $doc['specialtyId'] ?? '')), 0, 120), 'price' => max(0, (int) round((float) $price)),
             'time' => mb_substr(wp_strip_all_tags((string) ($doc['preferredTime'] ?? '')), 0, 80), 'address' => mb_substr(wp_strip_all_tags((string) ($doc['address'] ?? '')), 0, 200), 'ref' => substr((string) ($doc['id'] ?? ''), -5)];
         if ($f['service'] === '') { return ''; }

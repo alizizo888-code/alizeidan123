@@ -266,22 +266,56 @@ final class Mutqan_Rest {
         return self::order_wa_text($d, $price, $seal);
     }
 
+    /** Where the order came from: the face (site) and its address, and the door (site button, assistant, WhatsApp). */
+    private static function origin_text($d) {
+        $b = (string) ($d['brand'] ?? '');
+        $host = ($b !== '' && class_exists('Oxygen_Network') && Oxygen_Network::valid($b)) ? (string) Oxygen_Network::host_of($b) : (string) wp_parse_url(home_url('/'), PHP_URL_HOST);
+        $door = ['mutqan_ai' => 'المساعد الذكي', 'whatsapp' => 'واتساب', 'whatsapp_manual' => 'واتساب (يدوي)', 'site' => 'زر الطلب في الموقع'][(string) ($d['source'] ?? '')] ?? 'الموقع / التطبيق';
+        return self::order_brand_name($d) . ($host !== '' ? ' (' . $host . ')' : '') . ' — عن طريق ' . $door;
+    }
+
+    /** «بكرة العصر», «الخميس بعد المغرب»: the day it means, written out, next to his own words. */
+    private static function day_of_text($t) {
+        $t = (string) $t; if ($t === '') { return ''; }
+        try { $now = new DateTime('now', new DateTimeZone('Asia/Riyadh')); } catch (Throwable $e) { return ''; }
+        $add = null;
+        if (preg_match('/بعد\s*(بكر[ةها]|بكرا|غد)/u', $t)) { $add = 2; }
+        elseif (preg_match('/بكر[ةها]|بكرا|غدا|غدًا|الغد/u', $t)) { $add = 1; }
+        elseif (preg_match('/اليوم|النهارد|الحين|الآن|الان|دلوقتي|حالا|أقرب وقت|اقرب وقت/u', $t)) { $add = 0; }
+        else {
+            $wd = ['الأحد' => 0, 'الاحد' => 0, 'الاثنين' => 1, 'الإثنين' => 1, 'الثلاثاء' => 2, 'الأربعاء' => 3, 'الاربعاء' => 3, 'الخميس' => 4, 'الجمعة' => 5, 'الجمعه' => 5, 'السبت' => 6];
+            foreach ($wd as $name => $w) { if (mb_strpos($t, $name) !== false) { $add = ($w - (int) $now->format('w') + 7) % 7; break; } }
+        }
+        if ($add === null) { return ''; }
+        $now->modify('+' . $add . ' day');
+        $days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+        $months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+        return ($add === 0 ? 'اليوم ' : '') . $days[(int) $now->format('w')] . ' ' . $now->format('j') . ' ' . $months[(int) $now->format('n') - 1] . ' ' . $now->format('Y');
+    }
+
     private static function order_wa_text($d, $price, $seal) {
         $units = self::units_text($d);
+        if ($units === '' && ($d['specialtyId'] ?? '') !== '') { $units = '× ' . max(1, (int) ($d['qty'] ?? 1)); }
+        $when = self::when_text($d);
+        $date = empty($d['appointmentAt']) ? self::day_of_text(($d['preferredTime'] ?? '') ?: 'اليوم') : '';
+        $code = preg_match('~/v/([A-Z0-9]{8})~', (string) $seal, $m) ? $m[1] : '';
         $lines = array_filter([
             '🔔 *طلب جديد — ' . self::order_brand_name($d) . '*',
             'رقم الطلب: #' . substr((string) $d['id'], -5),
+            '🌐 جاي من: ' . self::origin_text($d),
             !empty($d['clientName']) ? '👤 الاسم: ' . $d['clientName'] : '',
             !empty($d['clientPhone']) ? '📱 الجوال: ' . $d['clientPhone'] : '',
             !empty($d['specialtyId']) ? '🛠️ الخدمة: ' . self::spec_label($d['specialtyId']) : '',
             self::kind_label($d) ? '🧰 نوع الطلب: ' . self::kind_label($d) : '',
             $units ? ((($d['specialtyId'] ?? '') === 'ac' ? '❄️ المكيفات: ' : '🔢 العدد: ') . $units) : '',
             self::note_text($d) ? '📝 التفاصيل: ' . self::note_text($d) : '',
-            '📅 الموعد: ' . self::when_text($d),
+            '⏰ الوقت المطلوب: ' . $when,
+            $date !== '' ? '📅 التاريخ: ' . $date : '',
             $price ? '💰 السعر المتفق: ' . $price . ' ر.س' : '',
             !empty($d['address']) ? '🏠 العنوان: ' . mb_substr((string) $d['address'], 0, 160) : '',
             (isset($d['lat'], $d['lng']) && is_numeric($d['lat']) && is_numeric($d['lng'])) ? '📍 الموقع: https://maps.google.com/?q=' . $d['lat'] . ',' . $d['lng'] : '',
             !empty($d['taxInvoice']) ? '🧾 مطلوب فاتورة ضريبية' . (!empty($d['invoiceVat']) ? ' — الرقم الضريبي: ' . preg_replace('/\D/', '', (string) $d['invoiceVat']) : '') : '',
+            $code !== '' ? '🔐 كود التوثيق: ' . $code : '',
             $seal ? '✅ للتحقق من صحة الطلب (توثيق): ' . $seal : '',
         ]);
         return implode("\n", $lines) . "\n\nسيصلك إشعار فور إسناد طلبك لفني، وتتابعه من التطبيق.";
@@ -534,13 +568,15 @@ final class Mutqan_Rest {
 
     public static function h_ai($req, $p) {
         $in = self::body($req);
-        if (($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
+        // The assistant's voice is for every visitor too (a visitor not signed in used to get the phone's own voice —
+        // often a woman's): one fixed voice, limited per address.
         if (!empty($in['tts'])) {
             $key = 'mq_tts_' . md5((string) ($p['id'] ?? '') . ($_SERVER['REMOTE_ADDR'] ?? '')); $n = (int) get_transient($key);
             if ($n >= 60) { throw new Mutqan_Error('rate_limited', 'كثير.', 429); }
             set_transient($key, $n + 1, 600);
-            return Mutqan_AI::tts((string) $in['tts'], (string) ($in['voice'] ?? 'Charon'));
+            return Mutqan_AI::tts((string) $in['tts']);
         }
+        if (($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
         return Mutqan_AI::run($in['prompt'] ?? '', is_array($in['opts'] ?? null) ? $in['opts'] : [], $p);
     }
 
