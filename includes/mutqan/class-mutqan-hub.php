@@ -192,6 +192,7 @@ final class Mutqan_Hub {
             }
             case 'greet': return self::greet((string) ($in['phone'] ?? ''), (string) ($in['text'] ?? ''), (string) ($in['brand'] ?? ''));
             case 'converse': return self::converse($in);
+            case 'quote': return self::quote((string) ($in['text'] ?? ''));
             case 'events': return ['events' => self::take_queue()];
             case 'ping': return ['ok' => true, 'site' => home_url('/')];
             // «رقم التجربة» set on the site (one phone that is both a customer and the room) is the hub's too.
@@ -255,6 +256,8 @@ final class Mutqan_Hub {
             'preferredTime' => mb_substr(trim((string) ($in['time'] ?? '')), 0, 120), 'brand' => (string) ($in['brand'] ?? '') ?: 'oxygen',
             'lat' => is_numeric($in['lat'] ?? null) ? (float) $in['lat'] : null, 'lng' => is_numeric($in['lng'] ?? null) ? (float) $in['lng'] : null,
             'waLine' => (string) ($in['line'] ?? ''), 'createdAt' => gmdate('c'),
+            'agreedPrice' => is_numeric($in['price'] ?? null) && (int) $in['price'] > 0 ? (int) $in['price'] : null,
+            'acQuote' => is_array($in['acQuote'] ?? null) ? $in['acQuote'] + ['total' => (int) ($in['price'] ?? 0)] : null, 'specialtyId' => (string) ($in['spec'] ?? '') ?: null,
             'statusHistory' => [['status' => 'new', 'at' => gmdate('c'), 'by' => 'whatsapp']],
         ], static function ($v) { return $v !== null && $v !== ''; });
         $doc = Mutqan_Store::insert('orders', $order, null, [], self::sys());
@@ -319,6 +322,62 @@ final class Mutqan_Hub {
         if ($reply === '') { return null; }
         $l = array_filter(array_map(static function ($v) { return trim(mb_substr((string) $v, 0, 160)); }, (array) ($j['lead'] ?? [])), 'strlen');
         return ['reply' => mb_substr($reply, 0, 1200), 'lead' => array_merge($lead, $l), 'complete' => !empty($j['complete']), 'handoff' => !empty($j['handoff']), 'reason' => mb_substr((string) ($j['handoff_reason'] ?? ''), 0, 140), 'provider' => (string) ($r['provider'] ?? '')];
+    }
+
+    /* ------------------------------------------------------------------ the price, from the owner's own price lists */
+
+    const SPEC_WORDS = [
+        'fridge' => ['غرفه تبريد', 'غرف تبريد', 'غرفه تجميد', 'غرف تجميد', 'ثلاجه عرض', 'فريزر', 'تجميد'],
+        'ac' => ['مكيف', 'مكيفات', 'تكييف', 'سبليت', 'شباك', 'دولابي', 'مخفي', 'كاسيت', 'مركزي', 'فريون'],
+        'plumbing' => ['سباك', 'سباكه', 'تسريب', 'تسرب', 'حنفيه', 'مواسير', 'صرف', 'بلاعه', 'سيفون', 'سخان'],
+        'electric' => ['كهربا', 'كهرباء', 'كهربائي', 'فيش', 'لمبات', 'ماس', 'قاطع', 'طبلون'],
+        'general' => ['نجار', 'نجاره', 'باب', 'دولاب', 'مطبخ'],
+        'paint' => ['دهان', 'دهانات', 'بويه'], 'cleaning' => ['تنظيف', 'تعقيم'], 'pest' => ['حشرات', 'رش', 'صراصير', 'بق'],
+        'tanks' => ['خزان', 'خزانات'], 'cameras' => ['كاميرا', 'كاميرات'], 'satellite' => ['دش', 'ساتلايت', 'رسيفر'],
+        'appliances' => ['غساله', 'ثلاجه', 'فرن', 'نشافه'], 'moving' => ['نقل عفش', 'نقل اثاث', 'نقل الاثاث'],
+    ];
+
+    /** How many units: «2 مكيف», «مكيفين», «تلات مكيفات». */
+    private static function qty_of($n) {
+        if (preg_match('/(?<!\d)(\d{1,2})(?!\d)\s*(مكيف|جهاز|وحده|سبليت|شباك|غرف|غرفه|حنفي|لمب|كاميرا)/u', $n, $m)) { return max(1, min(50, (int) $m[1])); }
+        if (preg_match('/(مكيفين|جهازين|غرفتين|اتنين|اثنين|ثنين)/u', $n)) { return 2; }
+        $words = ['تلات' => 3, 'ثلاث' => 3, 'تلاته' => 3, 'اربع' => 4, 'اربعه' => 4, 'خمس' => 5, 'خمسه' => 5, 'ست' => 6, 'سته' => 6];
+        foreach ($words as $w => $q) { if (preg_match('/(^|\s)' . $w . '(\s|$)/u', $n)) { return $q; } }
+        return 1;
+    }
+
+    /**
+     * «بكام غسيل 2 سبليت؟» — the list price and the lowest the owner allows, from his own price lists (the AC
+     * calculator, each specialty's base / minimum / visit fee). Repairs are priced after inspection: the starting
+     * price and the inspection rule are given instead.
+     */
+    public static function quote($text) {
+        $n = class_exists('Mutqan_Playbook') ? Mutqan_Playbook::norm($text) : mb_strtolower($text);
+        $spec = '';
+        foreach (self::SPEC_WORDS as $k => $words) { foreach ($words as $w) { if (mb_strpos($n, $w) !== false) { $spec = $k; break 2; } } }
+        if ($spec === '') { return null; }
+        $qty = self::qty_of($n);
+        $label = class_exists('Mutqan_Rest') ? (string) (Mutqan_Rest::SPEC_LABELS[$spec] ?? $spec) : $spec;
+        if ($spec === 'ac') {
+            $type = preg_match('/شباك/u', $n) ? 'شباك' : (preg_match('/(دولابي|مخفي|كاسيت|مركزي|داكت)/u', $n) ? 'دولابي' : 'سبليت');
+            $wash = (bool) preg_match('/(غسيل|غسل|اغسل|تنظيف|نظافه)/u', $n);
+            if ($wash) {
+                $q = ['mode' => 'wash', 'type' => $type, 'qty' => $qty, 'full' => true];
+                $total = (int) round(Mutqan_Policy::ac_total($q));
+                $floor = max(0, (int) Mutqan_Policy::ac_floor($q));
+                if ($total > 0) { return ['spec' => 'ac', 'fixed' => true, 'label' => 'غسيل ' . $qty . ' ' . ($qty > 1 ? 'مكيف ' : 'مكيف ') . $type, 'qty' => $qty, 'total' => $total, 'floor' => min($floor, $total), 'acQuote' => $q]; }
+            }
+            $row = Mutqan_Store::get_raw('pricing', 'ac') ?: [];
+            $from = (int) (is_numeric($row['base'] ?? null) ? $row['base'] : (Mutqan_Policy::price_bases()['ac'] ?? 100));
+            return ['spec' => 'ac', 'fixed' => false, 'label' => 'صيانة وإصلاح ' . ($qty > 1 ? $qty . ' مكيف' : 'المكيف'), 'qty' => $qty, 'from' => $from, 'inspect' => 'المعاينة مجانية لحد جهازين، وأكتر من جهازين من غير شغل رسوم الزيارة 50 ر.س.'];
+        }
+        $row = Mutqan_Store::get_raw('pricing', $spec) ?: [];
+        $base = (float) (is_numeric($row['base'] ?? null) ? $row['base'] : (Mutqan_Policy::price_bases()[$spec] ?? 100));
+        $visit = (float) (is_numeric($row['visitFee'] ?? null) ? $row['visitFee'] : 0);
+        $extra = (float) (is_numeric($row['extraUnitPct'] ?? null) ? $row['extraUnitPct'] : 80);
+        $total = (int) round($base * (1 + ($qty - 1) * $extra / 100) + $visit);
+        $floor = (int) Mutqan_Policy::floor_for($spec, $qty, false);
+        return ['spec' => $spec, 'fixed' => false, 'label' => $label, 'qty' => $qty, 'from' => $total, 'total' => $total, 'floor' => min($floor, $total), 'inspect' => 'والسعر النهائي بيتأكد بعد ما الفني يعاين، ومن غير أي حاجة من غير موافقتك.'];
     }
 
     /* ------------------------------------------------------------------ pairing (the owner, once) */
