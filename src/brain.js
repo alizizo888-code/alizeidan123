@@ -32,7 +32,7 @@ export const DEFAULTS = {
   prices: 'أسعارنا بتتحدد حسب نوع الجهاز والعدد، والمعاينة مجانية لحد جهازين.\nابعت نوع الخدمة وعدد الأجهزة والحي، ونبعتلك السعر على طول 🌷',
 }
 
-export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), log = () => {}, later = (fn, ms) => setTimeout(fn, ms), cancel = (h) => clearTimeout(h) }) {
+export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now = () => Date.now(), log = () => {}, later = (fn, ms) => setTimeout(fn, ms), cancel = (h) => clearTimeout(h) }) {
   // «الفني الفني علي»: a technician whose name already starts with «الفني» is named once.
   const send = (phone, text, o) => rawSend(phone, String(text).replace(/(الفن[يى])\s+(?=الفن[يى]\s)/g, ''), o)
   const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; if (!c.testPhone) c.testPhone = (store.get('wpConfig', {}) || {}).testCustomer || ''; if (/1️⃣ طلب خدمة/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome; return c }
@@ -206,10 +206,12 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
     if (fromMe && !self) {
       store.addMsg({ pk, line, dir: 'out', text: shown, kind, by: 'phone' })
       store.touchChat(pk, { phone: T.intl(phone), line, lastAt: now(), lastText: shown, humanAt: now(), needsHuman: 0, unread: 0 })
+      mirror(pk, line, 'out', shown, 'phone')
       return
     }
     store.addMsg({ pk, line, dir: 'in', text: shown, kind, by: name })
     const c = store.touchChat(pk, { phone: T.intl(phone), line: c0?.line || line, name: name || c0?.name || '', lastAt: now(), lastText: shown, unread: (c0?.unread || 0) + 1 })
+    mirror(pk, line, 'in', shown)
     if (c.kind === 'personal') return            // family, friends: the owner answers them himself
     if (!text && kind !== 'location') return     // a picture or a voice note: a person will look at it
 

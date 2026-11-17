@@ -9,6 +9,7 @@ import { openStore } from './store.js'
 import { createWp, hmac, safeEq } from './wp.js'
 import { createBrain, DEFAULTS } from './brain.js'
 import { intl, pkey } from './text.js'
+import { createChatwoot } from './chatwoot.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 8787)
@@ -32,6 +33,7 @@ async function initLines() {
     onStatus: (id, v) => {
       const l = store.line(id)
       if (l && v.phone && l.phone !== v.phone) store.putLine({ ...l, phone: v.phone })
+      if (v.status === 'open' && l) cw.link([store.line(id)]).catch(() => {})
       if (v.status === 'open' || v.status === 'logged_out') log('line', (l?.label || id) + ': ' + (v.status === 'open' ? 'متصل ' + v.phone : 'اتفصل من الموبايل'))
     },
     onMessage: (m) => brain.inbound(m).catch((e) => log('error', 'inbound: ' + (e?.message || e))),
@@ -100,6 +102,7 @@ async function pump() {
         store.addMsg({ pk, line: lineId, dir: 'out', text: row.text, by: row.purpose || 'bot', status: 'sent', waId: r.waId })
         const c = store.chat(pk)
         store.touchChat(pk, { phone: row.phone, line: c?.line || lineId, lastAt: Date.now(), lastText: row.text.slice(0, 200), kind: c?.kind || (['room', 'tech', 'agent'].includes(row.purpose) ? 'team' : 'customer') })
+        cw.mirror(pk, lineId, 'out', row.text, row.purpose)
       }, (e) => {
         if (row.tries >= 4) store.outDone(row.id, 'failed', e.message); else store.outRetry(row.id, e.message)
         log('warn', 'send ' + row.phone + ': ' + e.message)
@@ -109,7 +112,11 @@ async function pump() {
 }
 setInterval(pump, 2000)
 
-const brain = createBrain({ store, wp, send, log })
+const PUBLIC_URL = process.env.PUBLIC_URL || 'https://vps.oxygen11.com'
+const cw = createChatwoot({ store, wp, log, hookBase: PUBLIC_URL })
+const brain = createBrain({ store, wp, send, log, mirror: (...a) => cw.mirror(...a) })
+// The team's app (Chatwoot): linked by itself once the site has its credentials and a line is connected.
+setTimeout(() => { const open = store.lines().filter((l) => lines?.isOpen(l.id)); if (open.length) cw.link(open).catch(() => {}) }, 20000).unref?.()
 
 // The site's own settings the hub follows (the test phone), refreshed every ten minutes.
 const syncConfig = async () => { if (!store.get('pair')?.secret) return; try { const c = await wp('config', {}); if (c) store.set('wpConfig', c) } catch (e) { log('warn', 'config: ' + e.message) } try { const a = await wp('ai', {}); if (a) store.set('wpAi', a) } catch {} }
@@ -175,9 +182,10 @@ function lineViews() {
 }
 
 const api = {
-  'GET /api/state': () => {
+  'GET /api/state': async () => {
     const p = store.get('pair')
-    return { lines: lineViews(), settings: { ...DEFAULTS, ...(store.get('settings', {}) || {}) }, paired: !!(p && p.secret), site: p?.url || '', waiting: store.nextOut(500).length, human: store.chats({ filter: 'human', limit: 500 }).length, unread: store.chats({ filter: 'unread', limit: 500 }).length }
+    let chatwoot = null; try { chatwoot = await cw.status() } catch {}
+    return { chatwoot, lines: lineViews(), settings: { ...DEFAULTS, ...(store.get('settings', {}) || {}) }, paired: !!(p && p.secret), site: p?.url || '', waiting: store.nextOut(500).length, human: store.chats({ filter: 'human', limit: 500 }).length, unread: store.chats({ filter: 'unread', limit: 500 }).length }
   },
   'GET /api/chats': (q) => ({ chats: store.chats({ filter: q.get('filter') || '', limit: 200 }) }),
   'GET /api/chat': (q) => { const pk = String(q.get('pk') || ''); store.touchChat(pk, { unread: 0 }); return { chat: store.chat(pk), msgs: store.msgs(pk, 120) } },
@@ -217,6 +225,9 @@ const api = {
     store.set('settings', cur)
     return { settings: { ...DEFAULTS, ...cur } }
   },
+  'GET /api/chatwoot': () => cw.status(),
+  'POST /api/chatwoot/link': () => cw.link(store.lines().filter((l) => lines?.isOpen(l.id))),
+  'POST /api/chatwoot/on': (b) => { cw.setOn(!!b.on); return cw.status() },
   'GET /api/log': () => ({ log: store.logs(200), outbox: store.outbox(100) }),
   'POST /api/password': (b) => { if (String(b.password || '').length < 6) throw new Error('كلمة السر 6 حروف على الأقل'); store.set('pw', hashPw(String(b.password))); return { ok: true } },
 }
@@ -251,6 +262,12 @@ const server = http.createServer(async (req, res) => {
       const r = await wp('ai_keys', { providers: b.providers || {} })
       store.set('wpAi', r); log('ai', 'مفاتيح الذكاء الاصطناعي وصلت من GitHub: ' + ((r && r.set) || []).join('، '))
       return json(res, 200, { set: r?.set || [], live: r?.live || [], claude: !!r?.claude })
+    }
+    // Chatwoot calls here when an agent answers in the app.
+    if (route === 'POST /cw/hook') {
+      const e = JSON.parse(await body(req, 2 * 1024 * 1024) || '{}')
+      const r = cw.hook(e, u.searchParams.get('k'), send)
+      return json(res, r.status || 200, r)
     }
     // Pairing with the website: once, with the token only the server's owner has. The secret then lives in both places.
     if (route === 'POST /pair') {
