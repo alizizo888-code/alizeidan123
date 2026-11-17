@@ -20,6 +20,8 @@ export function openStore(file) {
     CREATE INDEX IF NOT EXISTS outbox_state ON outbox(state, id);
     CREATE TABLE IF NOT EXISTS log (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, kind TEXT, text TEXT);
   `)
+  // Columns added after the first release: added in place, old rows keep working.
+  for (const col of ['humanAt INTEGER DEFAULT 0', "contact TEXT DEFAULT ''", "greet TEXT DEFAULT ''"]) { try { db.exec('ALTER TABLE chats ADD COLUMN ' + col) } catch {} }
   const q = (sql) => db.prepare(sql)
   const now = () => Date.now()
   const s = {
@@ -54,7 +56,7 @@ export function openStore(file) {
       return s.chat(pk)
     },
     chats({ limit = 100, filter = '' } = {}) {
-      const where = filter === 'unread' ? 'WHERE unread>0' : filter === 'human' ? 'WHERE needsHuman=1' : filter === 'team' ? "WHERE kind<>'customer'" : ''
+      const where = filter === 'unread' ? "WHERE unread>0 AND kind<>'personal'" : filter === 'human' ? 'WHERE needsHuman=1' : filter === 'team' ? "WHERE kind IN ('tech','staff','team')" : filter === 'personal' ? "WHERE kind='personal'" : ''
       return q('SELECT * FROM chats ' + where + ' ORDER BY lastAt DESC LIMIT ?').all(limit)
     },
 

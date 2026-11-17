@@ -92,7 +92,7 @@ function render() {
 }
 
 function chatsView() {
-  const f = [['', 'الكل'], ['human', 'محتاج موظف'], ['unread', 'غير مقروء'], ['team', 'الفريق والفنيين']]
+  const f = [['', 'الكل'], ['human', 'محتاج موظف'], ['unread', 'غير مقروء'], ['team', 'الفريق والفنيين'], ['personal', 'شخصي (متجاهَل)']]
   const list = S.chats.map((c) => `<div class="item ${c.pk === S.pk ? 'on' : ''}" onclick="openChat('${c.pk}')">
     <div class="row"><b class="grow">${esc(c.name || c.phone)}</b>${c.unread ? `<span class="badge">${c.unread}</span>` : ''}<span class="mut">${ago(c.lastAt)}</span></div>
     <div class="mut">${c.needsHuman ? '🙋 ' : ''}${c.kind !== 'customer' ? '👷 ' : ''}${esc(c.lastText)}</div></div>`).join('') || '<div class="item mut">مفيش محادثات لسه.</div>'
@@ -102,6 +102,7 @@ function chatsView() {
       <div class="grow"><b>${esc(cv.name || cv.phone)}</b> <span class="mut">${esc(cv.phone)}</span>${cv.stage ? ` <span class="pill">${esc(cv.stage)}${cv.orderId ? ' · طلب' : ''}</span>` : ''}</div>
       <button class="ghost" onclick="chatSet({bot:${cv.botOff > Date.now() ? 1 : 0}})">${cv.botOff > Date.now() ? '▶️ شغّل الرد الآلي' : '⏸ وقّف الرد الآلي'}</button>
       ${cv.needsHuman ? `<button class="ghost" onclick="chatSet({done:1})">✔️ اتحل</button>` : ''}
+      <button class="ghost" onclick="chatSet({personal:${cv.kind === 'personal' ? 0 : 1}})">${cv.kind === 'personal' ? '👤 رجّعه عميل' : '🙈 شخصي — تجاهل'}</button>
       <a href="https://wa.me/${esc(cv.phone)}" target="_blank" rel="noreferrer"><button class="ghost">واتساب</button></a></div>
     <div class="msgs">${S.conv.msgs.map((m) => `<div class="b ${m.dir}">${esc(m.text)}<small>${m.dir === 'out' ? esc(m.by || '') + ' · ' : ''}${new Date(m.at).toLocaleString('ar-EG', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'numeric' })}</small></div>`).join('')}</div>
     <div class="compose"><textarea id="reply" placeholder="اكتب ردك…"></textarea><button onclick="sendReply()">إرسال</button></div>`
@@ -144,8 +145,15 @@ function settingsView() {
     <label>الموظفين اللي بتتوزع عليهم المحادثات (سطر لكل موظف: الاسم - الرقم)</label><textarea name="agents" placeholder="أحمد - 0501234567">${esc(ag)}</textarea>
     <div class="row"><label class="row"><input type="checkbox" name="autoReply" style="width:auto" ${s.autoReply ? 'checked' : ''}> الرد الآلي شغال</label>
       <label class="row"><input type="checkbox" name="notifyAgents" style="width:auto" ${s.notifyAgents ? 'checked' : ''}> بلّغ الموظف على واتساب لما عميل يحتاجه</label></div>
-    <label>رسالة الترحيب ({site} = اسم الشركة)</label><textarea name="welcome">${esc(s.welcome)}</textarea>
-    <label>رسالة برا مواعيد العمل</label><textarea name="afterHours">${esc(s.afterHours)}</textarea>
+    <div class="grid2">
+      <div><label>رقم الطوارئ (برا مواعيد العمل)</label><input name="emergencyPhone" value="${esc(s.emergencyPhone)}"></div>
+      <div><label>الموظف ياخد فرصة يرد قبل البوت (ثانية)</label><input name="humanFirstSec" type="number" min="0" max="900" value="${esc(s.humanFirstSec)}"></div>
+    </div>
+    <div class="row"><label class="row"><input type="checkbox" name="ignoreContacts" style="width:auto" ${s.ignoreContacts ? 'checked' : ''}> تجاهل الأسماء المتسجلة في موبايل الخط (أهل ومعارف)</label>
+      <label class="row"><input type="checkbox" name="dailyReport" style="width:auto" ${s.dailyReport ? 'checked' : ''}> ملخص اليوم للغرفة آخر اليوم</label></div>
+    <label>رسالة الترحيب ({site} = اسم الموقع اللي العميل جاي منه)</label><textarea name="welcome">${esc(s.welcome)}</textarea>
+    <label>ترحيب العميل القديم ({name} الاسم · {last} آخر خدمة)</label><textarea name="welcomeBack">${esc(s.welcomeBack)}</textarea>
+    <label>رسالة برا مواعيد العمل ({phone} = رقم الطوارئ)</label><textarea name="afterHours">${esc(s.afterHours)}</textarea>
     <label>رد «الأسعار»</label><textarea name="prices">${esc(s.prices)}</textarea>
     <div class="row" style="margin-top:12px"><button>حفظ</button><span id="saved" class="mut"></span></div></form>
     <div class="card"><b>كلمة سر اللوحة</b><div class="row" style="margin-top:8px"><input id="np" type="password" class="grow" placeholder="كلمة سر جديدة" autocomplete="new-password"><button class="ghost" onclick="setPw()">غيّر</button></div></div>`
@@ -153,7 +161,7 @@ function settingsView() {
 window.saveSettings = async (e) => {
   e.preventDefault(); const f = new FormData(e.target)
   const agents = String(f.get('agents') || '').split('\n').map((l) => l.split(/\s*[-–:،,]\s*/)).filter((p) => p[0] && p[0].trim()).map(([name, phone]) => ({ name: name.trim(), phone: (phone || '').trim() }))
-  const b = { roomPhone: f.get('roomPhone'), testPhone: f.get('testPhone'), siteName: f.get('siteName'), hoursFrom: Number(f.get('hoursFrom')), hoursTo: Number(f.get('hoursTo')), agents, autoReply: !!f.get('autoReply'), notifyAgents: !!f.get('notifyAgents'), welcome: f.get('welcome'), afterHours: f.get('afterHours'), prices: f.get('prices') }
+  const b = { roomPhone: f.get('roomPhone'), testPhone: f.get('testPhone'), siteName: f.get('siteName'), hoursFrom: Number(f.get('hoursFrom')), hoursTo: Number(f.get('hoursTo')), agents, autoReply: !!f.get('autoReply'), notifyAgents: !!f.get('notifyAgents'), welcome: f.get('welcome'), welcomeBack: f.get('welcomeBack'), emergencyPhone: f.get('emergencyPhone'), humanFirstSec: Number(f.get('humanFirstSec')), ignoreContacts: !!f.get('ignoreContacts'), dailyReport: !!f.get('dailyReport'), afterHours: f.get('afterHours'), prices: f.get('prices') }
   try { await api('/api/settings', b); $('#saved').textContent = 'اتحفظ ✓' } catch (err) { $('#saved').textContent = err.message }
 }
 window.setPw = async () => { try { await api('/api/password', { password: $('#np').value }); $('#np').value = ''; alert('اتغيرت ✓') } catch (e) { alert(e.message) } }

@@ -35,6 +35,7 @@ async function initLines() {
       if (v.status === 'open' || v.status === 'logged_out') log('line', (l?.label || id) + ': ' + (v.status === 'open' ? 'متصل ' + v.phone : 'اتفصل من الموبايل'))
     },
     onMessage: (m) => brain.inbound(m).catch((e) => log('error', 'inbound: ' + (e?.message || e))),
+    onContact: (line, phone, name) => brain.contact(phone, name),
   })
   // Carry the numbers the old gateway had already linked: nobody has to scan again.
   if (OLD && !store.lines().length) {
@@ -114,6 +115,8 @@ const brain = createBrain({ store, wp, send, log })
 const syncConfig = async () => { if (!store.get('pair')?.secret) return; try { const c = await wp('config', {}); if (c) store.set('wpConfig', c) } catch (e) { log('warn', 'config: ' + e.message) } }
 setTimeout(syncConfig, 3000); setInterval(syncConfig, 600000).unref?.()
 
+setInterval(() => brain.daily().catch(() => {}), 60000).unref?.()
+
 // A report the website could not deliver (the hub was restarting) waits there; collected every half minute.
 setInterval(async () => {
   if (!store.get('pair')?.secret) return
@@ -161,7 +164,7 @@ const api = {
     const phone = intl(c?.phone || b.phone || '')
     if (phone.length < 9 || !String(b.text || '').trim()) throw new Error('اكتب الرقم والرسالة')
     send(phone, String(b.text), { line: b.line || c?.line || '', purpose: 'agent' })
-    store.touchChat(pkey(phone), { phone, botOff: Date.now() + 2 * 3600000, needsHuman: 0, unread: 0 })
+    store.touchChat(pkey(phone), { phone, humanAt: Date.now(), needsHuman: 0, unread: 0 })
     return { ok: true }
   },
   'POST /api/chat': (b) => {
@@ -169,6 +172,7 @@ const api = {
     if ('bot' in b) f.botOff = b.bot ? 0 : Date.now() + 365 * 86400000
     if ('agent' in b) f.agent = String(b.agent || '')
     if ('done' in b) f.needsHuman = b.done ? 0 : 1
+    if ('personal' in b) f.kind = b.personal ? 'personal' : 'customer'
     return { chat: store.touchChat(String(b.pk), f) }
   },
   'POST /api/lines/add': async (b) => {
@@ -182,10 +186,11 @@ const api = {
   'POST /api/lines/remove': async (b) => { await lines.stop(String(b.id), true); store.dropLine(String(b.id)); return { ok: true } },
   'POST /api/settings': (b) => {
     const cur = store.get('settings', {}) || {}
-    const keep = ['roomPhone', 'testPhone', 'agents', 'notifyAgents', 'autoReply', 'siteName', 'hoursFrom', 'hoursTo', 'welcome', 'afterHours', 'prices', 'brandLines']
+    const keep = ['roomPhone', 'testPhone', 'agents', 'notifyAgents', 'autoReply', 'siteName', 'hoursFrom', 'hoursTo', 'welcome', 'welcomeBack', 'afterHours', 'prices', 'brandLines', 'emergencyPhone', 'humanFirstSec', 'ignoreContacts', 'dailyReport']
     for (const k of keep) if (k in b) cur[k] = b[k]
     if (cur.roomPhone) cur.roomPhone = intl(cur.roomPhone)
     if (cur.testPhone) cur.testPhone = intl(cur.testPhone)
+    if (cur.emergencyPhone) cur.emergencyPhone = String(cur.emergencyPhone).replace(/[^\d+]/g, '')
     if (Array.isArray(cur.agents)) cur.agents = cur.agents.filter((a) => a && a.name).map((a) => ({ name: String(a.name).slice(0, 40), phone: intl(a.phone || '') }))
     store.set('settings', cur)
     return { settings: { ...DEFAULTS, ...cur } }

@@ -7,9 +7,10 @@ import fs from 'node:fs'
 let pass = 0; let fail = 0
 const t = (name, ok, extra = '') => { if (ok) pass++; else { fail++; console.log('✗ ' + name + (extra ? '\n   ' + String(extra).slice(0, 600) : '')) } }
 
-const ROOM = '966536554731'; const CUST = '966500000001'; const TECH = '966549648890'; const NEW = '966500000009'
+const ROOM = '966536554731'; const CUST = '966500000001'; const TECH = '966549648890'; const NEW = '966500000009'; const OLDC = '966500000020'; const FRIEND = '966500000030'; const LATE = '966500000040'; const AIC = '966500000050'
+const AI = { on: false }
 const store = openStore(':memory:')
-store.set('settings', { roomPhone: ROOM, agents: [{ name: 'سارة', phone: '0511111111' }] })
+store.set('settings', { roomPhone: ROOM, agents: [{ name: 'سارة', phone: '0511111111' }], humanFirstSec: 0.3, hoursFrom: 0, hoursTo: 24 })
 const out = []
 const send = (phone, text, o = {}) => { out.push({ phone, text, purpose: o.purpose, dedup: o.dedup }); return out.length }
 const transcript = []
@@ -42,6 +43,8 @@ const wp = async (op, b) => {
   if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء' }; orders[o.id] = o; emit('order.created', o); return view(o) }
   if (op === 'report') return { text: '📋 تقرير' }
   if (op === 'info') return /سعر|اسعار/.test(b.text) ? { text: 'أسعار المالك' } : null
+  if (op === 'greet') return T.pkey(b.phone) === T.pkey(OLDC) ? { site: 'رعد السماء', kind: 'returning', name: 'أبو فهد', lastService: 'غسيل مكيفين', lastDays: 40, fromUs: false } : { site: 'رعد السماء', kind: 'new', fromUs: /#raad|من موقع/.test(b.text) }
+  if (op === 'converse') return AI.on ? { reply: 'أكيد، غسيل المكيف السبليت بـ 120 ر.س للجهاز. في أي حي؟', lead: { service: 'غسيل 2 سبليت', area: AI.area || '', time: AI.time || '' }, complete: !!(AI.area && AI.time) } : null
   return { ok: true }
 }
 brain = createBrain({ store, wp, send })
@@ -96,7 +99,7 @@ t('rating saved and sent to the room', orders.o1.customerRating === 5 && /تقي
 // ===== E. a stranger writes: welcome, a person, an order from the chat =====
 transcript.push('\n### هـ) عميل جديد بيكلم الخط: ترحيب، موظف، وطلب من الشات')
 m = await say(NEW, 'السلام عليكم')
-t('welcome menu', /أهلًا وسهلًا/.test(to(m, NEW)), to(m, NEW))
+t('welcome with the etiquette: the company and what we do', /مرحبًا بكم في \*رعد السماء\*/.test(to(m, NEW)) && /غرف التبريد والتجميد/.test(to(m, NEW)) && /السباكة والنجارة والكهرباء/.test(to(m, NEW)), to(m, NEW))
 m = await say(NEW, 'بكام الاسعار')
 t('prices from the owner\'s own answers', /أسعار المالك/.test(to(m, NEW)), to(m, NEW))
 m = await say(NEW, '4')
@@ -116,6 +119,49 @@ m = await say(ROOM, 'رد 1002 الفني هيكلمك بعد شوية', 'الغ
 t('room «رد 1002 …» reaches the customer', /الفني هيكلمك/.test(to(m, CUST)) && /وصلت للعميل/.test(to(m, ROOM)), JSON.stringify(m))
 m = await say(ROOM, 'عميل 0500000009 أهلا بيك', 'الغرفة')
 t('room «عميل رقم نص» reaches any customer', /أهلا بيك/.test(to(m, NEW)), JSON.stringify(m))
+
+
+// ===== G. the etiquette: old customers, people the owner knows, a person answering first =====
+transcript.push('\n### و) عميل قديم، ومعارف، وموظف بيرد قبل البوت')
+m = await say(OLDC, 'السلام عليكم')
+t('an old customer is welcomed back by name with his last job', /أهلًا بعودتك يا أبو فهد/.test(to(m, OLDC)) && /غسيل مكيفين/.test(to(m, OLDC)), to(m, OLDC))
+brain.contact(FRIEND, 'خالي محمد')
+m = await say(FRIEND, 'إزيك يا علي عامل ايه')
+t('a name saved in the phone, not from our sites: left alone', !to(m, FRIEND) && store.chat(T.pkey(FRIEND)).kind === 'personal', JSON.stringify(m))
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+m = await say(NEW.replace(/9$/, '8'), 'عايز اغسل مكيف سبليت')
+t('a full request: welcome at once, the rest waits for a person', /مرحبًا بكم/.test(m.map((x) => x.text).join()) && !/ابعت موقعك/.test(m.map((x) => x.text).join()), JSON.stringify(m))
+await brain.inbound({ line: 'l1', phone: NEW.replace(/9$/, '8'), text: 'أهلا بيك يا فندم، في أي حي؟', fromMe: true })
+await sleep(450); m = take()
+t('…a person answered within the two minutes: the bot keeps out', !m.length, JSON.stringify(m))
+m = await say(NEW.replace(/9$/, '7'), 'عايز اغسل مكيف سبليت')
+await sleep(450); m = m.concat(take())
+t('…nobody answered: the bot takes the customer', /ابعت موقعك/.test(m.map((x) => x.text).join()), JSON.stringify(m))
+m = await say(TECH, 'صباح الخير يا جماعة', 'الفني')
+t('a colleague saying hello gets no bot reply', !to(m, TECH), JSON.stringify(m))
+
+// ===== H. after hours: morning booking, emergencies to the phone =====
+transcript.push('\n### ز) برا مواعيد العمل')
+store.set('settings', { ...store.get('settings'), hoursFrom: 0, hoursTo: 0, emergencyPhone: '0536554731' })
+m = await say(LATE, 'عندي تسريب مياه من المكيف وماس كهربا')
+await sleep(450); m = m.concat(take())
+t('after hours an emergency is told to call the mobile, and the room is alerted', /اتصل بينا حالًا على \*0536554731\*/.test(to(m, LATE)) && /طارئ برا مواعيد العمل/.test(to(m, ROOM)), JSON.stringify(m))
+m = await say(LATE.replace(/0$/, '1'), 'محتاج غسيل مكيف')
+await sleep(450); m = m.concat(take())
+m = await say(LATE.replace(/0$/, '1'), 'حي النسيم')
+t('after hours an ordinary job is booked for the morning', /بكرة الصبح من الساعة 0/.test(to(m, LATE.replace(/0$/, '1'))), JSON.stringify(m))
+m = await say(LATE.replace(/0$/, '1'), 'تمام')
+t('…«تمام» books it', Object.values(orders).some((o) => T.pkey(o.clientPhone) === T.pkey(LATE.replace(/0$/, '1')) && /بكرة الصبح/.test(o.preferredTime)), JSON.stringify(m))
+store.set('settings', { ...store.get('settings'), hoursFrom: 0, hoursTo: 24 })
+
+// ===== I. the site's AI talks, prices, and books =====
+AI.on = true
+m = await say(AIC, 'السلام عليكم'); m = await say(AIC, 'بكم غسيل 2 مكيف سبليت؟')
+t('the site\'s AI answers the price question', /120 ر\.س/.test(to(m, AIC)), JSON.stringify(m))
+AI.area = 'الزاهر'; AI.time = 'بكرة العصر'
+m = await say(AIC, 'في الزاهر بكرة العصر')
+t('…and when it has everything, the order is created and confirmed', Object.values(orders).some((o) => T.pkey(o.clientPhone) === T.pkey(AIC) && o.address === 'الزاهر') && /وصلنا طلبك رقم/.test(to(m, AIC)), JSON.stringify(m))
+AI.on = false
 
 // ===== text helpers =====
 t('stepOf: «وصلت 1002»', T.stepOf('وصلت 1002') === 'arrived')

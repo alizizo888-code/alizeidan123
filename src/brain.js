@@ -22,15 +22,20 @@ export const DEFAULTS = {
   autoReply: true,
   siteName: 'أكسجين للصيانة',
   hoursFrom: 8, hoursTo: 24,
-  welcome: 'أهلًا وسهلًا بيك في *{site}* 🌷\nإحنا هنا لخدمتك في التكييف والتبريد والصيانة العامة بمكة وجدة.\n\nاكتب طلبك مباشرة (الخدمة + الحي + الموعد)، أو اختار رقم:\n1️⃣ طلب خدمة\n2️⃣ الأسعار والعروض\n3️⃣ متابعة طلبي\n4️⃣ أكلم موظف',
-  afterHours: 'إحنا برا مواعيد العمل دلوقتي، وهيرد عليك موظف أول ما نفتح. تقدر تسجل طلبك هنا وهيتنفذ في أقرب موعد.',
+  welcome: 'مرحبًا بكم في *{site}* 🌷\nنقدّم خدمات صيانة وإصلاح جميع أنواع المكيفات، وغرف التبريد والتجميد، وكمان خدمات السباكة والنجارة والكهرباء، والمزيد…\n\nاكتب لنا الخدمة اللي محتاجها والحي، ويسعدنا نخدمك.',
+  welcomeBack: 'أهلًا بعودتك{name} 🌷 نورتنا تاني في *{site}*.{last}\nتحب نكرر نفس الخدمة، ولا محتاج حاجة جديدة؟',
+  afterHours: '🌙 إحنا دلوقتي برا مواعيد العمل؛ نقدر نحجزلك أقرب موعد الصبح. ولو الموضوع طارئ اتصل بينا مباشرة على *{phone}*.',
+  emergencyPhone: '0536554731',
+  humanFirstSec: 120,             // a person gets two minutes to answer before the bot takes the conversation
+  ignoreContacts: true,           // names saved in the line's phone (family, friends) are left alone
+  dailyReport: true,              // the day's summary to the room at closing time
   prices: 'أسعارنا بتتحدد حسب نوع الجهاز والعدد، والمعاينة مجانية لحد جهازين.\nابعت نوع الخدمة وعدد الأجهزة والحي، ونبعتلك السعر على طول 🌷',
 }
 
 export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), log = () => {} }) {
   // «الفني الفني علي»: a technician whose name already starts with «الفني» is named once.
   const send = (phone, text, o) => rawSend(phone, String(text).replace(/(الفن[يى])\s+(?=الفن[يى]\s)/g, ''), o)
-  const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; if (!c.testPhone) c.testPhone = (store.get('wpConfig', {}) || {}).testCustomer || ''; return c }
+  const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; if (!c.testPhone) c.testPhone = (store.get('wpConfig', {}) || {}).testCustomer || ''; if (/1️⃣ طلب خدمة/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome; return c }
   const who$ = new Map()   // phone → {at, who}: one question to the website per person per ten minutes
 
   /* ------------------------------------------------------------------ sending */
@@ -84,7 +89,7 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
     if (!o) return
     // The room hears about every order at once, whatever happens with the customer.
     const head = '🆕 *طلب جديد #' + T.num(o) + '*' + (o.site ? ' — ' + o.site : '')
-    toRoom([head, '👤 ' + (o.clientName || '—') + (o.clientPhone ? ' — ' + o.clientPhone : ' — 📵 من غير رقم'), ...T.summary(o), '', o.techName ? '👷 اتسند آليًا لـ ' + o.techName : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'].join('\n'), 'new-' + o.id)
+    toRoom([head, '👤 ' + (o.clientName || 'بدون اسم') + (o.clientPhone ? ' — ' + o.clientPhone : ' — 📵 من غير رقم'), ...T.summary(o), '', o.techName ? '👷 اتسند آليًا لـ ' + o.techName : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'].join('\n'), 'new-' + o.id)
     if (!o.clientPhone || o.customerConfirmed || ['test', 'import'].includes(o.source)) return
     const miss = T.missing(o)
     const L = ['أهلًا' + (o.clientName ? ' ' + o.clientName : '') + ' 👋', 'معاك خدمة عملاء' + (o.site ? ' *' + o.site + '*' : '') + '، وصلنا طلبك رقم *' + T.num(o) + '*:', ...T.summary(o)]
@@ -164,9 +169,34 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
     return w
   }
 
+  /** A name the phone has in its own address book: the owner knows this person. */
+  function contact(phone, name) {
+    const pk = T.pkey(phone); if (!pk || !name) return
+    const c = store.chat(pk)
+    if (!c) store.touchChat(pk, { phone: T.intl(phone), contact: name })
+    else if (c.contact !== name) store.touchChat(pk, { contact: name })
+  }
+
+  // «اترد عليه؟» — a turn the bot holds back while a person may answer. One per chat; a new message joins it.
+  const held = new Map()   // pk → {timer, texts:[], at}
+  function holdThen(pk, text, ms, fn) {
+    const h = held.get(pk) || { texts: [], at: now() }
+    clearTimeout(h.timer)
+    h.texts.push(text)
+    h.timer = setTimeout(() => {
+      held.delete(pk)
+      const c = store.chat(pk)
+      if (c && (c.humanAt || 0) > h.at) return   // a person answered meanwhile: the bot keeps out
+      fn(h.texts.join('\n')).catch?.((e) => log('error', 'held: ' + (e?.message || e)))
+    }, ms)
+    if (h.timer.unref) h.timer.unref()
+    held.set(pk, h)
+  }
+  const humanActive = (c, within) => c && c.humanAt && now() - c.humanAt < within
+
   /**
-   * Every message that arrives on a linked line. `fromMe` is a person typing on the phone itself: it is kept and the
-   * bot steps back from that conversation for a while — nobody wants the bot answering over them.
+   * Every message that arrives on a linked line. `fromMe` is a person typing on the phone itself: it is kept, and the
+   * bot gives way — it speaks again only if the customer writes and nobody answers him for two minutes.
    */
   async function inbound({ line, phone, text = '', kind = 'text', name = '', fromMe = false, self = false }) {
     const pk = T.pkey(phone); if (!pk) return
@@ -175,16 +205,18 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
     const c0 = store.chat(pk)
     if (fromMe && !self) {
       store.addMsg({ pk, line, dir: 'out', text: shown, kind, by: 'phone' })
-      store.touchChat(pk, { phone: T.intl(phone), line, lastAt: now(), lastText: shown, botOff: now() + PAUSE_AFTER_HUMAN, needsHuman: 0, unread: 0 })
+      store.touchChat(pk, { phone: T.intl(phone), line, lastAt: now(), lastText: shown, humanAt: now(), needsHuman: 0, unread: 0 })
       return
     }
     store.addMsg({ pk, line, dir: 'in', text: shown, kind, by: name })
     const c = store.touchChat(pk, { phone: T.intl(phone), line: c0?.line || line, name: name || c0?.name || '', lastAt: now(), lastText: shown, unread: (c0?.unread || 0) + 1 })
-    if (!text && kind !== 'location') return   // a picture or a voice note: a person will look at it
+    if (c.kind === 'personal') return            // family, friends: the owner answers them himself
+    if (!text && kind !== 'location') return     // a picture or a voice note: a person will look at it
 
     const w = await who(phone)
     const testing = cfg().testPhone && T.pkey(cfg().testPhone) === pk
-    if (w.kind !== 'customer' && !(testing && !T.roomCommand(text))) {
+    if (w.kind !== 'customer' && !(testing && !T.roomCommand(text) && !/^عميل\s/.test(text))) {
+      // A colleague: no welcome, no small talk — only his work words (a technician's step, the room's commands).
       store.touchChat(pk, { kind: w.kind })
       const reply = w.kind === 'tech' ? await technician(w, text) : await room(w, text)
       if (reply) say(phone, line, reply)
@@ -195,49 +227,112 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
 
   /* ------------------------------------------------------------------ the customer */
 
+  const EMERGENCY = /(طوارئ|طارئ|ضروري جدا|مستعجل جدا|حالا حالا|تسريب|تسرب|ماس|شرار|حريق|دخان|ريحه غاز|ريحة غاز|كهربا فصلت|البضاعه هتبوظ|البضاعة هتبوظ|الغرفه سخنت|الغرفة سخنت|خربان كليا)/
+  function isOpen() {
+    const C = cfg()
+    const h = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Asia/Riyadh' }).format(new Date(now())))
+    return C.hoursTo >= 24 ? h >= C.hoursFrom : h >= C.hoursFrom && h < C.hoursTo
+  }
+
+  async function greetOf(c, text) {
+    let g = null; try { g = JSON.parse(c.greet || 'null') } catch {}
+    if (g && now() - (g.at || 0) < DAY) return g
+    try { g = await wp('greet', { phone: c.phone, text, brand: store.line?.(c.line)?.brand || '' }) } catch (e) { log('warn', 'greet: ' + e.message) }
+    g = { ...(g || {}), site: (g && g.site) || cfg().siteName, at: now() }
+    store.touchChat(c.pk, { greet: JSON.stringify(g) })
+    return g
+  }
+
+  /** «مرحبًا بكم في …» — the company he came through, what we do, and a welcome back for an old customer. */
+  function welcome(g) {
+    const C = cfg()
+    const back = ['returning', 'vip'].includes(g.kind)
+    const last = back && g.lastService ? '\nآخر مرة نفذنالك «' + g.lastService + '»' + (g.lastDays ? ' من ' + g.lastDays + ' يوم' : '') + (g.warrantyLeft ? '، وضمانها لسه ساري ' + g.warrantyLeft + ' يوم 🛡' : '') + '.' : ''
+    let t = (back ? C.welcomeBack : C.welcome).replace(/\{site\}/g, g.site || C.siteName).replace(/\{name\}/g, g.name ? ' يا ' + g.name : '')
+    t = t.includes('{last}') ? t.replace('{last}', last) : t.replace(/\n/, last + '\n')
+    if (!back && g.source) t += '\nشايفين إنك جاي من «' + g.source + '» — نقدر نساعدك فيها على طول.'
+    if (!isOpen()) t += '\n\n' + C.afterHours.replace(/\{phone\}/g, C.emergencyPhone)
+    return t
+  }
+
   async function customer({ c, line, phone, text, name }) {
+    const C = cfg()
     const j = stageOf(phone)
     if (j && j.o) {
-      let o = null
-      try { o = await wp('order', { id: j.o }) } catch (e) { log('warn', 'order ' + e.message) }
-      if (o) {
-        const reply = await journey(j.s, o, text, phone)
+      // The order's own conversation: at once — unless a person is talking to him right now.
+      const go = async (t) => {
+        let o = null
+        try { o = await wp('order', { id: j.o }) } catch (e) { log('warn', 'order ' + e.message) }
+        if (!o) { dropStage(phone); return reception(store.chat(c.pk), line, phone, t, name) }
+        const reply = await journey(j.s, o, t, phone)
         if (reply !== null) { if (reply) toCustomer({ ...o, waLine: line }, reply); return }
-      } else dropStage(phone)
+        return reception(store.chat(c.pk), line, phone, t, name)
+      }
+      if (humanActive(c, 10 * 60000)) return holdThen(c.pk, text, C.humanFirstSec * 1000, go)
+      return go(text)
     }
-    if (j && j.s === 'lead') return lead(c, line, phone, text, name)
-    const C = cfg()
     if (c.botOff && c.botOff > now()) return notifyHuman(c, text, false)
     if (!C.autoReply) return notifyHuman(c, text, false)
 
+    const g = await greetOf(c, text)
+    // Someone the phone knows by name, who did not come through our sites and never ordered: personal — left alone.
+    if (C.ignoreContacts && c.contact && !g.fromUs && (g.kind || 'new') === 'new' && !SERVICE_WORDS.some((w) => T.norm(text).includes(T.norm(w)))) {
+      store.touchChat(c.pk, { kind: 'personal' }); log('chat', 'اتجاهل (من الأسماء المتسجلة): ' + c.contact)
+      return
+    }
+    const first = !c.welcomedAt || now() - c.welcomedAt > WELCOME_EVERY
+    if (first) {
+      store.touchChat(c.pk, { welcomedAt: now() })
+      say(phone, line, welcome(g))
+      // Just «السلام عليكم»: the welcome is the answer. Anything more waits two minutes for a person first.
+      if (text.length <= 25 && !SERVICE_WORDS.some((w) => T.norm(text).includes(T.norm(w))) && T.intent(text) === 'general') return
+      return holdThen(c.pk, text, C.humanFirstSec * 1000, (t) => reception(store.chat(c.pk), line, phone, t, name))
+    }
+    if (humanActive(c, 30 * 60000)) return holdThen(c.pk, text, C.humanFirstSec * 1000, (t) => reception(store.chat(c.pk), line, phone, t, name))
+    return reception(c, line, phone, text, name)
+  }
+
+  /** The conversation itself: the site's AI when the owner has one, the hub's own rules otherwise. */
+  async function reception(c, line, phone, text, name) {
+    const C = cfg()
+    const open = isOpen()
     const n = T.norm(text); const it = T.intent(text)
+    if (!open && EMERGENCY.test(n)) {
+      toRoom('🚨 *طارئ برا مواعيد العمل*\n👤 ' + (c.name || 'بدون اسم') + ' — ' + c.phone + '\n💬 «' + text.slice(0, 200) + '»', 'emg-' + c.pk + '-' + Math.floor(now() / 1800000))
+      return say(phone, line, 'سلامتك 🙏 ده يبان طارئ ومحتاج تدخل سريع — اتصل بينا حالًا على *' + C.emergencyPhone + '* وهنتصرف فورًا.\nولو حابب، ابعت الموقع هنا وأنا هسجل البيانات للفني.')
+    }
     // His order is open: answer about it.
     if (['where', 'urgent', 'status', 'cancel', 'postpone', 'request', 'warranty', 'pay'].includes(it) || n === '3') {
       let o = null
       try { o = await wp('order', { phone: T.intl(phone), open: true }) } catch {}
-      if (o) { setStage(phone, o.id, o.customerConfirmed || o.status !== 'new' ? 'live' : 'confirm'); const r = await journey(o.customerConfirmed || o.status !== 'new' ? 'live' : 'confirm', o, text, phone); if (r) toCustomer({ ...o, waLine: line }, r); return }
-      if (n === '3') return say(phone, line, 'مفيش طلب مفتوح على رقمك دلوقتي. لو حابب تطلب خدمة اكتب *1* أو ابعت الخدمة والحي على طول 🌷')
+      if (o) { const st = o.customerConfirmed || o.status !== 'new' ? 'live' : 'confirm'; setStage(phone, o.id, st); const r = await journey(st, o, text, phone); if (r) toCustomer({ ...o, waLine: line }, r); return }
+      if (n === '3') return say(phone, line, 'مفيش طلب مفتوح على رقمك دلوقتي 🌷 قولّي الخدمة اللي محتاجها والحي، وأنا أجهز طلبك.')
     }
     if (n === '4' || it === 'human') return notifyHuman(c, text, true)
-    if (n === '2') return say(phone, line, await infoOr('الأسعار', C.prices))
-    if (n === '1' || SERVICE_WORDS.some((w) => n.includes(T.norm(w)))) return lead(c, line, phone, n === '1' ? '' : text, name, true)
-    // Prices, offers, warranty, payment… the website knows the owner's own answers.
-    try { const r = await wp('info', { text }); if (r && r.text) return say(phone, line, r.text) } catch {}
-    if (!c.welcomedAt || now() - c.welcomedAt > WELCOME_EVERY) {
-      store.touchChat(c.pk, { welcomedAt: now() })
-      return say(phone, line, welcome())
+
+    // The site's AI: understands the request, prices and bargains within the owner's floor, books, hands over.
+    const g = await greetOf(c, text)
+    let L = {}; try { L = JSON.parse(c.lead || '{}') } catch {}
+    let ai = null
+    try {
+      const hist = store.msgs(c.pk, 16).map((m) => (m.dir === 'in' ? 'العميل' : 'الشركة') + ': ' + String(m.text).slice(0, 300))
+      ai = await wp('converse', { phone: c.phone, text, history: hist, lead: L, site: g.site, brief: g.brief, source: g.source, afterHours: !open, emergencyPhone: C.emergencyPhone, hoursFrom: C.hoursFrom, hoursTo: C.hoursTo })
+    } catch (e) { log('warn', 'converse: ' + e.message) }
+    if (ai && ai.reply) {
+      store.touchChat(c.pk, { lead: JSON.stringify(ai.lead || {}) })
+      say(phone, line, ai.reply)
+      if (ai.handoff) notifyHuman(store.chat(c.pk), ai.reason || text, false)
+      if (ai.complete && ai.lead && ai.lead.service) return createFrom(store.chat(c.pk), line, phone, { service: [ai.lead.service, ai.lead.note, ai.lead.price ? 'السعر المتفق: ' + ai.lead.price : ''].filter(Boolean).join(' — '), place: ai.lead.area || '', time: ai.lead.time || (open ? 'أقرب وقت' : 'بكرة الصبح'), name: ai.lead.name || name }, true)
+      return
     }
+    // No AI: the hub's own rules.
+    if (n === '2') return say(phone, line, await infoOr('الأسعار', C.prices))
+    if (n === '1' || SERVICE_WORDS.some((w) => n.includes(T.norm(w))) || (c.stage === 'lead')) return lead(c, line, phone, n === '1' ? '' : text, name, c.stage !== 'lead')
+    try { const r = await wp('info', { text }); if (r && r.text) return say(phone, line, r.text) } catch {}
     return notifyHuman(c, text, false)
   }
 
   async function infoOr(text, fallback) { try { const r = await wp('info', { text }); if (r && r.text) return r.text } catch {} return fallback }
-
-  function welcome() {
-    const C = cfg()
-    const h = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Asia/Riyadh' }).format(new Date(now())))
-    const open = C.hoursTo >= 24 ? h >= C.hoursFrom : h >= C.hoursFrom && h < C.hoursTo
-    return C.welcome.replace(/\{site\}/g, C.siteName) + (open ? '' : '\n\n' + C.afterHours)
-  }
 
   /** A person is needed: the chat is marked, dealt to the next agent, and the agent hears it on WhatsApp. */
   function notifyHuman(c, text, ack) {
@@ -260,6 +355,7 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
   async function lead(c, line, phone, text, name, start = false) {
     let L = {}; try { L = JSON.parse(c.lead || '{}') } catch {}
     if (start || !c.stage || c.stage !== 'lead') L = {}
+    if (L.askedMorning && !L.time && T.isYes(text)) { L.time = 'بكرة الصبح من الساعة ' + cfg().hoursFrom; text = '' }
     const cc = T.coords(text)
     if (cc) { L.lat = cc[0]; L.lng = cc[1] }
     else if (text) {
@@ -273,15 +369,29 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
     store.touchChat(c.pk, { lead: JSON.stringify(L), stage: 'lead', stageAt: now(), orderId: '' })
     if (!L.service) return say(phone, line, 'تمام 🌷 اكتب الخدمة اللي محتاجها (مثال: غسيل 2 مكيف سبليت، أو تسريب مياه).')
     if (L.lat === undefined && !L.place) return say(phone, line, '📍 ابعت موقعك من واتساب (📎 ← الموقع) أو اكتب الحي والعنوان.')
-    if (!L.time) return say(phone, line, '📅 إيه الموعد المناسب ليك؟ (مثال: اليوم بعد العصر، بكرة الساعة 6، أو أقرب وقت)')
+    if (!L.time) {
+      if (!isOpen()) {
+        if (!L.askedMorning) {
+          L.askedMorning = 1; store.touchChat(c.pk, { lead: JSON.stringify(L) })
+          return say(phone, line, '🌙 إحنا دلوقتي برا مواعيد العمل، فأقرب موعد *بكرة الصبح من الساعة ' + cfg().hoursFrom + '*. يناسبك؟ اكتب *تمام*، أو اكتب الوقت اللي يناسبك.\nولو الموضوع طارئ اتصل بينا مباشرة على *' + cfg().emergencyPhone + '*.')
+        }
+      }
+      if (!L.time) return say(phone, line, '📅 إيه الموعد المناسب ليك؟ (مثال: اليوم بعد العصر، بكرة الساعة 6، أو أقرب وقت)')
+    }
+    return createFrom(c, line, phone, L)
+  }
+
+  /** The order goes to the website; its «created» report brings the confirmation back to the customer. */
+  async function createFrom(c, line, phone, L, fromAi = false) {
+    const name = L.name || c.name || ''
     try {
-      const o = await wp('create', { phone: T.intl(phone), name: name || c.name || '', service: L.service, address: L.place || '', lat: L.lat ?? null, lng: L.lng ?? null, time: L.time, line })
+      const o = await wp('create', { phone: T.intl(phone), name, service: L.service, address: L.place || '', lat: L.lat ?? null, lng: L.lng ?? null, time: L.time, line })
       store.touchChat(c.pk, { lead: '', stage: 'confirm', orderId: o?.id || '', stageAt: now() })
       // The website reports the new order and the confirmation goes out from created().
     } catch (e) {
       log('error', 'create: ' + e.message)
       notifyHuman(store.chat(c.pk), 'طلب جديد من الشات: ' + L.service + ' — ' + (L.place || 'لوكيشن') + ' — ' + L.time, false)
-      return say(phone, line, 'وصلنا طلبك ✅ وموظف هيأكده معاك حالًا.')
+      return fromAi ? 0 : say(phone, line, 'وصلنا طلبك ✅ وموظف هيأكده معاك حالًا.')
     }
   }
 
@@ -493,8 +603,9 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
           toRoom('⚠️ *الفني ' + String(w.name || '').replace(/^الفن[يى]\s+/, '') + ' — طلب #' + T.num(o) + '*\n💬 «' + text.slice(0, 300) + '»\n👤 ' + (o.clientName || '—') + ' — ' + (o.clientPhone || '') + '\n\nكلّم العميل: *رد ' + T.num(o) + ' نص الرسالة* · تسحبه: *اسحب ' + T.num(o) + '* · تلغيه: *الغي ' + T.num(o) + '*', 'tp-' + o.id + '-' + T.norm(text).slice(0, 20))
           return '📝 سجلتها على طلب ' + T.num(o) + ' وبلّغت غرفة العمليات حالًا ✅\nكمّل مع العميل لحد ما يوصلك ردهم.'
         }
-        return '📝 تم تسجيل ملاحظتك على طلب ' + T.num(o) + '.'
+        return null   // noted on the order quietly: a colleague is not chatted with
       }
+      if (!jobs.length && !/^(مساعدة|طلباتي|الاوامر|الأوامر)$/.test(text.trim())) return null   // a colleague chatting
       const L = ['*أهلًا ' + (w.name || '') + '*']
       if (jobs.length) { L.push('طلباتك المفتوحة:'); for (const o of jobs.slice(0, 6)) L.push('📋 ' + T.num(o) + ' — ' + (o.service || 'صيانة') + ' — _' + (o.statusLabel || o.status) + '_') } else L.push('مفيش طلبات مفتوحة عندك دلوقتي.')
       L.push('', 'اكتب: *قبلت* · *في الطريق* · *قربت* · *وصلت* · *بدأت العمل* · *تم*')
@@ -516,11 +627,12 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
     if (say2) {
       const ph = T.intl(say2[1]); const c = chatOf(ph)
       send(ph, say2[2].trim(), { line: c?.line || '', purpose: 'agent' })
-      if (c) store.touchChat(c.pk, { botOff: now() + PAUSE_AFTER_HUMAN, needsHuman: 0 })
+      if (c) store.touchChat(c.pk, { humanAt: now(), needsHuman: 0 })
       return '📤 اتبعتت للعميل ' + ph + '.'
     }
     const cmd = T.roomCommand(t)
-    if (!cmd || cmd.op === 'help') return T.ROOM_HELP + '\n💬 *عميل 0501234567 النص* — رد على عميل من خطه'
+    if (!cmd) return null   // a colleague chatting: not the bot's business
+    if (cmd.op === 'help') return T.ROOM_HELP + '\n💬 *عميل 0501234567 النص* — رد على عميل من خطه'
     try {
       if (cmd.op === 'report') { const r = await wp('report', { what: cmd.what }); return r?.text || '—' }
       const o = await wp('order', { number: cmd.num })
@@ -529,7 +641,7 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
       if (cmd.op === 'reply') {
         if (!o.clientPhone) return '📵 الطلب ده من غير رقم عميل.'
         toCustomer(o, cmd.text)
-        const c = chatOf(o.clientPhone); if (c) store.touchChat(c.pk, { botOff: now() + PAUSE_AFTER_HUMAN })
+        const c = chatOf(o.clientPhone); if (c) store.touchChat(c.pk, { humanAt: now() })
         wp('step', { id: o.id, kind: 'wa_room_reply', text: 'العمليات للعميل: ' + cmd.text.slice(0, 120), by: w.name }).catch(() => {})
         return '📤 وصلت للعميل ' + (o.clientName || o.clientPhone) + ' (طلب #' + T.num(o) + ').'
       }
@@ -550,5 +662,18 @@ export function createBrain({ store, wp, send: rawSend, now = () => Date.now(), 
     return T.ROOM_HELP
   }
 
-  return { onEvent, inbound, cfg, template }
+  /** At closing time, once a day: the day's summary to the room. */
+  async function daily() {
+    const C = cfg(); if (!C.dailyReport) return
+    const p = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', minute: 'numeric', hour12: false, timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(now()))
+    const v = Object.fromEntries(p.map((x) => [x.type, x.value]))
+    const at = Math.min(23, (C.hoursTo >= 24 ? 23 : C.hoursTo))
+    if (Number(v.hour) !== at || Number(v.minute) > 10) return
+    const day = v.year + '-' + v.month + '-' + v.day
+    if (store.get('dailyAt') === day) return
+    store.set('dailyAt', day)
+    try { const r = await wp('report', { what: 'report' }); if (r?.text) toRoom('🌙 *ملخص اليوم*\n' + r.text, 'daily-' + day) } catch (e) { log('warn', 'daily: ' + e.message) }
+  }
+
+  return { onEvent, inbound, contact, cfg, template, daily }
 }

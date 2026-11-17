@@ -31,7 +31,7 @@ export function extract(msg) {
   return { text: '', kind: 'other' }
 }
 
-export function createLines({ dataDir, onMessage, onStatus, log = pino({ level: process.env.LOG_LEVEL || 'warn' }) }) {
+export function createLines({ dataDir, onMessage, onStatus, onContact, log = pino({ level: process.env.LOG_LEVEL || 'warn' }) }) {
   const AUTH = path.join(dataDir, 'auth')
   fs.mkdirSync(AUTH, { recursive: true })
   const LIDF = path.join(dataDir, 'lid-map.json')
@@ -79,7 +79,14 @@ export function createLines({ dataDir, onMessage, onStatus, log = pino({ level: 
         setTimeout(() => { if (S.get(id) === st && !st.stopped) start(id).catch((e) => log.error(e)) }, wait)
       }
     })
-    const learnContacts = (list) => { for (const c of list || []) { if (isLid(c.lid) && isPn(c.id)) learn(c.lid, c.id); if (isLid(c.id) && isPn(c.phoneNumber || c.jid)) learn(c.id, c.phoneNumber || c.jid) } }
+    const learnContacts = (list) => {
+      for (const c of list || []) {
+        if (isLid(c.lid) && isPn(c.id)) learn(c.lid, c.id)
+        if (isLid(c.id) && isPn(c.phoneNumber || c.jid)) learn(c.id, c.phoneNumber || c.jid)
+        // A name saved in the phone's own address book: someone the owner knows personally (or a colleague).
+        if (c.name && onContact) { const pn = isPn(c.id) ? c.id : isPn(c.phoneNumber) ? c.phoneNumber : (lidMap[jidToPhone(c.id)] ? lidMap[jidToPhone(c.id)] + '@s.whatsapp.net' : ''); if (pn) onContact(id, jidToPhone(pn), String(c.name).slice(0, 60)) }
+      }
+    }
     sock.ev.on('contacts.upsert', learnContacts)
     sock.ev.on('contacts.update', learnContacts)
     sock.ev.on('lid-mapping.update', (u) => { for (const x of [].concat(u || [])) learn(x?.lid, x?.pn) })
