@@ -196,6 +196,12 @@ final class Mutqan_Hub {
             case 'events': return ['events' => self::take_queue()];
             case 'ping': return ['ok' => true, 'site' => home_url('/')];
             case 'ai': return self::ai_status();
+            // Chatwoot (the team's phone app on chat.oxygen11.com): the hub now carries the chats there itself.
+            case 'chatwoot': {
+                if (!class_exists('Mutqan_Chatwoot')) { return null; }
+                $c = Mutqan_Chatwoot::settings();
+                return $c['token'] !== '' && (int) $c['account'] > 0 ? ['url' => $c['url'] !== '' ? $c['url'] : 'https://chat.oxygen11.com', 'account' => (int) $c['account'], 'token' => (string) $c['token']] : null;
+            }
             case 'ai_keys': return self::save_ai_keys(['providers' => (array) ($in['providers'] ?? [])]);
             // «رقم التجربة» set on the site (one phone that is both a customer and the room) is the hub's too.
             case 'config': return ['testCustomer' => (string) get_option('mutqan_test_customer', ''), 'site' => home_url('/')];
