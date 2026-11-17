@@ -41,6 +41,7 @@ const wp = async (op, b) => {
   if (op === 'approve') { const o = orders[b.id]; Object.assign(o, { techId: 't1', techName: 'الفني علي', status: 'assigned' }); emit('order.assigned', o); return { text: '✅ اتسند للفني علي' } }
   if (op === 'eta_ask') return { result: 'asked' }
   if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; emit('order.created', o); return view(o) }
+  if (op === 'claim') { const o = byNum(b.number); if (!o || o.claimCode !== b.code) return null; const first = !o.customerConfirmed; Object.assign(o, { clientPhone: b.phone, customerConfirmed: true }); return { first, ...view(o) } }
   if (op === 'report') return { text: '📋 تقرير' }
   if (op === 'info') return /سعر|اسعار/.test(b.text) ? { text: 'أسعار المالك' } : null
   if (op === 'quote') { const n = T.norm(b.text); if (!/مكيف|سبليت|تسريب|سباك/.test(n)) return null; const q = /مكيفين|2/.test(n) ? 2 : 1; return /غسيل|اغسل/.test(n) ? { spec: 'ac', fixed: true, label: 'غسيل ' + q + ' مكيف سبليت', qty: q, total: q === 2 ? 140 : 100, floor: q === 2 ? 125 : 89, acQuote: { mode: 'wash', type: 'سبليت', qty: q } } : { spec: 'plumbing', fixed: false, label: 'سباكة', from: 120, total: 120, floor: 100 } }
@@ -201,5 +202,18 @@ t('moneyIn: «2 مكيف» is not a price', T.moneyIn('عندي 20 مكيف') ==
 t('roomCommand: وجّه 1002 لمحمود', T.roomCommand('وجّه 1002 لمحمود')?.name === 'محمود')
 
 if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join('\n'))
+// ===== Z. the site's confirm button opens WhatsApp with the order: sending it is the confirmation =====
+{
+  const CL = '966500000077'
+  orders.oc = { id: 'oc', number: 1777, status: 'new', clientPhone: '', service: 'غسيل مكيف', site: 'رعد السماء', claimCode: '4821' }
+  const bad = await say(CL, 'أكدت طلبي رقم #1777 ✅\nرمز الطلب: 1111')
+  t('a wrong order code does not take the order', orders.oc.clientPhone === '' && !/تم تأكيد طلبك/.test(to(bad, CL)), JSON.stringify(bad))
+  await sleep(); take(); store.touchChat(T.pkey(CL), { welcomedAt: 0 })
+  const m = await say(CL, 'السلام عليكم، أكدت طلبي رقم #1777 ✅\nالخدمة: غسيل مكيف\n📍 الموقع: https://maps.google.com/?q=21.4,39.8\nرمز الطلب: 4821')
+  t('the WhatsApp message from the confirm button claims and confirms the order', T.pkey(orders.oc.clientPhone) === T.pkey(CL) && orders.oc.customerConfirmed && /تم تأكيد طلبك رقم \*1777\*/.test(to(m, CL)) && /أكد طلب #1777 من واتساب/.test(to(m, ROOM)) && !/مرحبًا بكم/.test(to(m, CL)), JSON.stringify(m))
+  const again = await say(CL, 'أكدت طلبي رقم #1777 ✅\nرمز الطلب: 4821')
+  t('sending it twice only says it is already confirmed', /واصلنا ومأكد/.test(to(again, CL)) && !to(again, ROOM), JSON.stringify(again))
+}
+
 console.log(`wa-hub brain: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

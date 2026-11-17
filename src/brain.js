@@ -89,8 +89,9 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (!o) return
     // The room hears about every order at once, whatever happens with the customer.
     const head = '🆕 *طلب جديد #' + T.num(o) + '*' + (o.site ? ' — ' + o.site : '')
-    toRoom([head, '👤 ' + (o.clientName || 'بدون اسم') + (o.clientPhone ? ' — ' + o.clientPhone : ' — 📵 من غير رقم'), ...T.summary(o), '', o.techName ? '👷 اتسند آليًا لـ ' + o.techName : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'].join('\n'), 'new-' + o.id)
-    if (!o.clientPhone || o.customerConfirmed || ['test', 'import'].includes(o.source)) return
+    toRoom([head, '👤 ' + (o.clientName || 'بدون اسم') + (o.clientPhone ? ' — ' + o.clientPhone : ' — ⏳ مستني تأكيده من واتساب'), ...T.summary(o), '', o.techName ? '👷 اتسند آليًا لـ ' + o.techName : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'].join('\n'), 'new-' + o.id)
+    // Sent from the site's confirm button: his own WhatsApp message is on its way, and that is his confirmation.
+    if (!o.clientPhone || o.customerConfirmed || o.waClaim || ['test', 'import'].includes(o.source)) return
     const miss = T.missing(o)
     const L = ['أهلًا' + (o.clientName ? ' ' + o.clientName : '') + ' 👋', 'معاك خدمة عملاء' + (o.site ? ' *' + o.site + '*' : '') + '، وصلنا طلبك رقم *' + T.num(o) + '*:', ...T.summary(o)]
     if (miss.length) L.push('', 'عشان نبعتلك الفني محتاجين منك:', ...T.missingText(miss))
@@ -257,8 +258,26 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     return t
   }
 
+  /** The site's confirm button sent this from his own WhatsApp: the order is his, confirmed, and on its way. */
+  async function claimed(c, line, phone, text, name) {
+    const m = T.claimOf(text); if (!m) return false
+    let o = null
+    try { o = await wp('claim', { number: m.num, code: m.code, phone: T.intl(phone), name }) } catch (e) { log('warn', 'claim: ' + e.message) }
+    if (!o) return false
+    store.touchChat(c.pk, { welcomedAt: now() })
+    setStage(phone, o.id, 'live')
+    if (!o.first) { say(phone, line, 'طلبك رقم *' + T.num(o) + '* واصلنا ومأكد ✅ — هنبلغك هنا بكل جديد.'); return true }
+    const C = cfg()
+    const L = ['أهلًا' + (o.clientName || name ? ' ' + (o.clientName || name) : '') + ' 🌷', 'تم تأكيد طلبك رقم *' + T.num(o) + '*' + (o.site ? ' في *' + o.site + '*' : '') + ' ✅', ...T.summary(o), '', isOpen() ? 'جاري تجهيز الفني، وهنبلغك هنا أول ما يتحرك 🚗' : 'إحنا دلوقتي برا مواعيد العمل، وطلبك متسجل لأقرب موعد الصبح 🌙\nلو الموضوع طارئ اتصل مباشرة على *' + C.emergencyPhone + '*.']
+    if (o.url) L.push('🔗 تابع طلبك: ' + o.url)
+    toCustomer({ ...o, waLine: line }, L.join('\n'), 'claim-' + o.id)
+    toRoom('✅ العميل أكد طلب #' + T.num(o) + ' من واتساب — ' + T.intl(phone) + (name ? ' (' + name + ')' : ''), 'claim-' + o.id)
+    return true
+  }
+
   async function customer({ c, line, phone, text, name }) {
     const C = cfg()
+    if (await claimed(c, line, phone, text, name)) return
     const j = stageOf(phone)
     if (j && j.o) {
       // The order's own conversation: at once — unless a person is talking to him right now.

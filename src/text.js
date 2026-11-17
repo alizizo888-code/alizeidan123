@@ -164,6 +164,13 @@ export function summary(o) {
   if (Number(o.price) > 0) L.push('💰 السعر: ' + o.price + ' ر.س')
   return L
 }
+/** «أكدت طلبي رقم #1234 … رمز الطلب: 4821» — the message the site's confirm button writes into WhatsApp for him. */
+export function claimOf(text) {
+  const t = String(text || '').replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+  const m = t.match(/طلب[يى]?\s*(?:رقم)?\s*#?(\d{3,})[\s\S]*?رمز\s*(?:ال)?(?:طلب)?\s*[:：]?\s*(\d{4})/)
+  return m ? { num: m[1], code: m[2] } : null
+}
+
 export const num = (o) => String(o.number || String(o.id || '').slice(-5))
 
 /* ------------------------------------------------------------------ prices and bargaining */
