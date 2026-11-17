@@ -196,6 +196,7 @@ final class Mutqan_Hub {
             case 'events': return ['events' => self::take_queue()];
             case 'ping': return ['ok' => true, 'site' => home_url('/')];
             case 'ai': return self::ai_status();
+            case 'ai_keys': return self::save_ai_keys(['providers' => (array) ($in['providers'] ?? [])]);
             // «رقم التجربة» set on the site (one phone that is both a customer and the room) is the hub's too.
             case 'config': return ['testCustomer' => (string) get_option('mutqan_test_customer', ''), 'site' => home_url('/')];
         }
