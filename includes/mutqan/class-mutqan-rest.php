@@ -261,10 +261,11 @@ final class Mutqan_Rest {
     private static function order_wa_text($d, $price, $seal) {
         $units = self::units_text($d);
         $lines = array_filter([
-            '🔔 *تم استلام طلبك — ' . self::order_brand_name($d) . '*',
+            '🔔 *طلب جديد — ' . self::order_brand_name($d) . '*',
             'رقم الطلب: #' . substr((string) $d['id'], -5),
             !empty($d['clientName']) ? '👤 الاسم: ' . $d['clientName'] : '',
             !empty($d['clientPhone']) ? '📱 الجوال: ' . $d['clientPhone'] : '',
+            !empty($d['specialtyId']) ? '🛠️ الخدمة: ' . self::spec_label($d['specialtyId']) : '',
             self::kind_label($d) ? '🧰 نوع الطلب: ' . self::kind_label($d) : '',
             $units ? ((($d['specialtyId'] ?? '') === 'ac' ? '❄️ المكيفات: ' : '🔢 العدد: ') . $units) : '',
             self::note_text($d) ? '📝 التفاصيل: ' . self::note_text($d) : '',
@@ -367,7 +368,14 @@ final class Mutqan_Rest {
         self::admin_alert(($high ? '⭐ ' : '') . ($urgent ? '🚨 طلب عاجل جديد' : ($ops ? '📋 طلب بانتظار التوزيع' : '🆕 طلب جديد')) . (!empty($doc['specialtyId']) ? ' — ' . self::spec_label($doc['specialtyId']) : ''), implode("\n", $lines) ?: 'طلب خدمة جديد بانتظار المعالجة', '#/staff/order/' . $doc['id'], 'new_order', 'high', $doc['id']);
         // The same order, sent AUTOMATICALLY on WhatsApp by the business number to the customer (his copy + the conversation opens in the WhatsApp inbox). No confirmation step for anyone.
         $sent = false;
-        // With the hub paired its confirmation is the customer's copy: one message, not two.
+        // With the hub paired the same card goes out through it, straight away — the order needs no «تأكيد» from him.
+        if (!$ops && !empty($doc['clientPhone']) && class_exists('Mutqan_Hub') && Mutqan_Hub::on()) {
+            try {
+                $sent = Mutqan_Hub::send($doc['clientPhone'], self::order_wa_text($doc, $price, $seal), 'order', 'card-' . $doc['id']) !== false;
+                Mutqan_Store::update('orders', $doc['id'], ['waQueued' => true, 'waQueuedAt' => gmdate('c'), 'customerConfirmed' => true, 'confirmedAt' => gmdate('c'), 'confirmedVia' => 'site'], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user']);
+            } catch (Throwable $e) { error_log('[mutqan] order card via hub: ' . $e->getMessage()); }
+            return $sent;
+        }
         if (!$ops && !empty($doc['clientPhone']) && !(class_exists('Mutqan_Hub') && Mutqan_Hub::on())) {
             try {
                 $how = Mutqan_WA::auto_send($doc['clientPhone'], self::order_wa_text($doc, $price, $seal), 'order');
