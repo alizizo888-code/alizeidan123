@@ -50,6 +50,13 @@ async function initLines() {
       if (fs.existsSync(path.join(OLD, 'lid-map.json')) && !fs.existsSync(path.join(DATA, 'lid-map.json'))) fs.copyFileSync(path.join(OLD, 'lid-map.json'), path.join(DATA, 'lid-map.json'))
     } catch (e) { log('warn', 'import: ' + e.message) }
   }
+  // RELINK=<token>: once per token, every line forgets its keys and shows a fresh QR (keys copied from another
+  // gateway can end up out of step — the customer then sees «في انتظار هذه الرسالة» instead of the text).
+  const relink = process.env.RELINK || ''
+  if (relink && store.get('relinkDone') !== relink) {
+    for (const l of store.lines()) { fs.rmSync(path.join(DATA, 'auth', l.id), { recursive: true, force: true }); store.putLine({ ...l, phone: '' }) }
+    store.set('relinkDone', relink); log('line', 'كل الأرقام اتصفّرت عشان تتربط من جديد بالـQR')
+  }
   for (const l of store.lines()) lines.start(l.id).catch((e) => log('error', 'start ' + l.id + ': ' + e.message))
 }
 
@@ -115,6 +122,8 @@ setInterval(async () => {
 
 /* ------------------------------------------------------------------ the panel's door */
 
+// RESET_PANEL=<token>: once per token, the panel's password is cleared and the next visit chooses a new one.
+if (process.env.RESET_PANEL && store.get('resetDone') !== process.env.RESET_PANEL) { store.set('pw', null); store.set('resetDone', process.env.RESET_PANEL); store.log('panel', 'كلمة سر اللوحة اتصفّرت') }
 const sessKey = (() => { let k = store.get('sessKey'); if (!k) { k = crypto.randomBytes(32).toString('hex'); store.set('sessKey', k) } return k })()
 const cookieOf = (req) => Object.fromEntries(String(req.headers.cookie || '').split(';').map((c) => c.trim().split('=')).filter((p) => p.length === 2))
 function signedIn(req) {

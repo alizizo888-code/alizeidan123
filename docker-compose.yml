@@ -12,6 +12,8 @@ services:
       - DATA_DIR=/data
       - OLD_DIR=/old
       - SEND_DAILY_CAP=${SEND_DAILY_CAP:-300}
+      - RELINK=${RELINK:-}
+      - RESET_PANEL=${RESET_PANEL:-}
       - TZ=Asia/Riyadh
       - NODE_NO_WARNINGS=1
     command: >
