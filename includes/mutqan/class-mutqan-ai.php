@@ -11,6 +11,49 @@ if (!defined('ABSPATH')) { exit; }
  * because free tiers may let humans review prompts.
  */
 final class Mutqan_AI {
+
+    const HOUSE_FEATURES = ['chat', 'site_chat', 'wa', 'wa_hub', 'negotiate', 'sales'];
+
+    /** The official price sheet, from the owner's own tables (the same numbers the order page and the hub use). */
+    public static function price_sheet() {
+        $L = [];
+        if (class_exists('Mutqan_Policy')) {
+            $c = Mutqan_Policy::ac_table(); $f = function ($v) { return (string) (int) round((float) $v); };
+            $L[] = '- غسيل مكيف سبليت (داخلي وخارجي): 1 = ' . $f($c['split1']) . '، 2 = ' . $f($c['split2']) . '، 3 = ' . $f($c['split3']) . ' ر.س، وما زاد بثلث سعر الثلاثة لكل وحدة. داخلي فقط أرخص بـ ' . $f($c['innerOff1']) . '/' . $f($c['innerOff2']) . '/' . $f($c['innerOff3']) . '.';
+            $L[] = '- غسيل مكيف شباك: 1 = ' . $f($c['win1']) . '، 2 = ' . $f($c['win2']) . '، 3 = ' . $f($c['win3']) . ' ر.س (+' . $f($c['winExtra']) . ' لكل وحدة بعدها). باقي الأنواع (مخفي، كاسيت، دولابي، مركزي): ' . $f($c['other1']) . ' للوحدة.';
+            $L[] = '- ضمان 15 يوم مجاني. ضريبة القيمة المضافة ' . $f($c['vatPct']) . '% لو طلب فاتورة ضريبية. أقصى خصم مسموح ' . $f($c['maxDiscountPct']) . '%.';
+            $labels = class_exists('Mutqan_Rest') ? Mutqan_Rest::SPEC_LABELS : [];
+            $other = [];
+            foreach (Mutqan_Policy::price_bases() as $id => $b) {
+                if ($id === 'ac') { continue; }
+                $row = class_exists('Mutqan_Store') ? (Mutqan_Store::get_raw('pricing', $id) ?: []) : [];
+                $base = isset($row['base']) && is_numeric($row['base']) ? (int) $row['base'] : (int) $b;
+                $other[] = ($labels[$id] ?? $id) . ' من ' . $base;
+            }
+            $L[] = '- باقي الخدمات (زيارة/أول وحدة، والنهائي بعد المعاينة): ' . implode('، ', $other) . ' ر.س.';
+            $L[] = '- التركيب والإصلاح: يتسعّر بعد الفحص؛ الكشف مجاني لحد مكيفين.';
+        }
+        return implode("\n", $L);
+    }
+
+    /** The house policy every customer conversation follows (the site's assistant and WhatsApp alike). */
+    public static function house_rules() {
+        $now = class_exists('Mutqan_Sales') ? Mutqan_Sales::local()->format('Y-m-d H:i') : gmdate('Y-m-d H:i');
+        return "## سياسة الشركة الملزمة (تتقدم على أي تعليمات قبلها)\n"
+            . "الوقت الآن في مكة: {$now}.\n"
+            . "### الأسعار الرسمية — المصدر الوحيد لأي رقم\n" . self::price_sheet() . "\n"
+            . "ممنوع أي رقم من عندك، وممنوع خصم أكبر من المسموح. لو الخدمة مش في الجدول قل إن سعرها بعد المعاينة.\n"
+            . "### المواعيد\n"
+            . "- الافتراضي دايمًا: «اليوم — أقرب وقت ممكن». العميل اللي طلب خدمة عايزها دلوقتي؛ خدماتنا بسيطة (زي غسيل مكيف) وبتتعمل في نفس اليوم.\n"
+            . "- ممنوع تقترح بكرة أو الصبح أو تأجّل الطلب من نفسك، وممنوع تربط خصم بموعد صباحي. يوم تاني أو ساعة معينة بس لو العميل نفسه طلبها، أو لو الطلب جه بعد آخر استقبال الطلبات بالليل.\n"
+            . "- لو فيه ضغط أو ذروة: سجّل الطلب عادي على «اليوم — أقرب وقت»، والعمليات هتتواصل معاه لو احتاج أي تعديل.\n"
+            . "- لو قال وقت بمواقيت الصلاة (بعد الظهر/العصر/المغرب) أو بالساعة أو بتاريخ يوم معين: سجّله زي ما قاله بالظبط.\n"
+            . "### الأسلوب\n"
+            . "- راجل سعودي في خدمة العملاء، بلهجة سعودية بيضاء ثابتة، ودود ومختصر (جملتين بالكتير)، وسؤال واحد بس في كل رد.\n"
+            . "- اقرأ المحادثة كلها قبل ما ترد، وما تسألش عن حاجة العميل قالها قبل كده، وما تسألش أسئلة مالهاش لازمة للطلب.\n"
+            . "- الخطوات: الخدمة ← النوع والعدد ← السعر من الجدول ← تأكيد وقفل الطلب على «اليوم — أقرب وقت» (الموقع بيتحدد من الجهاز/الواتساب). أول ما تعرف الخدمة والعدد وسعرها: اقفل الطلب وسجّله على طول من غير لف.\n"
+            . "- لو سأل «طلبي فين/الفني فين»: جاوب من بيانات طلباته المرفقة بس، وما تخترعش حالة ولا وقت وصول.";
+    }
     const OPT = 'mutqan_ai_settings';
     const MAX_PROMPT_CHARS = 30000;
 
@@ -178,6 +221,9 @@ final class Mutqan_AI {
         // The sales brain goes in at the same door: who the customer is, what the day looks like, the plan for
         // this reply. Only customer conversations get one (see Mutqan_Sales::inject).
         if (class_exists('Mutqan_Sales')) { $prompt = Mutqan_Sales::inject($prompt, $opts, $p); }
+        // One house policy for every customer conversation — the site's assistant and the WhatsApp lines alike: the
+        // same official prices, the same «today, as soon as possible», the same way of closing an order. Last, so it wins.
+        if (in_array((string) ($opts['feature'] ?? ''), self::HOUSE_FEATURES, true)) { $prompt .= "\n\n" . self::house_rules(); }
         $wantJson = !empty($opts['json']);
         $temp = isset($opts['temperature']) && is_numeric($opts['temperature']) ? max(0, min(1.2, (float) $opts['temperature'])) : 0.4;
 
@@ -336,18 +382,26 @@ final class Mutqan_AI {
         return self::classify($code, $data, $raw, $retry);
     }
 
-    /** Gemini text-to-speech (male voice). @return array ['ok'=>true,'wav'=>base64] or ['ok'=>false] */
+    /** The assistant's one voice: a Saudi man, always the same — whatever the page or the request asks for. */
+    const VOICE = 'Charon';
+    const VOICE_STYLE = 'You are the voice of a customer-service man from Saudi Arabia. Read the Arabic text below aloud EXACTLY as written, word for word: do not add, drop, translate or change any word. Always the same adult male voice, Saudi (Hijazi) accent, calm warm tone, medium-low pitch, steady natural pace, no singing, no emotion changes. Text:';
+
+    /** Gemini text-to-speech (one fixed male voice). @return array ['ok'=>true,'wav'=>base64] or ['ok'=>false] */
     public static function tts($text, $voice = 'Charon') {
+        $voice = self::VOICE;   // fixed: never another voice, never a woman's
         $s = self::settings(); $c = $s['providers']['gemini'];
-        if (!self::usable('gemini', $c)) { return ['ok' => false, 'error' => 'no_gemini']; }
         $text = trim(mb_substr(preg_replace('/[*_#`]/u', '', (string) $text), 0, 700));
         if ($text === '') { return ['ok' => false, 'error' => 'empty']; }
-        if (!in_array($voice, ['Charon', 'Puck', 'Fenrir', 'Orus', 'Algenib'], true)) { $voice = 'Charon'; }
+        // The same sentence is spoken the same way every time, and a repeated one costs no quota.
+        $dir = ''; $file = '';
+        if (function_exists('wp_upload_dir')) { $u = wp_upload_dir(); $dir = rtrim((string) ($u['basedir'] ?? ''), '/') . '/mutqan-tts'; $file = $dir . '/' . md5($voice . '|' . $text) . '.wav'; }
+        if ($file !== '' && is_readable($file)) { return ['ok' => true, 'wav' => base64_encode((string) file_get_contents($file)), 'cached' => true]; }
+        if (!self::usable('gemini', $c)) { return ['ok' => false, 'error' => 'no_gemini']; }
         $why = '';
         foreach (['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'] as $m) {
             $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $m . ':generateContent';
             list($code, $data, $raw) = self::http($url, ['x-goog-api-key' => $c['key'], 'Content-Type' => 'application/json'], [
-                'contents' => [['role' => 'user', 'parts' => [['text' => 'Say the following in Arabic with a natural Saudi (Najdi/Hijazi) male accent, a warm friendly adult man, steady natural pace, no pauses between words: ' . $text]]]],
+                'contents' => [['role' => 'user', 'parts' => [['text' => self::VOICE_STYLE . "\n" . $text]]]],
                 'generationConfig' => ['responseModalities' => ['AUDIO'], 'speechConfig' => ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice]]]],
             ], 45);
             $part = $data['candidates'][0]['content']['parts'][0] ?? [];
@@ -359,6 +413,7 @@ final class Mutqan_AI {
         if ($b64 === '') { return ['ok' => false, 'error' => $why]; }
         $pcm = base64_decode($b64); $n = strlen($pcm);
         $wav = 'RIFF' . pack('V', 36 + $n) . 'WAVEfmt ' . pack('VvvVVvv', 16, 1, 1, 24000, 48000, 2, 16) . 'data' . pack('V', $n) . $pcm;
+        if ($file !== '' && (is_dir($dir) || @wp_mkdir_p($dir))) { @file_put_contents($file, $wav); }
         return ['ok' => true, 'wav' => base64_encode($wav)];
     }
 

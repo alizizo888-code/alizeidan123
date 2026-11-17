@@ -83,7 +83,8 @@ final class Mutqan_Hub {
         return self::event('send', null, array_filter(['phone' => $to, 'text' => mb_substr((string) $text, 0, 4000), 'purpose' => (string) $purpose, 'dedup' => (string) $dedup]));
     }
 
-    public static function order_created($doc) { return self::event('order.created', $doc); }
+    // The full card goes with it: the room reads the same order message the customer gets (site, service, time, map, seal).
+    public static function order_created($doc) { $card = ''; try { $card = class_exists('Mutqan_Rest') ? Mutqan_Rest::order_card($doc) : ''; } catch (Throwable $e) { $card = ''; } return self::event('order.created', $doc, $card !== '' ? ['card' => $card] : []); }
     public static function order_assigned($doc) { return self::event('order.assigned', $doc); }
     public static function order_status($doc, $old, $p = null) {
         $st = (string) ($doc['status'] ?? ''); $was = (string) ($old['status'] ?? '');
@@ -335,12 +336,14 @@ final class Mutqan_Hub {
             . "## الشركة\nالخدمات: {$specs}. صيانة وإصلاح جميع أنواع المكيفات، وغرف التبريد والتجميد، وكمان سباكة ونجارة وكهرباء وغيرها.\n"
             . "مواعيد العمل: من " . (int) ($in['hoursFrom'] ?? 8) . " لحد " . (int) ($in['hoursTo'] ?? 24) . ". " . ($after ? "دلوقتي برا مواعيد العمل: احجز له أقرب موعد الصبح، إلا لو الموضوع طارئ وخطير (تسريب مياه كبير، ماس أو ريحة حريق، غرفة تبريد فيها بضاعة هتبوظ) — ساعتها اطلب منه يتصل فورًا على {$emg}.\n" : "\n")
             . "## العميل\n" . (string) ($in['brief'] ?? 'عميل جديد') . (!empty($in['source']) ? "\nجه من صفحة: «" . mb_substr((string) $in['source'], 0, 90) . "»" : '') . "\n"
+            . "## طلباته عندنا (من نفس الجدول اللي العمليات شغالة عليه)\n" . self::orders_brief($phone) . "\n"
             . "## اللي اتجمع من الطلب\n" . ($lead ? wp_json_encode($lead, JSON_UNESCAPED_UNICODE) : 'لا شيء') . "\n"
             . "## المحادثة\n" . implode("\n", $hist) . "\nالعميل (آخر رسالة): " . mb_substr((string) ($in['text'] ?? ''), 0, 600) . "\n\n"
             . "## المطلوب\n"
-            . "- افهم نوع الخدمة، وجاوب سؤاله بالظبط. اجمع بالتدريج (سؤال واحد في كل رسالة): الخدمة والتفاصيل (نوع وعدد الأجهزة)، الحي، الوقت المناسب، والاسم.\n"
-            . "- الأسعار: من معلومات الشركة بس. لو فاصل في السعر نزّل بالتدريج لحد أقل سعر مسموح بس، وبعدها اعتذر بلطف واعرض قيمة الخدمة والضمان. ما تخترعش خصم ولا سعر.\n"
-            . "- أول ما يبقى عندك الخدمة والحي والوقت: complete=true وقوله إن الطلب اتسجل وهيوصله التأكيد حالًا.\n"
+            . "- افهم نوع الخدمة، وجاوب سؤاله بالظبط. اجمع بالتدريج (سؤال واحد في كل رسالة): الخدمة والتفاصيل (نوع وعدد الأجهزة)، وبعدين الحي أو يبعت اللوكيشن. الاسم مش شرط.\n"
+            . "- الأسعار: من جدول الأسعار الرسمي في آخر التعليمات بس. لو فاصل نزّل بالتدريج لحد أقل سعر مسموح بس، وبعدها اعتذر بلطف واعرض قيمة الخدمة والضمان.\n"
+            . "- الوقت: لو ما حددش، اكتب في lead.time «اليوم — أقرب وقت ممكن» وما تسألوش عنه ولا تقترح بكرة.\n"
+            . "- أول ما يبقى عندك الخدمة والحي: complete=true وقوله إن الطلب اتسجل وهيوصله التأكيد حالًا.\n"
             . "- شكوى، استرجاع فلوس، زعل شديد، أو قرار مش بتاعك: handoff=true.\n"
             . "- رد بالـJSON ده بس:\n"
             . '{"reply":"","lead":{"service":"","area":"","time":"","name":"","note":"","price":""},"complete":false,"handoff":false,"handoff_reason":""}';
@@ -351,6 +354,20 @@ final class Mutqan_Hub {
         if ($reply === '') { return null; }
         $l = array_filter(array_map(static function ($v) { return trim(mb_substr((string) $v, 0, 160)); }, (array) ($j['lead'] ?? [])), 'strlen');
         return ['reply' => mb_substr($reply, 0, 1200), 'lead' => array_merge($lead, $l), 'complete' => !empty($j['complete']), 'handoff' => !empty($j['handoff']), 'reason' => mb_substr((string) ($j['handoff_reason'] ?? ''), 0, 140), 'provider' => (string) ($r['provider'] ?? '')];
+    }
+
+    /** His orders, in one line each, for «طلبي فين / الفني فين». */
+    private static function orders_brief($phone) {
+        $k = substr(preg_replace('/\D/', '', (string) $phone), -9);
+        if (strlen($k) !== 9 || !class_exists('Mutqan_Store')) { return 'مفيش.'; }
+        $out = [];
+        foreach (Mutqan_Store::select('orders', [], ['limit' => 300, 'order' => 'desc'], self::sys()) as $o) {
+            if (substr(preg_replace('/\D/', '', (string) ($o['clientPhone'] ?? '')), -9) !== $k) { continue; }
+            $v = self::view($o);
+            $out[] = '- #' . self::num($o) . ' — ' . ($v['service'] ?? '') . ' — الحالة: ' . ($v['statusLabel'] ?? '') . (!empty($v['techName']) ? ' — الفني: ' . $v['techName'] : '') . (!empty($o['preferredTime']) ? ' — الموعد: ' . $o['preferredTime'] : '');
+            if (count($out) >= 5) { break; }
+        }
+        return $out ? implode("\n", $out) : 'مفيش طلبات قبل كده.';
     }
 
     /* ------------------------------------------------------------------ the price, from the owner's own price lists */
