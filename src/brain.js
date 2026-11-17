@@ -550,10 +550,14 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   async function liveStage(o, text, phone) {
     if (['completed', 'cancelled'].includes(o.status)) return null
     const cc = T.coords(text)
-    if (cc && !(o.lat !== null && o.lat !== undefined && o.lat !== '')) {
-      await wp('patch', { id: o.id, patch: { lat: cc[0], lng: cc[1] } })
-      if (o.techId) await wp('tell_tech', { id: o.id, text: '📍 العميل بعت اللوكيشن: https://maps.google.com/?q=' + cc[0] + ',' + cc[1] })
-      return 'وصل اللوكيشن ✅' + (o.techId ? ' وبعته للفني.' : '')
+    if (cc) {
+      // Every location he sends is kept on the order (a newer one replaces the old), and goes to the technician and the room.
+      const same = Number(o.lat) === cc[0] && Number(o.lng) === cc[1]
+      if (!same) await wp('patch', { id: o.id, patch: { lat: cc[0], lng: cc[1] }, step: { kind: 'wa_location', text: 'العميل بعت لوكيشن على واتساب' } })
+      const link = 'https://maps.google.com/?q=' + cc[0] + ',' + cc[1]
+      if (o.techId && !same) await wp('tell_tech', { id: o.id, text: '📍 العميل بعت اللوكيشن: ' + link })
+      if (!same) toRoom('📍 لوكيشن طلب #' + T.num(o) + ' (' + (o.clientName || o.clientPhone || 'العميل') + '): ' + link, 'loc-' + o.id + '-' + cc.join(','))
+      return 'وصل اللوكيشن ✅ واتحفظ في طلبك' + (o.techId ? ' وبعته للفني.' : '.')
     }
     let it = T.intent(text)
     const n = T.num(o)
