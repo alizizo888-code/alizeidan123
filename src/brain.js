@@ -75,7 +75,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const o = ev.order || null
     try {
       switch (ev.type) {
-        case 'order.created': return created(o)
+        case 'order.created': return created(o, ev.card)
         case 'order.assigned': return assigned(o)
         case 'order.status': return moved(o, ev.was || '', !!ev.byCustomer)
         case 'order.eta': return eta(o, ev.minutes)
@@ -85,11 +85,14 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     } catch (e) { log('error', 'event ' + ev.type + ': ' + (e?.message || e)) }
   }
 
-  function created(o) {
+  function created(o, card) {
     if (!o) return
-    // The room hears about every order at once, whatever happens with the customer.
+    // The room hears about every order at once, whatever happens with the customer — the full card when the site
+    // sent one (site, service, count, time and date, map, verification), else the short summary.
     const head = '🆕 *طلب جديد #' + T.num(o) + '*' + (o.site ? ' — ' + o.site : '')
-    toRoom([head, '👤 ' + (o.clientName || 'بدون اسم') + (o.clientPhone ? ' — ' + o.clientPhone : ' — ⏳ مستني تأكيده من واتساب'), ...T.summary(o), '', o.techName ? '👷 اتسند آليًا لـ ' + o.techName : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'].join('\n'), 'new-' + o.id)
+    const hint = o.techName ? '👷 اتسند آليًا لـ ' + o.techName : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'
+    const waiting = o.clientPhone ? '' : '⏳ رقم العميل يوصل أول ما يبعت رسالة الطلب من واتساب'
+    toRoom((card ? [card, waiting, '', hint] : [head, '👤 ' + (o.clientName || 'بدون اسم') + (o.clientPhone ? ' — ' + o.clientPhone : ' — ⏳ مستني تأكيده من واتساب'), ...T.summary(o), '', hint]).filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n'), 'new-' + o.id)
     // From the site's order button: the site sends him the full order card itself — no «اكتب تأكيد» for him.
     if (o.clientPhone && ['site', 'mutqan_ai'].includes(o.source)) { setStage(o.clientPhone, o.id, 'live'); return }
     if (!o.clientPhone || o.customerConfirmed || o.waClaim || ['test', 'import'].includes(o.source)) return

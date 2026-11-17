@@ -212,6 +212,13 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   t('…and his reply is about that order', !/مرحبًا بكم/.test(to(r, SC)), JSON.stringify(r))
 }
 
+// ===== X. the room gets the site's full card for a new order =====
+{
+  orders.ox = { id: 'ox', number: 1999, status: 'new', clientPhone: '', service: 'غسيل مكيف', site: 'متقن', source: 'site' }
+  brain.onEvent({ type: 'order.created', order: view(orders.ox), card: '🔔 *طلب جديد — متقن*\nرقم الطلب: #1999\n🌐 جاي من: متقن (mutqan.oxygen11.com)\n🔐 كود التوثيق: ABCD2345' }); await flush(); const m = take()
+  t('room gets the full card (site, seal)', /جاي من: متقن/.test(to(m, ROOM)) && /كود التوثيق/.test(to(m, ROOM)) && /اعتمد 1999/.test(to(m, ROOM)), JSON.stringify(m))
+}
+
 // ===== Z. the site's confirm button opens WhatsApp with the order: sending it is the confirmation =====
 {
   const CL = '966500000077'
