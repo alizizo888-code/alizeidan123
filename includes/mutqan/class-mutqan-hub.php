@@ -195,6 +195,7 @@ final class Mutqan_Hub {
             case 'quote': return self::quote((string) ($in['text'] ?? ''));
             case 'events': return ['events' => self::take_queue()];
             case 'ping': return ['ok' => true, 'site' => home_url('/')];
+            case 'ai': return self::ai_status();
             // «رقم التجربة» set on the site (one phone that is both a customer and the room) is the hub's too.
             case 'config': return ['testCustomer' => (string) get_option('mutqan_test_customer', ''), 'site' => home_url('/')];
         }
@@ -378,6 +379,37 @@ final class Mutqan_Hub {
         $total = (int) round($base * (1 + ($qty - 1) * $extra / 100) + $visit);
         $floor = (int) Mutqan_Policy::floor_for($spec, $qty, false);
         return ['spec' => $spec, 'fixed' => false, 'label' => $label, 'qty' => $qty, 'from' => $total, 'total' => $total, 'floor' => min($floor, $total), 'inspect' => 'والسعر النهائي بيتأكد بعد ما الفني يعاين، ومن غير أي حاجة من غير موافقتك.'];
+    }
+
+    /* ------------------------------------------------------------------ the AI keys */
+
+    /** Which AI providers are live (names only, never keys), and whether the paid fallback (Claude) is set. */
+    public static function ai_status() {
+        if (!class_exists('Mutqan_AI')) { return ['live' => [], 'claude' => false]; }
+        $s = Mutqan_AI::settings();
+        $live = method_exists('Mutqan_AI', 'live_providers') ? array_values((array) Mutqan_AI::live_providers($s)) : [];
+        return ['live' => array_map('strval', $live), 'order' => array_values((array) $s['order']), 'claude' => Mutqan_AI::anthropic_key() !== ''];
+    }
+
+    /**
+     * POST /ai-keys — the free providers' keys kept as GitHub secrets, handed to the site by a workflow signed in as
+     * the owner (WordPress application password). A key the owner already typed here is never overwritten.
+     */
+    public static function save_ai_keys($in) {
+        if (!class_exists('Mutqan_AI')) { throw new Mutqan_Error('unavailable', 'AI غير متاح.', 400); }
+        $cur = (array) get_option(Mutqan_AI::OPT, []);
+        $known = array_keys((array) Mutqan_AI::defaults()['providers']);
+        $set = [];
+        foreach ((array) ($in['providers'] ?? []) as $id => $c) {
+            $id = (string) $id; $key = trim((string) ($c['key'] ?? ''));
+            if (!in_array($id, $known, true) || strlen($key) < 12) { continue; }
+            $old = (array) ($cur['providers'][$id] ?? []);
+            if (!empty($old['key']) && empty($in['overwrite'])) { continue; }
+            $cur['providers'][$id] = array_merge($old, ['enabled' => 1, 'key' => $key], !empty($c['model']) ? ['model' => (string) $c['model']] : []);
+            $set[] = $id;
+        }
+        if ($set) { update_option(Mutqan_AI::OPT, $cur, false); }
+        return ['set' => $set] + self::ai_status();
     }
 
     /* ------------------------------------------------------------------ pairing (the owner, once) */
