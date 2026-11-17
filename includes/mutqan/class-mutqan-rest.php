@@ -258,6 +258,14 @@ final class Mutqan_Rest {
         return $b && empty($b['core']) ? $b['name'] : 'متقن';
     }
 
+    /** The full order card (as the customer gets it on WhatsApp), with its verification link — for the hub. */
+    public static function order_card($d) {
+        $price = (isset($d['price']) && is_numeric($d['price']) && $d['price'] > 0) ? $d['price'] : (Mutqan_Policy::quoted_total($d) ?: null);
+        $seal = '';
+        try { $seal = class_exists('Mutqan_Shop') ? Mutqan_Shop::seal_for_order($d, $price) : ''; } catch (Throwable $e) { $seal = ''; }
+        return self::order_wa_text($d, $price, $seal);
+    }
+
     private static function order_wa_text($d, $price, $seal) {
         $units = self::units_text($d);
         $lines = array_filter([

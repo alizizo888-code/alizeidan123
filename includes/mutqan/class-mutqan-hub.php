@@ -158,7 +158,9 @@ final class Mutqan_Hub {
         $first = empty($o['customerConfirmed']);
         $o = Mutqan_Store::update('orders', $o['id'], ['clientPhone' => '+' . $phone, 'customerConfirmed' => true, 'confirmedAt' => gmdate('c'), 'confirmedVia' => 'whatsapp'], self::sys());
         if ($first && class_exists('Mutqan_WA')) { Mutqan_WA::add_step($o['id'], 'wa_confirmed', 'العميل أكد الطلب من واتساب', 'مركز الواتساب'); }
-        return ['first' => $first] + self::view(Mutqan_Store::get_raw('orders', (string) $o['id']) + ['id' => (string) $o['id']]);
+        $raw = Mutqan_Store::get_raw('orders', (string) $o['id']) + ['id' => (string) $o['id']];
+        $card = $first && class_exists('Mutqan_Rest') ? Mutqan_Rest::order_card($raw) : '';
+        return ['first' => $first, 'card' => $card] + self::view($raw);
     }
 
     private static function need($in) { $o = self::order_by($in); if (!$o) { throw new Mutqan_Error('not_found', 'الطلب مش موجود.', 404); } return $o; }
