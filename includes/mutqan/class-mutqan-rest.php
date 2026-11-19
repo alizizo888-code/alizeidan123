@@ -36,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -597,6 +597,10 @@ final class Mutqan_Rest {
     public static function h_sales($req, $p) { return Mutqan_Sales::handle(self::body($req), $p); }
 
     /** «مساعد الطلب»: answers the customer inside his order's conversation and relays to the technician / the room. */
+    /** «جاي منين»: an article code (#oxygen/a26) → the article, and the search across every site of the network. */
+    public static function h_source($req, $p) { return Mutqan_Source::handle(self::body($req), $p); }
+    /** The owner's delete controls (orders, warranties, technicians, services). */
+    public static function h_owner($req, $p) { return Mutqan_Owner::handle(self::body($req), $p); }
     public static function h_hubadmin($req, $p) { return Mutqan_Hub::h_admin(self::body($req), $p); }
     public static function h_orderbot($req, $p) { return Mutqan_OrderBot::handle(self::body($req), $p); }
 

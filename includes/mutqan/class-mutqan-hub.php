@@ -53,6 +53,7 @@ final class Mutqan_Hub {
         return [
             'id' => $id, 'number' => (string) ($o['number'] ?? '') ?: substr($id, -5), 'status' => $st, 'statusLabel' => self::LABELS[$st] ?? $st,
             'source' => (string) ($o['source'] ?? ''), 'brand' => (string) ($o['brand'] ?? ''), 'site' => $site,
+            'origin' => is_array($o['origin'] ?? null) ? $o['origin'] : null, 'originLine' => class_exists('Mutqan_Source') ? Mutqan_Source::line((array) ($o['origin'] ?? [])) : '',
             'service' => mb_substr($svc, 0, 160), 'clientName' => (string) ($o['clientName'] ?? ''), 'clientPhone' => (string) ($o['clientPhone'] ?? ''),
             'address' => (string) ($o['address'] ?? ''), 'lat' => is_numeric($o['lat'] ?? null) ? (float) $o['lat'] : null, 'lng' => is_numeric($o['lng'] ?? null) ? (float) $o['lng'] : null,
             'appointment' => $appt, 'preferredTime' => (string) ($o['preferredTime'] ?? ''), 'note' => (string) ($o['note'] ?? ''),
@@ -158,6 +159,20 @@ final class Mutqan_Hub {
                 list($st, $f) = Mutqan_Shop::seal_check((string) $in['seal']);
                 $ref = $st === 'verified' ? (string) ($f['ref'] ?? '') : '';
                 if ($ref !== '') { foreach (Mutqan_Store::select('orders', [], ['limit' => 300, 'order' => 'desc'], self::sys()) as $r) { if (substr((string) $r['id'], -5) === $ref) { $o = $r; break; } } }
+            }
+            if (!$o) { return null; }
+        } elseif (!empty($in['ref']) && empty($in['code'])) {
+            // The site's order message without its verification link (sealing failed offline): «رقم الطلب: #5bfb9».
+            // Accepted only for a fresh order (≤ 6 hours) that no number has claimed yet.
+            $ref = strtolower(preg_replace('/[^0-9a-z]/i', '', (string) $in['ref']));
+            $o = null;
+            if (strlen($ref) === 5 && strlen($phone) >= 9) {
+                foreach (Mutqan_Store::select('orders', [], ['limit' => 200, 'order' => 'desc'], self::sys()) as $r) {
+                    if (substr((string) $r['id'], -5) !== $ref) { continue; }
+                    $t = strtotime((string) ($r['createdAt'] ?? '')) ?: 0;
+                    if ($t > time() - 6 * 3600 && preg_replace('/\D/', '', (string) ($r['clientPhone'] ?? '')) === '') { $o = $r; }
+                    break;
+                }
             }
             if (!$o) { return null; }
         } else {
@@ -297,6 +312,10 @@ final class Mutqan_Hub {
             'preferredTime' => mb_substr(trim((string) ($in['time'] ?? '')), 0, 120), 'brand' => (string) ($in['brand'] ?? '') ?: 'oxygen',
             'lat' => is_numeric($in['lat'] ?? null) ? (float) $in['lat'] : null, 'lng' => is_numeric($in['lng'] ?? null) ? (float) $in['lng'] : null,
             'waLine' => (string) ($in['line'] ?? ''), 'createdAt' => gmdate('c'),
+            'origin' => class_exists('Mutqan_Source') ? Mutqan_Source::clean_origin([
+                'site' => (string) ($in['brand'] ?? ''), 'page' => 'whatsapp', 'channel' => 'whatsapp', 'code' => (string) ($in['code'] ?? ''),
+                'title' => (string) ($in['source'] ?? ''), 'url' => (string) ($in['sourceUrl'] ?? ''), 'at' => gmdate('c'),
+            ], array_filter(['line' => (string) ($in['line'] ?? ''), 'platform' => (string) ($in['platform'] ?? '')])) : null,
             'agreedPrice' => is_numeric($in['price'] ?? null) && (int) $in['price'] > 0 ? (int) $in['price'] : null,
             'acQuote' => is_array($in['acQuote'] ?? null) ? $in['acQuote'] + ['total' => (int) ($in['price'] ?? 0)] : null, 'specialtyId' => (string) ($in['spec'] ?? '') ?: null,
             'statusHistory' => [['status' => 'new', 'at' => gmdate('c'), 'by' => 'whatsapp']],
@@ -321,8 +340,16 @@ final class Mutqan_Hub {
         if ($brand === '') { $brand = $lineBrand; }
         $site = class_exists('Mutqan_Customers') ? Mutqan_Customers::business($brand !== '' ? $brand : 'oxygen') : 'أكسجين';
         $src = class_exists('Mutqan_WA_Central') ? Mutqan_WA_Central::source($text) : [];
+        // The code itself («#oxygen/a26») stays as the customer sent it; here it becomes the article (title, link, WordPress/Blogger).
+        $art = null; $code = '';
+        if (class_exists('Mutqan_Source')) {
+            $cs = Mutqan_Source::codes($text);
+            if ($cs) { $code = Mutqan_Source::code_of($cs[0]['brand'], $cs[0]['kind'], $cs[0]['id']); $art = Mutqan_Source::lookup($cs[0]); if ($brand === '') { $brand = $cs[0]['brand']; $site = class_exists('Mutqan_Customers') ? Mutqan_Customers::business($brand) : $site; } }
+        }
+        $title = (string) ($src['title'] ?? '') ?: (string) ($art['title'] ?? '');
         $p = class_exists('Mutqan_Customers') ? Mutqan_Customers::profile($phone) : null;
-        return ['brand' => $brand, 'site' => $site, 'fromUs' => (bool) $fromUs, 'source' => (string) ($src['title'] ?? ''),
+        return ['brand' => $brand, 'site' => $site, 'fromUs' => (bool) $fromUs, 'source' => $title,
+            'code' => $code, 'sourceUrl' => (string) ($art['url'] ?? ''), 'platform' => (string) ($art['platform'] ?? ''), 'domain' => (string) ($art['domain'] ?? ''),
             'kind' => (string) ($p['kind'] ?? 'new'), 'name' => (string) ($p['name'] ?? ''), 'orders' => (int) ($p['orders'] ?? 0),
             'lastService' => mb_substr((string) ($p['lastService'] ?? ''), 0, 60), 'lastDays' => !empty($p['lastAt']) ? max(1, (int) floor((time() - (int) $p['lastAt']) / 86400)) : 0,
             'warrantyLeft' => !empty($p['warranty']['active']) ? (int) $p['warranty']['left'] : 0, 'brief' => class_exists('Mutqan_Customers') ? Mutqan_Customers::brief($phone) : ''];
