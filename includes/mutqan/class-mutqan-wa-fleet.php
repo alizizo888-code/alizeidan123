@@ -314,6 +314,7 @@ final class Mutqan_WA_Fleet {
 
     /** Which connected number an automatic message of this kind leaves from. '' = none of the fleet (old path decides). */
     public static function account_for($by) {
+        if (class_exists('Mutqan_Meta_WA') && Mutqan_Meta_WA::on()) { return Mutqan_Meta_WA::ACCT; }   // one official number carries every kind of message
         $want = 'general';
         foreach (self::ROLES as $role => $x) { if (in_array((string) $by, $x['by'], true)) { $want = $role; break; } }
         $open = array_values(array_filter(self::numbers(), function ($n) { return $n['status'] === 'open'; }));
