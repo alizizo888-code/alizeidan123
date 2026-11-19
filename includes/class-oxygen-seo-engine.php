@@ -578,6 +578,9 @@ class Oxygen_SEO_Engine {
         $s = self::settings();
         $ctx = self::ctx($item, $map);
         $b = self::build($item, 0, $ctx);
+        // one article, one place on the web: too close to anything of the network → AI rewrite, else held as a draft
+        $g = class_exists('Oxygen_Uniq') ? Oxygen_Uniq::gate($item, $b) : null;
+        if ($g) { $b['html'] = $g['html']; if ($g['status']) { $force_status = $g['status']; } }
         $author = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID']);
         $id = wp_insert_post([
             'post_type' => 'post', 'post_status' => $force_status ?: $s['status'], 'post_title' => $item['title'], 'post_name' => $item['key'],
@@ -600,6 +603,7 @@ class Oxygen_SEO_Engine {
         $cat = self::term($item['track'] === 'commercial' ? 'خدمات ' . self::brand() . '' : 'أدلة وإرشادات');
         if ($cat) { wp_set_post_categories($id, [$cat]); }
         self::log($kind === 'seo' ? 'new_seo' : ($kind === 'district' ? 'new_dist' : 'new'), $id, $item['title'], ['track' => $item['track'], 'st' => get_post_status($id), 'rev' => 0, 'kind' => $kind]);
+        if ($g && class_exists('Oxygen_Uniq')) { Oxygen_Uniq::after($id, $g); }
         if (get_post_status($id) === 'publish') { self::indexnow([get_permalink($id), home_url('/oxygen-seo-archive/')]); }
         return $id;
     }
@@ -693,8 +697,15 @@ class Oxygen_SEO_Engine {
     }
     private static function do_refresh($id, $item, $map, $action) {
         $rev = (int) get_post_meta($id, '_oxy_seo_rev', true) + 1;
+        // an AI-rewritten article keeps its own text; a copy taken out of the index is not worth refreshing
+        if (get_post_meta($id, '_oxy_rewritten', true) || get_post_meta($id, '_oxy_dup', true) !== '') { update_post_meta($id, '_oxy_seo_updated', current_time('mysql')); return false; }
         $ctx = self::ctx($item, $map);
         $b = self::build($item, $rev, $ctx);
+        // a refresh must not turn a unique article back into the template text other sites carry
+        if (class_exists('Oxygen_Uniq') && class_exists('Mutqan_Fp')) {
+            $chk = Mutqan_Fp::call('check', ['text' => $b['html'], 'url' => (string) get_permalink($id)]);
+            if (is_array($chk) && (float) ($chk['sim'] ?? 0) >= Oxygen_Uniq::GATE) { update_post_meta($id, '_oxy_seo_updated', current_time('mysql')); return false; }
+        }
         wp_update_post(['ID' => $id, 'post_title' => $item['title'], 'post_content' => $b['html'], 'post_excerpt' => $b['desc']]);
         update_post_meta($id, '_oxy_seo_rev', $rev);
         self::tag_post($id, $item, $b);
@@ -845,6 +856,7 @@ class Oxygen_SEO_Engine {
     public static function h_publish_drafts() {
         self::guard('oxy_seo_pub');
         $ids = get_posts(['post_type' => 'post', 'post_status' => 'draft', 'meta_key' => '_oxy_seo_key', 'numberposts' => -1, 'fields' => 'ids']);
+        $ids = array_values(array_filter($ids, function ($i) { return get_post_meta($i, '_oxy_held_dup', true) === ''; }));   // drafts held as copies stay drafts
         foreach ($ids as $id) { wp_update_post(['ID' => $id, 'post_status' => 'publish']); self::log('publish', $id, get_the_title($id), ['st' => 'publish']); }
         self::indexnow(array_map('get_permalink', $ids));
         self::back('تم نشر ' . count($ids) . ' مسودة.');

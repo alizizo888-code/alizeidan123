@@ -153,6 +153,8 @@ final class Oxygen_Partner_Articles {
         foreach (self::slots() as $slot) {
             if ($slot['idx'] >= (int) $s['count'] || isset($map[$slot['key']])) { continue; }
             $b = self::build($slot, 0, $nums); $title = self::slot_title($slot);
+            $g = class_exists('Oxygen_Uniq') ? Oxygen_Uniq::gate(['title' => $title], $b) : null;
+            if ($g) { $b['html'] = $g['html']; if ($g['status']) { $force_status = $g['status']; } }
             $author = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID']);
             $id = wp_insert_post(['post_type' => 'post', 'post_status' => $force_status ?: $s['status'], 'post_title' => $title, 'post_name' => $slot['key'], 'post_content' => $b['html'], 'post_excerpt' => $b['desc'], 'post_author' => $author ? (int) $author[0] : 1], true);
             if (is_wp_error($id) || !$id) { return false; }
@@ -161,6 +163,7 @@ final class Oxygen_Partner_Articles {
             $c = self::cat(); if ($c) { wp_set_post_categories($id, [$c]); }
             wp_set_post_tags($id, array_values(array_filter(['شركاء النجاح', self::brand(), self::scopes()[$slot['scope']][1]])), false);
             self::log('new', $id, $title);
+            if ($g && class_exists('Oxygen_Uniq')) { Oxygen_Uniq::after($id, $g); }
             if (get_post_status($id) === 'publish' && class_exists('Oxygen_SEO_Engine')) { Oxygen_SEO_Engine::indexnow([get_permalink($id)]); }
             return $id;
         }
