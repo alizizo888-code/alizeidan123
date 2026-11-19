@@ -172,6 +172,9 @@ export function claimOf(text) {
   // The site's own order message: «🔔 طلب جديد — … رقم الطلب: #5bfb9 … /v/6KHZCYHR-f4ab50»
   const s = /طلب جديد/.test(t) && t.match(/\/v\/([A-Z0-9]{8}(?:-[a-f0-9]{6})?)/)
   if (s) { const r = t.match(/رقم الطلب:\s*#([0-9a-z]{5})/i); return { seal: s[1], ref: r ? r[1] : '' } }
+  // the same message when the site could not seal it (offline): only the order number — the site accepts it for a fresh, unclaimed order
+  const n = /طلب جديد/.test(t) && t.match(/رقم الطلب:\s*#([0-9a-z]{5})/i)
+  if (n) return { ref: n[1] }
   return null
 }
 

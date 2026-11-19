@@ -91,7 +91,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     // sent one (site, service, count, time and date, map, verification), else the short summary.
     const head = '🆕 *طلب جديد #' + T.num(o) + '*' + (o.site ? ' — ' + o.site : '')
     const hint = o.techName ? '👷 اتسند آليًا لـ ' + o.techName : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'
-    const waiting = o.clientPhone ? '' : '⏳ رقم العميل يوصل أول ما يبعت رسالة الطلب من واتساب'
+    const waiting = [o.originLine ? '🧭 جاي منين: ' + o.originLine : '', o.clientPhone ? '' : '⏳ رقم العميل يوصل أول ما يبعت رسالة الطلب من واتساب'].filter(Boolean).join('\n')
     toRoom((card ? [card, waiting, '', hint] : [head, '👤 ' + (o.clientName || 'بدون اسم') + (o.clientPhone ? ' — ' + o.clientPhone : ' — ⏳ مستني تأكيده من واتساب'), ...T.summary(o), '', hint]).filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n'), 'new-' + o.id)
     // From the site's order button: the site sends him the full order card itself — no «اكتب تأكيد» for him.
     if (o.clientPhone && ['site', 'mutqan_ai'].includes(o.source)) { setStage(o.clientPhone, o.id, 'live'); return }
@@ -266,14 +266,14 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   async function claimed(c, line, phone, text, name) {
     const m = T.claimOf(text); if (!m) return false
     let o = null
-    try { o = await wp('claim', m.seal ? { seal: m.seal, phone: T.intl(phone), name } : { number: m.num, code: m.code, phone: T.intl(phone), name }) } catch (e) { log('warn', 'claim: ' + e.message) }
+    try { o = await wp('claim', m.seal ? { seal: m.seal, phone: T.intl(phone), name } : m.num ? { number: m.num, code: m.code, phone: T.intl(phone), name } : { ref: m.ref, phone: T.intl(phone), name }) } catch (e) { log('warn', 'claim: ' + e.message) }
     if (!o) return false
     store.touchChat(c.pk, { welcomedAt: now() })
     setStage(phone, o.id, 'live')
     if (!o.first) { say(phone, line, 'طلبك رقم *' + T.num(o) + '* واصلنا ومأكد ✅ — هنبلغك هنا بكل جديد.'); return true }
     const C = cfg()
     // He just sent us the order text himself: a short receipt, not the same card back.
-    const L = m.seal ? ['تم استلام طلبك رقم *' + T.num(o) + '* ✅ شكرًا لك' + (o.site ? ' في *' + o.site + '*' : '') + '.', ''] : o.card ? [o.card, ''] : ['أهلًا' + (o.clientName || name ? ' ' + (o.clientName || name) : '') + ' 🌷', 'تم تأكيد طلبك رقم *' + T.num(o) + '*' + (o.site ? ' في *' + o.site + '*' : '') + ' ✅', ...T.summary(o), ''];
+    const L = (m.seal || m.ref) ? ['تم استلام طلبك رقم *' + T.num(o) + '* ✅ شكرًا لك' + (o.site ? ' في *' + o.site + '*' : '') + '.', ''] : o.card ? [o.card, ''] : ['أهلًا' + (o.clientName || name ? ' ' + (o.clientName || name) : '') + ' 🌷', 'تم تأكيد طلبك رقم *' + T.num(o) + '*' + (o.site ? ' في *' + o.site + '*' : '') + ' ✅', ...T.summary(o), ''];
     L.push(isOpen() ? 'جاري تجهيز الفني، وهنبلغك هنا أول ما يتحرك 🚗' : 'إحنا دلوقتي برا مواعيد العمل، وطلبك متسجل لأقرب موعد الصبح 🌙\nلو الموضوع طارئ اتصل مباشرة على *' + C.emergencyPhone + '*.')
     if (o.url) L.push('🔗 تابع طلبك: ' + o.url)
     toCustomer({ ...o, waLine: line }, L.join('\n'), 'claim-' + o.id)
@@ -495,7 +495,10 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     try {
       const d = L.deal || {}
       const price = d.agreed || (d.fixed ? d.offer : null)
-      const o = await wp('create', { phone: T.intl(phone), name, service: L.service, address: L.place || '', lat: L.lat ?? null, lng: L.lng ?? null, time: L.time, line, price: price || null, acQuote: d.acQuote || null, spec: d.spec || '' })
+      // where he came from travels with the order: the site (#tag or the line's own), the article code and its link
+      let g = null; try { g = JSON.parse(c.greet || 'null') } catch {}
+      const o = await wp('create', { phone: T.intl(phone), name, service: L.service, address: L.place || '', lat: L.lat ?? null, lng: L.lng ?? null, time: L.time, line, price: price || null, acQuote: d.acQuote || null, spec: d.spec || '',
+        brand: (g && g.brand) || store.line?.(line)?.brand || '', code: (g && g.code) || '', source: (g && g.source) || '', sourceUrl: (g && g.sourceUrl) || '', platform: (g && g.platform) || '' })
       store.touchChat(c.pk, { lead: '', stage: 'confirm', orderId: o?.id || '', stageAt: now() })
       // The website reports the new order and the confirmation goes out from created().
     } catch (e) {
