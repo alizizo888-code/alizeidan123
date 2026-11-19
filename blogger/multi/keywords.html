@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>كلمات النشر</title>
+<style>
+:root{--bg:#f6f8fb;--card:#fff;--ink:#0f172a;--mute:#64748b;--line:#e2e8f0;--acc:#0ea5e9;--ok:#16a34a;--bad:#dc2626}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--card:#111a2e;--ink:#e2e8f0;--mute:#94a3b8;--line:#1e293b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 system-ui,"Segoe UI",Tahoma,sans-serif}
+main{max-width:760px;margin:24px auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+h1{font-size:22px;margin:0 0 12px}label{display:block;font-weight:700;margin:12px 0 6px}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:transparent;color:inherit;font:inherit}
+textarea{min-height:200px}.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1 1 200px}
+button{background:var(--acc);color:#fff;border:0;border-radius:99px;padding:11px 22px;font-weight:800;cursor:pointer;margin-top:14px}
+button.alt{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+small,.mute{color:var(--mute)}#msg{margin-top:12px;font-weight:700}.ok{color:var(--ok)}.bad{color:var(--bad)}
+</style>
+</head>
+<body>
+<main>
+<div class="card">
+<h1>إضافة كلمات بحثية للنشر</h1>
+<label for="tok">GitHub token <small>(Fine-grained، صلاحية Actions: Read and write على المستودع؛ يُحفظ في هذا المتصفح فقط)</small></label>
+<input id="tok" type="password" autocomplete="off">
+<div class="row">
+<div><label for="blog">المدونة</label><select id="blog"><option value="">توزيع تلقائي</option></select></div>
+<div><label for="kind">التخصص</label><select id="kind"><option value="">تلقائي (60% مكيفات / 40% تبريد)</option><option value="ac">مكيفات</option><option value="fridge">غرف تبريد وتجميد</option></select></div>
+</div>
+<label for="kw">الكلمات (كلمة في كل سطر)</label>
+<textarea id="kw" placeholder="أفضل شركة غسيل مكيفات في حي العزيزية بمكة&#10;صيانة غرف التجميد للمطاعم في جدة"></textarea>
+<div class="row"><button id="send">إرسال ونشر الآن</button><button id="copy" class="alt" type="button">نسخ كـ JSON</button></div>
+<div id="msg"></div>
+</div>
+<p class="mute">الإرسال يشغّل workflow «Blogger multi-account publish» بالكلمات؛ كل مدونة تُنشر من الحساب الذي يملكها.</p>
+</main>
+<script>
+const OWNER='alizizo888-code',REPO='mutaqin-oxygen-app',BRANCH='mutqan',WF='blogger-multi.yml'
+const $=(id)=>document.getElementById(id),msg=(t,c)=>{$('msg').textContent=t;$('msg').className=c||''}
+try{$('tok').value=localStorage.getItem('gh_tok')||''}catch(e){}
+const api=(p,o={})=>fetch('https://api.github.com/repos/'+OWNER+'/'+REPO+p,{...o,headers:{accept:'application/vnd.github+json',authorization:'Bearer '+$('tok').value.trim(),...(o.headers||{})}})
+async function loadBlogs(){
+  if(!$('tok').value.trim())return
+  try{const r=await api('/contents/blogger/network.json?ref='+BRANCH,{headers:{accept:'application/vnd.github.raw+json'}});if(!r.ok)return
+    const net=await r.json();$('blog').innerHTML='<option value="">توزيع تلقائي</option>'+net.filter(b=>b.blog_id).map(b=>`<option value="${b.blog_id}">${b.name} (${b.id})</option>`).join('')}catch(e){}
+}
+const lines=()=>$('kw').value.split('\n').map(s=>s.trim()).filter(Boolean).map(k=>[k,$('blog').value,$('kind').value].join(' | '))
+$('tok').addEventListener('change',()=>{try{localStorage.setItem('gh_tok',$('tok').value.trim())}catch(e){}loadBlogs()})
+$('copy').onclick=()=>{const j=JSON.stringify($('kw').value.split('\n').map(s=>s.trim()).filter(Boolean).map(k=>({keyword:k,blog_id:$('blog').value||undefined,kind:$('kind').value||undefined})),null,1);navigator.clipboard.writeText(j).then(()=>msg('اتنسخ','ok'),()=>msg(j))}
+$('send').onclick=async()=>{
+  const l=lines();if(!l.length)return msg('اكتب كلمة واحدة على الأقل','bad');if(!$('tok').value.trim())return msg('حط الـ token الأول','bad')
+  msg('جاري الإرسال...')
+  try{const r=await api('/actions/workflows/'+WF+'/dispatches',{method:'POST',body:JSON.stringify({ref:BRANCH,inputs:{keywords:l.join('\n')}})})
+    r.status===204?msg(`اتبعت ${l.length} كلمة، والنشر بدأ على GitHub Actions`,'ok'):msg('رفض GitHub: '+r.status+' '+(await r.text()).slice(0,150),'bad')}catch(e){msg('خطأ في الاتصال: '+e.message,'bad')}
+}
+loadBlogs()
+</script>
+</body>
+</html>
