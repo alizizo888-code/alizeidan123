@@ -25,9 +25,9 @@ final class Mutqan_Policy {
                 'used_ac_private' => ['read', 'write', 'write', 'write'], 'used_offers' => ['read', 'write', 'write', 'write'], 'order_seals' => ['read', 'write', 'write', 'write'], 'pay_links' => ['read', 'write', 'write', 'write'],
                 'assignment_settings' => ['staff', 'write', 'write', 'write'], 'tech_pay' => ['staff', 'write', 'write', 'write'],
                 'pricing_internal' => ['read', 'write', 'write', 'write'], 'settlements' => ['tech_own', 'write', 'write', 'write'], 'order_msgs' => ['chat', 'anon_ok', 'write', 'write'], 'stock_items' => ['read', 'write', 'write', 'write'], 'stock_moves' => ['read', 'write', 'write', 'write'],
-                'tech_profiles' => ['staff', 'authed', 'creator_or_write', 'write'],
+                'tech_profiles' => ['staff', 'authed', 'creator_or_write', 'owner'],
                 'tech_applications' => ['creator_or_read', 'authed', 'write', 'write'],
-                'orders' => ['orders', 'anon_ok', 'orders', 'write'],
+                'orders' => ['orders', 'anon_ok', 'orders', 'owner'],   // delete: the owner only (owner order 2026-11-19)
                 'customers' => ['creator_or_read', 'authed', 'creator_or_write', 'write'],
                 'handoffs' => ['creator_or_read', 'anon_ok', 'staff_or_creator', 'write'],
                 // A call is seen and answered by its caller, operations, and the one person it rings (`toUser`, set by Mutqan_Callnet).
@@ -35,7 +35,7 @@ final class Mutqan_Policy {
                 // Hotline register (written by operations): who called, the code given to the caller, and what he was linked to.
                 'call_log' => ['read', 'write', 'write', 'write'], 'call_contacts' => ['read', 'write', 'write', 'write'],
                 'notifications' => ['creator_or_read', 'authed', 'target_or_write', 'write'],
-                'warranties' => ['read', 'write', 'write', 'write'],
+                'warranties' => ['read', 'write', 'write', 'owner'],
                 'warranty_claims' => ['creator_or_read', 'authed', 'write', 'write'],
                 'wa_threads' => ['read', 'write', 'write', 'write'], 'wa_msgs' => ['read', 'write', 'write', 'write'], 'wa_bot' => ['read', 'write', 'write', 'write'],
                 'wa_outbox' => ['read', 'write', 'write', 'write'],
@@ -140,6 +140,7 @@ final class Mutqan_Policy {
                 return ($d['techId'] ?? null) === $me;
             }
             case 'write': return self::has_power($p, 'write');
+            case 'owner': return ($p['role'] ?? null) === 'owner';
             case 'creator_or_read': return $creator || self::has_power($p, 'read');
             case 'creator_or_write': return $creator || self::has_power($p, 'write');
             case 'staff_or_creator': return $creator || self::is_staff($p);
@@ -252,6 +253,11 @@ final class Mutqan_Policy {
         if ($coll === 'orders') {
             // Which of the 12 network faces took this order: the page's own origin wins (a client cannot claim another face), staff may set it.
             $data['brand'] = self::order_brand($data['brand'] ?? null, $priv);
+            // «جاي منين»: what the page says about itself, plus the host that really sent the order (cannot be claimed)
+            if (class_exists('Mutqan_Source')) {
+                $oh = isset($_SERVER['HTTP_ORIGIN']) ? strtolower((string) wp_parse_url((string) $_SERVER['HTTP_ORIGIN'], PHP_URL_HOST)) : '';
+                $data['origin'] = Mutqan_Source::clean_origin($data['origin'] ?? [], array_filter(['sentFrom' => $oh, 'orderSite' => $data['brand']]));
+            }
             unset($data['routing']);
             $manual = (($data['source'] ?? '') === 'whatsapp_manual');
             if ($manual && !$priv) { unset($data['source']); }

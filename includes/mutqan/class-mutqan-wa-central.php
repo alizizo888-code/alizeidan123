@@ -376,6 +376,12 @@ final class Mutqan_WA_Central {
             if ($pid > 0) { $tag .= '/' . (is_singular('post') ? 'a' : 'p') . $pid; }
             if ($title !== '') { $hello .= ' بخصوص: ' . mb_substr($title, 0, 60); }
         }
+        // «جاي منين»: the app on this host reads which article sent the customer (lib/origin.js). An article reached from
+        // another article within half an hour is a «مقالة فرعية».
+        if (function_exists('is_singular') && is_singular() && !empty($pid)) {
+            $page = ['code' => $tag, 'title' => mb_substr($title, 0, 120), 'url' => (string) get_permalink($pid), 'kind' => is_singular('post') ? 'a' : 'p'];
+            echo '<script>(function(){try{var P=' . wp_json_encode($page) . ',o=JSON.parse(localStorage.getItem("mq_last_page")||"null");P.sub=!!(o&&o.url&&o.url!==P.url&&Date.now()-o.at<1800000&&document.referrer.indexOf(location.host)>-1);P.at=Date.now();localStorage.setItem("mq_last_page",JSON.stringify(P))}catch(e){}})();</script>';
+        }
         echo '<script>(function(){var T=' . wp_json_encode($tag) . ',H=' . wp_json_encode($hello) . ';function f(a){try{var u=new URL(a.href);if(!/(^|\.)wa\.me$|api\.whatsapp\.com$/.test(u.hostname))return;var t=u.searchParams.get("text")||"";if(t.indexOf(T)>-1)return;u.searchParams.set("text",(t||H)+" "+T);a.href=u.toString()}catch(e){}}function run(){var l=document.querySelectorAll(\'a[href*="wa.me"],a[href*="api.whatsapp.com"]\');for(var i=0;i<l.length;i++)f(l[i])}run();document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a");if(a)f(a)},true)})();</script>';
     }
 }
