@@ -12,6 +12,9 @@ const TILES = [['ac', '❄️', 'تكييف: غسيل وصيانة وتركيب'
   ['pest', '🐜', 'مكافحة الحشرات'], ['tanks', '🚰', 'خزانات المياه'], ['locks', '🔐', 'أقفال ذكية'], ['cameras', '📹', 'كاميرات مراقبة'], ['paint', '🎨', 'دهان وديكور'], ['tiling', '🧱', 'تبليط وترميم'],
   ['moving', '📦', 'نقل الأثاث'], ['solar', '☀️', 'طاقة شمسية'], ['satellite', '📡', 'دش وساتلايت'], ['corporate', '🏢', 'خدمات الشركات']]
 const btn = (href, bg, big, small) => `<a href="${href}" style="flex:1 1 30%;min-width:96px;background:${bg};color:#fff;text-decoration:none;border-radius:14px;padding:11px 6px;text-align:center;font-weight:800;font-size:13px;line-height:1.5"><span style="display:block;font-size:22px">${big[0]}</span>${e(big[1])}<span style="display:block;font-weight:600;font-size:10px;opacity:.9">${e(small)}</span></a>`
+// The shop front opens every post: its words change per blog and per post so 44 blogs never carry one identical paragraph.
+const HERO = ['فنيون ومهندسون مختصون في @، حجز مباشر بلا تسجيل وتأكيد فوري.', 'نصلك في مكة وجدة لخدمة @ — اطلب فنيًا لموقعك واتابع طلبك خطوة بخطوة.', 'خبرتنا في @ تبدأ بالمعاينة وتنتهي بتقرير واضح لما تم إصلاحه.', 'احجز زيارة @ في دقيقة: اختر الخدمة، أرسل موقعك، ونتواصل معك فورًا.', 'فريق متخصص في @ يعمل بمواعيد دقيقة وضمان مكتوب على العمل.', 'من البيوت إلى المحلات والمنشآت: @ بأيدي فنيين يعرفون مناخ المنطقة.']
+const hash = (s) => { let h = 2166136261; for (const c of String(s)) { h ^= c.codePointAt(0); h = Math.imul(h, 16777619) >>> 0 } return h }
 const H2 = 'font-size:20px;font-weight:800;color:#075985;margin:22px 0 10px;padding-right:10px;border-right:5px solid #0ea5e9'
 
 function front(b, title) {
@@ -20,7 +23,7 @@ function front(b, title) {
   h += `<div style="background:linear-gradient(135deg,#0b3b73,#0c4a6e 60%,#0ea5e9);color:#fff;border-radius:18px;padding:20px 16px;text-align:center">`
     + `<span style="display:inline-block;background:#fbbf24;color:#4a2c00;font-weight:800;font-size:12px;border-radius:99px;padding:2px 12px">${e(b.name)} · مكة وجدة</span>`
     + `<p style="font-size:22px;font-weight:900;line-height:1.5;margin:8px 0 6px;color:#fff">${e(title)}</p>`
-    + `<p style="font-size:14px;margin:0 0 12px;color:#e0f2fe">فنيون ومهندسون مختصون، حجز مباشر بلا تسجيل، وتأكيد فوري. اتصل الآن أو اطلب فنيًا لموقعك.</p>`
+    + `<p style="font-size:14px;margin:0 0 12px;color:#e0f2fe">${e(HERO[(hash(b.id + '|' + title)) % HERO.length].replace('@', b.angle_label || b.name))}</p>`
     + `<div style="display:flex;gap:8px;flex-wrap:wrap">${btn(app + 'contact', 'linear-gradient(135deg,#f43f5e,#db2777)', ['📞', 'اتصال مباشر'], 'تحدث مع خدمة العملاء')}${btn(app + 'new', 'linear-gradient(135deg,#0ea5e9,#2563eb)', ['🛠️', 'اطلب فني الآن'], 'خدمة سريعة 24 ساعة')}${btn(app + 'ai', 'linear-gradient(135deg,#10b981,#16a34a)', ['💬', 'اسأل المساعد'], 'رد سريع وفوري')}</div></div>`
   // offers banners
   const offers = [['حجز سريع', 'اطلب فني صيانة الآن بدون تسجيل', app + 'new'], ['ضمان', 'غسيل وصيانة المكيفات وغرف التبريد بضمان', app + 'services'], ['عروض', 'تصفح عروض الأسبوع واحجز بخصم', app + 'offers']]

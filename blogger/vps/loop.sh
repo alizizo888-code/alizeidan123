@@ -32,6 +32,10 @@ once() {
   cp "$APP/blogger/state/published.json" "$DATA/published.json"
   node blogger/api/report.js > /dev/null 2>&1 && cp -r "$APP/blogger/state/reports/." "$DATA/reports/" 2>/dev/null
   cp "$APP/blogger/state/DASHBOARD.md" "$DATA/" 2>/dev/null
+  # once a day (the 03:17 UTC run): Search Console — submit missing / failed sitemaps of every blog and WordPress site
+  if [ "$(date -u +%H)" = "03" ] || [ ! -f "$DATA/gsc.json" ]; then
+    node blogger/api/gsc.js > "$DATA/gsc.log" 2>&1 && cp blogger/state/gsc.json "$DATA/gsc.json" 2>/dev/null; log "gsc: $(tail -c 300 "$DATA/gsc.log")"
+  fi
   log "run done (exit $RC)"
   return $RC
 }

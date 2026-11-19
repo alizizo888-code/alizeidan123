@@ -25,6 +25,12 @@ const save = () => fs.writeFileSync(SF, JSON.stringify(st, null, 1))
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const H2 = 'font-size:20px;font-weight:800;color:#075985;margin:22px 0 10px;padding-right:10px;border-right:5px solid #0ea5e9;border-top:3px dashed #bae6fd;padding-top:16px;margin-top:28px'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+// the network's article memory on the hub; unreachable → null (the article goes out as before)
+const FP_GATE = 0.30, FP_URL = process.env.FP_URL || 'https://oxygen11.com/wp-json/mutqan/v1/fp'
+async function fpCall(op, body) {
+  if (process.env.BLOGGER_DRY) return null
+  try { const r = await fetch(FP_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op, ...body }), signal: AbortSignal.timeout(20000) }); const j = await r.json(); return j && j.data ? j.data : null } catch { return null }
+}
 // Every headline the network already carries (this ledger's log + titles_all), normalised, so no two blogs share one.
 const normTitle = (t) => String(t || '').replace(/[ًٌٍَُِّْـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().slice(0, 80)
 const seenTitles = new Set([...(st.titles_all || []), ...(st.log || []).flatMap((l) => (Array.isArray(l.published) ? l.published : []).map((p) => normTitle(p && p.title)))])
@@ -91,11 +97,16 @@ async function publish(nArg) {
     // one title once in the whole network: two blogs carrying the same headline was flagged by the review (2026-11-19)
     const tk = normTitle(title)
     if (seenTitles.has(tk)) { skipped.push(`${x.id}: title already used in the network (${title.slice(0, 50)})`); continue }
+    // one article, one place on the web: compared with every WordPress site and blog of the network (hub memory, Mutqan_Fp)
+    const art = String(html).split('شرح المقال').pop()   // the article itself, without the shop front every post opens with
+    const fp = await fpCall('check', { text: art })
+    if (fp && fp.sim >= FP_GATE) { skipped.push(`${x.id}: ${Math.round(fp.sim * 100)}% like ${fp.url} (${title.slice(0, 40)})`); continue }
     try {
       const r = await B.insert(b.blog_id, title, html, String(labels || '').split(/[,،]/).map((s) => s.trim()).filter(Boolean))
       const isOld = x.src.startsWith('old')
       done.push({ brand: x.id, title, url: r.url, kind: x.kind, old: isOld, cooling: !!x.cool, makkah: !!x.mk, words, ai: ai ? ai.provider : null })
       seenTitles.add(tk); (st.titles_all = st.titles_all || []).push(tk)
+      if (r.url) await fpCall('add', { site: x.id, url: String(r.url).replace(/^http:/, 'https:'), key: 'b:' + (r.id || ''), text: art })
       day.counts[x.id] = (day.counts[x.id] || 0) + 1; day.n++
       if (x.kind === 'ac') day.ac++; else if (x.kind === 'fridge') day.fridge++
       if (isOld) day.old++; else { day.new++; if (x.mk) day.mk++ }
