@@ -217,7 +217,7 @@ final class Mutqan_Ops {
         $sys = self::sys(); $techs = self::techs(); $share = self::share(); $r = [];
         foreach (Mutqan_Store::select('orders', ['status' => ['in' => self::DONE]], ['limit' => 3000], $sys) as $o) {
             $t = (string) ($o['technicianId'] ?? '');
-            if ($t === '' || !empty($o['inhouse']) || ($o['dispatch'] ?? '') === 'site') { continue; }
+            if ($t === '' || !empty($o['inhouse']) || ($o['dispatch'] ?? '') === 'site' || !empty($o['noCommission'])) { continue; }
             $r[$t] = $r[$t] ?? ['id' => $t, 'name' => self::tname($techs, $t, $o), 'jobs' => 0, 'sales' => 0.0, 'commission' => 0.0, 'cash' => 0.0, 'settledIn' => 0.0, 'settledOut' => 0.0];
             $a = self::amount($o); $r[$t]['jobs']++; $r[$t]['sales'] += $a; $r[$t]['commission'] += $a * $share / 100;
             if (($o['paymentStatus'] ?? '') === 'paid' && self::is_cash($o)) { $r[$t]['cash'] += $a; }
@@ -300,7 +300,7 @@ final class Mutqan_Ops {
                 if (!$o && !empty($in['id'])) { $r = Mutqan_Store::select('orders', ['number' => (string) $in['id']], ['limit' => 1], $sys); $o = $r[0] ?? null; }
                 if (!$o) { throw new Exception('الطلب مش موجود.'); }
                 $techs = self::techs(); $amount = self::amount($o); $share = self::share();
-                $commission = (!empty($o['inhouse']) || ($o['dispatch'] ?? '') === 'site') ? 0 : round($amount * $share / 100, 2);
+                $commission = (!empty($o['inhouse']) || ($o['dispatch'] ?? '') === 'site' || !empty($o['noCommission'])) ? 0 : round($amount * $share / 100, 2);
                 $exp = []; $expSum = 0.0;
                 foreach (Mutqan_Store::select('expenses', ['orderId' => (string) $o['id']], ['limit' => 100], $sys) as $e) { $exp[] = ['item' => $e['category'] ?? ($e['note'] ?? ''), 'amount' => (float) ($e['amount'] ?? 0), 'at' => self::local($e['at'] ?? ($e['createdAt'] ?? ''))]; $expSum += (float) ($e['amount'] ?? 0); }
                 $steps = []; $prev = 0;

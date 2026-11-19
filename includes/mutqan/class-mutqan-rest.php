@@ -36,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner', 'fp'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner', 'fp', 'field'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -600,6 +600,8 @@ final class Mutqan_Rest {
     /** «جاي منين»: an article code (#oxygen/a26) → the article, and the search across every site of the network. */
     /** The network's article memory (Mutqan_Fp): check / add / rewrite, used by every site before it publishes. */
     public static function h_fp($req, $p) { return Mutqan_Fp::handle(self::body($req), $p); }
+    /** The field: map pin cards, old customers nearby, «couldn't fix it» reports. */
+    public static function h_field($req, $p) { return Mutqan_Field::handle(self::body($req), $p); }
     public static function h_source($req, $p) { return Mutqan_Source::handle(self::body($req), $p); }
     /** The owner's delete controls (orders, warranties, technicians, services). */
     public static function h_owner($req, $p) { return Mutqan_Owner::handle(self::body($req), $p); }
