@@ -158,7 +158,47 @@ final class Mutqan_Meta_WA {
         if (is_wp_error($res)) { return 'خطأ اتصال: ' . $res->get_error_message(); }
         $j = json_decode(wp_remote_retrieve_body($res), true);
         if (!empty($j['success'])) { return ''; }
-        return (string) ($j['error']['error_user_msg'] ?? ($j['error']['message'] ?? ('HTTP ' . wp_remote_retrieve_response_code($res))));
+        return self::err_text($j, $res);
+    }
+    private static function err_text($j, $res) {
+        $e = (array) ($j['error'] ?? []);
+        $t = (string) ($e['error_user_msg'] ?? ($e['message'] ?? ('HTTP ' . wp_remote_retrieve_response_code($res))));
+        if (!empty($e['error_data']['details'])) { $t .= ' — ' . $e['error_data']['details']; }
+        if (!empty($e['error_subcode'])) { $t .= ' [sub ' . $e['error_subcode'] . ']'; }
+        return $t;
+    }
+    private static function graph_get($path, $q = []) {
+        $c = self::cfg();
+        $res = wp_remote_get(add_query_arg($q, self::GRAPH . ltrim($path, '/')), ['timeout' => 20, 'headers' => ['Authorization' => 'Bearer ' . $c['token']]]);
+        if (is_wp_error($res)) { return ['_err' => $res->get_error_message()]; }
+        $j = json_decode(wp_remote_retrieve_body($res), true);
+        if (!is_array($j)) { return ['_err' => 'HTTP ' . wp_remote_retrieve_response_code($res)]; }
+        if (!empty($j['error'])) { return ['_err' => self::err_text($j, $res)]; }
+        return $j;
+    }
+
+    /** What the token can reach, and the number's state — no secret is printed. */
+    public static function diagnose() {
+        $c = self::cfg(); $L = [];
+        if ($c['token'] === '') { return 'مفيش Access token محفوظ.'; }
+        $dbg = self::graph_get('debug_token', ['input_token' => $c['token']]);
+        if (!empty($dbg['_err'])) { $L[] = 'المفتاح: ' . $dbg['_err']; }
+        else {
+            $d = (array) ($dbg['data'] ?? []);
+            $L[] = 'المفتاح: ' . (!empty($d['is_valid']) ? 'سليم' : 'مش سليم') . ' · التطبيق ' . ($d['app_id'] ?? '?') . ' · ينتهي: ' . (empty($d['expires_at']) ? 'أبدًا' : gmdate('Y-m-d', (int) $d['expires_at']));
+            $L[] = 'الصلاحيات: ' . implode(', ', (array) ($d['scopes'] ?? []));
+            foreach ((array) ($d['granular_scopes'] ?? []) as $g) { $L[] = '  ' . ($g['scope'] ?? '') . ' ← ' . implode(', ', (array) ($g['target_ids'] ?? ['(كل الحسابات)'])); }
+        }
+        $ph = self::graph_get(rawurlencode($c['phone_id']), ['fields' => 'display_phone_number,verified_name,code_verification_status,name_status,new_name_status,status,platform_type,account_mode,quality_rating']);
+        $L[] = 'الرقم ' . $c['phone_id'] . ': ' . (!empty($ph['_err']) ? $ph['_err'] : wp_json_encode($ph, JSON_UNESCAPED_UNICODE));
+        $ids = [$c['waba_id']];
+        foreach ((array) ($dbg['data']['granular_scopes'] ?? []) as $g) { foreach ((array) ($g['target_ids'] ?? []) as $t) { $ids[] = (string) $t; } }
+        foreach (array_unique(array_filter($ids)) as $id) {
+            $w = self::graph_get(rawurlencode($id), ['fields' => 'id,name,account_review_status,phone_numbers{id,display_phone_number}']);
+            $L[] = 'حساب ' . $id . ': ' . (!empty($w['_err']) ? $w['_err'] : wp_json_encode($w, JSON_UNESCAPED_UNICODE));
+        }
+        self::log('تشخيص: ' . implode(' | ', $L));
+        return implode("\n", $L);
     }
 
     /**
@@ -194,12 +234,13 @@ final class Mutqan_Meta_WA {
 
     public static function page() {
         if (!current_user_can('manage_options')) { return; }
-        $c = self::cfg(); $msg = '';
+        $c = self::cfg(); $msg = ''; $diag = '';
         if (!empty($_POST['mq_meta_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mq_meta_nonce'])), 'mq_meta')) {
             foreach (['phone_id', 'waba_id', 'template', 'lang', 'number'] as $k) { $c[$k] = sanitize_text_field(wp_unslash($_POST[$k] ?? $c[$k])); }
             foreach (['token', 'app_secret', 'verify'] as $k) { $v = trim((string) wp_unslash($_POST[$k] ?? '')); if ($v !== '') { $c[$k] = sanitize_text_field($v); } }   // blank = keep
             $c['on'] = !empty($_POST['on']) ? 1 : 0;
             update_option(self::OPT, $c, false); $msg = 'اتحفظ.';
+            if (!empty($_POST['diagnose'])) { $diag = self::diagnose(); }
             if (!empty($_POST['register_pin'])) { $msg .= ' ' . self::activate(preg_replace('/\D/', '', (string) wp_unslash($_POST['register_pin']))); }
             if (!empty($_POST['test_to'])) {
                 try { self::send(sanitize_text_field(wp_unslash($_POST['test_to'])), 'رسالة تجربة من الموقع ✅'); $msg .= ' ورسالة التجربة اتبعتت.'; }
@@ -213,6 +254,7 @@ final class Mutqan_Meta_WA {
         };
         echo '<div class="wrap" dir="rtl"><h1>واتساب الرسمي (Meta Cloud API)</h1>';
         if ($msg) { echo '<div class="notice notice-info"><p>' . esc_html($msg) . '</p></div>'; }
+        if ($diag) { echo '<h2>التشخيص</h2><pre dir="ltr" style="background:#fff;padding:10px;white-space:pre-wrap">' . esc_html($diag) . '</pre>'; }
         echo '<p>رابط الـ Webhook اللي يتحط في Meta: <code dir="ltr">' . esc_html(self::hook_url()) . '</code> — والحقول: <code>messages</code> و<code>smb_message_echoes</code>.</p>';
         echo '<form method="post">'; wp_nonce_field('mq_meta', 'mq_meta_nonce');
         echo '<table class="form-table">';
@@ -221,6 +263,7 @@ final class Mutqan_Meta_WA {
         $f('token', 'Access token (دائم)', true); $f('app_secret', 'App secret', true); $f('verify', 'Verify token (أي كلمة تختارها)', true);
         $f('template', 'اسم القالب لرسايل بعد 24 ساعة (اختياري)'); $f('lang', 'لغة القالب');
         echo '<tr><th>تفعيل الرقم (مرة واحدة)</th><td><input class="regular-text" dir="ltr" type="password" name="register_pin" placeholder="PIN من 6 أرقام تختاره (التحقق بخطوتين)" autocomplete="off"><p class="description">بيسجّل الرقم على Cloud API ويشغّل وصول الرسايل للموقع. احفظ الـ PIN عندك.</p></td></tr>';
+        echo '<tr><th>تشخيص</th><td><label><input type="checkbox" name="diagnose" value="1"> اعرض حالة المفتاح والرقم والحسابات (من غير ما يظهر المفتاح)</label></td></tr>';
         echo '<tr><th>رقم تجربة</th><td><input class="regular-text" dir="ltr" name="test_to" placeholder="05xxxxxxxx — لازم يكون باعتلك في آخر 24 ساعة"></td></tr>';
         echo '</table>'; submit_button('حفظ'); echo '</form>';
         $log = get_option(self::LOG, []);
