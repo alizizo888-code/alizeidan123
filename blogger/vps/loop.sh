@@ -29,6 +29,8 @@ once() {
   NP=$(printf '%s' "$P" | sed -n 's/.*"pages":\([0-9]*\).*/\1/p'); NP=${NP:-0}
   if printf '%s' "$P" | grep -q '"blocked":true'; then log "Blogger block on pages — no articles this hour"
   else MAX_WRITES=$((15 - NP)) node blogger/api/daily.js publish; RC=$?; fi
+  # 2 old posts an hour get «&src=<title>» on their app links (the order then names the article it came from)
+  [ "$RC" = 0 ] && node blogger/api/daily.js retag 2 > /dev/null 2>&1
   cp "$APP/blogger/state/published.json" "$DATA/published.json"
   node blogger/api/report.js > /dev/null 2>&1 && cp -r "$APP/blogger/state/reports/." "$DATA/reports/" 2>/dev/null
   cp "$APP/blogger/state/DASHBOARD.md" "$DATA/" 2>/dev/null

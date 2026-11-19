@@ -130,6 +130,26 @@ function status() {
   console.log(JSON.stringify({ today, live: live.length, target: total, done: d.n, mix: st.mix, ai: AI.available() }, null, 1))
 }
 
+const srcParam = (t) => '&amp;src=' + encodeURIComponent(String(t || '').slice(0, 70))
+
+// Old shop fronts link to the app without the article: add «&src=<title>» so an order from them names its article.
+async function retag(max) {
+  let n = 0; const done = [], errors = []
+  for (const b of live) {
+    if (n >= max) break
+    let posts; try { posts = await B.livePosts(b.blog_id) } catch (e) { errors.push(b.id + ': ' + e.message); continue }
+    const plain = `/app/?via=${b.id}#`
+    for (const p of posts) {
+      if (n >= max) break
+      const c = p.content || ''
+      if (!c.includes('<!--oxf-->') || !c.includes(plain)) continue
+      const html = c.split(plain).join(`/app/?via=${b.id}${srcParam(p.title)}#`)
+      try { await B.patch(b.blog_id, p.id, html); n++; done.push(b.id + ': ' + p.title.slice(0, 40)); await sleep(process.env.BLOGGER_DRY ? 0 : 15000) } catch (e) { errors.push(b.id + ': ' + e.message); if (e.status === 403 || e.status === 429) { max = 0; break } }
+    }
+  }
+  st.log.push({ date: today, time: new Date().toISOString().slice(11, 16) + 'Z', task: 'api-retag', done, errors }); save(); console.log(JSON.stringify({ retagged: n, errors }))
+}
+
 async function relayout(max) {
   let n = 0; const done = [], errors = []
   for (const b of live) {
@@ -138,7 +158,7 @@ async function relayout(max) {
     for (const p of posts) {
       if (n >= max) break
       if ((p.content || '').includes('<!--oxf-->')) continue
-      const html = front(b, '@@T@@').split('@@T@@').join(esc(p.title)) + `<h2 style="${H2}">شرح المقال: ${esc(p.title)}</h2>` + p.content
+      const html = front(b, '@@T@@').split('@@SRC@@').join(srcParam(p.title)).split('@@T@@').join(esc(p.title)) + `<h2 style="${H2}">شرح المقال: ${esc(p.title)}</h2>` + p.content
       try { await B.patch(b.blog_id, p.id, html); n++; done.push(b.id + ': ' + p.title.slice(0, 40)); await sleep(process.env.BLOGGER_DRY ? 0 : 15000) } catch (e) { errors.push(b.id + ': ' + e.message); if (e.status === 403 || e.status === 429) { max = 0; break } }
     }
   }
@@ -146,5 +166,5 @@ async function relayout(max) {
 }
 
 const [mode, arg] = process.argv.slice(2)
-;(mode === 'publish' ? publish(+arg || 0) : mode === 'relayout' ? relayout(+arg || 15) : mode === 'status' ? Promise.resolve(status()) : Promise.reject(new Error('usage: daily.js publish|relayout|status [N]')))
+;(mode === 'publish' ? publish(+arg || 0) : mode === 'relayout' ? relayout(+arg || 15) : mode === 'retag' ? retag(+arg || 2) : mode === 'status' ? Promise.resolve(status()) : Promise.reject(new Error('usage: daily.js publish|relayout|retag|status [N]')))
   .catch((e) => { console.error(e.message); process.exit(1) })

@@ -18,7 +18,8 @@ const hash = (s) => { let h = 2166136261; for (const c of String(s)) { h ^= c.co
 const H2 = 'font-size:20px;font-weight:800;color:#075985;margin:22px 0 10px;padding-right:10px;border-right:5px solid #0ea5e9'
 
 function front(b, title) {
-  const app = `${HUB}/app/?via=${b.id}#/`, blog = (b.live_url || b.blogspot || '/').replace(/\/?$/, '/')
+  // ?src=<title> tells the order which article the customer was reading (Blogger only sends the blog's origin as referrer)
+  const app = `${HUB}/app/?via=${b.id}${title && title !== '@@T@@' ? '&amp;src=' + encodeURIComponent(String(title).slice(0, 70)) : title === '@@T@@' ? '@@SRC@@' : ''}#/`, blog = (b.live_url || b.blogspot || '/').replace(/\/?$/, '/')
   let h = '<!--oxf--><div dir="rtl" style="font-family:inherit;line-height:1.9">'
   h += `<div style="background:linear-gradient(135deg,#0b3b73,#0c4a6e 60%,#0ea5e9);color:#fff;border-radius:18px;padding:20px 16px;text-align:center">`
     + `<span style="display:inline-block;background:#fbbf24;color:#4a2c00;font-weight:800;font-size:12px;border-radius:99px;padding:2px 12px">${e(b.name)} · مكة وجدة</span>`
