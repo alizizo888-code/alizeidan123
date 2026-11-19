@@ -70,7 +70,10 @@ async function publish(nArg) {
   // choose the slot type so the day's running shares stay on target: 2/3 new (60% A/C, 40% cold rooms; 70% Makkah), 1/3 old
   const sim = { n: day.n, new: day.new, old: day.old, ac: day.ac, fridge: day.fridge, mk: day.mk }
   const args = picks.map((id) => {
-    const wantOld = sim.old < (sim.n + 1) * (1 - R.new_share) && (st.pending_long[id] || []).length
+    // owner order 2026-11-19: A/C + cold rooms are the top priority — old generator articles only on blogs whose own trade is A/C or cold rooms;
+    // every other blog fills that slot with a new A/C / cold-room topic seen through its own angle
+    const spec = (NET.find((y) => y.id === id) || {}).spec
+    const wantOld = ['ac', 'fridge'].includes(spec) && sim.old < (sim.n + 1) * (1 - R.new_share) && (st.pending_long[id] || []).length
     const kind = sim.ac <= 0.6 * (sim.ac + sim.fridge + 1) - 0.0001 ? 'ac' : 'fridge'
     const city = sim.mk < 0.7 * (sim.new + 1) ? 'mk' : 'jd'
     sim.n++
