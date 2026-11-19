@@ -228,7 +228,14 @@ class Oxygen_SEO_Engine {
                     'dom' => $sv['spec'] ?? 'general', 'idx' => $idx++];
             }
         }
-        return self::$cache['plan'] = $plan;
+        return self::$cache['plan'] = self::cooling_first($plan);
+    }
+    /** Owner order 2026-11-19: A/C and cold / freezer rooms are the top priority. The publisher takes the first unpublished
+     *  item of the plan, so A/C + cold items move to the front (stable: their own order is kept); other trades follow. */
+    public static function cooling_first(array $plan) {
+        $hot = []; $rest = [];
+        foreach ($plan as $it) { if (in_array($it['dom'] ?? '', ['ac', 'fridge'], true)) { $hot[] = $it; } else { $rest[] = $it; } }
+        return array_merge($hot, $rest);
     }
     private static function domain($dom) {
         $d = self::data('domains');
