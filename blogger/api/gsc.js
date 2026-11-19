@@ -19,8 +19,9 @@ async function token() {
 function wanted() {
   const out = []
   for (const b of NET) if (b.blog_id && b.host) { out.push(`https://${b.host}/sitemap.xml`, `https://${b.host}/sitemap-pages.xml`) }
-  const hosts = WP.length ? WP.map((s) => s.host) : ['oxygen11.com', 'mutqan.oxygen11.com']
-  for (const h of hosts) out.push(`https://${h}/sitemap_index.xml`)
+  // the two core sites run Yoast (sitemap_index.xml); the faces use WordPress's own sitemap (wp-sitemap.xml)
+  const sites = WP.length ? WP : [{ host: 'oxygen11.com', core: true }, { host: 'mutqan.oxygen11.com', core: true }]
+  for (const w of sites) out.push(`https://${w.host}/${w.core ? 'sitemap_index.xml' : 'wp-sitemap.xml'}`)
   return [...new Set(out)]
 }
 
@@ -39,6 +40,11 @@ async function main(mode) {
       const r = await fetch(API + '/sitemaps/' + encodeURIComponent(u), { method: 'PUT', headers: H })
       if (r.ok) done.push(u); else errors.push(u + ' → ' + r.status)
       await new Promise((ok) => setTimeout(ok, 400))
+    }
+    // old entries that fail and are not part of the network any more (feeds, typos, retired hosts) are removed
+    const W = new Set(wanted())
+    for (const s of list.sitemap || []) {
+      if (+s.errors > 0 && !W.has(s.path)) { const r = await fetch(API + '/sitemaps/' + encodeURIComponent(s.path), { method: 'DELETE', headers: H }); if (r.ok) done.push('removed ' + s.path) }
     }
   }
   const rows = (list.sitemap || []).map((s) => ({ path: s.path, read: s.lastDownloaded || '', errors: +s.errors || 0, warnings: +s.warnings || 0, pending: !!s.isPending, urls: (s.contents || []).reduce((n, c) => n + (+c.submitted || 0), 0) }))
