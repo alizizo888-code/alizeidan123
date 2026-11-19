@@ -31,7 +31,8 @@ final class Mutqan_Hub {
     private static function sys() { return ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user', 'name' => 'مركز الواتساب']; }
     public static function cfg() { $c = get_option(self::OPT, []); return is_array($c) ? $c + ['url' => '', 'secret' => '', 'on' => 0] : ['url' => '', 'secret' => '', 'on' => 0]; }
     /** True once the hub is paired: from then on WhatsApp is the hub's alone. */
-    public static function on() { $c = self::cfg(); return !empty($c['on']) && strlen((string) $c['secret']) >= 32 && (string) $c['url'] !== ''; }
+    public static function on() { if (class_exists('Mutqan_Meta_WA') && Mutqan_Meta_WA::on()) { return false; }   // the official number took WhatsApp over
+        $c = self::cfg(); return !empty($c['on']) && strlen((string) $c['secret']) >= 32 && (string) $c['url'] !== ''; }
 
     /* ------------------------------------------------------------------ the order, as the hub sees it */
 

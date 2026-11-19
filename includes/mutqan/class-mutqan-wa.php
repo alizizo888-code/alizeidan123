@@ -198,6 +198,7 @@ final class Mutqan_WA {
 
     /** Id of a connected (status «open») business number, or '' when the gateway is not set up / down. Cached for a minute so an order never waits on it twice. */
     public static function open_account() {
+        if (class_exists('Mutqan_Meta_WA') && Mutqan_Meta_WA::on()) { return Mutqan_Meta_WA::ACCT; }
         if (class_exists('Mutqan_Hub') && Mutqan_Hub::on()) { return 'hub'; }
         $c = self::cfg();
         // A phone gateway cannot be asked which numbers it has; it tells us when it connects.
@@ -226,6 +227,8 @@ final class Mutqan_WA {
     public static function auto_send($phone, $text, $by = 'order') {
         $to = self::intl($phone);
         if ($to === '') { return false; }
+        // The official number (Meta Cloud API) sends everything when it is on: one HTTPS call, no queue, no gateway.
+        if (class_exists('Mutqan_Meta_WA') && Mutqan_Meta_WA::on()) { try { self::send(Mutqan_Meta_WA::ACCT, $to, $text, 'auto', $by); return 'sent'; } catch (Throwable $e) { error_log('[mutqan] meta auto_send: ' . $e->getMessage()); return false; } }
         // The hub on the VPS sends every WhatsApp message now; the site only hands it over.
         if (class_exists('Mutqan_Hub') && Mutqan_Hub::on()) { return Mutqan_Hub::send($to, $text, $by) ? 'sent' : false; }
         // A message leaves from the number whose job it is (orders from the customers' line, job cards from the
@@ -256,6 +259,11 @@ final class Mutqan_WA {
      */
     public static function send($acct, $phone, $text, $via, $by = '') {
         $text = preg_replace('/(الفن[يى])\s+(?=الفن[يى]\s)/u', '', (string) $text);   // «الفني الفني علي» — names that already start with «الفني»
+        if (class_exists('Mutqan_Meta_WA') && Mutqan_Meta_WA::on()) {
+            $msgId = Mutqan_Meta_WA::send($phone, $text);
+            self::store_message(Mutqan_Meta_WA::ACCT, self::intl($phone) ?: preg_replace('/\D/', '', (string) $phone), ['msgId' => $msgId, 'dir' => 'out', 'text' => $text, 'kind' => 'text', 'ts' => time(), 'via' => $via, 'by' => $by]);
+            return ['ok' => true];
+        }
         if (class_exists('Mutqan_Hub') && Mutqan_Hub::on()) { Mutqan_Hub::send($phone, $text, (string) $via); return ['ok' => true]; }
         $c = self::cfg();
         if ($c['url'] === '') { return self::queue($acct, $phone, $text, $via, $by); }
@@ -290,7 +298,7 @@ final class Mutqan_WA {
     /** Same signature as the webhook, checked the same way: the body, with the shared secret. */
     public static function pull_signed($raw, $sig) {
         // The old gateway is retired once the hub is paired: it gets nothing to do.
-        if (class_exists('Mutqan_Hub') && Mutqan_Hub::on()) { return ['jobs' => [], 'cmds' => [], 'retired' => true]; }
+        if ((class_exists('Mutqan_Hub') && Mutqan_Hub::on()) || (class_exists('Mutqan_Meta_WA') && Mutqan_Meta_WA::on())) { return ['jobs' => [], 'cmds' => [], 'retired' => true]; }
         $dev = class_exists('Mutqan_WA_Fleet') ? Mutqan_WA_Fleet::signer($raw, $sig) : null;
         if ($dev === null) {
             $c = self::cfg();
@@ -364,7 +372,7 @@ final class Mutqan_WA {
         if ($m['dir'] === 'in') { $patch['unread'] = (int) ($th['unread'] ?? 0) + 1; $patch['status'] = 'open'; if (!empty($m['name'])) { $patch['name'] = mb_substr($m['name'], 0, 60); } }
         self::put_thread($tid, $patch, ['accountId' => $acct, 'phone' => $phone, 'name' => mb_substr((string) ($m['name'] ?? ''), 0, 60), 'unread' => 0, 'status' => 'open']);
         // «جسر Chatwoot»: the team's inbox sees every message of the conversation (off until it is set up).
-        if (class_exists('Mutqan_Chatwoot')) { Mutqan_Chatwoot::mirror($acct, $phone, $tid, ['dir' => $m['dir'], 'text' => (string) $m['text'], 'kind' => $m['kind'] ?? 'text', 'via' => $m['via'] ?? '', 'by' => $m['by'] ?? '', 'mediaUrl' => $media['url'] ?? null]); }
+        if (class_exists('Mutqan_Chatwoot') && !(class_exists('Mutqan_Meta_WA') && Mutqan_Meta_WA::on())) { Mutqan_Chatwoot::mirror($acct, $phone, $tid, ['dir' => $m['dir'], 'text' => (string) $m['text'], 'kind' => $m['kind'] ?? 'text', 'via' => $m['via'] ?? '', 'by' => $m['by'] ?? '', 'mediaUrl' => $media['url'] ?? null]); }
         try { self::mirror_order($acct, $phone, $tid, $m, $id, $media['url'] ?? null); } catch (Throwable $e) { error_log('[mutqan] wa→order mirror ' . $e->getMessage()); }
         return true;
     }
@@ -492,6 +500,11 @@ final class Mutqan_WA {
         if (class_exists('Mutqan_WA_Fleet')) { Mutqan_WA_Fleet::touch($dev); }
         $e = json_decode($raw, true);
         if (!is_array($e)) { throw new Mutqan_Error('bad_input', 'حمولة غير صالحة.', 400); }
+        return self::process($e, $dev);
+    }
+
+    /** One gateway event (a status, or a message in or out), whoever carried it: a phone gateway, or Meta (Mutqan_Meta_WA). */
+    public static function process($e, $dev = null) {
         $acct = self::id($e['accountId'] ?? '');
         if (($e['type'] ?? '') === 'status') {
             set_transient('mq_wa_st_' . $acct, ['status' => (string) ($e['status'] ?? ''), 'at' => time()], DAY_IN_SECONDS);
