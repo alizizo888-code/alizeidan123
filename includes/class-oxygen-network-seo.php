@@ -141,7 +141,7 @@ final class Oxygen_Network_SEO {
             if ($pl[1] !== '') { $it['district'] = $pl[1]; }
             $plan[] = $it;
         }
-        return $cache[$id] = $plan;
+        return $cache[$id] = Oxygen_SEO_Engine::cooling_first($plan);   // A/C + cold rooms first (owner order 2026-11-19)
     }
 
     /** Publishing rhythm: the first BURST_DAYS days run at the core sites' pace, then every site settles at STEADY per day. */
