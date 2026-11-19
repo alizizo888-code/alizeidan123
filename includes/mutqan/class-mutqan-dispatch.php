@@ -181,7 +181,9 @@ final class Mutqan_Dispatch {
 
     /** pickTechnician() — smart, capacity or nearest. Null when nobody can take it. */
     public static function pick($order, $techs, $orders, $strategy = 'smart') {
-        $avail = array_values(array_filter($techs, function ($t) use ($orders) { return self::available($t, $orders); }));
+        // a technician who already reported «couldn't fix it» on this job is not sent back to it
+        $skip = array_map('strval', (array) ($order['abortedTechIds'] ?? []));
+        $avail = array_values(array_filter($techs, function ($t) use ($orders, $skip) { return self::available($t, $orders) && !in_array((string) ($t['userId'] ?? ''), $skip, true); }));
         if (!$avail) { return null; }
         if ($strategy === 'capacity') {
             usort($avail, function ($a, $b) use ($orders) { return self::remaining($b, $orders) <=> self::remaining($a, $orders); });
