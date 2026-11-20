@@ -338,7 +338,9 @@ final class Mutqan_Trainer {
         $end = date('Y-m-d', strtotime($s['start'] . ' +' . (int) ($s['days'] ?? self::DAYS) . ' days'));
         $names = [];
         foreach (self::all_scenarios() as $x) { $names[$x['id']] = $x['expect']; }
-        return ['on' => !empty($s['on']), 'active' => self::active($s), 'start' => $s['start'], 'end' => $end, 'day' => $s['day'] ?? '', 'plan' => array_values((array) ($s['plan'] ?? [])),
+        return ['on' => !empty($s['on']), 'active' => self::active($s), 'start' => $s['start'], 'end' => $end,
+            'here' => !(class_exists('Oxygen_Network') && method_exists('Oxygen_Network', 'is_satellite') && Oxygen_Network::is_satellite()),
+            'brainUrl' => (string) get_option('mutqan_claude_brain_url', 'https://claude.ai/artifact/HtPr7XNcHAktyLynuhgRuk'), 'day' => $s['day'] ?? '', 'plan' => array_values((array) ($s['plan'] ?? [])),
             'results' => (object) ($s['results'] ?? []), 'stats' => (object) ($s['stats'] ?? []), 'expect' => (object) $names,
             'runs' => array_map(function ($r) { return array_intersect_key($r, array_flip(['id', 'day', 'scenario', 'kind', 'pass', 'score', 'transcript', 'issues', 'better', 'expect', 'got', 'provider', 'createdAt'])); }, $runs),
             'lessons' => array_map(function ($r) { return ['id' => (string) $r['id'], 'q' => (string) ($r['q'] ?? ''), 'a' => (string) ($r['a'] ?? ''), 'count' => (int) ($r['count'] ?? 1)]; }, $lessons)];
