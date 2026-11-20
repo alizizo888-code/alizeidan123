@@ -40,7 +40,9 @@ async function groqModel(key) {
 }
 
 const PROVIDERS = [
-  { name: 'groq', key: 'GROQ_API_KEY', ask: async (prompt, key) => openaiLike('https://api.groq.com/openai/v1/chat/completions', key, await groqModel(key), prompt) },
+  { name: 'groq', key: 'GROQ_API_KEY', ask: async (prompt, key, model) => openaiLike('https://api.groq.com/openai/v1/chat/completions', key, model || await groqModel(key), prompt),
+    // when the best model hits its daily token cap or fails the JSON check, smaller models still have their own free quota
+    fallbacks: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'] },
   { name: 'gemini', key: 'GEMINI_API_KEY', async ask(prompt, key) {
     const model = await geminiModel(key)
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
@@ -62,8 +64,10 @@ async function openaiLike(url, key, model, prompt) {
   return ((j.choices || [])[0] || {}).message?.content || ''
 }
 
-const available = () => PROVIDERS.filter((p) => process.env[p.key])
-const disabled = new Set()   // a provider that hit its free quota (429) is skipped for the rest of the run
+// several free keys per provider (owner order 2026-11-20): KEY=a,b,c — each Google / Groq account has its own free quota
+const keysOf = (p) => String(process.env[p.key] || '').split(',').map((k) => k.trim()).filter(Boolean)
+const available = () => PROVIDERS.filter((p) => keysOf(p).length)
+const disabled = new Set()   // «provider|key|model» that hit its free quota (429/403) is skipped for the rest of the run
 
 const BAD = /ريال|ر\.س|\bSAR\b|\d{3,}|[٠-٩]{3,}|\d+ ?%|نجوم|مرخص|ترخيص|رخصة|سنة خبرة|سنوات خبرة|عاماً من الخبرة|عميلنا|أحد عملائنا|اتصل بنا على/
 
@@ -95,11 +99,21 @@ function toHtml(raw) {
 async function enrich(ctx) {
   if (DRY) return null
   for (const p of available()) {
-    if (disabled.has(p.name)) continue
-    try {
-      const h = toHtml(await p.ask(prompt(ctx), process.env[p.key]))
-      if (h) return { provider: p.name, ...h }
-    } catch (err) { if (/ 429| 403/.test(err.message)) disabled.add(p.name); ctx.errors && ctx.errors.push('ai ' + err.message) }
+    const keys = keysOf(p)
+    for (let ki = 0; ki < keys.length; ki++) {
+      for (const model of [null, ...(p.fallbacks || [])]) {
+        const tag = `${p.name}|${ki}|${model || '*'}`
+        if (disabled.has(tag)) continue
+        try {
+          const h = toHtml(await p.ask(prompt(ctx), keys[ki], model))
+          if (h) return { provider: p.name + (keys.length > 1 ? '#' + (ki + 1) : ''), ...h }
+        } catch (err) {
+          if (/ 429| 403/.test(err.message)) disabled.add(tag)
+          ctx.errors && ctx.errors.push(`ai ${p.name}#${ki + 1}${model ? ' ' + model : ''}: ` + String(err.message).slice(0, 120))
+          if (!/ 429| 400| 413/.test(err.message) || !p.fallbacks) break   // only a quota / JSON / size failure is worth a smaller model
+        }
+      }
+    }
   }
   return null
 }
