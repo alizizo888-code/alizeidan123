@@ -29,6 +29,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-partner-articles
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-social.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-desk.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-owner-link.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-health.php';
 Oxygen_SEO_Engine::boot();
 Oxygen_Daily_Report::boot();
 Oxygen_Visuals::boot();
