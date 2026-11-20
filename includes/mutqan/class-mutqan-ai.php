@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) { exit; }
  */
 final class Mutqan_AI {
 
-    const HOUSE_FEATURES = ['chat', 'site_chat', 'wa', 'wa_hub', 'negotiate', 'sales'];
+    const HOUSE_FEATURES = ['chat', 'site_chat', 'wa', 'wa_hub', 'wa_reception', 'negotiate', 'sales'];
 
     /** The official price sheet, from the owner's own tables (the same numbers the order page and the hub use). */
     public static function price_sheet() {
@@ -36,6 +36,13 @@ final class Mutqan_AI {
         return implode("\n", $L);
     }
 
+    /** Appointment rules for the hour it is now (Mutqan_Deal::booking). */
+    public static function booking_rules() {
+        if (!class_exists('Mutqan_Deal')) { return '- الافتراضي «اليوم — أقرب وقت ممكن».'; }
+        $b = Mutqan_Deal::booking();
+        return $b['rule'] . "\n- لو العميل ما حددش وقت سجّل في الطلب: «" . $b['defaultTime'] . "».";
+    }
+
     /** The house policy every customer conversation follows (the site's assistant and WhatsApp alike). */
     public static function house_rules() {
         $now = class_exists('Mutqan_Sales') ? Mutqan_Sales::local()->format('Y-m-d H:i') : gmdate('Y-m-d H:i');
@@ -43,16 +50,14 @@ final class Mutqan_AI {
             . "الوقت الآن في مكة: {$now}.\n"
             . "### الأسعار الرسمية — المصدر الوحيد لأي رقم\n" . self::price_sheet() . "\n"
             . "ممنوع أي رقم من عندك، وممنوع خصم أكبر من المسموح. لو الخدمة مش في الجدول قل إن سعرها بعد المعاينة.\n"
-            . "### المواعيد\n"
-            . "- الافتراضي دايمًا: «اليوم — أقرب وقت ممكن». العميل اللي طلب خدمة عايزها دلوقتي؛ خدماتنا بسيطة (زي غسيل مكيف) وبتتعمل في نفس اليوم.\n"
-            . "- ممنوع تقترح بكرة أو الصبح أو تأجّل الطلب من نفسك، وممنوع تربط خصم بموعد صباحي. يوم تاني أو ساعة معينة بس لو العميل نفسه طلبها، أو لو الطلب جه بعد آخر استقبال الطلبات بالليل.\n"
-            . "- لو فيه ضغط أو ذروة: سجّل الطلب عادي على «اليوم — أقرب وقت»، والعمليات هتتواصل معاه لو احتاج أي تعديل.\n"
-            . "- لو قال وقت بمواقيت الصلاة (بعد الظهر/العصر/المغرب) أو بالساعة أو بتاريخ يوم معين: سجّله زي ما قاله بالظبط.\n"
+            . "### المواعيد\n" . self::booking_rules() . "\n"
             . "### الأسلوب\n"
             . "- راجل سعودي في خدمة العملاء، بلهجة سعودية بيضاء ثابتة، ودود ومختصر (جملتين بالكتير)، وسؤال واحد بس في كل رد.\n"
             . "- اقرأ المحادثة كلها قبل ما ترد، وما تسألش عن حاجة العميل قالها قبل كده، وما تسألش أسئلة مالهاش لازمة للطلب.\n"
-            . "- الخطوات: الخدمة ← النوع والعدد ← السعر من الجدول ← تأكيد وقفل الطلب على «اليوم — أقرب وقت» (الموقع بيتحدد من الجهاز/الواتساب). أول ما تعرف الخدمة والعدد وسعرها: اقفل الطلب وسجّله على طول من غير لف.\n"
-            . "- لو سأل «طلبي فين/الفني فين»: جاوب من بيانات طلباته المرفقة بس، وما تخترعش حالة ولا وقت وصول."
+            . "- الخطوات: الخدمة ← النوع والعدد ← السعر من الجدول ← الموعد (حسب قواعد المواعيد فوق) ← تأكيد وقفل الطلب (الموقع بيتحدد من الجهاز/الواتساب). أول ما تعرف الخدمة والعدد وسعرها: اقفل الطلب وسجّله على طول من غير لف.\n"
+            . "- الفصال: انزل بالتدريج وكل تنازل مقابل حاجة (يحجز دلوقتي، عدد أكبر). العدد الكبير (4 مكيفات وطالع) ليه سعر باقة حسب تعليمات العقل التجاري. ما تذكرش أبدًا إن فيه حد أدنى ولا رقمه.\n"
+            . "- لو العميل فاصل لحد آخر سعر ممكن وما وافقش: اعتذر بلطف واعرض القيمة (ضمان، فاتورة، فني معتمد) أو تقليل العدد، وما تقفلش الباب.\n"
+            . "- لو سأل «طلبي فين/الفني فين»: جاوب من بيانات طلباته المرفقة بس، وما تخترعش حالة ولا وقت وصول. لو عايز يلغي أو يأجل: النظام بيتصرف وبيبلغ العمليات — قوله إنه اتبلغ."
             . (class_exists('Mutqan_Command') && ($r = Mutqan_Command::intake_rule()) !== '' ? "\n" . $r : '');
     }
     const OPT = 'mutqan_ai_settings';
@@ -222,6 +227,8 @@ final class Mutqan_AI {
         // The sales brain goes in at the same door: who the customer is, what the day looks like, the plan for
         // this reply. Only customer conversations get one (see Mutqan_Sales::inject).
         if (class_exists('Mutqan_Sales')) { $prompt = Mutqan_Sales::inject($prompt, $opts, $p); }
+        // The service encyclopedia: what a seasoned agent knows about the customer's own last message (Mutqan_Lore).
+        if (class_exists('Mutqan_Lore')) { $prompt = Mutqan_Lore::inject($prompt, $opts, $p); }
         // One house policy for every customer conversation — the site's assistant and the WhatsApp lines alike: the
         // same official prices, the same «today, as soon as possible», the same way of closing an order. Last, so it wins.
         if (in_array((string) ($opts['feature'] ?? ''), self::HOUSE_FEATURES, true)) { $prompt .= "\n\n" . self::house_rules(); }

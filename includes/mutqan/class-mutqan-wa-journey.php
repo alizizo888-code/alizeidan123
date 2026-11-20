@@ -199,6 +199,13 @@ final class Mutqan_WA_Journey {
     private static function on_confirm_stage($o, $text, $phone) {
         $patch = []; $got = [];
         if (class_exists('Mutqan_OrderBot') && Mutqan_OrderBot::intent($text) === 'cancel') {
+            // One procedure everywhere (Mutqan_Deal::cancel): before a technician accepted, it is cancelled at once.
+            if (class_exists('Mutqan_Deal')) {
+                $r = Mutqan_Deal::cancel($o, $text);
+                self::tell_room('❌ العميل ' . ($r['done'] === 'cancelled' ? 'لغى' : 'طلب إلغاء') . ' طلب #' . self::num($o) . ' قبل التأكيد: «' . mb_substr($text, 0, 120) . '»', 'jr-cancel-' . $o['id'], $o);
+                self::step($o, 'wa_cancel', 'العميل لغى على واتساب: ' . mb_substr($text, 0, 80));
+                return $r['reply'];
+            }
             Mutqan_OrderBot::act('cancel', $o, $text);
             self::tell_room('❌ العميل طلب إلغاء طلب #' . self::num($o) . ' قبل التأكيد: «' . mb_substr($text, 0, 120) . '»', 'jr-cancel-' . $o['id'], $o);
             return 'وصلني طلب الإلغاء وبلّغت العمليات، وهيتأكد لك حالًا.';
@@ -245,6 +252,14 @@ final class Mutqan_WA_Journey {
             return 'وصل اللوكيشن ✅' . (!empty($o['technicianId']) ? ' وبعته للفني.' : '');
         }
         $intent = Mutqan_OrderBot::intent($text);
+        if ($intent === 'cancel' && class_exists('Mutqan_Deal')) {
+            $r = Mutqan_Deal::cancel($o, $text);
+            $moving = $r['done'] === 'requested';
+            self::tell_room('❌ *العميل ' . ($moving ? 'عايز يلغي' : 'لغى') . ' طلب #' . self::num($o) . '*' . ($moving ? ' — والفني ' . (string) ($o['technicianName'] ?? '') . ' ' . (self::LABEL_ST[$st] ?? $st) : ' (قبل ما فني يقبله — اتلغى)') . "\n💬 «" . mb_substr($text, 0, 160) . "»\n👤 " . ((string) ($o['clientName'] ?? '') ?: '—') . ' — ' . (string) ($o['clientPhone'] ?? '')
+                . ($moving ? "\n\nتأكّد الإلغاء: *الغي " . self::num($o) . "* · أو كلّمه: *رد " . self::num($o) . " نص الرسالة*" : ''), 'jr-cancel-' . $o['id'] . '-' . md5($text), $o);
+            self::step($o, $r['done'] === 'cancelled' ? 'wa_cancel' : 'wa_cancel_request', 'العميل طلب الإلغاء على واتساب: ' . mb_substr($text, 0, 80));
+            return $r['reply'];
+        }
         if ($intent === 'cancel') {
             // On the way or not, the customer said «cancel»: the room decides, the technician holds, and nothing is cancelled behind anyone's back.
             Mutqan_Store::update('orders', $o['id'], ['cancelRequest' => ['at' => gmdate('c'), 'text' => mb_substr($text, 0, 200), 'status' => $st]], self::sys());

@@ -27,8 +27,11 @@ final class Mutqan_Command {
     const TECH_TOOLS = ['my_jobs', 'job_status', 'job_problem'];
     const STAFF_ONLY = ['my_jobs', 'job_status', 'job_problem'];   // the technician's own tools: no use to the office
 
+    const OFFICE_TOOLS = ['price_band_set'];   // owner and operations (not the supervisor)
+
     public static function allowed($name, $p) {
         $r = self::role($p);
+        if ($r === 'supervisor' && in_array($name, self::OFFICE_TOOLS, true)) { return false; }
         if ($r === 'owner') { return !in_array($name, self::STAFF_ONLY, true); }
         if ($r === 'operations' || $r === 'supervisor') { return !in_array($name, self::OWNER_ONLY, true) && !in_array($name, self::STAFF_ONLY, true); }
         if ($r === 'technician') { return in_array($name, self::TECH_TOOLS, true); }
@@ -48,6 +51,8 @@ final class Mutqan_Command {
         $s = function ($props, $req = []) { return ['type' => 'object', 'properties' => (object) $props, 'required' => $req]; };
         $str = ['type' => 'string'];
         return [
+            ['name' => 'price_band', 'description' => 'ليميت الأسعار دلوقتي: المينيمم والماكسيمم للمكيف في صفقات 4 مكيفات وطالع، الوضع (تلقائي حسب شغل اليوم/مرن/ماسك/رسمي بس)، وعدد طلبات النهارده.', 'input_schema' => $s([])],
+            ['name' => 'price_band_set', 'description' => 'غيّر ليميت الأسعار للبوت: step = +5 (ارفع الليميت) أو -5 (قلّل الليميت)، أو minUnit و maxUnit بالريال للمكيف، و mode = auto (حسب شغل اليوم) أو loose (مرن على المينيمم) أو tight (امسك على الماكسيمم) أو fixed (الأسعار الرسمية بس بدون فصال). hours اختياري لمدة مؤقتة.', 'input_schema' => $s(['step' => ['type' => 'number'], 'minUnit' => ['type' => 'number'], 'maxUnit' => ['type' => 'number'], 'mode' => ['type' => 'string', 'enum' => ['auto', 'loose', 'tight', 'fixed']], 'hours' => ['type' => 'number'], 'note' => $str])],
             ['name' => 'intake_get', 'description' => 'حالة استقبال الطلبات دلوقتي (مفتوح / بنحجز لبكره / موقوف) وتعديل الأسعار الساري.', 'input_schema' => $s([])],
             ['name' => 'intake_set', 'description' => 'استقبال الطلبات الجديدة: mode = open (عادي) أو tomorrow (السوق زحمة: أي طلب جديد يتحجز لبكره الصبح) أو paused (وقف استقبال الطلبات واعتذر للعميل وخد رقمه). hours = مدة بالساعات (اختياري، بعدها يرجع عادي). note = سبب أو جملة تتقال للعميل. بوت العملاء على الموقع والواتساب بيطبقها فورًا.', 'input_schema' => $s(['mode' => ['type' => 'string', 'enum' => ['open', 'tomorrow', 'paused']], 'hours' => ['type' => 'number'], 'note' => $str], ['mode'])],
             ['name' => 'prices_adjust', 'description' => 'رفع أو تخفيض أسعار غسيل/صيانة المكيفات في الجدول الرسمي كله: percent من -50 لـ +100 (مثلاً 10 = زيادة 10%، -15 = تخفيض 15%)، والأسعار بتتقرّب لأقرب 5 ريال. maxDiscountPct (اختياري) = أقصى خصم يسمح بيه البوت في الفصال. الجدول ده هو اللي التطبيق والبوت بيحسبوا منه. يحتاج تأكيد.', 'input_schema' => $s(['percent' => ['type' => 'number'], 'maxDiscountPct' => ['type' => 'number']], ['percent'])],
@@ -157,6 +162,13 @@ final class Mutqan_Command {
     public static function run($name, $in, $p) {
         if (!self::allowed($name, $p)) { throw new Exception('الأمر ده مش من صلاحياتك.'); }
         switch ($name) {
+            case 'price_band': return ['text' => Mutqan_Deal::status_text(), 'band' => Mutqan_Deal::band(), 'demand' => Mutqan_Deal::demand()];
+            case 'price_band_set': {
+                if (!class_exists('Mutqan_Deal')) { throw new Exception('محرك الصفقة مش متاح.'); }
+                $b = Mutqan_Deal::set_band($in, $p);
+                foreach (['owner', 'operations'] as $rr) { self::push(['role' => $rr], '💰 ليميت الأسعار اتغيّر', 'المينيمم ' . $b['minUnit'] . ' · الماكسيمم ' . $b['maxUnit'] . ' للمكيف — ' . ['auto' => 'تلقائي', 'loose' => 'مرن', 'tight' => 'ماسك', 'fixed' => 'رسمي بس'][$b['mode']] . ' (' . ((string) ($p['name'] ?? '')) . ')', '#/staff/pricing', 'price_band'); }
+                return ['text' => Mutqan_Deal::status_text(), 'band' => $b, 'links' => [['type' => 'page', 'label' => 'صفحة التسعير', 'href' => '#/staff/pricing']]];
+            }
             case 'intake_get':
                 return ['intake' => self::intake(), 'prices' => array_intersect_key(Mutqan_Policy::ac_table(), array_flip(array_merge(self::PRICE_KEYS, ['maxDiscountPct']))), 'priceChangedAt' => (get_option(self::PRICE_BACKUP, [])['at'] ?? null)];
             case 'intake_set': return self::intake_set($in);
@@ -421,6 +433,7 @@ final class Mutqan_Command {
             $extra = $cmds ? "\n" . implode("\n", array_map(function ($x) { return '• ' . $x['label']; }, array_slice($cmds, 0, 5))) : '';
             return ($n ? 'لقيت ' . ($n === 1 ? 'نتيجة واحدة' : $n . ' نتايج') . ' عن «' . $o['q'] . '» — اضغط تفتحها:' : 'عن «' . $o['q'] . '»:') . $extra;
         }
+        if ($tool === 'price_band' || $tool === 'price_band_set') { return ($tool === 'price_band_set' ? "✅ اتنفذ — البوت شغال بالليميت الجديد من الرسالة الجاية.\n" : '') . ($o['text'] ?? ''); }
         if ($tool === 'order_open') {
             $x = (array) ($o['order'] ?? []);
             $st = class_exists('Mutqan_Ops') ? (Mutqan_Ops::STATUS[$x['status'] ?? ''] ?? ($x['status'] ?? '')) : ($x['status'] ?? '');
