@@ -268,7 +268,7 @@ body.lock{overflow:hidden}
 <script>//<![CDATA[
 (function(){
   var HUB='https://oxygen11.com', ID='amin', box=document.getElementById('appx'), fr=document.getElementById('appx-f');
-  function open(route, push){ fr.src = HUB + '/app/?via=' + ID + '&embed=1#' + (route || '/'); box.classList.add('on'); document.body.classList.add('lock'); if (push !== false) history.pushState({appx: route}, '', '#app' + route); }
+  function open(route, push){ fr.src = HUB + '/app/?via=' + ID + '&embed=1&src=' + encodeURIComponent((document.title || '').split(/[|\u2014-]/)[0].trim().slice(0, 70)) + '#' + (route || '/'); box.classList.add('on'); document.body.classList.add('lock'); if (push !== false) history.pushState({appx: route}, '', '#app' + route); }
   function close(){ box.classList.remove('on'); document.body.classList.remove('lock'); fr.src = 'about:blank'; }
   document.addEventListener('click', function(ev){ var a = ev.target.closest && ev.target.closest('[data-app]'); if (!a || ev.ctrlKey || ev.metaKey || ev.shiftKey) return; ev.preventDefault(); open(a.getAttribute('data-app')); });
   document.getElementById('appx-close').addEventListener('click', function(){ if (history.state && history.state.appx) history.back(); else close(); });

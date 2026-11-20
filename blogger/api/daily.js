@@ -14,7 +14,9 @@ const ROOT = path.join(__dirname, '..'), SF = path.join(ROOT, 'state', 'publishe
 const NET = require('../network.json'), st = JSON.parse(fs.readFileSync(SF, 'utf8'))
 // blogs fully set up (theme + pages): state.api_blogs when set, otherwise every blog with a blog_id whose pages are done
 const ALLOW = st.api_blogs || NET.filter((b) => b.blog_id && !(st.pages_pending || {})[b.id]).map((b) => b.id)
-const live = NET.filter((b) => b.blog_id && ALLOW.includes(b.id))
+// a blog of the second Google account is used only once its key is on the server (BLOGGER_REFRESH_TOKEN_2)
+const hasKey = (b) => (b.account || 1) === 1 || !!process.env['BLOGGER_REFRESH_TOKEN_' + b.account]
+const live = NET.filter((b) => b.blog_id && ALLOW.includes(b.id) && hasKey(b))
 const now = new Date(Date.now() + 3 * 3600e3), today = now.toISOString().slice(0, 10), hourRiyadh = now.getUTCHours()
 const RUN_HOURS = Array.from({ length: 24 }, (_, h) => h)       // VPS cron runs every hour (owner order 2026-11-17: higher volume)
 // blogs whose own trade IS A/C or cold rooms (or covers them fully) get twice the slots of the other trades (owner order 2026-11-17)
