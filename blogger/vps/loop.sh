@@ -8,6 +8,9 @@ set -uo pipefail
 REPO=${CODE_REPO:-https://github.com/alizizo888-code/alizeidan123.git}
 BR=${CODE_BRANCH:-blogger-vps}
 APP=/app; DATA=/data
+# GitHub keeps the data (owner order 2026-11-20): after every run the ledger, dashboard and reports go to the private repo,
+# so the server can be cancelled at any moment and GitHub Actions (blogger-api.yml) or a new server carries on from there.
+STATE_REPO=${STATE_REPO:-alizizo888-code/mutaqin-oxygen-app}; STATE_BRANCH=${STATE_BRANCH:-mutqan}
 mkdir -p "$DATA/reports"
 log() { echo "[$(date -u '+%F %T')Z] $*"; }
 
@@ -15,8 +18,35 @@ pull() {
   if [ ! -d "$APP/.git" ]; then git clone -q --depth 1 -b "$BR" "$REPO" "$APP" || return 1
   else git -C "$APP" fetch -q --depth 1 origin "$BR" && git -C "$APP" reset -q --hard "origin/$BR" || return 1; fi
   # the volume's ledger wins over the one in the code (first start: seed it from the code)
+  # first start (new server, empty volume): take the newest ledger from GitHub when a token is set, else the code's copy
+  if [ ! -f "$DATA/published.json" ] && [ -n "${GITHUB_TOKEN:-}" ]; then
+    curl -fsS -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github.raw" \
+      "https://api.github.com/repos/$STATE_REPO/contents/blogger/state/published.json?ref=$STATE_BRANCH" -o "$DATA/published.json" 2>/dev/null \
+      && log "ledger seeded from GitHub" || rm -f "$DATA/published.json"
+  fi
   [ -f "$DATA/published.json" ] || cp "$APP/blogger/state/published.json" "$DATA/published.json"
   cp "$DATA/published.json" "$APP/blogger/state/published.json"
+}
+
+sync_github() {
+  [ -n "${GITHUB_TOKEN:-}" ] || { log "ledger not sent to GitHub: GITHUB_TOKEN not set"; return 0; }
+  local D=/tmp/ledger i
+  for i in 1 2 3; do
+    rm -rf "$D"
+    git clone -q --depth 1 --filter=blob:none --sparse -b "$STATE_BRANCH" "https://x-access-token:${GITHUB_TOKEN}@github.com/${STATE_REPO}.git" "$D" 2>/dev/null || { sleep 5; continue; }
+    git -C "$D" sparse-checkout set blogger/state >/dev/null 2>&1
+    mkdir -p "$D/blogger/state/reports"
+    cp "$DATA/published.json" "$D/blogger/state/published.json"
+    [ -f "$DATA/DASHBOARD.md" ] && cp "$DATA/DASHBOARD.md" "$D/blogger/state/DASHBOARD.md"
+    cp -r "$DATA/reports/." "$D/blogger/state/reports/" 2>/dev/null
+    [ -f "$DATA/gsc.json" ] && cp "$DATA/gsc.json" "$D/blogger/state/gsc.json"
+    git -C "$D" add -A blogger/state
+    git -C "$D" diff --cached --quiet && { rm -rf "$D"; return 0; }
+    git -C "$D" -c user.name="oxygen-blogger (VPS)" -c user.email="noreply@users.noreply.github.com" commit -qm "Blogger ledger from the server" \
+      && git -C "$D" push -q origin "HEAD:$STATE_BRANCH" 2>/dev/null && { log "ledger saved to GitHub"; rm -rf "$D"; return 0; }
+    sleep 10
+  done
+  log "ledger NOT saved to GitHub (push failed 3 times)"; return 1
 }
 
 once() {
@@ -39,6 +69,7 @@ once() {
   if [ "$(date -u +%H)" = "03" ] || [ ! -f "$DATA/gsc.json" ]; then
     node blogger/api/gsc.js > "$DATA/gsc.log" 2>&1 && cp blogger/state/gsc.json "$DATA/gsc.json" 2>/dev/null; log "gsc: $(tail -c 300 "$DATA/gsc.log")"
   fi
+  sync_github || true
   log "run done (exit $RC)"
   return $RC
 }

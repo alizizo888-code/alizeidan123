@@ -2,7 +2,9 @@
 # every hour at :17, from the server only (owner order 2026-11-17). Code: public branch «blogger-vps» of alizeidan123.
 # Keys are set in the project's environment in hPanel (never in this file):
 #   BLOGGER_CLIENT_ID, BLOGGER_CLIENT_SECRET, BLOGGER_REFRESH_TOKEN   (account that owns the blogs)
-#   GEMINI_API_KEY, GROQ_API_KEY                                     (optional: unique AI sections)
+#   GEMINI_API_KEY, GROQ_API_KEY                                     (optional: unique AI sections; several keys «a,b,c»)
+#   GITHUB_TOKEN                                                     (saves the ledger to GitHub after every run)
+# BLOGGER_REFRESH_TOKEN may hold «account1,account2». The same values are kept as GitHub Actions secrets, the master copy.
 services:
   blogger:
     image: node:22-bookworm
@@ -13,6 +15,7 @@ services:
       - BLOGGER_REFRESH_TOKEN=${BLOGGER_REFRESH_TOKEN}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - TZ=UTC
     volumes:
       - data:/data
