@@ -170,6 +170,9 @@ final class Mutqan_Agent {
             ['name' => 'day_plan', 'description' => 'خطة يوم (مكة وجدة): عدد الطلبات وأوقاتها والذروة والقاعدة الشغالة وأول المواعيد المتاحة. date بصيغة YYYY-MM-DD (افتراضي اليوم).', 'input_schema' => $s(['date' => $str])],
             ['name' => 'sales_simulate', 'description' => 'جرّب البوت: رسالة عميل + السعر الرسمي (list) والحد الأدنى (floor) → السيناريو المختار، السعر اللي هيقوله، المواعيد اللي هيعرضها، ومثال رد.', 'input_schema' => $s(['text' => $str, 'list' => ['type' => 'number'], 'floor' => ['type' => 'number'], 'phone' => $str, 'city' => ['type' => 'string', 'enum' => ['makkah', 'jeddah', 'out']]], ['text'])],
             ['name' => 'sales_scenarios', 'description' => 'بحث في مكتبة سيناريوهات الفصال والاتفاق (أكثر من 700 سيناريو: موقف × نوع عميل × ذروة/هدوء).', 'input_schema' => $s(['q' => $str, 'limit' => $int])],
+            ['name' => 'trainer_status', 'description' => 'التدريب اليومي للمساعد: نتيجة آخر ليلة (نجح كام من ١٢ وليه فشل)، والردود الأفضل المستنية موافقة المالك، ورابط «عقل Claude».', 'input_schema' => $s([])],
+            ['name' => 'trainer_lesson', 'description' => 'اعتماد أو رفض رد مقترح من التدريب: id من trainer_status، decision = approved أو rejected، و a (اختياري) نسخة معدّلة من الرد. المعتمد يتعلمه كل المساعدين.', 'input_schema' => $s(['id' => ['type' => 'string'], 'decision' => ['type' => 'string', 'enum' => ['approved', 'rejected']], 'a' => ['type' => 'string']], ['id', 'decision'])],
+            ['name' => 'trainer_run', 'description' => 'شغّل تمرين تدريب واحد دلوقتي ورجّع نتيجته: id اسم التمرين (مثلاً price-split أو haggle أو disp-nearest-online).', 'input_schema' => $s(['id' => ['type' => 'string']], ['id'])],
         ];
     }
 
@@ -477,6 +480,16 @@ final class Mutqan_Agent {
                 $res = wp_remote_get('https://www.blogger.com/feeds/' . rawurlencode($b['blog_id']) . '/posts/default?alt=json&max-results=' . max(1, min(50, (int) ($in['limit'] ?? 10))), ['timeout' => 15]);
                 $d = json_decode(wp_remote_retrieve_body($res), true);
                 return array_map(function ($e) { $u = ''; foreach ($e['link'] as $l) { if ($l['rel'] === 'alternate') { $u = $l['href']; } } return ['title' => $e['title']['$t'] ?? '', 'url' => $u, 'published' => $e['published']['$t'] ?? '']; }, (array) ($d['feed']['entry'] ?? []));
+            case 'trainer_status':
+                if (!class_exists('Mutqan_Trainer')) { throw new Exception('التدريب مش متاح.'); }
+                $st = Mutqan_Trainer::status();
+                return ['active' => $st['active'], 'from' => $st['start'], 'to' => $st['end'], 'lastDay' => $st['day'], 'results' => $st['results'], 'lessons' => $st['lessons'], 'claude' => $st['brainUrl']];
+            case 'trainer_lesson':
+                if (!class_exists('Mutqan_Trainer')) { throw new Exception('التدريب مش متاح.'); }
+                return Mutqan_Trainer::handle(['op' => 'lesson', 'id' => (string) ($in['id'] ?? ''), 'decision' => (string) ($in['decision'] ?? ''), 'a' => (string) ($in['a'] ?? '')], ['id' => 'agent', 'role' => 'owner', 'kind' => 'user', 'powers' => ['read', 'write', 'manage']]);
+            case 'trainer_run':
+                if (!class_exists('Mutqan_Trainer')) { throw new Exception('التدريب مش متاح.'); }
+                return Mutqan_Trainer::run_one((string) ($in['id'] ?? 'price-split'));
             case 'ops_query':
                 if (!class_exists('Mutqan_Ops')) { throw new Exception('مدير العمليات مش متاح.'); }
                 return Mutqan_Ops::run_tool((string) ($in['what'] ?? 'ops_overview'), (array) ($in['input'] ?? []));
