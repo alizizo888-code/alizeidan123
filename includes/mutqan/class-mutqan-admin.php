@@ -176,15 +176,6 @@ final class Mutqan_Admin {
             <p>رابط التطبيق: <a href="<?php echo esc_url($app); ?>" target="_blank" rel="noopener"><?php echo esc_html($app); ?></a>
                 <?php if (!$built): ?> — <strong style="color:#b45309">لم يُرفع ملف الواجهة بعد (مجلد app داخل الإضافة).</strong><?php endif; ?></p>
 
-            <?php if (class_exists('Mutqan_Trainer')): $tr = Mutqan_Trainer::status(); $res = (array) $tr['results']; $okN = count(array_filter($res, function ($r) { return !empty($r['pass']); })); ?>
-            <div style="border:1px solid #f0c36d;background:#fff8e5;border-radius:8px;padding:12px 16px;margin:12px 0">
-                <strong>عقل Claude والتدريب اليومي</strong> — من <?php echo esc_html($tr['start']); ?> لحد <?php echo esc_html($tr['end']); ?>.
-                <?php echo !$tr['here'] ? 'التدريب بيشتغل على الموقع الرئيسي oxygen11.com.' : ($tr['day'] ? esc_html('آخر تدريب (' . $tr['day'] . '): نجح ' . $okN . ' من ' . count($res) . '.') : 'أول تدريب الليلة (١–٧ الفجر بتوقيت مكة).'); ?>
-                <?php if (count($tr['lessons'])): ?> <strong style="color:#b45309"><?php echo (int) count($tr['lessons']); ?> رد مستني موافقتك.</strong><?php endif; ?>
-                <br><a href="<?php echo esc_url($app . '#/staff/ai-trainer'); ?>" target="_blank" rel="noopener">التدريب والردود المقترحة</a>
-                · <a href="<?php echo esc_url($tr['brainUrl']); ?>" target="_blank" rel="noopener">افتح عقل Claude (اشتراكك)</a>
-            </div>
-            <?php endif; ?>
 
             <h2>١) حساب المالك</h2>
             <?php if ($owner): ?>

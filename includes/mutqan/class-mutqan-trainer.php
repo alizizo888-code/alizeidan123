@@ -312,7 +312,11 @@ final class Mutqan_Trainer {
             foreach (array_slice($bad, 0, 3, true) as $id => $r) { $lines[] = (strpos($id, 'real:') === 0 ? 'رسالة حقيقية' : $id) . ($r['issue'] !== '' ? ' — ' . $r['issue'] : ''); }
             $body .= ' يحتاج تحسين: ' . implode('؛ ', $lines) . '. الردود الأفضل مستنية موافقتك في «تدريب المساعد».';
         }
-        Mutqan_Store::insert('_push', ['target' => ['role' => 'owner'], 'title' => '🎓 تقرير تدريب المساعد', 'body' => mb_substr($body, 0, 480), 'url' => '#/staff/ai-trainer', 'sound' => 'chime', 'event' => 'trainer_report', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 3 * 86400)], self::sys());
+        // Quiet unless there is something for the owner to decide (owner, 2026-11-20: no test reports, just learning).
+        $waiting = count(array_filter(Mutqan_Store::select('wa_bot', ['feature' => 'trainer'], ['limit' => 60], self::sys()), function ($r) { return ($r['status'] ?? '') === 'pending'; }));
+        if ($waiting === 0) { return; }
+        $body = "المساعد اتعلّم {$waiting} رد أحسن من محادثات الليلة — راجعهم واعتمدهم من «ذاكرة المساعد وتطوره» أو قول للمساعد «اعتمد الردود الجديدة».";
+        Mutqan_Store::insert('_push', ['target' => ['role' => 'owner'], 'title' => '🧠 ردود جديدة اتعلمها المساعد', 'body' => mb_substr($body, 0, 480), 'url' => '#/staff/ai-trainer', 'sound' => 'chime', 'event' => 'trainer_report', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 3 * 86400)], self::sys());
     }
 
     /* ------------------------------------------------------------------ the owner's page (/trainer) */
