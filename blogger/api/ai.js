@@ -3,6 +3,8 @@
 //   1. Google Gemini      GEMINI_API_KEY      (model: GEMINI_MODEL, else the newest flash model from the live list)
 //   2. Groq               GROQ_API_KEY        (model: GROQ_MODEL, else the best one from the live list)
 //   3. OpenRouter         OPENROUTER_API_KEY  (model: OPENROUTER_MODEL, default meta-llama/llama-3.3-70b-instruct:free)
+//   4. Mistral            MISTRAL_API_KEY     (model: MISTRAL_MODEL, default mistral-small-latest)
+// Every *_API_KEY may hold several keys separated by commas (two Groq accounts = twice the daily tokens).
 // With no key at all, enrich() returns null and the article is published as built by the generator (nothing breaks).
 // The model only writes 3 extra sections as JSON; the HTML is built here, escaped, and checked:
 // no prices, phone numbers, ratings, licences, years of experience or invented customer stories are accepted.
@@ -56,6 +58,8 @@ const PROVIDERS = [
     return ((j.candidates || [])[0] || {}).content?.parts?.map((p) => p.text).join('') || ''
   } },
   { name: 'openrouter', key: 'OPENROUTER_API_KEY', ask: (prompt, key) => openaiLike('https://openrouter.ai/api/v1/chat/completions', key, process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free', prompt) },
+  // 4th free source (2026-11-20): Mistral's free «Experiment» plan — only used when MISTRAL_API_KEY exists.
+  { name: 'mistral', key: 'MISTRAL_API_KEY', ask: (prompt, key) => openaiLike('https://api.mistral.ai/v1/chat/completions', key, process.env.MISTRAL_MODEL || 'mistral-small-latest', prompt) },
 ]
 async function openaiLike(url, key, model, prompt, strict = true) {
   const r = await fetch(url, {

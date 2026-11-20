@@ -35,7 +35,7 @@ ask() { # ask NAME secret(1/0)
   sed -i "/^$1=/d" "$ENV"; [ -n "$v" ] && echo "$1=$v" >> "$ENV"
   return 0
 }
-for k in GITHUB_TOKEN BLOGGER_CLIENT_ID BLOGGER_CLIENT_SECRET BLOGGER_REFRESH_TOKEN GEMINI_API_KEY GROQ_API_KEY OPENROUTER_API_KEY; do ask "$k"; done
+for k in GITHUB_TOKEN BLOGGER_CLIENT_ID BLOGGER_CLIENT_SECRET BLOGGER_REFRESH_TOKEN GEMINI_API_KEY GROQ_API_KEY OPENROUTER_API_KEY MISTRAL_API_KEY; do ask "$k"; done
 set -a; . "$ENV"; set +a
 [ -n "${GITHUB_TOKEN:-}" ] || { echo "GITHUB_TOKEN is required"; exit 1; }
 
