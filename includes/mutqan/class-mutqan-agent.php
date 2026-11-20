@@ -28,7 +28,7 @@ final class Mutqan_Agent {
 
     public static function handle($in, $p) {
         Mutqan_Auth::require_user($p);
-        if (!in_array($p['role'] ?? '', ['owner', 'operations'], true)) { throw new Mutqan_Error('forbidden', 'مساعد التحكم للمالك ومشرف العمليات فقط.', 403); }
+        if (!in_array($p['role'] ?? '', ['owner', 'operations', 'technician'], true)) { throw new Mutqan_Error('forbidden', 'المساعد للفريق بس (المالك والعمليات والفنيين).', 403); }
         if (!empty($in['confirm'])) { return self::confirm((string) $in['confirm'], $p); }
         if (!empty($in['cancel'])) { delete_transient('mq_agent_' . preg_replace('/[^a-z0-9]/', '', (string) $in['cancel'])); return ['text' => 'اتلغى الأمر.']; }
         if (isset($in['points'])) { return self::points($in['points'], $p); }
@@ -36,7 +36,7 @@ final class Mutqan_Agent {
         if (!$msgs) { throw new Mutqan_Error('empty_prompt', 'اكتب طلبك.', 400); }
         // 1) The internal engine: the usual commands run at once, no model, no limit, no points.
         $last = end($msgs)['content'] ?? '';
-        if (is_string($last) && class_exists('Mutqan_Quick')) { $q = Mutqan_Quick::try_run($last, $p, 'agent'); if ($q) { return $q; } }
+        if (is_string($last) && class_exists('Mutqan_Quick') && ($p['role'] ?? '') !== 'technician') { $q = Mutqan_Quick::try_run($last, $p, 'agent'); if ($q) { return $q; } }
         // 2) Claude (paid, from the points wallet), then 3) the free chain. A failure never reaches the owner as a bare error.
         $why = '';
         if (Mutqan_AI::anthropic_key() !== '' && (!class_exists('Mutqan_Points') || Mutqan_Points::available())) {
@@ -77,13 +77,13 @@ final class Mutqan_Agent {
     private static function free_turn($msgs, $p) {
         if (!Mutqan_AI::any_enabled()) { return self::offline_reply(); }
         $last = ''; foreach (array_reverse($msgs) as $m) { if ($m['role'] === 'user') { $last = $m['content']; break; } }
-        $list = implode("\n", array_map(function ($t) { return '- ' . $t['name'] . ': ' . $t['description'] . ' مدخلات: ' . implode(',', array_keys((array) $t['input_schema']['properties'])); }, self::tools()));
+        $list = implode("\n", array_map(function ($t) { return '- ' . $t['name'] . ': ' . $t['description'] . ' مدخلات: ' . implode(',', array_keys((array) $t['input_schema']['properties'])); }, self::tools_for($p)));
         $prompt = "أنت مساعد تحكم لشركة صيانة. اختار أداة واحدة من القائمة تنفذ طلب المستخدم، أو لا أداة لو مجرد كلام.\nالأدوات:\n$list\n\nطلب المستخدم: $last\n\nرد بـ JSON فقط بالشكل {\"tool\":\"اسم الأداة أو none\",\"input\":{...},\"reply\":\"رد قصير بالعامية المصرية لو مفيش أداة\"}";
         $prompt = self::system($p) . "\n\n" . $prompt;
         $r = Mutqan_AI::run($prompt, ['json' => true, 'temperature' => 0.1, 'tier' => 'low', 'budget' => 18], $p);
         $j = is_array($r['json'] ?? null) ? $r['json'] : [];
         $tool = (string) ($j['tool'] ?? 'none'); $input = is_array($j['input'] ?? null) ? $j['input'] : [];
-        if ($tool === 'none' || !in_array($tool, array_column(self::tools(), 'name'), true)) { return ['text' => (string) ($j['reply'] ?? ($r['text'] ?? '')), 'steps' => [], 'pending' => null]; }
+        if ($tool === 'none' || !in_array($tool, array_column(self::tools_for($p), 'name'), true)) { return ['text' => (string) ($j['reply'] ?? ($r['text'] ?? '')), 'steps' => [], 'pending' => null]; }
         if (self::needs_confirm($tool, $input)) { $pend = self::park($tool, $input, $p); return ['text' => 'جاهز — راجع وأكّد.', 'steps' => [['tool' => $tool, 'status' => 'pending']], 'pending' => $pend]; }
         try { $out = self::run_tool($tool, $input, $p); self::audit($tool, $input, true, $p); }
         catch (Throwable $e) { self::audit($tool, $input, false, $p); return ['text' => 'ما اتنفذش: ' . $e->getMessage(), 'steps' => [['tool' => $tool, 'status' => 'error']], 'pending' => null]; }
@@ -118,12 +118,16 @@ final class Mutqan_Agent {
     }
 
     private static function system($p) {
+        if (($p['role'] ?? '') === 'technician') {
+            return Mutqan_Command::role_brief($p) . "\nاتكلم بالعربية المصرية المختصرة. التاريخ الآن " . wp_date('Y-m-d H:i') . ' بتوقيت السعودية.';
+        }
         $who = ($p['role'] ?? '') === 'owner' ? 'المالك' : 'مشرف العمليات';
         return "أنت «المستشار الذكي» لشركة أكسجين/أكسجين للصيانة والمقاولات العامة (مكة وجدة): العقل اللي ماسك المواقع والمحادثات والطلبات والأزمات والتعديلات والتعليمات. تتكلم مع {$who} بالعربية المصرية المختصرة وبثقة.\n"
             . "## الوضع دلوقتي\n" . self::situation() . "\n"
             . "## طريقتك\n- ابدأ بالأهم: أي أزمة (عميل زعلان، طلب متأخر، فني مش بيرد، خط واتساب واقع، موقع واقف) قولها أول سطر ومعاها الحل المقترح.\n- لو الطلب محتاج كذا خطوة اعملها بالأدوات واحدة ورا التانية، واختم بملخص: اتعمل إيه، فاضل إيه، وإيه اللي محتاج قرارك.\n- أي تعليمة دائمة من المالك (أسعار، مواعيد، أسلوب كلام، قواعد توزيع) خزنها بالأداة المناسبة عشان تتطبق على طول.\n"
             . "شغلك فقط على أنظمة الشركة عبر الأدوات المتاحة: الطلبات، الواتساب، موقع ووردبريس، DNS نطاق oxygen11.com على هوستنجر، ومدونات الشبكة على بلوجر (قراءة).\n"
             . "وأنت كمان مدرّب «العقل التجاري» اللي بيفاصل العملاء: لما المالك يشرح أسعار أو قواعد مواعيد (مثلاً: جدة أيام الأحد والثلاثاء، بعد 3 طلبات قرّب المواعيد، أقصى خصم 10%) حوّل كلامه لـ sales_brain_set، ولما يدّي توجيه في أسلوب الكلام استخدم sales_teach. اقرأ sales_brain_get قبل أي تعديل، وجرّب بـ sales_simulate لو طلب يشوف البوت هيرد إزاي.\n"
+            . Mutqan_Command::role_brief($p) . "\n"
             . "لا تعد بتنفيذ شيء خارج هذه الأدوات، وارفض أي طلب لا يخص الشركة. قبل أي تعديل اقرأ الحالة الحالية بأداة قراءة.\n"
             . "الأدوات المعلَّمة (تحتاج تأكيد) لا تُنفَّذ فورًا: تُعرض على المستخدم ليضغط تنفيذ؛ لا تقل إنها تمت.\n"
             . 'التاريخ الآن ' . wp_date('Y-m-d H:i') . ' بتوقيت السعودية.';
@@ -131,7 +135,14 @@ final class Mutqan_Agent {
 
     /* ------------------------------------------------------------------ tool list */
 
-    public static function tools() {
+    /** The tools this person may use: the owner everything, operations the day-to-day, a technician his own jobs. */
+    public static function tools_for($p) {
+        return array_values(array_filter(self::tools(), function ($t) use ($p) { return Mutqan_Command::allowed($t['name'], $p); }));
+    }
+
+    public static function tools() { return array_merge(self::base_tools(), class_exists('Mutqan_Command') ? Mutqan_Command::tools() : []); }
+
+    private static function base_tools() {
         $s = function ($props, $req = []) { return ['type' => 'object', 'properties' => (object) $props, 'required' => $req]; };
         $str = ['type' => 'string']; $int = ['type' => 'integer'];
         return [
@@ -178,6 +189,7 @@ final class Mutqan_Agent {
 
     /** Which calls wait for the owner's "تنفيذ" (policy: confirm what matters only). */
     public static function needs_confirm($name, $input) {
+        if (class_exists('Mutqan_Command') && Mutqan_Command::needs_confirm($name, (array) $input)) { return true; }
         if (in_array($name, ['wa_send', 'dns_set', 'settings_set', 'ai_engine_set', 'tech_create', 'tech_update', 'expense_add', 'sales_brain_set'], true)) { return true; }
         if ($name === 'wp_update') {
             $post = get_post((int) ($input['id'] ?? 0));
@@ -195,7 +207,7 @@ final class Mutqan_Agent {
         $t0 = microtime(true);
         for ($i = 0; $i < self::MAX_STEPS; $i++) {
             if ($i > 0 && microtime(true) - $t0 > 60) { $text .= ($text !== '' ? "\n" : '') . '⏱ وقفت هنا عشان ما أطوّلش عليك — قولّي «كمّل» وأكمّل من نفس النقطة.'; break; }
-            list($code, $data, $raw) = Mutqan_AI::anthropic_request(['model' => $model, 'max_tokens' => 2500, 'system' => self::system($p), 'tools' => self::tools(), 'messages' => $msgs]);
+            list($code, $data, $raw) = Mutqan_AI::anthropic_request(['model' => $model, 'max_tokens' => 2500, 'system' => self::system($p), 'tools' => self::tools_for($p), 'messages' => $msgs]);
             if ($code < 200 || $code >= 300 || !isset($data['content'])) {
                 error_log('[mutqan] agent ' . $code . ' ' . substr((string) $raw, 0, 300));
                 throw new Mutqan_Error('ai_unavailable', 'المساعد مش متاح دلوقتي (' . $code . ').', 503);
@@ -222,7 +234,7 @@ final class Mutqan_Agent {
             if (($data['stop_reason'] ?? '') !== 'tool_use' || $pending) {
                 if ($pending && $results) {           // let the model phrase the request for confirmation
                     $msgs[] = ['role' => 'user', 'content' => $results];
-                    list($c2, $d2) = Mutqan_AI::anthropic_request(['model' => $model, 'max_tokens' => 600, 'system' => self::system($p), 'tools' => self::tools(), 'messages' => $msgs]);
+                    list($c2, $d2) = Mutqan_AI::anthropic_request(['model' => $model, 'max_tokens' => 600, 'system' => self::system($p), 'tools' => self::tools_for($p), 'messages' => $msgs]);
                     if ($c2 >= 200 && $c2 < 300) { foreach ((array) ($d2['content'] ?? []) as $b) { if (($b['type'] ?? '') === 'text') { $text .= "\n" . $b['text']; } } }
                 }
                 break;
@@ -276,6 +288,10 @@ final class Mutqan_Agent {
     /* ------------------------------------------------------------------ tools (all scoped to the business) */
 
     public static function run_tool($name, $in, $p) {
+        if (class_exists('Mutqan_Command')) {
+            if (!Mutqan_Command::allowed($name, $p)) { throw new Exception('الأمر ده مش من صلاحياتك.'); }
+            if (in_array($name, Mutqan_Command::names(), true)) { return Mutqan_Command::run($name, (array) $in, $p); }
+        }
         switch ($name) {
             case 'sales_brain_get':
                 return ['settings' => Mutqan_Sales::settings(), 'today' => Mutqan_Sales::day_plan(), 'insights' => Mutqan_Sales::insights(30), 'playbook' => Mutqan_Playbook::stats()];
