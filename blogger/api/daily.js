@@ -53,8 +53,10 @@ async function publish(nArg) {
   day.target = total
   // Blogger's daily quota comes back at midnight Pacific (08:00 UTC = 11:00 Makkah), not at midnight Makkah:
   // a block only holds until then, so the rest of the Makkah day is not lost (2026-11-20 audit).
-  if (day.blocked && day.blockedUntil && Date.now() >= Date.parse(day.blockedUntil)) { day.blocked = false; delete day.blockedUntil }
-  if (day.blocked) { console.log('Blogger blocked; resuming after ' + (day.blockedUntil || 'tomorrow')); return save() }
+  // A Blogger 429 is not a whole-day verdict: on 2026-11-20 the quota came back at 15:18 UTC while the old rule kept
+  // articles off until midnight. Each hourly run now tries again; if Blogger still refuses, the first insert 429s and the
+  // run stops after that one call. Pages answering again (loop.sh runs them first) is the sign it is back.
+  if (day.blocked) { console.log('Blogger refused earlier today — trying again this hour'); day.blocked = false; delete day.blockedUntil }
   if (!live.length) return console.log('no live blogs')
   const runsLeft = Math.max(1, RUN_HOURS.filter((h) => h >= hourRiyadh).length)
   const left = Math.max(0, total - day.n)
@@ -126,8 +128,6 @@ async function publish(nArg) {
       errors.push(x.id + ': ' + e.message)
       if (e.status === 403 || e.status === 429) {
         day.blocked = true; R.last_block = today; R.after_block = Math.max(R.base, total - R.step)
-        const u = new Date(); u.setUTCHours(8, 5, 0, 0); if (u.getTime() <= Date.now()) u.setUTCDate(u.getUTCDate() + 1)
-        day.blockedUntil = u.toISOString()
         break
       }
     }
