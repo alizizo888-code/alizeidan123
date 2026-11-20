@@ -75,8 +75,96 @@ final class Mutqan_Coach {
             case 'ticket_update': return self::ticket_update((string) ($in['id'] ?? ''), $in);
             case 'test_bot': return self::test_bot((string) ($in['text'] ?? ''));
             case 'vps_enroll': return self::vps_enroll();
+            case 'brief': return self::brief();
+            case 'apply': return self::apply($in);
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة: ' . $op, 400);
+    }
+
+
+    /* ------------------------------------------------------------------ «عقل Claude» (owner, 2026-11-20) */
+
+    /**
+     * Everything Claude on the owner's subscription needs to study the business, in ONE call (the WordPress connector
+     * has a daily call allowance, so the page reads once and writes once): last nights' practice, what the bot could not
+     * answer, answers waiting for approval, the house rules with the price sheet, the standing instructions, the FAQ
+     * titles, a short picture of operations and recent customer messages (masked).
+     */
+    public static function brief() {
+        $tr = class_exists('Mutqan_Trainer') ? Mutqan_Trainer::status() : null;
+        $runs = [];
+        foreach ((array) ($tr['runs'] ?? []) as $r) {
+            if (($r['kind'] ?? '') === 'drill') { continue; }
+            $runs[] = ['scenario' => $r['scenario'] ?? '', 'pass' => !empty($r['pass']), 'score' => (int) ($r['score'] ?? 0), 'issues' => array_slice((array) ($r['issues'] ?? []), 0, 4), 'transcript' => array_slice((array) ($r['transcript'] ?? []), 0, 10), 'day' => $r['day'] ?? ''];
+            if (count($runs) >= 14) { break; }
+        }
+        $st = self::state();
+        $ai = self::ai_doc();
+        global $wpdb;
+        $t = Mutqan_Store::table('docs');
+        $recent = [];
+        foreach ((array) $wpdb->get_col($wpdb->prepare("SELECT data FROM $t WHERE coll IN ('ai_messages','wa_msgs') AND created_at > %s ORDER BY created_at DESC LIMIT 120", gmdate('Y-m-d H:i:s', time() - 14 * 86400))) as $raw) {
+            $d = json_decode((string) $raw, true);
+            if (!is_array($d)) { continue; }
+            $txt = trim((string) ($d['text'] ?? $d['content'] ?? $d['body'] ?? ''));
+            if ($txt === '' || mb_strlen($txt) > 400) { continue; }
+            $who = (string) ($d['role'] ?? $d['from'] ?? $d['direction'] ?? '');
+            $recent[] = (in_array($who, ['user', 'customer', 'in', 'incoming'], true) ? 'عميل: ' : 'نحن: ') . Mutqan_AI::mask($txt);
+            if (count($recent) >= 40) { break; }
+        }
+        return [
+            'at' => gmdate('c'),
+            'rules' => class_exists('Mutqan_AI') ? Mutqan_AI::house_rules() : '',
+            'notes' => array_column($st['notes'], 'text'),
+            'faq' => array_map(function ($f) { return mb_substr((string) ($f['q'] ?? ''), 0, 140); }, array_slice((array) ($ai['faq'] ?? []), 0, 120)),
+            'misses' => array_map(function ($m) { return ['q' => $m['q'], 'count' => $m['count']]; }, array_slice($st['misses'], 0, 20)),
+            'pending' => array_map(function ($l) { return ['id' => $l['id'], 'q' => $l['q'], 'a' => $l['a']]; }, array_slice($st['learned'], 0, 20)),
+            'trainer' => $tr ? ['day' => $tr['day'], 'results' => $tr['results'], 'stats' => $tr['stats'], 'end' => $tr['end'], 'lessons' => array_slice((array) $tr['lessons'], 0, 20)] : null,
+            'runs' => $runs,
+            'recent' => array_reverse($recent),
+            'overview' => $st['overview'],
+            'extraScenarios' => array_values((array) get_option('mutqan_trainer_extra', [])),
+        ];
+    }
+
+    /**
+     * What the owner approved from Claude's study, written in ONE call: answers into the FAQ every channel reads,
+     * standing instructions, approve/reject of waiting answers, and new practice scenarios for the nightly trainer.
+     */
+    public static function apply($in) {
+        $done = ['faq' => 0, 'notes' => 0, 'approved' => 0, 'rejected' => 0, 'scenarios' => 0];
+        foreach (array_slice((array) ($in['faq'] ?? []), 0, 30) as $f) {
+            if (trim((string) ($f['q'] ?? '')) === '' || trim((string) ($f['a'] ?? '')) === '') { continue; }
+            self::faq_save(null, ['q' => $f['q'], 'a' => $f['a'], 'cat' => 'Claude', 'keywords' => (string) ($f['keywords'] ?? '')]); $done['faq']++;
+        }
+        foreach (array_slice((array) ($in['notes'] ?? []), 0, 10) as $n) {
+            $n = trim((string) $n);
+            if ($n === '') { continue; }
+            Mutqan_Sales::save(['note' => mb_substr($n, 0, 400)]); self::audit('note_add', $n); $done['notes']++;
+        }
+        foreach (array_slice((array) ($in['decide'] ?? []), 0, 40) as $d) {
+            $id = (string) ($d['id'] ?? ''); $ok = !empty($d['approve']);
+            if ($id === '') { continue; }
+            $r = Mutqan_Store::get_raw('wa_bot', $id);
+            if (!$r) { continue; }
+            if (($r['feature'] ?? '') === 'trainer' && class_exists('Mutqan_Trainer')) { Mutqan_Trainer::handle(['op' => 'lesson', 'id' => $id, 'decision' => $ok ? 'approved' : 'rejected', 'a' => (string) ($d['a'] ?? '')], self::owner()); }
+            else { self::learned($id, $ok ? 'approved' : 'rejected', ['a' => (string) ($d['a'] ?? ''), 'to_faq' => $ok]); }
+            $done[$ok ? 'approved' : 'rejected']++;
+        }
+        $extra = array_values((array) get_option('mutqan_trainer_extra', []));
+        foreach (array_slice((array) ($in['scenarios'] ?? []), 0, 10) as $sc) {
+            $turns = array_values(array_filter(array_map(function ($x) { return mb_substr(trim((string) $x), 0, 300); }, (array) ($sc['turns'] ?? [])), 'strlen'));
+            $expect = mb_substr(trim((string) ($sc['expect'] ?? '')), 0, 400);
+            if (!$turns || $expect === '') { continue; }
+            $extra[] = ['id' => 'cl-' . substr(md5(implode('|', $turns)), 0, 8), 'kind' => in_array($sc['kind'] ?? '', ['chat', 'lead'], true) ? $sc['kind'] : 'chat', 'turns' => array_slice($turns, 0, 5), 'expect' => $expect, 'after' => !empty($sc['after'])];
+            $done['scenarios']++;
+        }
+        if ($done['scenarios']) {
+            $seen = []; $extra = array_values(array_filter($extra, function ($x) use (&$seen) { if (isset($seen[$x['id']])) { return false; } $seen[$x['id']] = 1; return true; }));
+            update_option('mutqan_trainer_extra', array_slice($extra, -40), false);
+        }
+        self::audit('claude_apply', wp_json_encode($done));
+        return $done;
     }
 
     /* ------------------------------------------------------------------ what the artifact shows */
