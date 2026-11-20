@@ -23,20 +23,20 @@ final class Mutqan_Command {
 
     /* ------------------------------------------------------------------ who may use which tool */
 
-    const OWNER_ONLY = ['prices_adjust', 'prices_revert', 'tech_role', 'sales_brain_set', 'dns_set', 'ai_engine_set', 'settings_set', 'wp_update', 'tech_create'];
+    const OWNER_ONLY = ['orders_delete', 'prices_adjust', 'prices_revert', 'tech_role', 'sales_brain_set', 'dns_set', 'ai_engine_set', 'settings_set', 'wp_update', 'tech_create'];
     const TECH_TOOLS = ['my_jobs', 'job_status', 'job_problem'];
     const STAFF_ONLY = ['my_jobs', 'job_status', 'job_problem'];   // the technician's own tools: no use to the office
 
     public static function allowed($name, $p) {
         $r = self::role($p);
         if ($r === 'owner') { return !in_array($name, self::STAFF_ONLY, true); }
-        if ($r === 'operations') { return !in_array($name, self::OWNER_ONLY, true) && !in_array($name, self::STAFF_ONLY, true); }
+        if ($r === 'operations' || $r === 'supervisor') { return !in_array($name, self::OWNER_ONLY, true) && !in_array($name, self::STAFF_ONLY, true); }
         if ($r === 'technician') { return in_array($name, self::TECH_TOOLS, true); }
         return false;
     }
 
     public static function needs_confirm($name, $in) {
-        if (in_array($name, ['prices_adjust', 'prices_revert', 'tech_role'], true)) { return true; }
+        if (in_array($name, ['prices_adjust', 'prices_revert', 'tech_role', 'orders_delete'], true)) { return true; }
         if ($name === 'tech_account' && ($in['action'] ?? '') === 'suspend') { return true; }
         if ($name === 'intake_set' && ($in['mode'] ?? '') === 'paused') { return true; }
         return false;
@@ -57,6 +57,10 @@ final class Mutqan_Command {
             ['name' => 'tech_role', 'description' => 'تغيير صلاحية عضو في الفريق: role = technician أو operations. للمالك بس، ويحتاج تأكيد.', 'input_schema' => $s(['techId' => $str, 'role' => ['type' => 'string', 'enum' => ['technician', 'operations']]], ['techId', 'role'])],
             ['name' => 'order_hold', 'description' => 'التحكم في شغل طلب: action = hold (وقّف الشغل عليه وبلّغ الفني) أو resume (رجّعه) أو unassign (اسحبه من الفني ويرجع جديد) أو tomorrow (أجّله لبكره الصبح وبلّغ الفني والعميل). reason سبب قصير.', 'input_schema' => $s(['id' => $str, 'action' => ['type' => 'string', 'enum' => ['hold', 'resume', 'unassign', 'tomorrow']], 'reason' => $str], ['id', 'action'])],
             ['name' => 'customer_notify', 'description' => 'رسالة للعميل على صفحة طلبه + إشعار على موبايله (لو عنده التطبيق): orderId، text. (للواتساب استخدم wa_send).', 'input_schema' => $s(['orderId' => $str, 'text' => $str], ['orderId', 'text'])],
+            ['name' => 'find', 'description' => 'بحث في كل حاجة ورجّع روابط تفتحها على طول: طلب (برقمه أو اسم العميل أو جواله أو الحي أو الخدمة)، خدمة وسعرها من الجدول، صفحة في النظام (الأسعار، الخريطة، غرفة العمليات…)، أو أمر. q = كلمة البحث.', 'input_schema' => $s(['q' => $str], ['q'])],
+            ['name' => 'order_open', 'description' => 'هات طلب معيّن برقمه (أو آخر أرقام الـ id) مع رابط يفتحه: ref.', 'input_schema' => $s(['ref' => $str], ['ref'])],
+            ['name' => 'orders_delete', 'description' => 'مسح طلبات نهائيًا (للمالك بس، ويحتاج تأكيد): numbers = أرقام الطلبات، أو filter = cancelled (الملغية) أو test (التجريبية) أو all (كله).', 'input_schema' => $s(['numbers' => ['type' => 'array', 'items' => $str], 'filter' => ['type' => 'string', 'enum' => ['cancelled', 'test', 'all']]])],
+            ['name' => 'cache_clear', 'description' => 'امسح الكاش: all = true لكل المواقع (المركز + الشبكة)، وإلا الموقع الحالي بس.', 'input_schema' => $s(['all' => ['type' => 'boolean']])],
             ['name' => 'my_jobs', 'description' => 'شغلي: الطلبات المسندة ليا اللي لسه مفتوحة، بالعنوان والخدمة والموعد.', 'input_schema' => $s([])],
             ['name' => 'job_status', 'description' => 'حرّك طلب من طلباتي: status = en_route (في الطريق) أو arrived (وصلت) أو in_progress (بشتغل) أو completed (خلصت، ومعاها report وprice لو فيه).', 'input_schema' => $s(['id' => $str, 'status' => ['type' => 'string', 'enum' => ['en_route', 'arrived', 'in_progress', 'completed']], 'report' => $str, 'price' => ['type' => 'number']], ['id', 'status'])],
             ['name' => 'job_problem', 'description' => 'بلّغ العمليات بمشكلة في طلب من طلباتي (قطعة ناقصة، العميل مش موجود، العطل أكبر): id، text. بيوصلهم إشعار فوري.', 'input_schema' => $s(['id' => $str, 'text' => $str], ['id', 'text'])],
@@ -156,6 +160,20 @@ final class Mutqan_Command {
             case 'intake_get':
                 return ['intake' => self::intake(), 'prices' => array_intersect_key(Mutqan_Policy::ac_table(), array_flip(array_merge(self::PRICE_KEYS, ['maxDiscountPct']))), 'priceChangedAt' => (get_option(self::PRICE_BACKUP, [])['at'] ?? null)];
             case 'intake_set': return self::intake_set($in);
+            case 'find': return self::find((string) ($in['q'] ?? ''));
+            case 'order_open': {
+                $o = self::resolve_order((string) ($in['ref'] ?? ''));
+                if (!$o) { throw new Exception('ملقتش طلب بالرقم ده.'); }
+                $l = self::order_link($o);
+                return ['order' => ['id' => $o['id'], 'number' => $o['number'] ?? '', 'status' => $o['status'] ?? '', 'client' => $o['clientName'] ?? '', 'phone' => $o['clientPhone'] ?? '', 'service' => class_exists('Mutqan_Rest') ? Mutqan_Rest::spec_label($o['specialtyId'] ?? '') : '', 'technician' => $o['technicianName'] ?? '', 'address' => $o['address'] ?? '', 'price' => $o['price'] ?? null], 'links' => [$l]];
+            }
+            case 'orders_delete': return self::orders_delete($in, $p);
+            case 'cache_clear': {
+                if (!class_exists('Oxygen_Network')) { throw new Exception('مسح الكاش مش متاح هنا.'); }
+                if (!empty($in['all']) && Oxygen_Network::is_hub()) { $r = Oxygen_Network::purge_network(); return ['text' => 'اتمسح الكاش في المركز، واتبعت أمر المسح لـ ' . max(0, (int) $r['count'] - 1) . ' موقع تاني.']; }
+                $done = Oxygen_Network::purge_local();
+                return ['text' => 'اتمسح كاش الموقع ده' . ($done ? ' (' . implode('، ', $done) . ')' : '') . '.'];
+            }
             case 'prices_adjust': return self::prices_adjust($in, $p);
             case 'prices_revert': return self::prices_revert();
 
@@ -269,6 +287,146 @@ final class Mutqan_Command {
             }
         }
         throw new Exception('أداة غير معروفة.');
+    }
+
+
+    /* ------------------------------------------------------------------ find / open / delete / cache */
+
+    const PAGES = [
+        ['/staff/operations', 'غرفة العمليات', 'العمليات غرفه التشغيل'],
+        ['/staff/orders-board', 'لوحة الطلبات', 'لوحه الطلبات كل الطلبات تصدير'],
+        ['/staff/map', 'الخريطة الميدانية', 'الخريطه الخريطة الفنيين علي الخريطه'],
+        ['/staff/pricing', 'التسعير والخصومات', 'الاسعار الأسعار التسعير الخصومات الخصم'],
+        ['/staff/ac', 'أسعار وخدمات التكييف', 'المكيفات التكييف غسيل'],
+        ['/staff/reports', 'التقارير', 'تقارير التقرير الإيرادات الايراد'],
+        ['/staff/wa-hub', 'مركز الواتساب', 'واتساب الواتساب الرسايل'],
+        ['/staff/tech-requests', 'طلبات الفنيين', 'طلبات انضمام فنيين جدد'],
+        ['/staff/warranties', 'الضمانات', 'ضمان الضمانات'],
+        ['/staff/inventory', 'المخزون', 'مخزن المخزون قطع غيار'],
+        ['/staff/accounts', 'الحسابات', 'حسابات العهده المصاريف'],
+        ['/staff/payment-methods', 'طرق الدفع', 'الدفع تحويل بنك'],
+        ['/staff/ai-settings', 'إعدادات البوت', 'البوت الذكاء الاصطناعي اعدادات المساعد'],
+        ['/staff/sales-brain', 'العقل التجاري', 'الفصال العقل التجاري المبيعات'],
+        ['/staff/admin', 'الإدارة الشاملة', 'الاعدادات الإعدادات الاداره'],
+        ['/staff/network', 'شبكة المواقع', 'المواقع الشبكه الدومينات'],
+        ['/staff/apps', 'التطبيقات والأجهزة', 'التطبيقات الابلكيشن apk'],
+        ['/staff/schedule', 'المواعيد', 'المواعيد الجدول الحجز'],
+        ['/staff/business', 'بيانات الشركة', 'بيانات الشركه الاسم الشعار'],
+        ['/staff/security', 'الأمان', 'الامان كلمه السر'],
+        ['/staff/wp', 'ووردبريس', 'ووردبريس المقالات الموقع'],
+        ['/staff/ops-manager', 'مدير العمليات', 'مدير العمليات'],
+        ['/staff/ai-trainer', 'ذاكرة المساعد وتطوره', 'ذاكره المساعد التعلم الردود المقترحه'],
+        ['/notifications', 'الإشعارات', 'الاشعارات التنبيهات'],
+    ];
+
+    private static function norm($t) { return class_exists('Mutqan_Quick') ? Mutqan_Quick::norm($t) : trim((string) $t); }
+
+    /** A reference the owner types (1024, #1024, the end of an id, a full id) → the order, or null. */
+    public static function resolve_order($ref) {
+        $ref = trim(Mutqan_Auth::fold_digits((string) $ref), " #\t");
+        if ($ref === '') { return null; }
+        $o = Mutqan_Store::get_raw('orders', $ref);
+        if ($o) { $o['id'] = $ref; return $o; }
+        foreach (Mutqan_Store::select('orders', [], ['limit' => 500, 'order' => '-createdAt'], self::sys()) as $x) {
+            if ((string) ($x['number'] ?? '') === $ref || ($ref !== '' && strlen($ref) >= 4 && substr((string) $x['id'], -strlen($ref)) === $ref)) { return $x; }
+        }
+        return null;
+    }
+
+    private static function order_link($o) {
+        $num = (string) ($o['number'] ?? '') ?: substr((string) $o['id'], -5);
+        $st = class_exists('Mutqan_Ops') ? (Mutqan_Ops::STATUS[$o['status'] ?? ''] ?? ($o['status'] ?? '')) : ($o['status'] ?? '');
+        return ['type' => 'order', 'label' => 'طلب #' . $num . ' — ' . trim((string) ($o['clientName'] ?? '')) . ' · ' . $st, 'href' => '#/staff/order/' . $o['id']];
+    }
+
+    public static function find($q) {
+        $q = trim((string) $q);
+        if ($q === '') { throw new Exception('اكتب كلمة البحث.'); }
+        $n = self::norm($q); $digits = preg_replace('/\D/', '', Mutqan_Auth::fold_digits($q));
+        $out = [];
+        // orders
+        foreach (Mutqan_Store::select('orders', [], ['limit' => 500, 'order' => '-createdAt'], self::sys()) as $o) {
+            $hay = self::norm(implode(' ', [$o['number'] ?? '', $o['clientName'] ?? '', $o['address'] ?? '', $o['technicianName'] ?? '', class_exists('Mutqan_Rest') ? Mutqan_Rest::spec_label($o['specialtyId'] ?? '') : '', $o['notes'] ?? '', $o['source'] ?? '']));
+            $ph = preg_replace('/\D/', '', (string) ($o['clientPhone'] ?? ''));
+            $hit = ($digits !== '' && strlen($digits) >= 3 && ((string) ($o['number'] ?? '') === $digits || ($ph !== '' && strpos($ph, $digits) !== false) || substr((string) $o['id'], -strlen($digits)) === $digits))
+                || (mb_strlen($n) >= 2 && mb_strpos($hay, $n) !== false);
+            if ($hit) { $out[] = self::order_link($o); }
+            if (count($out) >= 8) { break; }
+        }
+        // services and prices
+        if (class_exists('Mutqan_Rest')) {
+            foreach (Mutqan_Rest::SPEC_LABELS as $id => $label) {
+                if (mb_strlen($n) >= 2 && (mb_strpos(self::norm($label), $n) !== false || mb_strpos($n, self::norm($label)) !== false)) { $out[] = ['type' => 'service', 'label' => 'خدمة: ' . $label, 'href' => '#/staff/pricing']; }
+            }
+        }
+        if (class_exists('Mutqan_AI')) {
+            foreach (explode("\n", Mutqan_AI::price_sheet()) as $line) {
+                $ln = self::norm($line);
+                $words = array_filter(explode(' ', $n), function ($w) { return mb_strlen($w) >= 3 && !in_array($w, ['سعر', 'اسعار', 'بكام', 'تسعير', 'كام'], true); });
+                foreach ($words as $w) { if (mb_strpos($ln, $w) !== false) { $out[] = ['type' => 'price', 'label' => trim($line, "- \t"), 'href' => '#/staff/pricing']; break; } }
+            }
+        }
+        // pages
+        foreach (self::PAGES as $pg) {
+            $hay = self::norm($pg[1] . ' ' . $pg[2]);
+            foreach (array_filter(explode(' ', $n), function ($w) { return mb_strlen($w) >= 3; }) as $w) { if (mb_strpos($hay, $w) !== false) { $out[] = ['type' => 'page', 'label' => 'صفحة: ' . $pg[1], 'href' => '#' . $pg[0]]; break; } }
+        }
+        // commands
+        if (class_exists('Mutqan_Quick')) {
+            foreach (explode("\n", Mutqan_Quick::help()) as $line) { if (mb_strlen($n) >= 3 && mb_strpos(self::norm($line), $n) !== false) { $out[] = ['type' => 'command', 'label' => 'أمر: ' . trim($line, "• \t"), 'href' => '']; } }
+        }
+        $seen = []; $out = array_values(array_filter($out, function ($x) use (&$seen) { $k = $x['label'] . '|' . $x['href']; if (isset($seen[$k])) { return false; } $seen[$k] = 1; return true; }));
+        return ['q' => $q, 'count' => count($out), 'results' => array_slice($out, 0, 15)];
+    }
+
+    private static function orders_delete($in, $p) {
+        $ids = [];
+        foreach ((array) ($in['numbers'] ?? []) as $ref) { $o = self::resolve_order($ref); if ($o) { $ids[(string) $o['id']] = self::order_link($o)['label']; } }
+        $f = (string) ($in['filter'] ?? '');
+        if ($f !== '') {
+            foreach (Mutqan_Store::select('orders', [], ['limit' => 500, 'order' => '-createdAt'], self::sys()) as $o) {
+                $test = (bool) preg_match('/(تجرب|تجربة|اختبار|test)/iu', (string) ($o['clientName'] ?? '') . ' ' . (string) ($o['notes'] ?? '') . ' ' . (string) ($o['source'] ?? ''));
+                if ($f === 'all' || ($f === 'cancelled' && ($o['status'] ?? '') === 'cancelled') || ($f === 'test' && $test)) { $ids[(string) $o['id']] = self::order_link($o)['label']; }
+            }
+        }
+        if (!$ids) { throw new Exception('مفيش طلبات بالمواصفات دي.'); }
+        $r = Mutqan_Owner::handle(['op' => 'deleteOrders', 'ids' => array_keys($ids)], $p);
+        return ['deleted' => (int) ($r['deleted'] ?? 0), 'orders' => array_values($ids), 'links' => [['type' => 'page', 'label' => 'لوحة الطلبات', 'href' => '#/staff/orders-board']]];
+    }
+
+    /** Links for the chat: whatever a tool returned that has a page — orders, search results — becomes a tap. */
+    public static function links($tool, $out) {
+        $L = [];
+        $walk = function ($v, $depth) use (&$walk, &$L) {
+            if ($depth > 4 || count($L) >= 10 || !is_array($v)) { return; }
+            if (isset($v['href']) && is_string($v['href']) && $v['href'] !== '' && isset($v['label'])) { $L[] = ['label' => (string) $v['label'], 'href' => (string) $v['href']]; return; }
+            $id = (string) ($v['id'] ?? '');
+            if ($id !== '' && preg_match('/^[0-9a-f-]{36}$/i', $id) && (isset($v['status']) || isset($v['clientName']) || isset($v['specialtyId']))) {
+                $L[] = ['label' => 'طلب #' . (((string) ($v['number'] ?? '')) ?: substr($id, -5)) . (!empty($v['clientName']) ? ' — ' . $v['clientName'] : ''), 'href' => '#/staff/order/' . $id];
+                return;
+            }
+            foreach ($v as $x) { if (is_array($x)) { $walk($x, $depth + 1); } }
+        };
+        $walk($out, 0);
+        $seen = [];
+        return array_values(array_filter($L, function ($x) use (&$seen) { if (isset($seen[$x['href']])) { return false; } $seen[$x['href']] = 1; return true; }));
+    }
+
+    /** Plain words for the new tools when the internal engine runs them (no model). */
+    public static function say($tool, $o) {
+        if ($tool === 'find') {
+            if (empty($o['results'])) { return 'ملقتش حاجة عن «' . ($o['q'] ?? '') . '».'; }
+            return 'لقيت ' . (int) $o['count'] . ' نتيجة عن «' . $o['q'] . '» — اضغط على أي واحدة تفتحها:';
+        }
+        if ($tool === 'order_open') {
+            $x = (array) ($o['order'] ?? []);
+            $st = class_exists('Mutqan_Ops') ? (Mutqan_Ops::STATUS[$x['status'] ?? ''] ?? ($x['status'] ?? '')) : ($x['status'] ?? '');
+            $bits = array_filter(['طلب #' . ($x['number'] ?? ''), $x['client'] ?? '', $x['service'] ?? '', $st, !empty($x['technician']) ? 'الفني: ' . $x['technician'] : '', $x['address'] ?? '']);
+            return '✅ ' . implode(' · ', $bits) . "\nاضغط تحت تفتحه.";
+        }
+        if ($tool === 'orders_delete') { return '✅ اتمسح ' . (int) ($o['deleted'] ?? 0) . ' طلب نهائيًا.'; }
+        if ($tool === 'cache_clear') { return '✅ ' . ($o['text'] ?? 'اتمسح الكاش.'); }
+        return null;
     }
 
     /** How the assistant introduces itself to each role. */

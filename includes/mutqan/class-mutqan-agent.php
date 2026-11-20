@@ -28,7 +28,7 @@ final class Mutqan_Agent {
 
     public static function handle($in, $p) {
         Mutqan_Auth::require_user($p);
-        if (!in_array($p['role'] ?? '', ['owner', 'operations', 'technician'], true)) { throw new Mutqan_Error('forbidden', 'المساعد للفريق بس (المالك والعمليات والفنيين).', 403); }
+        if (!in_array($p['role'] ?? '', ['owner', 'operations', 'supervisor', 'technician'], true)) { throw new Mutqan_Error('forbidden', 'المساعد للفريق بس (المالك والعمليات والمشرف والفنيين).', 403); }
         if (!empty($in['confirm'])) { return self::confirm((string) $in['confirm'], $p); }
         if (!empty($in['cancel'])) { delete_transient('mq_agent_' . preg_replace('/[^a-z0-9]/', '', (string) $in['cancel'])); return ['text' => 'اتلغى الأمر.']; }
         if (isset($in['points'])) { return self::points($in['points'], $p); }
@@ -84,13 +84,17 @@ final class Mutqan_Agent {
         $j = is_array($r['json'] ?? null) ? $r['json'] : [];
         $tool = (string) ($j['tool'] ?? 'none'); $input = is_array($j['input'] ?? null) ? $j['input'] : [];
         if ($tool === 'none' || !in_array($tool, array_column(self::tools_for($p), 'name'), true)) { return ['text' => (string) ($j['reply'] ?? ($r['text'] ?? '')), 'steps' => [], 'pending' => null]; }
+        if (class_exists('Mutqan_Command') && !Mutqan_Command::allowed($tool, $p)) { return ['text' => 'الأمر ده مش من صلاحياتك.', 'steps' => [['tool' => $tool, 'status' => 'error']], 'pending' => null]; }
         if (self::needs_confirm($tool, $input)) { $pend = self::park($tool, $input, $p); return ['text' => 'جاهز — راجع وأكّد.', 'steps' => [['tool' => $tool, 'status' => 'pending']], 'pending' => $pend]; }
         try { $out = self::run_tool($tool, $input, $p); self::audit($tool, $input, true, $p); }
         catch (Throwable $e) { self::audit($tool, $input, false, $p); return ['text' => 'ما اتنفذش: ' . $e->getMessage(), 'steps' => [['tool' => $tool, 'status' => 'error']], 'pending' => null]; }
+        $links = class_exists('Mutqan_Command') ? Mutqan_Command::links($tool, $out) : [];
+        $quick = class_exists('Mutqan_Command') ? Mutqan_Command::say($tool, $out) : null;
+        if ($quick !== null) { return ['text' => $quick, 'steps' => [['tool' => $tool, 'status' => 'ok']], 'pending' => null, 'links' => $links]; }
         $data = mb_substr(wp_json_encode($out, JSON_UNESCAPED_UNICODE), 0, 6000);
         try { $w = Mutqan_AI::run("طلب المستخدم: $last\nنتيجة النظام (JSON): $data\nلخّص النتيجة للمستخدم بالعامية المصرية في سطور قصيرة واضحة بالأرقام. من غير JSON.", ['temperature' => 0.3, 'tier' => 'low', 'budget' => 12], $p); $text = trim((string) ($w['text'] ?? '')); }
         catch (Throwable $e) { $text = $data; }
-        return ['text' => $text, 'steps' => [['tool' => $tool, 'status' => 'ok']], 'pending' => null];
+        return ['text' => $text, 'steps' => [['tool' => $tool, 'status' => 'ok']], 'pending' => null, 'links' => $links];
     }
 
     private static function clean_messages($m) {
@@ -202,7 +206,7 @@ final class Mutqan_Agent {
 
     private static function loop($msgs, $p) {
         $model = Mutqan_AI::tier_model('high') ?: 'claude-opus-5-5';
-        $steps = []; $pending = null; $text = '';
+        $steps = []; $pending = null; $text = ''; $links = [];
         // A whole answer has about a minute, whatever the tools: past that the advisor says what it has instead of hanging.
         $t0 = microtime(true);
         for ($i = 0; $i < self::MAX_STEPS; $i++) {
@@ -219,7 +223,7 @@ final class Mutqan_Agent {
                 if (($b['type'] ?? '') === 'text') { $text .= ($text !== '' ? "\n" : '') . $b['text']; }
                 if (($b['type'] ?? '') !== 'tool_use') { continue; }
                 $name = (string) $b['name']; $input = (array) ($b['input'] ?? []);
-                if (self::needs_confirm($name, $input)) {
+                if (self::needs_confirm($name, $input) && (!class_exists('Mutqan_Command') || Mutqan_Command::allowed($name, $p))) {
                     $pending = self::park($name, $input, $p);
                     $results[] = ['type' => 'tool_result', 'tool_use_id' => $b['id'], 'content' => 'بانتظار تأكيد المستخدم؛ لم يُنفَّذ بعد.'];
                     $steps[] = ['tool' => $name, 'status' => 'pending', 'summary' => $pending['summary']];
@@ -228,6 +232,7 @@ final class Mutqan_Agent {
                 try { $out = self::run_tool($name, $input, $p); $ok = true; }
                 catch (Throwable $e) { $out = ['error' => $e->getMessage()]; $ok = false; }
                 self::audit($name, $input, $ok, $p);
+                if ($ok && class_exists('Mutqan_Command')) { $links = array_merge($links, Mutqan_Command::links($name, $out)); }
                 $steps[] = ['tool' => $name, 'status' => $ok ? 'done' : 'error'];
                 $results[] = ['type' => 'tool_result', 'tool_use_id' => $b['id'], 'content' => mb_substr(wp_json_encode($out, JSON_UNESCAPED_UNICODE), 0, 12000), 'is_error' => !$ok];
             }
@@ -241,7 +246,7 @@ final class Mutqan_Agent {
             }
             $msgs[] = ['role' => 'user', 'content' => $results];
         }
-        return ['text' => trim($text) ?: 'تم.', 'steps' => $steps, 'pending' => $pending];
+        return ['text' => trim($text) ?: 'تم.', 'steps' => $steps, 'pending' => $pending, 'links' => array_slice($links, 0, 12)];
     }
 
     /* ------------------------------------------------------------------ confirmation */
@@ -255,6 +260,12 @@ final class Mutqan_Agent {
     public static function summary($name, $in) {
         switch ($name) {
             case 'expense_add': return 'تسجيل مصروف ' . ($in['amount'] ?? '') . ' ر.س — ' . ($in['category'] ?? '') . (!empty($in['note']) ? ' (' . mb_substr((string) $in['note'], 0, 80) . ')' : '') . (!empty($in['orderId']) ? ' على الطلب ' . $in['orderId'] : '');
+            case 'orders_delete': return 'مسح نهائي للطلبات: ' . (!empty($in['numbers']) ? '#' . implode('، #', array_map('strval', (array) $in['numbers'])) : '') . (!empty($in['filter']) ? ' ' . ['cancelled' => 'كل الطلبات الملغية', 'test' => 'كل الطلبات التجريبية', 'all' => 'كل الطلبات'][$in['filter']] ?? '' : '') . ' — مش هيترجع.';
+            case 'prices_adjust': return 'تعديل أسعار التكييف ' . ((float) ($in['percent'] ?? 0) > 0 ? '+' : '') . ($in['percent'] ?? '') . '%' . (isset($in['maxDiscountPct']) ? ' وأقصى خصم ' . $in['maxDiscountPct'] . '%' : '');
+            case 'prices_revert': return 'رجوع جدول الأسعار زي ما كان';
+            case 'tech_account': return (($in['action'] ?? '') === 'suspend' ? 'إيقاف' : 'تشغيل') . ' حساب الفني';
+            case 'tech_role': return 'تغيير صلاحية العضو إلى ' . (($in['role'] ?? '') === 'operations' ? 'عمليات' : 'فني');
+            case 'intake_set': return 'استقبال الطلبات: ' . ['open' => 'مفتوح', 'tomorrow' => 'حجز لبكره', 'paused' => 'موقوف'][$in['mode'] ?? 'open'] ?? '';
             case 'wa_send': return 'إرسال واتساب إلى ' . ($in['phone'] ?? '') . ': «' . mb_substr((string) ($in['text'] ?? ''), 0, 160) . '»';
             case 'dns_set': return 'سجل DNS ' . ($in['type'] ?? '') . ' ' . ($in['name'] ?? '') . '.' . self::ZONE . ' ← ' . ($in['content'] ?? '');
             case 'ai_engine_set': return 'تعديل إعدادات محرك الذكاء في الموقع: ' . mb_substr(wp_json_encode($in, JSON_UNESCAPED_UNICODE), 0, 200);
@@ -274,7 +285,9 @@ final class Mutqan_Agent {
         try { $out = self::run_tool($a['name'], $a['input'], $p); $ok = true; }
         catch (Throwable $e) { $out = ['error' => $e->getMessage()]; $ok = false; }
         self::audit($a['name'], $a['input'], $ok, $p, true);
-        return ['text' => $ok ? 'اتنفذ: ' . self::summary($a['name'], $a['input']) : 'ما اتنفذش: ' . $out['error'], 'ok' => $ok, 'result' => $out];
+        $links = $ok && class_exists('Mutqan_Command') ? Mutqan_Command::links($a['name'], $out) : [];
+        $said = $ok && class_exists('Mutqan_Command') ? Mutqan_Command::say($a['name'], $out) : null;
+        return ['text' => $ok ? ($said ?? ('✅ اتنفذ: ' . self::summary($a['name'], $a['input']))) : 'ما اتنفذش: ' . $out['error'], 'ok' => $ok, 'result' => $out, 'links' => $links];
     }
 
     private static function audit($name, $input, $ok, $p, $confirmed = false) {
