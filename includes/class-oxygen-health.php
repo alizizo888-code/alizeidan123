@@ -8,7 +8,6 @@ if (!defined('ABSPATH')) { exit; }
  *     matching WordPress jobs exist (its own settings page is the only other place that creates them).
  *  2. Every 30 minutes, on the hub site only, the owner and operations are told — once per problem, not every tick — when:
  *       - an order has waited more than 30 minutes with no real technician (new / forced / site placeholder),
- *       - an order arrived with no phone number and nobody has added one in 20 minutes,
  *       - the WhatsApp inbox has been silent for 24 hours (the gateway is probably logged out).
  * Nothing here changes an order; it only raises the alarm.
  */
@@ -96,9 +95,6 @@ final class Oxygen_Health {
             $noTech = $tid === '' || in_array($tid, self::site_ids(), true);
             if ($noTech && $age >= 30 && empty($o['inhouse']) && self::once('wait:' . $id)) {
                 self::tell('⏳ طلب منتظر بدون فني ' . $short, 'مرّ عليه ' . (int) $age . ' دقيقة ولم يستلمه فني حقيقي — أسنده الآن.', '#/staff/order/' . $id, 'order_waiting');
-            }
-            if (trim((string) ($o['clientPhone'] ?? '')) === '' && $age >= 20 && self::once('phone:' . $id)) {
-                self::tell('📵 طلب بدون رقم جوال ' . $short, 'لا يوجد رقم للتواصل مع العميل — راجع واتساب أو أضف الرقم يدويًا.', '#/staff/order/' . $id, 'order_no_phone');
             }
         }
     }

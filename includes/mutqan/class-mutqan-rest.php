@@ -395,7 +395,7 @@ final class Mutqan_Rest {
             'وقت إرسال الطلب: ' . self::full_when(gmdate('c')),
             !empty($doc['taxInvoice']) ? 'مطلوب فاتورة ضريبية' . (!empty($doc['invoiceVat']) ? ' — الرقم الضريبي: ' . preg_replace('/\D/', '', (string) $doc['invoiceVat']) : '') : '',
             !empty($doc['clientName']) ? 'الاسم: ' . $doc['clientName'] : '',
-            !empty($doc['clientPhone']) ? 'الجوال: ' . $doc['clientPhone'] : '⚠️ بدون رقم جوال — انتظر رسالة العميل على واتساب',
+            !empty($doc['clientPhone']) ? 'الجوال: ' . $doc['clientPhone'] : '',
             !empty($doc['address']) ? 'العنوان: ' . mb_substr((string) $doc['address'], 0, 120) : '',
             (isset($doc['lat'], $doc['lng']) && is_numeric($doc['lat']) && is_numeric($doc['lng'])) ? 'الموقع: https://maps.google.com/?q=' . $doc['lat'] . ',' . $doc['lng'] : '',
             !empty($doc['inhouse']) ? 'تنفيذ داخلي (فني الموقع)' : '',
