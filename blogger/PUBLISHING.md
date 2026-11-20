@@ -112,7 +112,7 @@ re-paste runner.js after every full navigation; never await long work in one jav
 ## Second Google account (owner order 2026-11-09)
 - The second Gmail account (altakyif) gets its **own full set of 44 blogs** (88 on Blogger in total), with different names, addresses and content from the first account's 44; same structure (theme, pages, sitemaps, rules above).
 - 2026-11-20: the 44 entries are in `network.json` with `"account": 2` (all A/C or cold/freezer-room angles, owner order: cooling only), themes built, Hostinger CNAMEs `blog-<id>` → `ghs.google.com.` added (`dns: true`). Blogs are created in Chrome while signed in to altakyif (5 a day).
-- Server writes for these blogs use `BLOGGER_REFRESH_TOKEN_2` (same OAuth client, consent given by altakyif); until that variable exists the publisher and the pages job skip account-2 blogs.
+- Server writes for these blogs use the second refresh token: `BLOGGER_REFRESH_TOKEN=<account 1>,<account 2>` (or `BLOGGER_REFRESH_TOKEN_2`), same OAuth client, consent given by altakyif; until it exists the publisher and the pages job skip account-2 blogs.
 - AI keys: `GEMINI_API_KEY` / `GROQ_API_KEY` accept several comma-separated keys (one per Google / Groq project), tried in turn.
 - Old WordPress articles that name other cities or look alike stay as they are; only new content follows the Makkah + Jeddah and variety rules.
 

@@ -20,10 +20,10 @@ async function main(max) {
   st.service_pages = st.service_pages || {}
   const jobs = []
   for (const id of Object.keys(st.pages_pending || {})) {
-    const b = NET.find((x) => x.id === id); if (!b || !b.blog_id || ((b.account || 1) !== 1 && !process.env['BLOGGER_REFRESH_TOKEN_' + b.account])) continue
+    const b = NET.find((x) => x.id === id); if (!b || !b.blog_id || !B.hasAccount(b.account || 1)) continue
     jobs.push({ b, std: true, list: (PAGES[id] || []).map(([title, html]) => ({ title, html: () => html })) })
   }
-  const hasKey = (b) => (b.account || 1) === 1 || !!process.env['BLOGGER_REFRESH_TOKEN_' + b.account]
+  const hasKey = (b) => B.hasAccount(b.account || 1)
   for (const b of NET.filter((x) => x.blog_id && hasKey(x) && !(st.pages_pending || {})[x.id])) {
     const have = st.service_pages[b.id] || [], bi = NET.indexOf(b)
     const list = SERVICE.filter((s) => !have.includes(s.title)).map((s) => ({ title: s.title, svc: true, html: () => { const a = build(b, { t: s.t, kw: s.kw, city: s.city, kind: s.kind, cool: true }, bi); return wrap(b, s.t, a[2]) } }))

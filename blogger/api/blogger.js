@@ -10,18 +10,23 @@ function accountOf(blogId) {
   if (!NETMAP) { NETMAP = {}; try { for (const b of JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'network.json'), 'utf8'))) if (b.blog_id) NETMAP[b.blog_id] = b.account || 1 } catch (e) { /* no map: account 1 */ } }
   return NETMAP[blogId] || 1
 }
+// BLOGGER_REFRESH_TOKEN may hold «token1,token2» (account 1, account 2); BLOGGER_REFRESH_TOKEN_<n> wins when set
+function refreshToken(acct) {
+  if (process.env['BLOGGER_REFRESH_TOKEN_' + acct]) return process.env['BLOGGER_REFRESH_TOKEN_' + acct]
+  return String(process.env.BLOGGER_REFRESH_TOKEN || '').split(',').map((t) => t.trim())[acct - 1] || ''
+}
 const tokens = {}
 async function auth(acct = 1) {
   if (DRY) return 'dry'
   const t = tokens[acct]; if (t && Date.now() - t.at < 45 * 60 * 1000) return t.v
   // A one-hour key borrowed from the site (oxygen11.com holds the Google authorization; see the workflow): nothing to refresh here.
   if (acct === 1 && process.env.BLOGGER_ACCESS_TOKEN) { tokens[1] = { v: process.env.BLOGGER_ACCESS_TOKEN, at: Date.now() }; return tokens[1].v }
-  const rk = acct === 1 ? 'BLOGGER_REFRESH_TOKEN' : 'BLOGGER_REFRESH_TOKEN_' + acct
-  const need = ['BLOGGER_CLIENT_ID', 'BLOGGER_CLIENT_SECRET', rk].filter((k) => !process.env[k])
+  const rt = refreshToken(acct)
+  const need = ['BLOGGER_CLIENT_ID', 'BLOGGER_CLIENT_SECRET'].filter((k) => !process.env[k]).concat(rt ? [] : ['refresh token of account ' + acct])
   if (need.length) { const e = new Error('missing secrets: ' + need.join(', ')); e.status = 401; throw e }
   const r = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: process.env.BLOGGER_CLIENT_ID, client_secret: process.env.BLOGGER_CLIENT_SECRET, refresh_token: process.env[rk], grant_type: 'refresh_token' }),
+    body: new URLSearchParams({ client_id: process.env.BLOGGER_CLIENT_ID, client_secret: process.env.BLOGGER_CLIENT_SECRET, refresh_token: rt, grant_type: 'refresh_token' }),
   })
   const j = await r.json(); if (!r.ok) throw new Error(`token refresh failed (account ${acct}): ` + (j.error_description || j.error))
   tokens[acct] = { v: j.access_token, at: Date.now() }; return tokens[acct].v
@@ -35,6 +40,7 @@ async function call(method, path, body) {
   return j
 }
 module.exports = {
+  hasAccount: (acct) => acct === 1 || !!refreshToken(acct),
   insert: (blogId, title, content, labels) => call('POST', `/blogs/${blogId}/posts?isDraft=false`, { kind: 'blogger#post', title, content, labels }),
   insertPage: (blogId, title, content) => call('POST', `/blogs/${blogId}/pages?isDraft=false`, { kind: 'blogger#page', title, content }),
   async pageTitles(blogId) { if (DRY) return []; const j = await call('GET', `/blogs/${blogId}/pages?status=live&status=draft&fetchBodies=false`); return (j.items || []).map((x) => x.title) },
