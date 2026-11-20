@@ -49,18 +49,25 @@ const PROVIDERS = [
       method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(TIMEOUT),
       body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9, responseMimeType: 'application/json' } }),
     })
-    const j = await r.json(); if (!r.ok) throw new Error(`gemini ${r.status} ${(j.error && j.error.message) || ''}`.slice(0, 160))
+    const j = await r.json().catch(() => ({}))
+    // «high demand» (503) is momentary: one more try after a short wait before giving the article up
+    if (r.status === 503 && !this._retried) { this._retried = true; await new Promise((ok) => setTimeout(ok, 6000)); try { return await this.ask(prompt, key) } finally { this._retried = false } }
+    if (!r.ok) throw new Error(`gemini ${r.status} ${(j.error && j.error.message) || ''}`.slice(0, 160))
     return ((j.candidates || [])[0] || {}).content?.parts?.map((p) => p.text).join('') || ''
   } },
   { name: 'openrouter', key: 'OPENROUTER_API_KEY', ask: (prompt, key) => openaiLike('https://openrouter.ai/api/v1/chat/completions', key, process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free', prompt) },
 ]
-async function openaiLike(url, key, model, prompt) {
+async function openaiLike(url, key, model, prompt, strict = true) {
   const r = await fetch(url, {
     method: 'POST', signal: AbortSignal.timeout(TIMEOUT),
     headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
-    body: JSON.stringify({ model, temperature: 0.9, messages: [{ role: 'user', content: prompt }], response_format: { type: 'json_object' } }),
+    body: JSON.stringify(Object.assign({ model, temperature: 0.8, messages: [{ role: 'user', content: prompt }] }, strict ? { response_format: { type: 'json_object' } } : {})),
   })
-  const j = await r.json(); if (!r.ok) throw new Error(`${new URL(url).host} ${r.status} ${(j.error && (j.error.message || j.error)) || ''}`.slice(0, 160))
+  const j = await r.json().catch(() => ({}))
+  // 2026-11-20: Groq's JSON mode refuses many Arabic answers («Failed to validate/generate JSON») although the text is fine —
+  // ask once more without the JSON mode and let toHtml() cut the object out of the reply.
+  if (!r.ok && strict && r.status === 400 && /JSON/i.test(String((j.error && (j.error.message || j.error)) || ''))) return openaiLike(url, key, model, prompt, false)
+  if (!r.ok) throw new Error(`${new URL(url).host} ${r.status} ${(j.error && (j.error.message || j.error)) || ''}`.slice(0, 160))
   return ((j.choices || [])[0] || {}).message?.content || ''
 }
 
@@ -85,7 +92,8 @@ function prompt(ctx) {
 }
 
 function toHtml(raw) {
-  let j; try { j = JSON.parse(String(raw).replace(/^```(?:json)?|```$/g, '').trim()) } catch { return null }
+  const t = String(raw || ''), a = t.indexOf('{'), b = t.lastIndexOf('}')
+  let j; try { j = JSON.parse(a >= 0 && b > a ? t.slice(a, b + 1) : t) } catch { return null }
   const secs = (j.sections || []).filter((s) => s && s.h2 && Array.isArray(s.paragraphs) && s.paragraphs.length)
   if (secs.length < 2) return null
   const text = secs.map((s) => s.h2 + ' ' + s.paragraphs.join(' ')).join(' ')

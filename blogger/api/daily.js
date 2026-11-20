@@ -51,7 +51,10 @@ async function publish(nArg) {
   const day = (st.api_day = st.api_day && st.api_day.date === today ? st.api_day : { date: today, counts: {}, cursor: 0, n: 0, new: 0, old: 0, ac: 0, fridge: 0, mk: 0 })
   const { total, R } = target()
   day.target = total
-  if (day.blocked) { console.log('Blogger blocked earlier today; resuming tomorrow'); return save() }
+  // Blogger's daily quota comes back at midnight Pacific (08:00 UTC = 11:00 Makkah), not at midnight Makkah:
+  // a block only holds until then, so the rest of the Makkah day is not lost (2026-11-20 audit).
+  if (day.blocked && day.blockedUntil && Date.now() >= Date.parse(day.blockedUntil)) { day.blocked = false; delete day.blockedUntil }
+  if (day.blocked) { console.log('Blogger blocked; resuming after ' + (day.blockedUntil || 'tomorrow')); return save() }
   if (!live.length) return console.log('no live blogs')
   const runsLeft = Math.max(1, RUN_HOURS.filter((h) => h >= hourRiyadh).length)
   const left = Math.max(0, total - day.n)
@@ -121,7 +124,12 @@ async function publish(nArg) {
       await sleep(process.env.BLOGGER_DRY ? 0 : 20000)
     } catch (e) {
       errors.push(x.id + ': ' + e.message)
-      if (e.status === 403 || e.status === 429) { day.blocked = true; R.last_block = today; R.after_block = Math.max(R.base, total - R.step); break }
+      if (e.status === 403 || e.status === 429) {
+        day.blocked = true; R.last_block = today; R.after_block = Math.max(R.base, total - R.step)
+        const u = new Date(); u.setUTCHours(8, 5, 0, 0); if (u.getTime() <= Date.now()) u.setUTCDate(u.getUTCDate() + 1)
+        day.blockedUntil = u.toISOString()
+        break
+      }
     }
   }
   const c = done.filter((d) => d.kind === 'ac').length, f = done.filter((d) => d.kind === 'fridge').length, m = done.filter((d) => d.makkah).length
