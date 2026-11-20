@@ -90,6 +90,12 @@ final class Mutqan_Trainer {
         ];
     }
 
+    /** The built-in scenarios plus the ones Claude designed and the owner approved (option mutqan_trainer_extra). */
+    public static function all_scenarios() {
+        $extra = array_values(array_filter((array) get_option('mutqan_trainer_extra', []), function ($x) { return is_array($x) && !empty($x['id']) && !empty($x['turns']); }));
+        return array_merge(self::scenarios(), $extra);
+    }
+
     /** Dispatch drills: a known right answer from the real picker. */
     public static function drills() {
         $now = gmdate('c');
@@ -144,7 +150,7 @@ final class Mutqan_Trainer {
     /** Today's 12: failed ones first, then the ones least practised, 2 drills, up to 2 real openers. */
     private static function plan($s) {
         $stats = (array) ($s['stats'] ?? []);
-        $chat = self::scenarios();
+        $chat = self::all_scenarios();
         usort($chat, function ($a, $b) use ($stats) {
             $fa = !empty($stats[$a['id']]['lastFail']); $fb = !empty($stats[$b['id']]['lastFail']);
             if ($fa !== $fb) { return $fa ? -1 : 1; }
@@ -205,7 +211,7 @@ final class Mutqan_Trainer {
             $sc = ['id' => 'real', 'kind' => 'real', 'turns' => [substr($id, 5)], 'expect' => 'رسالة عميل حقيقية: يرد زي أفضل موظف خدمة عملاء حسب سياسة الشركة ويقرب العميل من طلب.'];
         } else {
             $sc = null;
-            foreach (self::scenarios() as $x) { if ($x['id'] === $id) { $sc = $x; } }
+            foreach (self::all_scenarios() as $x) { if ($x['id'] === $id) { $sc = $x; } }
             if (!$sc) { return ['id' => $id, 'pass' => true, 'score' => 10, 'issues' => [], 'kind' => 'gone']; }
         }
         return self::run_chat($sc);
@@ -331,7 +337,7 @@ final class Mutqan_Trainer {
         $lessons = array_values(array_filter(Mutqan_Store::select('wa_bot', ['feature' => 'trainer'], ['limit' => 60, 'order' => '-updatedAt'], self::sys()), function ($r) { return ($r['status'] ?? '') === 'pending'; }));
         $end = date('Y-m-d', strtotime($s['start'] . ' +' . (int) ($s['days'] ?? self::DAYS) . ' days'));
         $names = [];
-        foreach (self::scenarios() as $x) { $names[$x['id']] = $x['expect']; }
+        foreach (self::all_scenarios() as $x) { $names[$x['id']] = $x['expect']; }
         return ['on' => !empty($s['on']), 'active' => self::active($s), 'start' => $s['start'], 'end' => $end, 'day' => $s['day'] ?? '', 'plan' => array_values((array) ($s['plan'] ?? [])),
             'results' => (object) ($s['results'] ?? []), 'stats' => (object) ($s['stats'] ?? []), 'expect' => (object) $names,
             'runs' => array_map(function ($r) { return array_intersect_key($r, array_flip(['id', 'day', 'scenario', 'kind', 'pass', 'score', 'transcript', 'issues', 'better', 'expect', 'got', 'provider', 'createdAt'])); }, $runs),
