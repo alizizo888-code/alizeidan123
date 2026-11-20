@@ -57,7 +57,11 @@ final class Mutqan_Dispatch {
         $pool = $site ? array_values(array_filter($profiles, function ($t) use ($site) { return ($t['userId'] ?? '') !== $site['userId']; })) : $profiles;
         $tech = self::pick($order, $pool, $orders, (string) ($s['strategy'] ?? 'smart'));
         if ($tech) { return self::link($order, $tech, 'auto'); }
-        if ($site && ($s['siteFallback'] ?? true) !== false) { return self::link($order, $site, 'site-fallback'); }
+        if ($site && ($s['siteFallback'] ?? true) !== false) {
+            $doc = self::link($order, $site, 'site-fallback');
+            self::warn_staff($order, 'لم يُسند لفني حقيقي (لا يوجد فني متاح) — راجعه وأسنده يدويًا');
+            return $doc;
+        }
         return self::force($order);
     }
 
@@ -65,7 +69,17 @@ final class Mutqan_Dispatch {
 
     public static function profiles() {
         $rows = Mutqan_Store::select('tech_profiles', [], ['limit' => 300], self::sys());
-        return array_values(array_filter($rows, function ($t) { return !empty($t['userId']); }));
+        // A profile whose account was deleted, disabled or never existed (old tests, a duplicate made
+        // before the account) is not a person who can take a job: an order sent there is lost silently.
+        $live = null;
+        if (class_exists('Mutqan_Auth') && method_exists('Mutqan_Auth', 'staff_members')) {
+            $live = [];
+            foreach (Mutqan_Auth::staff_members('technician') as $m) { $live[(string) $m['id']] = true; }
+        }
+        return array_values(array_filter($rows, function ($t) use ($live) {
+            if (empty($t['userId'])) { return false; }
+            return $live === null || isset($live[(string) $t['userId']]);
+        }));
     }
 
     /** Orders that can affect today's capacity or a technician's current load. */
@@ -201,6 +215,15 @@ final class Mutqan_Dispatch {
     }
 
     /* ------------------------------------------------------------------ writing it down */
+
+    /** An order no real technician took: the owner and operations hear it at once, not when a customer calls. */
+    private static function warn_staff($order, $why) {
+        $id = (string) ($order['id'] ?? '');
+        if ($id === '') { return; }
+        foreach (['operations', 'owner'] as $role) {
+            Mutqan_Store::insert('_push', ['target' => ['role' => $role], 'title' => '⚠️ طلب بدون فني #' . substr($id, -5), 'body' => $why, 'url' => '#/staff/order/' . $id, 'sound' => 'bell', 'priority' => 'high', 'event' => 'order_unassigned', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 3 * 86400)], self::sys());
+        }
+    }
 
     /** linkTech() — the same fields the room writes, so nothing downstream can tell who did it. */
     private static function link($order, $t, $by) {

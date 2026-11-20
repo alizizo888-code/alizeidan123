@@ -392,6 +392,15 @@ final class Mutqan_Store {
         if (!$private) { $data = Mutqan_Policy::sanitize_insert($coll, $data, $p); }
         // Every order gets a short number people can say and type («طلب 1004»), whichever door it came through.
         if ($coll === 'orders' && is_array($data) && trim((string) ($data['number'] ?? '')) === '') { $data['number'] = (string) self::next_order_number(); }
+        // An order nobody can call is an order nobody can serve: take the account's number when the form sent none, else flag it.
+        if ($coll === 'orders' && is_array($data) && trim((string) ($data['clientPhone'] ?? '')) === '') {
+            $uid = (string) ($data['clientId'] ?? ($p['id'] ?? ''));
+            if ($uid !== '' && $uid !== 'system' && class_exists('Mutqan_Auth')) {
+                $u = Mutqan_Auth::user_row($uid);
+                if (is_array($u) && !empty($u['phone'])) { $data['clientPhone'] = (string) $u['phone']; }
+            }
+            if (trim((string) ($data['clientPhone'] ?? '')) === '') { $data['needsPhone'] = true; }
+        }
         list($data, $json) = self::clean_data($data);
         $id = ($id !== null && $id !== '') ? self::valid_id($id) : wp_generate_uuid4();
         if (!$private) { Mutqan_Policy::check_insert_id($coll, $id, $p); }
