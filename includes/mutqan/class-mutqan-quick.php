@@ -47,6 +47,29 @@ final class Mutqan_Quick {
             return ['kind' => 'self', 'tool' => 'assign', 'input' => ['number' => $m[5], 'tech' => trim($m[8])]];
         }
 
+        // امسح طلب 1024 / امسح الطلبات الملغية / امسح الطلبات التجريبية (للمالك، بتأكيد)
+        if (self::has($n, ['امسح', 'احذف', 'مسح', 'حذف', 'شيل', 'الغي نهائي']) && self::has($n, ['طلب', 'الطلبات', 'طلبات'])) {
+            preg_match_all('/\d{2,10}/', $n, $mm);
+            $f = self::has($n, ['كل الطلبات', 'الطلبات كلها', 'جميع الطلبات']) ? 'all' : (self::has($n, ['ملغي', 'الملغيه', 'الملغاه', 'اللاغيه']) ? 'cancelled' : (self::has($n, ['تجريب', 'تجربه', 'التجربه', 'اختبار', 'test']) ? 'test' : ''));
+            if ($mm[0] || $f !== '') { return ['kind' => 'agent', 'tool' => 'orders_delete', 'input' => array_filter(['numbers' => $mm[0], 'filter' => $f])]; }
+        }
+        // هات طلب 1024 / افتح الطلب 1024 / وريني طلب 1024 → الطلب + رابط
+        if (preg_match('/(هات|هاتلي|جيب|جيبلي|افتح|افتحلي|عايز|ابغي|ابي)\s*(لي)?\s*(ال)?طلب\s*(رقم)?\s*#?(\d{2,10})/u', $n, $m)) {
+            return ['kind' => 'agent', 'tool' => 'order_open', 'input' => ['ref' => $m[5]]];
+        }
+        // ابحث عن … / دور على … / فتش عن …
+        if (preg_match('/^(ابحث|ابحثلي|دور|دورلي|فتش|search|find)\s*(لي)?\s*(عن|علي)?\s*(.{2,80})$/u', $n, $m)) {
+            return ['kind' => 'agent', 'tool' => 'find', 'input' => ['q' => trim($m[4])]];
+        }
+        // افتح صفحة الأسعار / وديني على الخريطة
+        if (preg_match('/^(افتح|افتحلي|وديني|روح|خدني|ودني)\s*(لي)?\s*(علي|ل|الي|عند)?\s*(صفحه)?\s*(.{2,60})$/u', $n, $m) && !preg_match('/طلب\s*#?\d/u', $n)) {
+            return ['kind' => 'agent', 'tool' => 'find', 'input' => ['q' => trim($m[5])]];
+        }
+        // سعر غسيل السبليت / بكام الشباك / تسعير الكهرباء
+        if (preg_match('/^(سعر|اسعار|بكام|تسعير|كام سعر)\s*(.{2,60})$/u', $n, $m)) {
+            return ['kind' => 'agent', 'tool' => 'find', 'input' => ['q' => trim($m[2])]];
+        }
+
         // طلب 1024 / تفاصيل طلب 1024 / قصة الطلب 1024
         if (preg_match('/^(تفاصيل|قصه|فين|حاله|اعرض|وريني)?\s*(ال)?طلب\s*(رقم)?\s*#?(\d{1,10})$/u', $n, $m)) {
             return ['kind' => 'ops', 'tool' => 'order_story', 'input' => ['number' => $m[4]]];
@@ -91,7 +114,6 @@ final class Mutqan_Quick {
         if ($from === 'ops' && ($m['kind'] === 'agent' && Mutqan_Agent::needs_confirm($m['tool'], $m['input']) || in_array($m['tool'], ['assign', 'cache_purge'], true))) {
             return ['text' => 'ده أمر تنفيذ — اكتبه في تبويب «أوامر» وهيتنفذ على طول.', 'steps' => [], 'pending' => null, 'engine' => 'internal'];
         }
-        if ($role === 'supervisor' && $m['kind'] !== 'ops' && $m['tool'] !== 'route') { return null; }
         try {
             $out = self::run($m, $p);
         } catch (Throwable $e) {
@@ -104,16 +126,18 @@ final class Mutqan_Quick {
     private static function run($m, $p) {
         $tool = $m['tool']; $in = $m['input'];
         if ($m['kind'] === 'agent') {
+            if (class_exists('Mutqan_Command') && !Mutqan_Command::allowed($tool, $p)) { throw new Exception('الأمر ده مش من صلاحياتك.'); }
             if (Mutqan_Agent::needs_confirm($tool, $in)) {
                 return ['text' => 'جاهز — راجع وأكّد.', 'steps' => [['tool' => $tool, 'status' => 'pending']], 'pending' => Mutqan_Agent::park_public($tool, $in, $p)];
             }
             $out = Mutqan_Agent::run_tool($tool, $in, $p);
             Mutqan_Agent::audit_public($tool, $in, true, $p);
-            return ['text' => self::say($tool, $out), 'steps' => [['tool' => $tool, 'status' => 'done']], 'pending' => null];
+            $said = class_exists('Mutqan_Command') ? Mutqan_Command::say($tool, $out) : null;
+            return ['text' => $said ?? self::say($tool, $out), 'steps' => [['tool' => $tool, 'status' => 'done']], 'pending' => null, 'links' => class_exists('Mutqan_Command') ? Mutqan_Command::links($tool, $out) : []];
         }
         if ($m['kind'] === 'ops') {
             $out = Mutqan_Ops::run_tool($tool, $in);
-            return ['text' => self::say($tool, $out), 'steps' => [['tool' => $tool, 'status' => 'done']], 'pending' => null];
+            return ['text' => self::say($tool, $out), 'steps' => [['tool' => $tool, 'status' => 'done']], 'pending' => null, 'links' => class_exists('Mutqan_Command') ? Mutqan_Command::links($tool, $out) : []];
         }
         switch ($tool) {
             case 'help': return ['text' => self::help(), 'steps' => [], 'pending' => null];
@@ -128,7 +152,7 @@ final class Mutqan_Quick {
                 return ['text' => $t . "\nاتصرف: " . number_format((int) $s['used']) . ' نقطة في ' . (int) $s['calls'] . ' طلب لـ Claude، و' . (int) $s['internal'] . ' أمر اتنفذ داخلي ببلاش.', 'steps' => [], 'pending' => null, 'points' => $s];
             }
             case 'cache_purge': {
-                if (($p['role'] ?? '') !== 'owner' && ($p['role'] ?? '') !== 'operations') { throw new Exception('للمالك والعمليات فقط.'); }
+                if (!in_array((string) ($p['role'] ?? ''), ['owner', 'operations', 'supervisor'], true)) { throw new Exception('للمالك والعمليات والمشرف فقط.'); }
                 if (!empty($in['all']) && Oxygen_Network::is_hub()) {
                     $r = Oxygen_Network::purge_network();
                     Mutqan_Agent::audit_public('cache_purge', $in, true, $p);
@@ -171,7 +195,7 @@ final class Mutqan_Quick {
         return "أوامر بتتنفذ فورًا من غير ذكاء اصطناعي:\n"
             . "• اسند طلب 1024 لمحمود\n• طلب 1024 (قصة الطلب كاملة)\n• الطلبات الجديدة / الطلبات\n• الوضع (ملخص العمليات)\n• التنبيهات\n"
             . "• فين الفنيين / خط سير محمود / تتبع ف-03 / مهام على طريق سامي\n• الفنيين\n• فلوس النهارده / فلوس الأسبوع / فلوس الشهر\n• رسايل الواتساب\n• ايه اللي حصل (سجل 24 ساعة)\n"
-            . "• نضف المواقع كلها من الكاش\n• حالة الذكاء (اختبار المزودين)\n• النقاط (رصيد توكن Claude)\n"
+            . "• هات طلب 1024 / ابحث عن العزيزية / افتح صفحة الأسعار / سعر غسيل السبليت\n• امسح طلب 1024 / امسح الطلبات الملغية (للمالك، بتأكيد)\n• نضف المواقع كلها من الكاش\n• حالة الذكاء (اختبار المزودين)\n• النقاط (رصيد توكن Claude)\n"
             . "أي حاجة تانية بتروح للذكاء الاصطناعي.";
     }
 
