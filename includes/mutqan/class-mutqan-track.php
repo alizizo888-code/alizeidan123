@@ -73,7 +73,10 @@ final class Mutqan_Track {
         // next job on his road. Switching off (or no job and off shift) keeps nothing.
         if (!$open && empty($t['active'])) { self::forget($techId, $t); return ['ok' => false, 'reason' => 'no_open_job']; }
         // One current point, overwritten. Nothing accumulates, so there is no trail of a person.
-        Mutqan_Store::update('tech_profiles', $techId, ['lat' => round((float) $lat, 6), 'lng' => round((float) $lng, 6), 'atAt' => time(), 'lastSeenAt' => gmdate('c')], self::sys());
+        $pp = ['lat' => round((float) $lat, 6), 'lng' => round((float) $lng, 6), 'atAt' => time(), 'lastSeenAt' => gmdate('c')];
+        // «نشط من»: the start of this stretch online — a new stretch after 30 minutes without a single position.
+        if (empty($t['activeSince']) || empty($t['atAt']) || time() - (int) $t['atAt'] > 1800) { $pp['activeSince'] = gmdate('c'); }
+        Mutqan_Store::update('tech_profiles', $techId, $pp, self::sys());
         if (class_exists('Mutqan_Route')) { Mutqan_Route::record($techId, $lat, $lng); }
         $near = [];
         try { $near = self::approach($techId, (float) $lat, (float) $lng); } catch (Throwable $e) { error_log('[mutqan] approach ' . $e->getMessage()); }
