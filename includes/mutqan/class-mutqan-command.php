@@ -416,7 +416,10 @@ final class Mutqan_Command {
     public static function say($tool, $o) {
         if ($tool === 'find') {
             if (empty($o['results'])) { return 'ملقتش حاجة عن «' . ($o['q'] ?? '') . '».'; }
-            return 'لقيت ' . (int) $o['count'] . ' نتيجة عن «' . $o['q'] . '» — اضغط على أي واحدة تفتحها:';
+            $n = count(self::links('find', $o));
+            $cmds = array_values(array_filter($o['results'], function ($x) { return ($x['href'] ?? '') === ''; }));
+            $extra = $cmds ? "\n" . implode("\n", array_map(function ($x) { return '• ' . $x['label']; }, array_slice($cmds, 0, 5))) : '';
+            return ($n ? 'لقيت ' . ($n === 1 ? 'نتيجة واحدة' : $n . ' نتايج') . ' عن «' . $o['q'] . '» — اضغط تفتحها:' : 'عن «' . $o['q'] . '»:') . $extra;
         }
         if ($tool === 'order_open') {
             $x = (array) ($o['order'] ?? []);
