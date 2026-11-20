@@ -162,6 +162,9 @@ final class Mutqan_Trainer {
 
     public static function tick() {
         if (!class_exists('Mutqan_Store') || !class_exists('Mutqan_AI')) { return; }
+        // Practice happens where the customers are answered: not on the 20 network faces, not where no AI is set up.
+        if (class_exists('Oxygen_Network') && method_exists('Oxygen_Network', 'is_satellite') && Oxygen_Network::is_satellite()) { return; }
+        if (!Mutqan_AI::any_enabled()) { return; }
         $s = self::state();
         if (!self::active($s)) { return; }
         $day = self::today();
