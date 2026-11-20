@@ -74,12 +74,34 @@ final class Oxygen_Partner_Articles {
             'contact' => ['دليل التواصل', 'partner', ['دليل أرقام شركاء {b} {S}: تواصل مباشر مع النخبة', 'أرقام التواصل المباشر مع شركاء {b} {S}', 'دليلك السريع لشركاء {b} {S}: اتصل بالأقرب إليك']],
         ];
     }
+    /**
+     * Owner order 2026-11-20: all 120 articles are about A/C and cold / freezer rooms. The slot keys (and so the post slugs)
+     * stay as they were, so the old posts of other trades are rewritten into cooling articles on refresh, never duplicated.
+     */
+    const SCOPE_VER = 2;
     private static function scopes() {
-        $sc = ['mk' => ['في مكة المكرمة', 'مكة المكرمة', ''], 'jd' => ['في جدة', 'جدة', ''], 'both' => ['في مكة وجدة', 'مكة وجدة', '']];
-        foreach (['ac', 'plumbing', 'electric', 'fridge', 'appliances', 'pest', 'tanks', 'locks', 'cameras', 'solar', 'satellite', 'paint', 'tiling', 'cleaning', 'moving', 'general', 'contracting'] as $d) {
-            $lbl = Oxygen_Visuals::specs()[$d][0]; $sc[$d] = ['لخدمات ' . $lbl . ' بمكة وجدة', 'مكة وجدة', $d];
-        }
-        return $sc;
+        return [
+            'mk' => ['لصيانة المكيفات وغرف التبريد في مكة المكرمة', 'مكة المكرمة', 'ac'],
+            'jd' => ['لصيانة المكيفات وغرف التبريد في جدة', 'جدة', 'ac'],
+            'both' => ['لصيانة المكيفات وغرف التبريد والتجميد في مكة وجدة', 'مكة وجدة', 'fridge'],
+            'ac' => ['لصيانة المكيفات بمكة وجدة', 'مكة وجدة', 'ac'],
+            'fridge' => ['لصيانة غرف التبريد والتجميد بمكة وجدة', 'مكة وجدة', 'fridge'],
+            'plumbing' => ['لصيانة وغسيل المكيفات السبليت بمكة وجدة', 'مكة وجدة', 'ac'],
+            'electric' => ['لصيانة المكيفات المركزية والكونسيلد بمكة وجدة', 'مكة وجدة', 'ac'],
+            'appliances' => ['لصيانة مكيفات الشباك بمكة وجدة', 'مكة وجدة', 'ac'],
+            'pest' => ['لتركيب وفك ونقل المكيفات بمكة وجدة', 'مكة وجدة', 'ac'],
+            'tanks' => ['لتعبئة فريون المكيفات وكشف التسريب بمكة وجدة', 'مكة وجدة', 'ac'],
+            'locks' => ['لغسيل وتنظيف المكيفات بمكة وجدة', 'مكة وجدة', 'ac'],
+            'cameras' => ['لتركيب غرف التبريد بمكة وجدة', 'مكة وجدة', 'fridge'],
+            'solar' => ['لصيانة غرف التجميد بمكة وجدة', 'مكة وجدة', 'fridge'],
+            'satellite' => ['لصيانة غرف التبريد للمطاعم والمحلات بمكة وجدة', 'مكة وجدة', 'fridge'],
+            'paint' => ['لصيانة مكيفات المحلات والمطاعم والشركات بمكة وجدة', 'مكة وجدة', 'ac'],
+            'tiling' => ['لصيانة غرف التبريد والتجميد في مكة المكرمة', 'مكة المكرمة', 'fridge'],
+            'cleaning' => ['لصيانة غرف التبريد والتجميد في جدة', 'جدة', 'fridge'],
+            'moving' => ['لصيانة المكيفات في مكة المكرمة', 'مكة المكرمة', 'ac'],
+            'general' => ['لصيانة المكيفات في جدة', 'جدة', 'ac'],
+            'contracting' => ['لصيانة المكيفات الكاسيت والدولابية بمكة وجدة', 'مكة وجدة', 'ac'],
+        ];
     }
     public static function slots() {
         static $s = null; if ($s !== null) { return $s; }
@@ -158,7 +180,7 @@ final class Oxygen_Partner_Articles {
             $author = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID']);
             $id = wp_insert_post(['post_type' => 'post', 'post_status' => $force_status ?: $s['status'], 'post_title' => $title, 'post_name' => $slot['key'], 'post_content' => $b['html'], 'post_excerpt' => $b['desc'], 'post_author' => $author ? (int) $author[0] : 1], true);
             if (is_wp_error($id) || !$id) { return false; }
-            update_post_meta($id, '_oxy_pa_key', $slot['key']); update_post_meta($id, '_oxy_pa_rev', 0); update_post_meta($id, '_oxy_pa_updated', current_time('mysql')); update_post_meta($id, '_oxy_pa_spec', $b['spec']);
+            update_post_meta($id, '_oxy_pa_key', $slot['key']); update_post_meta($id, '_oxy_pa_rev', 0); update_post_meta($id, '_oxy_pa_ver', self::SCOPE_VER); update_post_meta($id, '_oxy_pa_updated', current_time('mysql')); update_post_meta($id, '_oxy_pa_spec', $b['spec']);
             update_post_meta($id, '_yoast_wpseo_metadesc', $b['desc']); update_post_meta($id, 'rank_math_description', $b['desc']);
             $c = self::cat(); if ($c) { wp_set_post_categories($id, [$c]); }
             wp_set_post_tags($id, array_values(array_filter(['شركاء النجاح', self::brand(), self::scopes()[$slot['scope']][1]])), false);
@@ -173,14 +195,21 @@ final class Oxygen_Partner_Articles {
         $nums = self::numbers(); if (!$nums) { return false; }
         $map = self::map(); $by = []; foreach (self::slots() as $sl) { $by[$sl['key']] = $sl; }
         $old = time() - self::REFRESH_DAYS * DAY_IN_SECONDS; $cand = [];
-        foreach ($map as $k => $id) { if (!isset($by[$k])) { continue; } $u = strtotime((string) get_post_meta($id, '_oxy_pa_updated', true)) ?: 0; if ($u <= $old) { $cand[] = [$u, $id, $k]; } }
+        foreach ($map as $k => $id) {
+            if (!isset($by[$k])) { continue; }
+            $u = strtotime((string) get_post_meta($id, '_oxy_pa_updated', true)) ?: 0;
+            if ((int) get_post_meta($id, '_oxy_pa_ver', true) < self::SCOPE_VER) { $u = 0; }   // written before the cooling-only set: rewrite first
+            if ($u <= $old) { $cand[] = [$u, $id, $k]; }
+        }
         if (!$cand) { return false; }
         usort($cand, function ($a, $b) { return $a[0] <=> $b[0]; });
         $id = $cand[0][1]; $slot = $by[$cand[0][2]]; $rev = (int) get_post_meta($id, '_oxy_pa_rev', true) + 1;
         $b = self::build($slot, $rev, $nums); $title = self::slot_title($slot, $rev);
         wp_update_post(['ID' => $id, 'post_title' => $title, 'post_content' => $b['html'], 'post_excerpt' => $b['desc']]);
         update_post_meta($id, '_oxy_pa_rev', $rev); update_post_meta($id, '_oxy_pa_updated', current_time('mysql')); update_post_meta($id, '_oxy_pa_spec', $b['spec']);
+        update_post_meta($id, '_oxy_pa_ver', self::SCOPE_VER);
         update_post_meta($id, '_yoast_wpseo_metadesc', $b['desc']); update_post_meta($id, 'rank_math_description', $b['desc']);
+        wp_set_post_tags($id, array_values(array_filter(['شركاء النجاح', self::brand(), self::scopes()[$slot['scope']][1]])), false);
         self::log('refresh', $id, $title);
         if (get_post_status($id) === 'publish' && class_exists('Oxygen_SEO_Engine')) { Oxygen_SEO_Engine::indexnow([get_permalink($id)]); }
         return $id;
@@ -188,7 +217,8 @@ final class Oxygen_Partner_Articles {
     public static function tick() {
         $s = self::settings(); if (empty($s['enabled']) || !self::numbers()) { return; }
         for ($i = 0; $i < (int) $s['per_tick_new']; $i++) { if (!self::create_next()) { break; } }
-        for ($i = 0; $i < (int) $s['per_tick_refresh']; $i++) { if (!self::refresh_next()) { break; } }
+        $n = get_option('oxygen_pa_ver_done') == self::SCOPE_VER ? (int) $s['per_tick_refresh'] : 25;
+        for ($i = 0; $i < $n; $i++) { if (!self::refresh_next()) { if ($n > (int) $s['per_tick_refresh']) { update_option('oxygen_pa_ver_done', self::SCOPE_VER, false); } break; } }
     }
 
     /* ---------- admin ---------- */

@@ -222,7 +222,7 @@ class Oxygen_SEO_Mega {
 
     /** Cooling, refrigeration, freezer and cold-room services: the focus of the daily mix. */
     const FOCUS_SIDS = ['ac-wash', 'ac-maint', 'ac-install', 'ac-central', 'fridge'];
-    const FOCUS_SHARE = 0.9;   // share of each day's articles about A/C + cold / freezer rooms (owner order 2026-11-19: top priority, was 0.7)
+    const FOCUS_SHARE = 1.0;   // A/C + cold / freezer rooms only (owner order 2026-11-20); other trades only when no cooling item is left
     const MAKKAH_SHARE = 0.7;  // share of each day's articles located in Makkah
 
     public static function is_focus($it) { return in_array($it['sid'] ?? '', self::FOCUS_SIDS, true); }
