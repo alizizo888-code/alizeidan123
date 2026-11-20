@@ -227,7 +227,11 @@ final class Mutqan_AI {
         $wantJson = !empty($opts['json']);
         $temp = isset($opts['temperature']) && is_numeric($opts['temperature']) ? max(0, min(1.2, (float) $opts['temperature'])) : 0.4;
 
-        $want = $opts['tier'] ?? 'low';
+        // Who the answer is for (owner, 2026-11-20): customers ride the free providers and only then the cheapest Claude;
+        // technicians the next one up; the owner and operations get the strong model first, for thinking and planning.
+        // Customer features count as «customer» even when the hub calls in as the system account.
+        $aud = self::audience($opts, $p);
+        $want = $opts['tier'] ?? ($aud === 'manager' ? 'high' : 'low');
         $ft = (array) ($s['feature_tiers'] ?? []);
         $f = (string) ($opts['feature'] ?? '');
         if ($f !== '' && isset($ft[$f]) && array_search($ft[$f], self::TIERS, true) > array_search(in_array($want, self::TIERS, true) ? $want : 'low', self::TIERS, true)) { $want = $ft[$f]; }
@@ -280,8 +284,44 @@ final class Mutqan_AI {
             self::note($id, $r['error']);
             if ($r['cooldown']) { self::set_cooldown($id, $r['cooldown']); }
         }
+        // Every free door is shut: the paid fallback for this audience (customers → the cheapest Claude, technicians → the
+        // next, owner/operations → the strong one), once, still under the wallet and the cooldown.
+        $fb = self::fallback_model($aud, $s);
+        if ($fb !== '' && $fb !== $model && !self::cooling('anthropic') && (!class_exists('Mutqan_Points') || Mutqan_Points::available())) {
+            self::$cap = (int) max(6, min(20, $deadline - microtime(true) + 8));
+            $r = self::call_anthropic(array_merge($s['providers']['anthropic'], ['model' => $fb]), $prompt, $wantJson, $temp);
+            self::$cap = 0;
+            if ($r['ok']) {
+                $text = trim($r['text']); $json = $wantJson ? self::extract_json($text) : null;
+                if (!$wantJson || $json !== null) { self::note('anthropic', 'ok'); $out = ['text' => $text, 'json' => $json, 'provider' => 'anthropic', 'tier' => 'fallback-' . $aud]; self::teach($prompt, $out, $opts, $p); return $out; }
+            } else {
+                self::note('anthropic', $r['error']);
+                if ($r['cooldown']) { self::set_cooldown('anthropic', $r['cooldown']); }
+            }
+        }
         if ($lastText !== '') { return ['text' => $lastText, 'json' => null, 'provider' => $lastProvider]; }
         throw new Mutqan_Error('ai_unavailable', 'خدمة الذكاء الاصطناعي مشغولة الآن.', 503);
+    }
+
+    /** customer | technician | system | manager — whom this answer serves, for choosing the paid model. */
+    public static function audience($opts, $p) {
+        $f = (string) ($opts['feature'] ?? '');
+        if (in_array($f, self::HOUSE_FEATURES, true) || !Mutqan_Policy::is_staff($p)) { return 'customer'; }
+        // Background jobs run as the system account: articles, reports, routine work — the middle model, never the top one.
+        if ((string) ($p['id'] ?? '') === 'system') { return 'system'; }
+        $role = (string) ($p['role'] ?? '');
+        return ($role === 'owner' || $role === 'operations') ? 'manager' : 'technician';
+    }
+
+    /** The Claude model that backs an audience once the free providers are exhausted; '' when Claude is not set up. */
+    public static function fallback_model($aud, $s = null) {
+        $s = $s ?: self::settings();
+        $c = $s['providers']['anthropic'] ?? null;
+        if (!$c || !self::usable('anthropic', $c)) { return ''; }
+        $t = array_merge(self::defaults()['tiers'], (array) ($s['tiers'] ?? []));
+        if ($aud === 'customer') { return (string) ($t['mid'] ?: ($c['model'] ?? '')); }
+        if ($aud === 'technician' || $aud === 'system') { return (string) $t['routine']; }
+        return (string) $t['high'];
     }
 
     /**
