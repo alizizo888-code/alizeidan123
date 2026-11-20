@@ -459,7 +459,13 @@ final class Mutqan_Policy {
         if ($total <= 0) { return 0; }
         $row = Mutqan_Store::get_raw('pricing', 'ac_calc') ?: [];
         $md = (isset($row['maxDiscountPct']) && is_numeric($row['maxDiscountPct'])) ? max(0, (float) $row['maxDiscountPct']) : 10.0;
-        return (int) round(round($total) * (1 - $md / 100)) - 1;
+        $floor = (int) round(round($total) * (1 - $md / 100)) - 1;
+        // 4+ split units (owner, 2026-11-20): the bulk band may go deeper than the percentage cap — six for 250 on a quiet day.
+        if (class_exists('Mutqan_Deal') && empty($q['items']) && ($q['mode'] ?? 'wash') === 'wash' && ($q['type'] ?? 'سبليت') === 'سبليت' && (!isset($q['full']) || $q['full'])) {
+            $qty = max(1, (int) ($q['qty'] ?? 1));
+            if ($qty >= Mutqan_Deal::band()['fromQty']) { $floor = min($floor, Mutqan_Deal::bulk_floor($qty, (int) round($total), null) - 1); }
+        }
+        return $floor;
     }
 
     /** Official AC total (0 = priced after inspection). Same rules as acPricing.js. */

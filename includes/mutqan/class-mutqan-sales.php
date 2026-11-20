@@ -30,7 +30,7 @@ final class Mutqan_Sales {
     const LOG = 'mutqan_sales_log';
     const CRON = 'mutqan_sales_tick';
     const TZ = 'Asia/Riyadh';
-    const CUSTOMER_FEATURES = ['chat', 'site_chat', 'wa', 'negotiate', 'sales'];
+    const CUSTOMER_FEATURES = ['chat', 'site_chat', 'wa', 'wa_hub', 'wa_reception', 'negotiate', 'sales'];
 
     private static function sys() { return ['kind' => 'user', 'role' => 'owner', 'id' => 'system', 'powers' => ['read', 'write', 'manage']]; }
 
@@ -54,7 +54,7 @@ final class Mutqan_Sales {
                 'roundTo' => 5,
             ],
             'cities' => [
-                'makkah' => ['label' => 'مكة المكرمة', 'enabled' => 1, 'days' => [0, 1, 2, 3, 4, 5, 6], 'from' => '08:00', 'to' => '22:00', 'dailyCap' => 24, 'give' => 1.0],
+                'makkah' => ['label' => 'مكة المكرمة', 'enabled' => 1, 'days' => [0, 1, 2, 3, 4, 5, 6], 'from' => '07:00', 'to' => '22:00', 'dailyCap' => 24, 'give' => 1.0],
                 'jeddah' => ['label' => 'جدة', 'enabled' => 1, 'days' => [0, 2, 4, 6], 'from' => '13:00', 'to' => '21:00', 'dailyCap' => 10, 'give' => 0.8, 'minBatch' => 2],
             ],
             // Batching ladder per city and day. When a city reaches «after» orders for a day, new bookings for that
@@ -161,7 +161,7 @@ final class Mutqan_Sales {
         $peak = [];
         foreach ((array) ($r['peak'] ?? [['from' => '16:00', 'to' => '21:00']]) as $p) { if (is_array($p) && isset($p['from'], $p['to'])) { $peak[] = ['from' => self::hm($p['from'], '16:00'), 'to' => self::hm($p['to'], '21:00')]; } }
         return [
-            'openFrom' => self::hm($r['openFrom'] ?? '', '08:00'), 'openTo' => self::hm($r['openTo'] ?? '', '22:00'),
+            'openFrom' => self::hm($r['openFrom'] ?? '', '07:00'), 'openTo' => self::hm($r['openTo'] ?? '', '22:00'),
             'closedDays' => array_map('intval', (array) ($r['closedDays'] ?? [])),
             'peak' => $peak, 'capNormal' => (int) self::num($r['capNormal'] ?? 4, 4, 1, 50), 'capPeak' => (int) self::num($r['capPeak'] ?? 2, 2, 1, 50),
             'leadMinutes' => (int) self::num($r['leadMinutes'] ?? 60, 60, 0, 600),
@@ -423,6 +423,8 @@ final class Mutqan_Sales {
         if ($list <= 0) { return null; }
         $capFloor = (int) ceil($list * (1 - (float) $P['maxDiscountPct'] / 100));
         $floor = max($capFloor, (int) round((float) ($ctx['floor'] ?? 0)));
+        // A bulk deal is priced by the owner's band, which may sit under the percentage cap (Mutqan_Deal).
+        if (!empty($ctx['bulk']) && is_numeric($ctx['floor'] ?? null)) { $floor = (int) round((float) $ctx['floor']); }
         $floor = min($floor, $list);
         $gap = $list - $floor;
         $arch = (string) ($ctx['archetype'] ?? 'new');
@@ -435,6 +437,9 @@ final class Mutqan_Sales {
         if ($arch === 'vip' || $arch === 'urgent' || !empty($ctx['urgent'])) { $t -= 0.3; }
         if ($arch === 'corporate') { $t += 0.1; }
         if ($peak && !empty($P['noPeakDiscount'])) { $t -= 0.35; }
+        // The day (owner, 2026-11-20): no orders yet → a filled slot beats the price; two orders in → hold the price.
+        $lvl = (string) ($ctx['demand'] ?? '');
+        if ($lvl === 'quiet') { $t += !empty($ctx['bulk']) ? 0.4 : 0.15; } elseif ($lvl === 'busy') { $t -= 0.3; }
         $t = max(0, min(1, $t * $cityGive));
         $target = max($floor, self::r($list - $t * $gap, $P['roundTo']));
         // Concessions get smaller every time: 40% / 30% / 20% / 10% of the way to the target.
@@ -507,7 +512,8 @@ final class Mutqan_Sales {
         $peak = $first ? !empty($first['peak']) : self::is_peak($now);
         $ctxId = $peak ? 'peak' : 'calm';
         $sc = Mutqan_Playbook::get($sid . '.' . $arch . '.' . $ctxId) ?: Mutqan_Playbook::get($sid . '.new.' . $ctxId);
-        $strat = $list > 0 ? self::strategy(['list' => $list, 'floor' => $in['floor'] ?? null, 'qty' => $in['qty'] ?? 1, 'peak' => $peak, 'asks' => $sig['asks'], 'situation' => $sid,
+        $dem = class_exists('Mutqan_Deal') ? Mutqan_Deal::demand($now, $orders) : ['level' => ''];
+        $strat = $list > 0 ? self::strategy(['list' => $list, 'floor' => $in['floor'] ?? null, 'qty' => $in['qty'] ?? 1, 'peak' => $peak, 'bulk' => !empty($in['bulk']), 'demand' => $dem['level'], 'asks' => $sig['asks'], 'situation' => $sid,
             'archetype' => $arch, 'sensitivity' => $sens, 'give' => $sc['give'] ?? 0, 'city' => $city === 'out' ? 'makkah' : $city, 'budget' => $sig['budget'], 'urgent' => $sig['urgent'],
             'counter' => in_array($sid, ['counter_low', 'counter_ok', 'budget_stated', 'split_difference'], true) ? Mutqan_Playbook::money_in($text) : null], $s) : null;
         $quiet = null;
@@ -517,7 +523,7 @@ final class Mutqan_Sales {
             'k' => Mutqan_Playbook::money_in($text), 's' => $first['label'] ?? null], crc32($text)) : '';
         return ['scenario' => $sc ? ['id' => $sc['id'], 'title' => $sc['title'], 'tactic' => $sc['tactic'], 'persona' => $sc['persona'], 'timing' => $sc['timing'], 'action' => $sc['action']] : null,
             'archetype' => $arch, 'sensitivity' => $sens, 'profile' => $prof, 'signals' => $sig, 'city' => $city, 'peak' => $peak,
-            'price' => $strat, 'slots' => $slots['slots'], 'quietSlot' => $quiet, 'rule' => $slots['ruleText'] ?? '', 'cityToday' => $slots['today'] ?? null, 'sample' => $sample,
+            'price' => $strat, 'demand' => $dem, 'deal' => (!empty($in['bulk']) && class_exists('Mutqan_Deal')) ? Mutqan_Deal::deal_hint((int) ($in['qty'] ?? 1), (int) $list, $in['floor'] ?? null) : '', 'slots' => $slots['slots'], 'quietSlot' => $quiet, 'rule' => $slots['ruleText'] ?? '', 'cityToday' => $slots['today'] ?? null, 'sample' => $sample,
             'notes' => array_map(function ($n) { return $n['text']; }, array_slice($s['notes'], -8))];
     }
 
@@ -540,6 +546,8 @@ final class Mutqan_Sales {
             if ($pr['loyal']) { $L[] = '- سعر الولاء المسموح لهذا العميل: ' . $pr['loyal'] . ' ر.س — قدّمه كتقدير لا كفصال.'; }
             if ($pr['scope']) { $L[] = '- ' . $pr['scope'] . '.'; }
         }
+        if (!empty($plan['deal'])) { $L[] = '- ' . $plan['deal']; }
+        if (!empty($plan['demand']['label'])) { $L[] = '- حالة اليوم: ' . $plan['demand']['label'] . ' (' . (int) $plan['demand']['today'] . ' طلب).'; }
         if ($plan['city'] === 'out') { $L[] = '- المنطقة خارج مكة وجدة: لا تحجز ولا تسعّر، اعرض التحويل لفرع شريك.'; }
         elseif ($plan['slots']) {
             $L[] = '- مواعيد ' . ($plan['city'] === 'jeddah' ? 'جدة' : 'مكة') . ' المقترحة (اعرض أول واحد أو اثنين فقط): ' . implode(' | ', array_map(function ($x) { return $x['label'] . ($x['peak'] ? ' (ذروة)' : ''); }, $plan['slots'])) . '.';
@@ -571,6 +579,11 @@ final class Mutqan_Sales {
                 'phone' => (string) ($ctx['phone'] ?? ''), 'userId' => ($p['kind'] ?? '') === 'user' ? (string) ($p['id'] ?? '') : '',
                 'name' => mb_substr((string) ($ctx['name'] ?? ''), 0, 30), 'dialect' => (string) ($ctx['dialect'] ?? ''), 'agreed' => !empty($ctx['agreed']), 'quoted' => !empty($ctx['quoted'])];
             if ($in['phone'] === '' && $in['userId'] !== '') { $in['phone'] = $in['userId']; }
+            if ($in['list'] <= 0 && class_exists('Mutqan_Deal') && ($pq = Mutqan_Deal::priced($lines))) {
+                $in['list'] = (float) $pq['list']; $in['floor'] = (float) $pq['floor']; $in['qty'] = $pq['qty']; $in['bulk'] = $pq['bulk'];
+            } elseif ($in['list'] > 0 && class_exists('Mutqan_Deal') && (int) $in['qty'] >= Mutqan_Deal::band()['fromQty'] && ($ctx['spec'] ?? '') === 'ac') {
+                $in['floor'] = (float) Mutqan_Deal::bulk_floor((int) $in['qty'], (int) $in['list'], $in['floor']); $in['bulk'] = true;
+            }
             $plan = self::plan($in);
             // The app runs its own negotiation ladder and records the agreed price from it. When it has already
             // decided the number for this turn, that number is the one to say — the brain adds the who, the when

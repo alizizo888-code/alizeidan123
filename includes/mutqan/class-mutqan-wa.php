@@ -668,7 +668,7 @@ final class Mutqan_WA {
                 'area' => $area !== '' ? $area : null,
                 'qty' => isset($neg['qty']) ? (int) $neg['qty'] : null,
                 'unitType' => isset($neg['type']) ? (string) $neg['type'] : null,
-                'agreedPrice' => isset($neg['offer']) ? (int) $neg['offer'] : null,
+                'agreedPrice' => isset($neg['offer']) ? (int) $neg['offer'] : (preg_match('/(\d{2,5})/', strtr((string) ($lead['price'] ?? ''), ['٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9']), $pm) ? (int) $pm[1] : null),
                 'quotedPrice' => isset($neg['total']) ? (int) $neg['total'] : null,
             ], static function ($v) { return $v !== null && $v !== ''; }),
             // The route: every step this order takes, in order, so anyone picking it up can see its history.

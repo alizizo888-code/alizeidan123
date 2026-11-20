@@ -57,11 +57,13 @@ final class Mutqan_WA_AI {
             . "## اللي اتجمع من الطلب لحد دلوقتي\n" . ($lead ? wp_json_encode($lead, JSON_UNESCAPED_UNICODE) : 'لا شيء') . "\n"
             . "## المحادثة\n" . ($hist ? implode("\n", $hist) : '') . "\nالعميل (آخر رسالة): " . mb_substr((string) $text, 0, 600) . "\n\n"
             . "## المطلوب\n"
-            . "- جاوب سؤاله بالظبط. لو عايز خدمة: اجمع منه بالتدريج (بسؤال واحد في كل رسالة) الخدمة المطلوبة، الحي/المدينة، الوقت المناسب، والاسم.\n"
+            . "- جاوب سؤاله بالظبط. لو عايز خدمة: اجمع منه بالتدريج (بسؤال واحد في كل رسالة) الخدمة المطلوبة ونوع وعدد الأجهزة، الحي/المدينة، والوقت. الاسم مش شرط.\n"
+            . "- الوقت: " . (class_exists('Mutqan_Deal') ? 'لو ما حددش اكتب في lead.time «' . Mutqan_Deal::booking()['defaultTime'] . '».' : 'الافتراضي اليوم — أقرب وقت.') . "\n"
+            . "- الأسعار من جدول الأسعار الرسمي بس، والفصال حسب تعليمات العقل التجاري (لو موجودة). سجّل السعر اللي اتفقتوا عليه في lead.price.\n"
             . "- أول ما يبقى عندك الخدمة والحي على الأقل، سجّل الطلب (complete=true) وقوله إن الطلب اتسجل وهيوصله التأكيد حالًا.\n"
             . "- شكوى، استرجاع فلوس، زعل شديد، تهديد، أو أي قرار مش بتاعك: handoff=true وقوله إن المسؤول هيكلمه حالًا.\n"
             . "- رد بالـJSON ده بس:\n"
-            . '{"reply":"نص الرد","lead":{"service":"","area":"","time":"","name":"","note":""},"complete":false,"handoff":false,"handoff_reason":""}';
+            . '{"reply":"نص الرد","lead":{"service":"","area":"","time":"","name":"","note":"","price":""},"complete":false,"handoff":false,"handoff_reason":""}';
         return $P;
     }
 
@@ -72,6 +74,16 @@ final class Mutqan_WA_AI {
         $hs = (int) ($ai['hourStart'] ?? 0); $hc = (int) ($ai['hourCount'] ?? 0);
         if ($ts - $hs > 3600) { $hs = $ts; $hc = 0; }
         if ($hc >= (int) self::settings()['maxPerHour']) { $out['notify'] = 'محادثة كتير جدًا مع عميل واحد — البوت وقف يرد ساعة، راجعها بنفسك.'; return $out; }
+        // A customer with an order on the go asking about it («الفني فين؟», «الغي الطلب», «أجّله»): the system acts on the
+        // order and answers from its facts — no model needed, and nothing invented.
+        if (class_exists('Mutqan_Deal')) {
+            try { $sv = Mutqan_Deal::service($phone, (string) $text); } catch (Throwable $e) { $sv = null; error_log('[mutqan] wa service ' . $e->getMessage()); }
+            if ($sv && ($sv['reply'] ?? '') !== '') {
+                $out['replies'][] = $sv['reply'];
+                $out['patch'] = ['ai' => array_merge($ai, ['hourStart' => $hs, 'hourCount' => $hc + 1, 'lastAt' => $ts, 'service' => $sv['intent']])];
+                return $out;
+            }
+        }
         $r = null;
         if (class_exists('Mutqan_AI') && Mutqan_AI::any_enabled()) {
             try {
@@ -83,7 +95,8 @@ final class Mutqan_WA_AI {
         if ($reply === '' && $r && trim((string) ($r['text'] ?? '')) !== '' && strpos((string) $r['text'], '{') === false) { $reply = trim((string) $r['text']); }
         if ($reply === '') {
             // The model is not answering: a person-like holding line, never silence, never a menu — and a person is called.
-            $said = class_exists('Mutqan_Brain') ? Mutqan_Brain::fallback((string) $text) : '';
+            $said = class_exists('Mutqan_Lore') ? Mutqan_Lore::answer((string) $text) : '';
+            if ($said === '' && class_exists('Mutqan_Brain')) { $said = Mutqan_Brain::fallback((string) $text); }
             $out['replies'][] = $said !== '' ? $said : 'أهلًا بيك 🌷 وصلتني رسالتك، ثواني ويرد عليك أحد الزملاء بنفسه.';
             $out['notify'] = 'الذكاء الاصطناعي ما ردش على عميل — رد عليه بنفسك: «' . mb_substr((string) $text, 0, 80) . '»';
             $out['patch'] = ['ai' => array_merge($ai, ['hourStart' => $hs, 'hourCount' => $hc + 1, 'lastAt' => $ts, 'down' => true])];
@@ -94,7 +107,7 @@ final class Mutqan_WA_AI {
         $lead = array_merge((array) ($ai['lead'] ?? []), $lead);
         $done = !empty($j['complete']) && trim((string) ($lead['service'] ?? '')) !== '';
         if ($done) {
-            $out['lead'] = ['service' => $lead['service'], 'area' => (string) ($lead['area'] ?? ''), 'name' => (string) ($lead['name'] ?? ''), 'note' => trim((string) ($lead['note'] ?? '')), 'time' => (string) ($lead['time'] ?? '')];
+            $out['lead'] = ['service' => $lead['service'], 'area' => (string) ($lead['area'] ?? ''), 'name' => (string) ($lead['name'] ?? ''), 'note' => trim((string) ($lead['note'] ?? '')), 'time' => (string) ($lead['time'] ?? '') ?: (class_exists('Mutqan_Deal') ? Mutqan_Deal::booking()['defaultTime'] : ''), 'price' => (string) ($lead['price'] ?? '')];
             $lead = [];
         }
         if (!empty($j['handoff'])) {
