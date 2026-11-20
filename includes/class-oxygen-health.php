@@ -105,6 +105,9 @@ final class Oxygen_Health {
 
     private static function whatsapp() {
         global $wpdb;
+        // Since 2026-11-16 WhatsApp runs through the VPS hub, which keeps the messages itself: wa_msgs going quiet is
+        // then normal, not an outage (first live run raised a false «83 hours» alarm). Only the on-site gateway is judged here.
+        if (class_exists('Mutqan_Hub') && Mutqan_Hub::on()) { return; }
         $t = Mutqan_Store::table('docs');
         $last = $wpdb->get_var($wpdb->prepare("SELECT MAX(created_at) FROM $t WHERE coll=%s", 'wa_msgs'));
         if (!$last) { return; }
