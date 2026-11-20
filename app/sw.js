@@ -41,9 +41,16 @@ self.addEventListener('push', (e) => {
     if (wins.some((w) => w.visibilityState === 'visible' && w.focused)) return
     const hi = d.priority === 'high'
     const icon = new URL('icon-192.png', self.registration.scope).href
-    await self.registration.showNotification(d.title || 'تنبيه جديد', {
-      body: d.body || '', tag: d.id || undefined, renotify: true, requireInteraction: hi,
-      vibrate: hi ? [500, 150, 500, 150, 900] : [200, 100, 200], icon, badge: icon, dir: 'rtl', lang: 'ar', data: { url: d.url || '' },
+    // Each kind feels different in the hand (the browser plays the phone's own notification sound; the Android app has a tone per kind).
+    const ev = String(d.event || '')
+    const kind = d.kind || (ev.includes('call') ? 'call' : /msg|message|chat|phone_wa/.test(ev) ? 'msg_in' : /new_order|order_bot|wa_handoff|warranty_claim/.test(ev) ? 'order'
+      : /assigned|accepted|rejected|en_route|nearby|arrived|started|progress|completed|contact|distance|order_status/.test(ev) ? 'tech' : 'ops')
+    const VIBE = { order: [500, 150, 500, 150, 900], msg_in: [180, 100, 180], tech: [120, 80, 120, 80, 300], ops: [220, 90, 220, 90, 320], customer: [180, 100, 180], call: [1000, 500, 1000, 500, 1000, 500, 1000], test: [500, 150, 500] }
+    const MARK = { order: '🆕 ', msg_in: '💬 ', tech: '🧰 ', ops: '🛰️ ', call: '📞 ', customer: '' }
+    const title = d.title || 'تنبيه جديد'
+    await self.registration.showNotification(/^\p{Extended_Pictographic}/u.test(title) ? title : (MARK[kind] || '') + title, {
+      body: d.body || '', tag: d.id || undefined, renotify: true, requireInteraction: hi || kind === 'call', silent: false,
+      vibrate: VIBE[kind] || (hi ? VIBE.order : [200, 100, 200]), icon, badge: icon, dir: 'rtl', lang: 'ar', timestamp: Date.now(), data: { url: d.url || '' },
     })
   })())
 })

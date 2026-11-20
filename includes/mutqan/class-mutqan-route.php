@@ -113,7 +113,12 @@ final class Mutqan_Route {
             foreach ($jobs as $j) { if (is_numeric($j['lat'] ?? null)) { $next = $j; break; } }
             $row = ['id' => $id, 'name' => mb_substr((string) ($t['displayName'] ?? $t['name'] ?? 'فني'), 0, 40), 'phone' => (string) ($t['phone'] ?? ''),
                 'code' => $c['code'], 'color' => $c['color'], 'off' => isset($t['available']) && !$t['available'], 'jobs' => count($jobs),
-                'live' => false, 'trail' => array_map(function ($p) { return [$p[0], $p[1]]; }, array_slice($trail, -120)), 'motion' => $mo];
+                'live' => false, 'trail' => array_map(function ($p) { return [$p[0], $p[1]]; }, array_slice($trail, -120)), 'motion' => $mo,
+                // the phone's state, for the operations room: battery, since when online, when and where last seen, his home
+                'battery' => isset($t['battery']) && is_numeric($t['battery']) ? (int) $t['battery'] : null, 'charging' => !empty($t['charging']), 'net' => (string) ($t['net'] ?? ''),
+                'activeSince' => (string) ($t['activeSince'] ?? ''), 'lastSeenAt' => (string) ($t['lastSeenAt'] ?? ''), 'shift' => !empty($t['active']),
+                'lastLat' => is_numeric($t['lat'] ?? null) ? (float) $t['lat'] : null, 'lastLng' => is_numeric($t['lng'] ?? null) ? (float) $t['lng'] : null,
+                'homeLat' => is_numeric($t['homeLat'] ?? null) ? (float) $t['homeLat'] : null, 'homeLng' => is_numeric($t['homeLng'] ?? null) ? (float) $t['homeLng'] : null];
             if ($pos) { $row += ['lat' => $pos['lat'], 'lng' => $pos['lng'], 'ago' => $pos['ago']]; $row['live'] = $pos['ago'] <= self::LIVE_S; }
             elseif (is_numeric($t['homeLat'] ?? null)) { $row += ['lat' => (float) $t['homeLat'], 'lng' => (float) $t['homeLng'], 'home' => true]; }
             if ($next) {

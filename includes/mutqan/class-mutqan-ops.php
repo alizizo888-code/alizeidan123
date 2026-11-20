@@ -54,6 +54,18 @@ final class Mutqan_Ops {
             return Mutqan_Route::assign((string) ($in['order'] ?? ''), (string) ($in['tech'] ?? ''), $p);
         }
         if ($op === 'fleet_ai') { return self::fleet_ai($p); }
+        // «سكن الفني»: operations pin where a technician lives (or clear it) — the start point of his day and the fallback
+        // place on the map when his phone is not sending.
+        if ($op === 'set_home') {
+            if (!Mutqan_Policy::has_power($p, 'write')) { throw new Mutqan_Error('forbidden', 'للعمليات والمالك.', 403); }
+            $tid = (string) ($in['tech'] ?? '');
+            if (!Mutqan_Store::get_raw('tech_profiles', $tid)) { throw new Mutqan_Error('not_found', 'الفني مش موجود.', 404); }
+            $clear = !empty($in['clear']);
+            $lat = $in['lat'] ?? null; $lng = $in['lng'] ?? null;
+            if (!$clear && (!is_numeric($lat) || !is_numeric($lng) || abs((float) $lat) > 90 || abs((float) $lng) > 180)) { throw new Mutqan_Error('bad_input', 'حدد المكان على الخريطة.', 400); }
+            Mutqan_Store::update('tech_profiles', $tid, $clear ? ['homeLat' => null, 'homeLng' => null, 'homeAt' => gmdate('c')] : ['homeLat' => round((float) $lat, 6), 'homeLng' => round((float) $lng, 6), 'homeAt' => gmdate('c'), 'homeBy' => (string) ($p['id'] ?? '')], self::sys());
+            return ['ok' => true];
+        }
         $msgs = self::clean_messages($in['messages'] ?? []);
         if (!$msgs) { throw new Mutqan_Error('empty_prompt', 'اكتب سؤالك.', 400); }
         if (!$isTech && class_exists('Mutqan_Quick')) {            // the internal engine first: instant, free, no limit

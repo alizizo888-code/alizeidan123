@@ -63,6 +63,7 @@ final class Mutqan_WebPush {
             if ($endpoint !== '') { self::drop($endpoint); }
             return ['ok' => true];
         }
+        if ($op === 'test') { return self::test($p, max(0, min(30, (int) ($in['delay'] ?? 0)))); }
         if ($op !== 'subscribe') { throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400); }
         $host = strtolower((string) wp_parse_url($endpoint, PHP_URL_HOST));
         if (strpos($endpoint, 'https://') !== 0 || $host === '' || strlen($endpoint) > 1000) { throw new Mutqan_Error('bad_request', 'اشتراك غير صالح.', 400); }
@@ -77,6 +78,40 @@ final class Mutqan_WebPush {
         ];
         self::put(self::id($endpoint), $doc);
         return ['ok' => true];
+    }
+
+    /**
+     * «جرّب»: a real alert to this person's own devices. Now (and say how many devices took it), or after a few seconds,
+     * once the answer has gone back, so the phone can be locked first. The Android app's alert service picks the same
+     * alert from the inbox; the browser gets it by Web Push.
+     */
+    private static function test($p, $delay) {
+        Mutqan_Limiter::hit('webpush_test', 20, 3600);
+        $uid = (string) ($p['id'] ?? '');
+        $subs = Mutqan_Store::select(self::SUBS, ['userId' => $uid], ['limit' => 50], self::sys());
+        $doc = ['id' => 'test-' . substr(md5(uniqid('', true)), 0, 10), 'title' => '🔔 تجربة إشعار — الشاشة مقفولة', 'body' => 'لو سامع ده والتطبيق مقفول يبقى الإشعارات شغالة على الجهاز ده ✅', 'url' => '#/notifications', 'priority' => 'high', 'event' => 'test', 'target' => ['user' => $uid]];
+        $fire = function () use ($doc, $subs) {
+            $ok = 0; $failed = 0;
+            try { Mutqan_Store::insert('_push', $doc + ['noWeb' => true, 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 3600)], self::sys()); } catch (Throwable $e) { /* native inbox only */ }
+            $payload = wp_json_encode(['id' => $doc['id'], 'title' => $doc['title'], 'body' => $doc['body'], 'url' => $doc['url'], 'priority' => 'high', 'event' => 'test', 'kind' => 'order'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            foreach ($subs as $s) {
+                $code = self::send($s, $payload, 'high', 600);
+                if ($code >= 200 && $code < 300) { $ok++; } else { $failed++; if ($code === 404 || $code === 410) { self::drop((string) $s['endpoint']); } }
+            }
+            return [$ok, $failed];
+        };
+        if ($delay > 0) {
+            register_shutdown_function(function () use ($fire, $delay) {
+                if (function_exists('fastcgi_finish_request')) { @fastcgi_finish_request(); }
+                elseif (function_exists('litespeed_finish_request')) { @litespeed_finish_request(); }
+                @ignore_user_abort(true); @set_time_limit(90);
+                sleep($delay);
+                try { $fire(); } catch (Throwable $e) { error_log('[mutqan] webpush test ' . $e->getMessage()); }
+            });
+            return ['devices' => count($subs), 'delay' => $delay];
+        }
+        [$ok, $failed] = $fire();
+        return ['devices' => count($subs), 'ok' => $ok, 'failed' => $failed];
     }
 
     private static function id($endpoint) { return 'ps:' . substr(hash('sha256', $endpoint), 0, 40); }
@@ -95,7 +130,7 @@ final class Mutqan_WebPush {
 
     /** Called for every alert written to `_push`; sent once the request is answered. */
     public static function queue($doc) {
-        if (!is_array($doc) || !self::supported()) { return; }
+        if (!is_array($doc) || !self::supported() || !empty($doc['noWeb'])) { return; }
         self::$queue[] = $doc;
         if (self::$hooked) { return; }
         self::$hooked = true;
@@ -130,7 +165,7 @@ final class Mutqan_WebPush {
         $hi = ($doc['priority'] ?? '') === 'high';
         $payload = wp_json_encode([
             'id' => (string) ($doc['id'] ?? ''), 'title' => (string) ($doc['title'] ?? ''), 'body' => mb_substr((string) ($doc['body'] ?? ''), 0, 600),
-            'url' => (string) ($doc['url'] ?? ''), 'priority' => $hi ? 'high' : 'normal', 'event' => (string) ($doc['event'] ?? ''), 'sound' => $doc['sound'] ?? null,
+            'url' => (string) ($doc['url'] ?? ''), 'priority' => $hi ? 'high' : 'normal', 'event' => (string) ($doc['event'] ?? ''), 'kind' => (string) ($doc['kind'] ?? ''), 'sound' => $doc['sound'] ?? null,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $n = 0;
         foreach (array_slice($subs, 0, self::MAX_PER_ALERT) as $s) {
