@@ -75,6 +75,7 @@ final class Mutqan_Dispatch {
         if (class_exists('Mutqan_Auth') && method_exists('Mutqan_Auth', 'staff_members')) {
             $live = [];
             foreach (Mutqan_Auth::staff_members('technician') as $m) { $live[(string) $m['id']] = true; }
+            if (!$live) { $live = null; }   // no technician accounts at all (a fresh install): nothing to check against
         }
         return array_values(array_filter($rows, function ($t) use ($live) {
             if (empty($t['userId'])) { return false; }

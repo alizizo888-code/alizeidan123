@@ -67,6 +67,15 @@ final class Oxygen_Health {
         try { self::whatsapp(); } catch (Throwable $e) { error_log('[oxygen-health] wa ' . $e->getMessage()); }
     }
 
+    private static function site_ids() {
+        static $ids = null;
+        if ($ids === null) {
+            $ids = [];
+            foreach (Mutqan_Store::select('tech_profiles', [], ['limit' => 300], self::sys()) as $p) { if (!empty($p['isSite'])) { $ids[] = (string) ($p['userId'] ?? $p['id'] ?? ''); } }
+        }
+        return $ids;
+    }
+
     private static function age_min($o) {
         $ts = strtotime((string) ($o['createdAt'] ?? ''));
         return $ts ? (time() - $ts) / 60 : 0;
@@ -81,7 +90,10 @@ final class Oxygen_Health {
             $age = self::age_min($o);
             if ($age > 7 * 1440) { continue; }   // a week-old open order is a bookkeeping matter, not an alarm
             $short = '#' . substr($id, -5);
-            $noTech = in_array($st, ['new', 'forced', ''], true) || ($o['dispatch'] ?? '') === 'site';
+            // «no technician» = nobody real holds it: empty, or the site placeholder. A stale dispatch='site' on an order
+            // that was later handed to a person must not ring (first live run, 2026-11-20).
+            $tid = (string) ($o['technicianId'] ?? '');
+            $noTech = $tid === '' || in_array($tid, self::site_ids(), true);
             if ($noTech && $age >= 30 && empty($o['inhouse']) && self::once('wait:' . $id)) {
                 self::tell('⏳ طلب منتظر بدون فني ' . $short, 'مرّ عليه ' . (int) $age . ' دقيقة ولم يستلمه فني حقيقي — أسنده الآن.', '#/staff/order/' . $id, 'order_waiting');
             }
