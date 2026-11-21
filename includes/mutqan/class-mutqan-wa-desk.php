@@ -372,8 +372,7 @@ final class Mutqan_WA_Desk {
     private static function tech_name($t) { return (string) ($t['displayName'] ?? $t['name'] ?? 'فني'); }
     private static function num($o) { return (string) ($o['number'] ?? $o['ref'] ?? $o['id'] ?? '—'); }
     private static function what($o) {
-        $s = (string) ($o['serviceLabel'] ?? $o['service'] ?? $o['specialtyLabel'] ?? '');
-        return $s !== '' ? $s : 'صيانة';
+        return Mutqan_Service::label($o);
     }
     const LABELS = ['new' => 'جديد', 'forced' => 'إجباري', 'assigned' => 'مُسند', 'accepted' => 'قَبِل الفني',
         'en_route' => 'في الطريق', 'nearby' => 'قرّب', 'arrived' => 'وصل', 'in_progress' => 'جاري العمل',

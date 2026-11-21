@@ -74,19 +74,8 @@ final class Mutqan_WA_Journey {
     }
 
     private static function summary($o) {
-        $L = [];
-        $svc = (string) ($o['serviceLabel'] ?? ($o['service'] ?? ''));
-        if ($svc === '' && class_exists('Mutqan_Rest') && !empty($o['specialtyId'])) { $svc = (string) Mutqan_Rest::spec_label($o['specialtyId']); }
-        if ($svc !== '') { $L[] = '🛠 الخدمة: ' . mb_substr($svc, 0, 120); }
-        if (!empty($o['address'])) { $L[] = '🏠 العنوان: ' . mb_substr((string) $o['address'], 0, 140); }
-        if (is_numeric($o['lat'] ?? null)) { $L[] = '📍 اللوكيشن: https://maps.google.com/?q=' . $o['lat'] . ',' . $o['lng']; }
-        if (!empty($o['appointmentAt'])) { $L[] = '📅 الموعد: ' . (class_exists('Mutqan_Sales') ? Mutqan_Sales::slot_label(strtotime((string) $o['appointmentAt'])) : $o['appointmentAt']); }
-        elseif (!empty($o['preferredTime'])) { $L[] = '📅 الموعد: ' . mb_substr((string) $o['preferredTime'], 0, 80); }
-        $price = $o['agreedPrice'] ?? ($o['plan']['agreedPrice'] ?? null);
-        if (is_numeric($price)) { $L[] = '💰 السعر المتفق: ' . $price . ' ر.س'; }
-        return $L;
+        return Mutqan_Service::lines($o, true);
     }
-
     private static function site_name($o) {
         $card = (array) ($o['card'] ?? []);
         if (!empty($card['site']) && $card['site'] !== 'غير محدد') { return (string) $card['site']; }
