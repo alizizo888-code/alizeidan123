@@ -551,7 +551,11 @@ class Oxygen_SEO_Engine {
                 }
             }
         }
-        return ['app' => self::app_url(), 'wa' => preg_replace('/\D/', '', (string) $s['wa']), 'links' => $links, 'img' => $img];
+        $wa = preg_replace('/\D/', '', (string) $s['wa']);
+        // Each new article carries one of the company's sales numbers, picked by the article (Mutqan_Lines), so the
+        // network's articles spread over all the sales lines instead of one fixed number.
+        if (class_exists('Mutqan_Lines')) { $r = Mutqan_Lines::public_for(class_exists('Oxygen_Network') ? Oxygen_Network::current_id() : '', (int) sprintf('%u', crc32((string) $item['key'])), 'articles'); if ($r['wa'] !== '') { $wa = $r['wa']; } }
+        return ['app' => self::app_url(), 'wa' => $wa, 'links' => $links, 'img' => $img];
     }
     private static function term($name) {
         if (!function_exists('wp_insert_term')) { return 0; }

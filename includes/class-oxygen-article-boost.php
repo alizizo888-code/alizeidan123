@@ -22,7 +22,15 @@ final class Oxygen_Article_Boost {
     private static function app_url() { return plugins_url('app/index.html', dirname(__DIR__) . '/oxygen-ac-automation.php') . '#/'; }
 
     /** WhatsApp / phone: article settings → business control → first enabled number of the app. */
-    public static function contact() {
+    public static function contact($pid = 0) {
+        // An article shows one of the company's sales numbers, chosen by the article and moved weekly (Mutqan_Lines),
+        // so the numbers spread over the articles and never sit fixed. Pages that are not articles keep the site's own.
+        if (!$pid && function_exists('is_singular') && is_singular('post')) { $pid = (int) get_the_ID(); }
+        if ($pid && class_exists('Mutqan_Lines')) {
+            $site = class_exists('Oxygen_Network') ? Oxygen_Network::current_id() : '';
+            $r = Mutqan_Lines::public_for($site, $pid, 'articles');
+            if ($r['wa'] !== '') { return ['wa' => $r['wa'], 'phone' => $r['phone']]; }
+        }
         static $c = null; if ($c !== null) { return $c; }
         $wa = ''; $phone = '';
         if (class_exists('Oxygen_SEO_Engine')) { $s = Oxygen_SEO_Engine::settings(); $wa = preg_replace('/\D/', '', (string) ($s['wa'] ?? '')); }
@@ -229,7 +237,7 @@ final class Oxygen_Article_Boost {
             }
         }
         if ($art && class_exists('Oxygen_Visuals')) {
-            $cc = self::contact(); $app = esc_url(self::app_url()); $topic = wp_strip_all_tags(get_the_title($pid));
+            $cc = self::contact((int) $pid); $app = esc_url(self::app_url()); $topic = wp_strip_all_tags(get_the_title($pid));
             $lbl = Oxygen_Visuals::specs()[$spec][0] ?? 'خدماتنا';
             $caps = [['مشهد من عالم ' . $lbl . ' — خبرة تصنع الفرق', 2], ['فريق مختص بخدمة ' . $lbl . ' في مكة وجدة', 5], ['جودة وإتقان في ' . $lbl, 7]];
             $promo = Oxygen_Visuals::promo(self::brand(), $app, $cc['wa'], $cc['phone'], $topic);

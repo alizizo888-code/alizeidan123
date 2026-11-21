@@ -231,9 +231,13 @@ final class Oxygen_Network {
         $digits = function ($v) { return substr(preg_replace('/\D+/', '', (string) $v), 0, 15); };
         $sat = isset(self::registry()[$id]) && empty(self::registry()[$id]['core']);
         $own = $digits($c['phone'] ?? '') !== '';
-        $phone = $own ? $digits($c['phone']) : ($sat ? self::DEFAULT_PHONE : '');
-        $wa = $digits($c['wa'] ?? '') !== '' ? $digits($c['wa']) : ($own ? $phone : ($sat ? self::DEFAULT_PHONE : ''));
-        $wa2 = $digits($c['wa2'] ?? '') !== '' ? $digits($c['wa2']) : ($own ? '' : ($sat ? self::DEFAULT_PHONE2 : ''));
+        // No number pinned for this brand: the company's sales numbers (Mutqan_Lines), spread over the brands and moved weekly.
+        $pool = (!$own && $sat && class_exists('Mutqan_Lines')) ? Mutqan_Lines::public_for($id, 0, 'sites') : null;
+        $d1 = $pool && $pool['wa'] !== '' ? $pool['wa'] : self::DEFAULT_PHONE;
+        $d2 = $pool && $pool['wa2'] !== '' ? $pool['wa2'] : self::DEFAULT_PHONE2;
+        $phone = $own ? $digits($c['phone']) : ($sat ? $d1 : '');
+        $wa = $digits($c['wa'] ?? '') !== '' ? $digits($c['wa']) : ($own ? $phone : ($sat ? $d1 : ''));
+        $wa2 = $digits($c['wa2'] ?? '') !== '' ? $digits($c['wa2']) : ($own ? '' : ($sat ? $d2 : ''));
         return ['phone' => $phone, 'wa' => $wa, 'wa2' => $wa2];
     }
 

@@ -35,7 +35,7 @@ final class Mutqan_Leads {
     public static function table() { global $wpdb; return $wpdb->prefix . 'mutqan_leads'; }
 
     public static function install() {
-        if (get_option(self::DBV) === '1') { return; }
+        if (get_option(self::DBV) === '2') { return; }
         global $wpdb;
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         $t = self::table(); $cs = $wpdb->get_charset_collate();
@@ -57,13 +57,19 @@ final class Mutqan_Leads {
   query varchar(190) NOT NULL DEFAULT '',
   mobile tinyint(1) NOT NULL DEFAULT 0,
   status varchar(12) NOT NULL DEFAULT 'new',
+  source varchar(12) NOT NULL DEFAULT 'maps',
+  line varchar(20) NOT NULL DEFAULT '',
+  sent_count int(11) NOT NULL DEFAULT 0,
+  last_sent datetime NULL,
+  replied tinyint(1) NOT NULL DEFAULT 0,
   first_seen datetime NOT NULL,
   last_seen datetime NOT NULL,
   PRIMARY KEY  (id),
   UNIQUE KEY phone (phone),
-  KEY cf (city, field, status)
+  KEY cf (city, field, status),
+  KEY outreach (status, mobile, last_sent)
 ) $cs;");
-        update_option(self::DBV, '1', false);
+        update_option(self::DBV, '2', false);
     }
 
     public static function defaults() {
@@ -139,7 +145,7 @@ final class Mutqan_Leads {
         $new = 0; $seen = 0; $bad = 0;
         foreach (array_slice($rows, 0, 2000) as $r) {
             $p = self::phone($r['phone'] ?? '');
-            if ($p === '' || !in_array($r['city'] ?? '', ['makkah', 'jeddah'], true) || !in_array($r['field'] ?? '', ['ac', 'cold'], true)) { $bad++; continue; }
+            if ($p === '' || (class_exists('Mutqan_Lines') && Mutqan_Lines::is_ours($p)) || !in_array($r['city'] ?? '', ['makkah', 'jeddah'], true) || !in_array($r['field'] ?? '', ['ac', 'cold'], true)) { $bad++; continue; }
             $s = function ($k, $n) use ($r) { return mb_substr(sanitize_text_field((string) ($r[$k] ?? '')), 0, $n); };
             $row = ['name' => $s('name', 190), 'category' => $s('category', 120), 'address' => $s('address', 255), 'website' => esc_url_raw(mb_substr((string) ($r['website'] ?? ''), 0, 255)),
                 'email' => sanitize_email((string) ($r['email'] ?? '')), 'link' => esc_url_raw(mb_substr((string) ($r['link'] ?? ''), 0, 500)), 'query' => $s('query', 190),
