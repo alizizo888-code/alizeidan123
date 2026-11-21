@@ -148,12 +148,13 @@ export const sign = (site, text) => (!site || text.includes('— *' + site + '*'
 export function missing(o) {
   const miss = []
   if (!o.appointment && !String(o.preferredTime || '').trim()) miss.push('time')
-  if (!(Number.isFinite(Number(o.lat)) && o.lat !== null && o.lat !== '') && !String(o.address || '').trim()) miss.push('place')
+  // The pin itself (owner, 2026-11-21): a neighbourhood's name does not take the technician to the door.
+  if (!(Number.isFinite(Number(o.lat)) && o.lat !== null && o.lat !== '')) miss.push('place')
   return miss
 }
 export const missingText = (miss) => [
   ...(miss.includes('time') ? ['📅 الموعد المناسب ليك (مثال: بكرة العصر، أو اليوم الساعة 6)'] : []),
-  ...(miss.includes('place') ? ['📍 موقعك: ابعت اللوكيشن من واتساب (📎 ← الموقع) أو اكتب الحي والعنوان'] : []),
+  ...(miss.includes('place') ? ['📍 اللوكيشن نفسه من واتساب: 📎 ← الموقع ← إرسال موقعي الحالي (اسم الحي لوحده مش كفاية)'] : []),
 ]
 export function summary(o) {
   const L = []

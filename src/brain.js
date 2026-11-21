@@ -106,8 +106,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     // sent one (site, service, count, time and date, map, verification), else the short summary.
     const head = '🆕 *طلب جديد #' + T.num(o) + '*' + (o.site ? ' — ' + o.site : '')
     const hint = o.techName ? '👷 اتسند آليًا لـ ' + o.techName : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'
-    const waiting = [o.originLine ? '🧭 جاي منين: ' + o.originLine : '', o.clientPhone ? '' : '⏳ رقم العميل يوصل أول ما يبعت رسالة الطلب من واتساب'].filter(Boolean).join('\n')
-    toRoom((card ? [card, waiting, '', hint] : [head, '👤 ' + (o.clientName || 'بدون اسم') + (o.clientPhone ? ' — ' + o.clientPhone : ' — ⏳ مستني تأكيده من واتساب'), ...T.summary(o), '', hint]).filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n'), 'new-' + o.id)
+    const waiting = [o.originLine ? '🧭 جاي منين: ' + o.originLine : '', o.historyText ? '✅ تم العمل عنده قبل كده\n' + o.historyText : '', o.clientPhone ? '' : '⏳ رقم العميل يوصل أول ما يبعت رسالة الطلب من واتساب'].filter(Boolean).join('\n')
+    toRoom((card ? [card, waiting, '', hint] : [head, '👤 ' + (o.clientName || 'بدون اسم') + (o.clientPhone ? ' — ' + o.clientPhone : ' — ⏳ مستني تأكيده من واتساب'), ...T.summary(o), o.historyText ? '✅ تم العمل عنده قبل كده\n' + o.historyText : '', '', hint]).filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n'), 'new-' + o.id)
     // From the site's order button: the site sends him the full order card itself — no «اكتب تأكيد» for him.
     if (o.clientPhone && ['site', 'mutqan_ai'].includes(o.source)) { setStage(o.clientPhone, o.id, 'live'); return }
     if (!o.clientPhone || o.customerConfirmed || o.waClaim || ['test', 'import'].includes(o.source)) return
@@ -407,6 +407,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   /* ------------------------------------------------------------------ the menu: the customer picks (owner, 2026-11-21) */
 
   const FLOW_TTL = 6 * 3600000
+  const PIN_ASK = '📍 ابعت *اللوكيشن نفسه* من واتساب: 📎 ← الموقع ← إرسال موقعي الحالي.\nاسم الحي لوحده مش كفاية — الفني بيوصلك باللوكيشن.'
   const REPAIR = /(عطل|عطلان|خربان|ما يبرد|مش بيبرد|ما يشتغل|ما يشغل|صيانه|اصلاح|تصليح|يقطر|ينقط|صوت|ريحه|فريون|كود|بيفصل|يفصل)/
   const INSTALL = /(تركيب|ركب|فك|نقل|اركب)/
   const PARTS = /(قطع غيار|قطع الغيار|سعر القطع|اسعار القطع|سعر القطعه|مكثف|كباستور|كابستور|بطاريه المكيف|ترموستات|ثرموستات|كونتاكتور|كنتاكتور|شريحه|بورده|موتور|ماتور|ريش المروحه|كمبروسر|كمبريسور|ضاغط|فريون)/
@@ -469,8 +470,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
 
   function askPlace(c, line, phone, m, prefix = '') {
     m.step = 'place'; saveFlow(c.pk, m)
-    if (m.place || m.lat !== undefined) return askTime(c, line, phone, m, prefix)
-    return say(phone, line, (prefix ? prefix + '\n\n' : '') + '📍 ابعت موقعك من واتساب (📎 ← الموقع) أو اكتب الحي والعنوان.')
+    if (m.lat !== undefined && m.lat !== null) return askTime(c, line, phone, m, prefix)
+    return say(phone, line, (prefix ? prefix + '\n\n' : '') + PIN_ASK)
   }
   function askTime(c, line, phone, m, prefix = '') {
     const tc = M.timeChoices(hourNow()); m.step = 'time'; m.tc = tc.opts; saveFlow(c.pk, m)
@@ -479,17 +480,22 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   function summary(c, line, phone, m) {
     m.step = 'summary'; saveFlow(c.pk, m)
     const price = m.svc === 'wash' ? '💰 السعر: *' + (m.agreed || m.offer) + ' ر.س*' : '💰 ' + (m.svc === 'repair' ? 'الكشف مجاني لحد جهازين، والسعر بعد الكشف وقبل أي شغل' : 'السعر بعد المعاينة (حسب النوع وطول النحاس) وقبل أي شغل')
-    return say(phone, line, ['📝 *ملخص طلبك*', '🛠 ' + m.label, price, '📍 ' + (m.place || 'اللوكيشن اتبعت ✅'), '📅 ' + m.time, '', '1️⃣ تأكيد الطلب ✅', '2️⃣ تعديل', '3️⃣ إلغاء'].join('\n'))
+    return say(phone, line, ['📝 *ملخص طلبك*', '🛠 ' + m.label, price, '📍 اللوكيشن اتبعت ✅' + (m.place ? ' (' + m.place + ')' : ''), '📅 ' + m.time, '', '1️⃣ تأكيد الطلب ✅', '2️⃣ تعديل', '3️⃣ إلغاء'].join('\n'))
   }
 
   async function book(c, line, phone, m, name) {
+    if (m.lat === undefined || m.lat === null) { m.step = 'place'; saveFlow(c.pk, m); return say(phone, line, PIN_ASK) }
     let g = null; try { g = JSON.parse(c.greet || 'null') } catch {}
     let o = null
     try {
       o = await wp('create', { phone: T.intl(phone), name: name || c.name || '', service: m.label + (m.desc ? ' — ' + m.desc : ''), address: m.place || '', lat: m.lat ?? null, lng: m.lng ?? null, time: m.time, line,
         price: m.svc === 'wash' ? (m.agreed || m.offer) : null, acQuote: m.svc === 'wash' ? (m.price?.acQuote || null) : null, spec: m.spec || 'ac', units: m.price?.units || m.count || null, confirmed: true,
         brand: (g && g.brand) || store.line?.(line)?.brand || '', code: (g && g.code) || '', source: (g && g.source) || '', sourceUrl: (g && g.sourceUrl) || '', platform: (g && g.platform) || '' })
-    } catch (e) { log('error', 'create: ' + e.message) }
+    } catch (e) {
+      log('error', 'create: ' + e.message)
+      // The site refuses an order without the pin: back to the place step, nothing lost.
+      if (/need_location|اللوكيشن/.test(String(e.message))) { m.step = 'place'; delete m.lat; saveFlow(c.pk, m); return say(phone, line, PIN_ASK) }
+    }
     saveFlow(c.pk, null)
     if (!o) { notifyHuman(store.chat(c.pk), 'طلب من القائمة ما اتسجلش: ' + m.label + ' — ' + (m.place || '') + ' — ' + m.time, false); return say(phone, line, 'وصلنا طلبك ✅ وموظف هيأكده معاك حالًا.') }
     store.touchChat(c.pk, { stage: 'live', orderId: o.id || '', stageAt: now() })
@@ -607,8 +613,9 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       }
       case 'place': {
         if (coords) { m.lat = coords[0]; m.lng = coords[1]; return askTime(c, line, phone, m, 'وصل اللوكيشن ✅') }
-        if (String(text).trim().length < 3 || k !== null) return say(phone, line, '📍 ابعت موقعك من واتساب (📎 ← الموقع) أو اكتب اسم الحي.')
-        m.place = String(text).slice(0, 160); return askTime(c, line, phone, m)
+        // A written address is kept as a note, but the order waits for the pin.
+        if (String(text).trim().length >= 3 && k === null) { m.place = String(text).slice(0, 160); saveFlow(c.pk, m); return say(phone, line, 'تمام، سجلت «' + m.place + '» كملاحظة ✅\n' + PIN_ASK) }
+        return say(phone, line, PIN_ASK)
       }
       case 'time': {
         const opts = m.tc || []
@@ -773,7 +780,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       let q = null; try { q = await wp('quote', { text: L.service }) } catch {}
       if (q && q.fixed && q.total) { L.deal = dealOf(q); store.touchChat(c.pk, { lead: JSON.stringify(L) }); priced = quoteText(q) + '\n\n' }
     }
-    if (L.lat === undefined && !L.place) return say(phone, line, priced + '📍 ابعت موقعك من واتساب (📎 ← الموقع) أو اكتب الحي والعنوان.')
+    if (L.lat === undefined) return say(phone, line, priced + PIN_ASK)
     if (!L.time) {
       if (!isOpen()) {
         if (!L.askedMorning) {
