@@ -257,6 +257,19 @@ const server = http.createServer(async (req, res) => {
       for (const ev of j.events || []) await brain.onEvent(ev)
       return
     }
+    // The site (signed with the pairing secret) reads recent customer conversations — the owner reviews the bot's work.
+    if (route === 'POST /wp/chats') {
+      const raw = await body(req)
+      const p = store.get('pair')
+      if (!p?.secret || !safeEq(req.headers['x-mq-hub'], hmac(p.secret, raw))) return json(res, 401, { error: 'bad signature' })
+      const j = JSON.parse(raw || '{}')
+      if (Math.abs(Date.now() / 1000 - Number(j.ts || 0)) > 600) return json(res, 401, { error: 'stale' })
+      const want = String(j.phone || '').replace(/\D/g, '').slice(-9)
+      const list = store.chats({ filter: '', limit: 60 }).filter((c) => (want || c.kind !== 'personal') && (!want || String(c.phone || c.pk || '').replace(/\D/g, '').endsWith(want)))
+      const n = Math.max(1, Math.min(10, Number(j.limit || 3)))
+      const out = list.slice(0, n).map((c) => ({ phone: c.phone || c.pk, name: c.name || '', lastAt: c.lastAt, lead: c.lead || '', msgs: store.msgs(c.pk, Math.min(120, Number(j.msgs || 60))).map((m) => ({ dir: m.dir, by: m.by || '', at: m.at, text: String(m.text || '').slice(0, 600) })) }))
+      return json(res, 200, { chats: out })
+    }
     // The AI keys kept as GitHub secrets: a workflow of the owner's repository proves itself with GitHub's own signed
     // token (OIDC) — no password to keep anywhere — and the hub hands the keys to the website over the paired channel.
     if (route === 'POST /ai-keys') {
