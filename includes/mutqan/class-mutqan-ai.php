@@ -500,6 +500,32 @@ final class Mutqan_AI {
         return self::classify($code, $data, $raw, $retry);
     }
 
+    /**
+     * Reads a document (an image or a PDF) with Gemini — the free provider that sees files — and answers $prompt about
+     * it. Used to lift a company's data from its commercial registration, VAT certificate or national address.
+     * @return array ['ok' => bool, 'text' => string, 'error' => string]
+     */
+    public static function vision($b64, $mime, $prompt, $json = true) {
+        $s = self::settings(); $c = $s['providers']['gemini'] ?? [];
+        if (!self::usable('gemini', $c)) { return ['ok' => false, 'text' => '', 'error' => 'no_gemini']; }
+        $gen = ['temperature' => 0.1, 'maxOutputTokens' => 1500];
+        if ($json) { $gen['responseMimeType'] = 'application/json'; }
+        $models = array_values(array_unique([(string) $c['model'], 'gemini-2.5-flash', 'gemini-2.0-flash']));
+        $last = '';
+        foreach ($models as $m) {
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($m) . ':generateContent';
+            list($code, $data, $raw) = self::http($url, ['x-goog-api-key' => $c['key'], 'Content-Type' => 'application/json'], [
+                'contents' => [['role' => 'user', 'parts' => [['inline_data' => ['mime_type' => $mime, 'data' => $b64]], ['text' => $prompt]]]], 'generationConfig' => $gen,
+            ], 60);
+            if ($code >= 200 && $code < 300 && isset($data['candidates'][0]['content']['parts'])) {
+                $t = ''; foreach ($data['candidates'][0]['content']['parts'] as $part) { $t .= (string) ($part['text'] ?? ''); }
+                if ($t !== '') { self::usage('gemini', $m, $data['usageMetadata'] ?? [], 'doc_extract'); return ['ok' => true, 'text' => $t, 'error' => '']; }
+            }
+            $last = 'http_' . $code;
+        }
+        return ['ok' => false, 'text' => '', 'error' => $last];
+    }
+
     /** Raw Messages API call (used by run() and by the owner agent with tools). @return array [code, data, raw, retry] */
     public static function anthropic_request($body, $key = null) {
         $key = $key ?: self::anthropic_key();

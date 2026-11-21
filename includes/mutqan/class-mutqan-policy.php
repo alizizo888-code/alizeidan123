@@ -43,6 +43,11 @@ final class Mutqan_Policy {
                 'shops' => ['staff', 'write', 'write', 'write'],
                 // The permanent customer ledger (Mutqan_Ledger): read by the staff, written by the server, removed by the owner only.
                 'client_ledger' => ['read', 'owner', 'owner', 'owner'],
+                // Invoices (Mutqan_Invoice): issued by the server only, read by the staff, never deleted (voided by the owner).
+                'invoices' => ['read', 'owner', 'owner', 'owner'],
+                // Quotations and their saved wordings (Mutqan_Quote): written by the server, read by the staff.
+                'quotes' => ['read', 'owner', 'owner', 'owner'],
+                'quote_snippets' => ['read', 'owner', 'owner', 'owner'],
                 // Pins the owner and operations drop on the map: a customer, an old customer, a technician, a shop…
                 'client_pins' => ['read', 'write', 'write', 'write'],
                 'wa_leads' => ['read', 'anon_ok', 'write', 'write'],
