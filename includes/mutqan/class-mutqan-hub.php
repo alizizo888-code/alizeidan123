@@ -253,7 +253,12 @@ final class Mutqan_Hub {
             }
             case 'ai_keys': return self::save_ai_keys(['providers' => (array) ($in['providers'] ?? [])]);
             // «رقم التجربة» set on the site (one phone that is both a customer and the room) is the hub's too.
-            case 'config': return ['testCustomer' => (string) get_option('mutqan_test_customer', ''), 'site' => home_url('/')];
+            // The owner's hours (2026-11-20) — the VPS hub follows the site, not its own panel.
+            case 'config': return ['testCustomer' => (string) get_option('mutqan_test_customer', ''), 'site' => home_url('/'), 'hoursFrom' => 7, 'hoursTo' => 23];
+            // One procedure for both lines (Mutqan_Deal::cancel): before a technician accepted, cancelled at once.
+            case 'cancel': { $o = self::need($in); if (!class_exists('Mutqan_Deal')) { return ['reply' => null]; } $r = Mutqan_Deal::cancel($o, (string) ($in['text'] ?? '')); return $r + ['num' => self::num($o)]; }
+            // The same answers as the site chat (Mutqan_Concierge): an order by number, payment, warranty, offers, his live order.
+            case 'answer': { if (!class_exists('Mutqan_Concierge')) { return ['reply' => null]; } $a = Mutqan_Concierge::answer((string) ($in['text'] ?? ''), ['channel' => 'wa', 'phone' => (string) ($in['phone'] ?? ''), 'verified' => true, 'brand' => (string) ($in['brand'] ?? '')]); return $a ?: ['reply' => null]; }
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
     }
@@ -373,7 +378,10 @@ final class Mutqan_Hub {
         $P = "أنت موظف خدمة عملاء محترف في «{$site}» للصيانة والمقاولات العامة (مكة المكرمة وجدة)، بترد على واتساب باسم الشركة.\n"
             . "اكتب بلهجة {$tone}: رسالة قصيرة أو اتنين، بأدب واحترام، زي موظف حقيقي، من غير قوائم أرقام ومن غير ما تقول إنك بوت أو ذكاء اصطناعي.\n"
             . "## الشركة\nالخدمات: {$specs}. صيانة وإصلاح جميع أنواع المكيفات، وغرف التبريد والتجميد، وكمان سباكة ونجارة وكهرباء وغيرها.\n"
-            . "مواعيد العمل: من " . (int) ($in['hoursFrom'] ?? 8) . " لحد " . (int) ($in['hoursTo'] ?? 24) . ". " . ($after ? "دلوقتي برا مواعيد العمل: احجز له أقرب موعد الصبح، إلا لو الموضوع طارئ وخطير (تسريب مياه كبير، ماس أو ريحة حريق، غرفة تبريد فيها بضاعة هتبوظ) — ساعتها اطلب منه يتصل فورًا على {$emg}.\n" : "\n")
+            . (class_exists('Mutqan_Deal')
+                // The owner's appointment rule for this hour (same as the site): 7 am–10 pm today, after 11 pm tomorrow morning.
+                ? "## المواعيد (حسب الساعة دلوقتي)\n" . Mutqan_Deal::booking()['rule'] . ($emg !== '' ? "\n- رقم الطوارئ المباشر: {$emg}." : '') . "\n"
+                : "مواعيد العمل: من " . (int) ($in['hoursFrom'] ?? 8) . " لحد " . (int) ($in['hoursTo'] ?? 24) . ". " . ($after ? "دلوقتي برا مواعيد العمل: احجز له أقرب موعد الصبح، إلا لو الموضوع طارئ وخطير — ساعتها اطلب منه يتصل فورًا على {$emg}.\n" : "\n"))
             . "## العميل\n" . (string) ($in['brief'] ?? 'عميل جديد') . (!empty($in['source']) ? "\nجه من صفحة: «" . mb_substr((string) $in['source'], 0, 90) . "»" : '') . "\n"
             . "## طلباته عندنا (من نفس الجدول اللي العمليات شغالة عليه)\n" . self::orders_brief($phone) . "\n"
             . "## اللي اتجمع من الطلب\n" . ($lead ? wp_json_encode($lead, JSON_UNESCAPED_UNICODE) : 'لا شيء') . "\n"
