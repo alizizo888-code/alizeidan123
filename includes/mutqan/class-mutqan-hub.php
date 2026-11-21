@@ -587,12 +587,12 @@ final class Mutqan_Hub {
         ['id' => 'capacitor', 'label' => 'تغيير المكثف (الكباستور)', 'words' => ['مكثف', 'كباستور', 'كاباستور', 'كابستور', 'بطاريه', 'المبينه', 'مبينه'], 'from' => 100, 'to' => 100, 'fit' => 50],
         ['id' => 'thermostat', 'label' => 'تغيير الترموستات', 'words' => ['ترموستات', 'ثرموستات', 'ثيرموستات', 'حساس الحراره', 'حساس'], 'from' => 50, 'to' => 50, 'fit' => 50],
         ['id' => 'freon', 'label' => 'شحن الفريون', 'words' => ['فريون', 'شحن غاز', 'تعبيه غاز', 'غاز المكيف'], 'from' => 200, 'to' => 270, 'fit' => 0, 'low' => 150],
-        ['id' => 'contactor', 'label' => 'تغيير الكونتاكتور', 'words' => ['كونتاكتور', 'كنتاكتور', 'ريليه', 'قطع الكهرباء', 'قطع كهرباء'], 'from' => 250, 'to' => 300, 'fit' => 0],
+        ['id' => 'contactor', 'label' => 'تغيير الكونتاكتور', 'words' => ['كونتاكتور', 'كنتاكتور', 'كونتكتر', 'كنتكتر', 'كونتاكتر', 'ريليه', 'قطع الكهرباء', 'قطع كهرباء'], 'from' => 250, 'to' => 300, 'fit' => 0],
         ['id' => 'power_board', 'label' => 'تغيير شريحة الكهرباء', 'words' => ['شريحه الكهرباء', 'شريحه كهرباء', 'بورده كهرباء', 'كرت كهرباء'], 'from' => 300, 'to' => 450, 'fit' => 0],
         ['id' => 'digital_board', 'label' => 'تغيير الشريحة الإلكترونية (الديجيتال)', 'words' => ['شريحه الكترونيه', 'شريحه ديجيتال', 'بورده', 'الكارت', 'كرت', 'شريحه'], 'from' => 300, 'to' => 500, 'fit' => 0],
-        ['id' => 'fan_motor', 'label' => 'تغيير موتور المروحة', 'words' => ['موتور', 'ماتور', 'محرك المروحه'], 'from' => 200, 'to' => 550, 'fit' => 0],
+        ['id' => 'fan_motor', 'label' => 'تغيير موتور المروحة', 'words' => ['موتور المروحه', 'ماتور المروحه', 'موتور', 'ماتور', 'محرك المروحه', 'فانه', 'الفان', 'دينمو', 'دنمو', 'دينامو', 'الدينمو', 'الدنمو'], 'from' => 200, 'to' => 550, 'fit' => 0],
         ['id' => 'fan_blade', 'label' => 'تغيير ريش المروحة', 'words' => ['ريش', 'ريشه', 'المروحه مكسوره'], 'from' => 150, 'to' => 250, 'fit' => 0],
-        ['id' => 'compressor', 'label' => 'تغيير الكمبروسر', 'words' => ['كمبروسر', 'كمبريسور', 'كومبروسر', 'ضاغط', 'الكباس'], 'noPrice' => true],
+        ['id' => 'compressor', 'label' => 'تغيير الكمبروسر', 'words' => ['كمبروسر', 'كمبريسور', 'كومبروسر', 'كمبرسور', 'ضاغط', 'الضاغط', 'الكباس', 'الماتور الكبير', 'الموتور الكبير', 'ماتور كبير', 'موتور كبير', 'الماتور البراني الكبير'], 'noPrice' => true],
     ];
 
     /** «إحنا بنبيع حل العطل مش قطعة غيار» — the owner's line for whoever haggles over a part. */
@@ -624,11 +624,17 @@ final class Mutqan_Hub {
         $n = class_exists('Mutqan_Playbook') ? Mutqan_Playbook::norm($text) : mb_strtolower((string) $text);
         $want = [];
         foreach (['410' => '/410/u', 'R22' => '/(^|\D)22(\D|$)/u', 'R32' => '/(^|\D)32(\D|$)/u', '134' => '/134/u', 'DC' => '/(انفرتر|انفيرتر|dc|دي سي|ديسي)/u', 'شباك' => '/شباك/u',
-            'سبليت' => '/(سبليت|سبلت|اسبليت)/u', 'خارجي' => '/(خارجي|برا|بره|الكمبروسر|الكومبروسر)/u', 'داخلي' => '/(داخلي|جوه|جوا)/u', 'مروحة' => '/مروح/u', '3 فاز' => '/(3 فاز|تلات فاز|ثلاث فاز|380)/u'] as $tag => $rx) {
+            'سبليت' => '/(سبليت|سبلت|اسبليت)/u', 'خارجي' => '/(خارجي|برا|بره|الكمبروسر|الكومبروسر)/u', 'داخلي' => '/(داخلي|جوه|جوا)/u', 'مروحة' => '/مروح/u', '3 فاز' => '/(3 فاز|تلات فاز|ثلاث فاز|380)/u', '220' => '/(220|فاز واحد|سنجل|سينجل|منزلي)/u'] as $tag => $rx) {
             if ($n !== '' && preg_match($rx, $n)) { $want[] = $tag; }
         }
         $best = $all[0]; $score = 0;
         foreach ($all as $im) { $sc = 0; foreach ($want as $w) { if (mb_stripos($im['title'], $w) !== false) { $sc++; } } if ($sc > $score) { $score = $sc; $best = $im; } }
+        // he named a kind we have no photo of (a 220 V contactor, R22 gas…): no photo rather than the other kind's
+        foreach ([['410', 'R22', 'R32', '134'], ['220', '3 فاز']] as $grp) {
+            $asked = array_intersect($want, $grp); if (!$asked) { continue; }
+            $has = false; foreach ($asked as $w) { if (mb_stripos($best['title'], $w) !== false) { $has = true; } }
+            if (!$has) { foreach ($grp as $g) { if (mb_stripos($best['title'], $g) !== false) { return ''; } } }
+        }
         return $best['url'];
     }
 
@@ -659,6 +665,11 @@ final class Mutqan_Hub {
         $n = class_exists('Mutqan_Playbook') ? Mutqan_Playbook::norm($text) : (string) $text;
         $hit = [];
         foreach (self::parts() as $p) { foreach ((array) $p['words'] as $w) { if ($n !== '' && mb_strpos($n, $w) !== false) { $hit[] = $p; break; } } }
+        // «الماتور الكبير» / «الضاغط» is the compressor (owner, 2026-11-21): the fan motor is not meant unless named as the fan's
+        $ids = array_column($hit, 'id');
+        if (in_array('compressor', $ids, true) && in_array('fan_motor', $ids, true) && !preg_match('/(مروح|فانه|الفان|دينمو|دنمو|دينامو)/u', $n)) {
+            $hit = array_values(array_filter($hit, function ($p) { return $p['id'] !== 'fan_motor'; }));
+        }
         return $hit;
     }
 
