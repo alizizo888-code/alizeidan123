@@ -49,6 +49,17 @@ final class Mutqan_Ops {
         if ($op === 'pos') { if (is_numeric($in['acc'] ?? null) && (float) $in['acc'] > Mutqan_Track::MAX_ACCURACY_M) { return ['ok' => false, 'reason' => 'low_accuracy']; } return self::ping($p, $in['lat'] ?? null, $in['lng'] ?? null); }
         // «الخريطة الحية»: every technician (code, colour, trail, speed, next job, ETA), operations staff and customers.
         if ($op === 'fleet') { return Mutqan_Route::fleet(); }
+        // the permanent customer layer + the hand-dropped pins (owner, 2026-11-21)
+        if ($op === 'old_clients') { return ['clients' => Mutqan_Ledger::map_rows(), 'pins' => Mutqan_Ledger::pins()]; }
+        if ($op === 'client_card') { $r = Mutqan_Ledger::card($in['key'] ?? ''); if (!$r) { throw new Mutqan_Error('not_found', 'مش لاقي العميل ده.', 404); } return $r; }
+        if ($op === 'pin_save') {
+            if (!Mutqan_Policy::has_power($p, 'write')) { throw new Mutqan_Error('forbidden', 'للعمليات والمالك.', 403); }
+            return Mutqan_Ledger::pin_save($in, $p);
+        }
+        if ($op === 'pin_del') {
+            if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'المسح للمالك بس.', 403); }
+            Mutqan_Store::delete('client_pins', (string) ($in['id'] ?? ''), $p); return ['ok' => true];
+        }
         if ($op === 'route_assign') {
             if (!Mutqan_Policy::has_power($p, 'write')) { throw new Mutqan_Error('forbidden', 'الإسناد للعمليات والمالك.', 403); }
             return Mutqan_Route::assign((string) ($in['order'] ?? ''), (string) ($in['tech'] ?? ''), $p);

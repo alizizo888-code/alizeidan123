@@ -392,6 +392,10 @@ final class Mutqan_Store {
         if (!$private) { $data = Mutqan_Policy::sanitize_insert($coll, $data, $p); }
         // Every order gets a short number people can say and type («طلب 1004»), whichever door it came through.
         if ($coll === 'orders' && is_array($data) && trim((string) ($data['number'] ?? '')) === '') { $data['number'] = (string) self::next_order_number(); }
+        // Served before? (the permanent customer ledger: same phone, or a known house within 150 m) — on the order itself.
+        if ($coll === 'orders' && is_array($data) && class_exists('Mutqan_Ledger') && empty($data['history'])) {
+            try { $h = Mutqan_Ledger::history_for($data); if ($h) { $data['history'] = $h; } } catch (Throwable $e) { error_log('[mutqan] history ' . $e->getMessage()); }
+        }
         list($data, $json) = self::clean_data($data);
         $id = ($id !== null && $id !== '') ? self::valid_id($id) : wp_generate_uuid4();
         if (!$private) { Mutqan_Policy::check_insert_id($coll, $id, $p); }
@@ -415,6 +419,7 @@ final class Mutqan_Store {
         // Every alert also goes out as a real background notification to the devices it is for.
         if ($coll === '_push' && class_exists('Mutqan_WebPush')) { Mutqan_WebPush::queue($doc); }
         if ($coll === 'orders' && class_exists('Mutqan_Sales')) { Mutqan_Sales::on_order($doc); }
+        if ($coll === 'orders' && class_exists('Mutqan_Ledger')) { Mutqan_Ledger::touch($doc); }
         return self::for_reader($coll, $doc, $p);
     }
 
@@ -472,6 +477,7 @@ final class Mutqan_Store {
         if ($coll === 'orders' && class_exists('Mutqan_Dispatch')) {
             try { Mutqan_Dispatch::tell($old, $doc, $patch, $p, $row['owner_id'] ?? ''); } catch (Throwable $e) { error_log('[mutqan] tell ' . $e->getMessage()); }
         }
+        if ($coll === 'orders' && class_exists('Mutqan_Ledger')) { Mutqan_Ledger::touch($doc); }
         return self::for_reader($coll, $doc, $p);
     }
 
@@ -537,6 +543,8 @@ final class Mutqan_Store {
         } else {
             Mutqan_Policy::require_can('delete', $coll, $p, $row, null);
         }
+        // The customer stays in the permanent ledger; only his order goes (marked «deleted» there).
+        if ($coll === 'orders' && class_exists('Mutqan_Ledger')) { Mutqan_Ledger::on_delete((json_decode($row['data'], true) ?: []) + ['id' => (string) $row['doc_id']]); }
         $wpdb->delete(self::table('docs'), ['pk' => $row['pk']]);
         self::bump($coll);
         return true;

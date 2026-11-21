@@ -14,10 +14,11 @@ if (!defined('ABSPATH')) { exit; }
 final class Mutqan_Kit {
 
     const OPT = 'mutqan_service_kit';
+    const V = 2;   // a new rule from the owner raises this: stored records get the new rules added, nothing of his removed
 
     public static function defaults() {
         return [
-            'v' => 1,
+            'v' => self::V,
             'washVideos' => [
                 ['type' => 'split', 'label' => 'غسيل المكيف السبليت', 'url' => 'https://youtu.be/wvtQ_aztCrE'],
                 ['type' => 'split', 'label' => 'غسيل المكيف السبليت (تيك توك)', 'url' => 'https://vt.tiktok.com/ZSCTdsF4N/'],
@@ -34,6 +35,7 @@ final class Mutqan_Kit {
                 'العميل اللي بيشتم: اعتذار، تحويل لموظف، والبوت يقف معاه نص ساعة.',
                 'نفس الرد للمرة التالتة = موظف يستلم المحادثة.',
                 'طلب غسيل: لينك فيديو الغسيل للنوع ده بس. طلب قطعة: سعر الإصلاح ده بس وصورته، من غير قوائم ومن غير «سعر القطعة» ولا «شامل التركيب».',
+                'ممنوع تسجيل طلب بعنوان مكتوب أو اسم حي: لازم العميل يبعت اللوكيشن نفسه (من واتساب: 📎 ← الموقع، أو من التطبيق). اسم الحي يتسجل ملاحظة بس.',
                 'المواعيد: من 7 الصبح لـ 10 بالليل نفس اليوم (واعرض اليوم ولا بكره)، من 10 لـ 11 بكره الصبح إلا لو مُصر، بعد 11 بكره الصبح أو أي وقت بكره.',
             ],
         ];
@@ -43,6 +45,10 @@ final class Mutqan_Kit {
     public static function get() {
         $k = get_option(self::OPT, null);
         if (!is_array($k) || empty($k['v'])) { $k = self::defaults(); update_option(self::OPT, $k, false); }
+        elseif ((int) $k['v'] < self::V) {
+            $k['rules'] = array_values(array_unique(array_merge((array) ($k['rules'] ?? []), self::defaults()['rules'])));
+            $k['v'] = self::V; update_option(self::OPT, $k, false);
+        }
         return array_merge(self::defaults(), $k);
     }
 
