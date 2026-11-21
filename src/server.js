@@ -94,7 +94,12 @@ async function pump() {
       if (Date.now() - row.at > EXPIRE_MS) { store.outDone(row.id, 'expired', 'فات عليها أكتر من 6 ساعات'); continue }
       const lineId = pickLine({ line: row.line, phone: row.phone, purpose: row.purpose, brand: meta.get(row.id)?.brand })
       if (!lineId || busy.has(lineId)) continue
-      if (store.sentToday(lineId) >= DAILY_CAP) { store.outRetry(row.id, 'الحد اليومي للخط'); continue }
+      // The daily cap protects the line from a ban on mass sending to customers; the room and the technicians are ours.
+      if (!['room', 'tech', 'agent'].includes(row.purpose) && store.sentToday(lineId) >= DAILY_CAP) {
+        store.outRetry(row.id, 'الحد اليومي للخط')
+        if (store.get('capWarned') !== new Date().toDateString()) { store.set('capWarned', new Date().toDateString()); log('warn', 'الخط ' + lineId + ' وصل الحد اليومي (' + DAILY_CAP + ' رسالة) — باقي رسايل العملاء مستنية لبكره') }
+        continue
+      }
       busy.add(lineId)
       lines.sendText(lineId, row.phone, row.text).then((r) => {
         store.outDone(row.id, 'sent'); meta.delete(row.id)

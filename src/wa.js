@@ -3,7 +3,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import pino from 'pino'
 import QRCode from 'qrcode'
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys'
+import makeWASocket, * as B from '@whiskeysockets/baileys'
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = B
+// optional helper: used when this Baileys has it, otherwise the plain key store (a missing name must never stop the line)
+const cachedKeys = (keys, log) => (typeof B.makeCacheableSignalKeyStore === 'function' ? B.makeCacheableSignalKeyStore(keys, log) : keys)
 import { digits } from './text.js'
 
 const jidToPhone = (jid) => digits(String(jid || '').split('@')[0].split(':')[0])
@@ -47,7 +50,31 @@ export function createLines({ dataDir, onMessage, onStatus, onContact, log = pin
     try { const pn = await sock.signalRepository?.lidMapping?.getPNForLID?.(jid); const j = String(pn || '').replace(/:\d+@/, '@'); if (isPn(j)) { learn(jid, j); return j } } catch {}
     return jid
   }
-  const toJid = (to) => { const d = digits(to); return lidMap['@' + d] ? d + '@lid' : `${d}@s.whatsapp.net` }
+  // Reply to the very address the customer wrote from (his LID chat or his number): answering a LID chat on the
+  // phone-number address opens a second encryption session on his phone — one cause of «في انتظار هذه الرسالة».
+  const LASTF = path.join(dataDir, 'last-jid.json')
+  const lastJid = (() => { try { return JSON.parse(fs.readFileSync(LASTF, 'utf8')) } catch { return {} } })()
+  let lastT = null
+  const rememberJid = (phone, jid) => { const d = digits(phone); if (!d || !isUserJid(jid) || lastJid[d] === jid) return; lastJid[d] = jid; clearTimeout(lastT); lastT = setTimeout(() => { try { fs.writeFileSync(LASTF, JSON.stringify(lastJid)) } catch {} }, 1500) }
+  const toJid = (to) => { const d = digits(to); if (lastJid[d]) return lastJid[d]; return lidMap['@' + d] ? d + '@lid' : `${d}@s.whatsapp.net` }
+
+  // Every message we send is kept (per line, the last 2000, on disk) so that when his phone could not decrypt it and
+  // asks for it again (a retry receipt), it is sent again instead of staying «في انتظار هذه الرسالة» for ever.
+  const SENTF = (id) => path.join(dataDir, 'sent-' + id + '.json')
+  const sentStore = new Map()   // line → Map(msgId → message)
+  const sentOf = (id) => {
+    if (!sentStore.has(id)) { let m = new Map(); try { m = new Map(Object.entries(JSON.parse(fs.readFileSync(SENTF(id), 'utf8')))) } catch {} sentStore.set(id, m) }
+    return sentStore.get(id)
+  }
+  const sentT = new Map()
+  const keepSent = (id, msgId, message) => {
+    if (!msgId || !message) return
+    const m = sentOf(id); m.set(msgId, message)
+    while (m.size > 2000) m.delete(m.keys().next().value)
+    clearTimeout(sentT.get(id)); sentT.set(id, setTimeout(() => { try { fs.writeFileSync(SENTF(id), JSON.stringify(Object.fromEntries(m))) } catch {} }, 2000))
+  }
+  // How many times a message was retried (Baileys' retry counter) — a tiny in-memory store.
+  const retryCache = (() => { const m = new Map(); return { get: (k) => m.get(k), set: (k, v) => { m.set(k, v); if (m.size > 5000) m.delete(m.keys().next().value) }, del: (k) => m.delete(k), flushAll: () => m.clear() } })()
 
   const S = new Map()   // id → {sock, status, qr, phone, name, retry, sent:Set}
   const view = (id) => { const s = S.get(id) || {}; return { id, status: s.status || 'stopped', qr: s.status === 'qr' ? s.qr : null, phone: s.phone || '', name: s.name || '' } }
@@ -60,7 +87,15 @@ export function createLines({ dataDir, onMessage, onStatus, onContact, log = pin
     S.set(id, st)
     const { state, saveCreds } = await useMultiFileAuthState(path.join(AUTH, id))
     const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }))
-    const sock = makeWASocket({ version, auth: state, logger: log, browser: Browsers.ubuntu('Chrome'), printQRInTerminal: false, markOnlineOnConnect: false, syncFullHistory: false })
+    const sock = makeWASocket({
+      version, logger: log, browser: Browsers.ubuntu('Chrome'), printQRInTerminal: false, markOnlineOnConnect: false, syncFullHistory: false,
+      // cached signal keys: no half-written key files when many messages arrive together (a broken session = «waiting for this message»)
+      auth: { creds: state.creds, keys: cachedKeys(state.keys, log) },
+      msgRetryCounterCache: retryCache,
+      maxMsgRetryCount: 5,
+      // his phone asks for a message it could not open: give it back so it is encrypted and sent again
+      getMessage: async (key) => sentOf(id).get(key?.id) || undefined,
+    })
     st.sock = sock
     sock.ev.on('creds.update', saveCreds)
     sock.ev.on('connection.update', async (u) => {
@@ -100,6 +135,7 @@ export function createLines({ dataDir, onMessage, onStatus, onContact, log = pin
           const x = extract(msg.message)
           if (x.kind === 'reaction' || x.kind === 'other') continue
           const jid = await realJid(sock, raw, msg.key)
+          if (!msg.key.fromMe) rememberJid(jidToPhone(jid), raw)
           if (isLid(jid)) { const d = jidToPhone(jid); if (!lidMap['@' + d]) { lidMap['@' + d] = 1; saveLid() } }
           const me = st.phone || jidToPhone(sock.user?.id); const myLid = jidToPhone(sock.user?.lid || '')
           const self = !!msg.key.fromMe && (jidToPhone(jid) === me || (myLid && jidToPhone(raw) === myLid))
@@ -124,7 +160,7 @@ export function createLines({ dataDir, onMessage, onStatus, onContact, log = pin
     await st.sock.sendPresenceUpdate('composing', jid).catch(() => {})
     await new Promise((r) => setTimeout(r, 600 + Math.random() * 1400))
     const sent = await st.sock.sendMessage(jid, { text })
-    if (sent?.key?.id) { st.sent.add(sent.key.id); if (st.sent.size > 1000) st.sent.delete(st.sent.values().next().value) }
+    if (sent?.key?.id) { st.sent.add(sent.key.id); if (st.sent.size > 1000) st.sent.delete(st.sent.values().next().value); keepSent(id, sent.key.id, sent.message || { conversation: text }) }
     st.sock.sendPresenceUpdate('paused', jid).catch(() => {})
     return { waId: sent?.key?.id || '' }
   }
