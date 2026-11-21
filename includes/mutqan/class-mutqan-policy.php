@@ -48,6 +48,9 @@ final class Mutqan_Policy {
                 // Quotations and their saved wordings (Mutqan_Quote): written by the server, read by the staff.
                 'quotes' => ['read', 'owner', 'owner', 'owner'],
                 'quote_snippets' => ['read', 'owner', 'owner', 'owner'],
+                // Customers & companies (Mutqan_Accounts) and their papers (Mutqan_Vault): through the server only.
+                'accounts' => ['read', 'owner', 'owner', 'owner'],
+                'vault_files' => ['owner', 'owner', 'owner', 'owner'],
                 // Pins the owner and operations drop on the map: a customer, an old customer, a technician, a shop…
                 'client_pins' => ['read', 'write', 'write', 'write'],
                 'wa_leads' => ['read', 'anon_ok', 'write', 'write'],

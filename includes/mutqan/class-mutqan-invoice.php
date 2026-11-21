@@ -23,19 +23,21 @@ final class Mutqan_Invoice {
             'vatNo' => '310798423700003', 'crNo' => '4031244695',
             'phones' => ['0549423050', '0549423050'], 'address' => 'المملكة العربية السعودية – مكة المكرمة',
             'vatRate' => 15, 'inclusive' => true,
-            'next' => ['normal' => 1001, 'tax' => 1],
+            'next' => ['normal' => 1001, 'tax' => 1, 'credit' => 1],
+            'cats' => ['غسيل', 'صيانة وإصلاح', 'تركيب', 'قطع غيار', 'غرف تبريد', 'أخرى'],
+            'issuers' => [],   // more issuing companies, each with its own VAT number, numbers, stamp
             'template' => ['normal' => 'classic', 'tax' => 'official'],
             'logo' => '', 'stamp' => '', 'signature' => '',   // empty logo/stamp = the bundled ones; no signature until he uploads one
             'signer' => '', 'signDefault' => false,
             'note' => 'أي فاتورة لا تحمل ختم المؤسسة تعتبر لاغية',
             'items' => [
-                ['code' => '101', 'name' => 'غسيل مكيف سبليت', 'unit' => 'عدد', 'price' => 0],
-                ['code' => '102', 'name' => 'غسيل مكيف شباك', 'unit' => 'عدد', 'price' => 0],
-                ['code' => '201', 'name' => 'صيانة وإصلاح مكيف', 'unit' => 'عدد', 'price' => 0],
-                ['code' => '202', 'name' => 'شحن فريون', 'unit' => 'عدد', 'price' => 0],
-                ['code' => '301', 'name' => 'تركيب مكيف سبليت', 'unit' => 'عدد', 'price' => 0],
-                ['code' => '302', 'name' => 'فك وتركيب مكيف', 'unit' => 'عدد', 'price' => 0],
-                ['code' => '401', 'name' => 'صيانة غرفة تبريد / تجميد', 'unit' => 'خدمة', 'price' => 0],
+                ['code' => '101', 'name' => 'غسيل مكيف سبليت', 'unit' => 'عدد', 'price' => 0, 'cat' => 'غسيل'],
+                ['code' => '102', 'name' => 'غسيل مكيف شباك', 'unit' => 'عدد', 'price' => 0, 'cat' => 'غسيل'],
+                ['code' => '201', 'name' => 'صيانة وإصلاح مكيف', 'unit' => 'عدد', 'price' => 0, 'cat' => 'صيانة وإصلاح'],
+                ['code' => '202', 'name' => 'شحن فريون', 'unit' => 'عدد', 'price' => 0, 'cat' => 'صيانة وإصلاح'],
+                ['code' => '301', 'name' => 'تركيب مكيف سبليت', 'unit' => 'عدد', 'price' => 0, 'cat' => 'تركيب'],
+                ['code' => '302', 'name' => 'فك وتركيب مكيف', 'unit' => 'عدد', 'price' => 0, 'cat' => 'تركيب'],
+                ['code' => '401', 'name' => 'صيانة غرفة تبريد / تجميد', 'unit' => 'خدمة', 'price' => 0, 'cat' => 'غرف تبريد'],
             ],
         ];
     }
@@ -44,6 +46,7 @@ final class Mutqan_Invoice {
         $c = get_option(self::OPT, []);
         $c = array_merge(self::defaults(), is_array($c) ? $c : []);
         $c['next'] = array_merge(self::defaults()['next'], (array) $c['next']);
+        $c['issuers'] = array_values(array_filter((array) $c['issuers'], 'is_array'));
         $c['template'] = array_merge(self::defaults()['template'], (array) $c['template']);
         return $c;
     }
@@ -65,6 +68,9 @@ final class Mutqan_Invoice {
         if (isset($in['phones'])) { $c['phones'] = array_values(array_filter(array_map(function ($x) { return self::digits($x, 15); }, (array) $in['phones']))); }
         if (isset($in['vatRate']) && is_numeric($in['vatRate'])) { $c['vatRate'] = max(0, min(30, (float) $in['vatRate'])); }
         if (isset($in['inclusive'])) { $c['inclusive'] = (bool) $in['inclusive']; }
+        if (isset($in['next']['credit']) && is_numeric($in['next']['credit'])) { $c['next']['credit'] = max(1, (int) $in['next']['credit']); }
+        if (isset($in['cats'])) { $c['cats'] = array_values(array_unique(array_filter(array_map(function ($x) { return self::s($x, 40); }, (array) $in['cats'])))); }
+        if (isset($in['issuers'])) { $c['issuers'] = self::clean_issuers((array) $in['issuers'], $c['issuers']); }
         foreach (['normal', 'tax'] as $t) {
             if (isset($in['next'][$t]) && is_numeric($in['next'][$t])) { $c['next'][$t] = max(1, (int) $in['next'][$t]); }
             if (isset($in['template'][$t]) && isset(self::TEMPLATES[$in['template'][$t]])) { $c['template'][$t] = (string) $in['template'][$t]; }
@@ -80,7 +86,9 @@ final class Mutqan_Invoice {
                 if ($code === '' ) { $code = (string) (count($items) + 1); }
                 if (isset($seen[$code])) { throw new Mutqan_Error('bad_input', 'كود الصنف «' . $code . '» متكرر.', 400); }
                 $seen[$code] = 1;
-                $items[] = ['code' => $code, 'name' => $name, 'unit' => self::s($it['unit'] ?? 'عدد', 20) ?: 'عدد', 'price' => max(0, round((float) ($it['price'] ?? 0), 2))];
+                $items[] = ['code' => $code, 'name' => $name, 'unit' => self::s($it['unit'] ?? 'عدد', 20) ?: 'عدد', 'price' => max(0, round((float) ($it['price'] ?? 0), 2)),
+                    'cat' => self::s($it['cat'] ?? '', 40), 'specs' => mb_substr(trim((string) ($it['specs'] ?? '')), 0, 1000)];
+                if ($items[count($items) - 1]['cat'] !== '' && !in_array($items[count($items) - 1]['cat'], $c['cats'], true)) { $c['cats'][] = $items[count($items) - 1]['cat']; }
             }
             $c['items'] = $items;
         }
@@ -122,18 +130,48 @@ final class Mutqan_Invoice {
         return base64_encode($tlv);
     }
 
-    /** The next number of that type, taken under a lock so two people saving at once never share one. */
-    private static function take_number($type) {
+    /** More issuing companies: each its own name, VAT number, CR, stamp, signature and numbers. */
+    private static function clean_issuers($list, $old) {
+        $prev = []; foreach ((array) $old as $o) { $prev[$o['id']] = $o; }
+        $out = [];
+        foreach ($list as $x) {
+            $x = (array) $x; $name = self::s($x['nameAr'] ?? '', 160); if ($name === '') { continue; }
+            $id = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($x['id'] ?? ''))) ?: 'c' . substr(md5($name . microtime()), 0, 8);
+            if ($id === 'main') { $id = 'c' . substr(md5($name), 0, 8); }
+            $vat = self::digits($x['vatNo'] ?? '', 15);
+            if ($vat !== '' && !preg_match('/^3\d{13}3$/', $vat)) { throw new Mutqan_Error('bad_input', 'الرقم الضريبي لـ «' . $name . '» لازم 15 رقم يبدأ وينتهي بـ 3.', 400); }
+            $out[] = ['id' => $id, 'nameAr' => $name, 'nameEn' => self::s($x['nameEn'] ?? '', 160), 'brand' => self::s($x['brand'] ?? '', 40), 'cityLine' => self::s($x['cityLine'] ?? '', 120),
+                'vatNo' => $vat, 'crNo' => self::digits($x['crNo'] ?? '', 10), 'phones' => array_values(array_filter(array_map(function ($p) { return self::digits($p, 15); }, (array) ($x['phones'] ?? [])))),
+                'address' => self::s($x['address'] ?? '', 160), 'note' => self::s($x['note'] ?? '', 200), 'logo' => esc_url_raw((string) ($x['logo'] ?? '')), 'stamp' => esc_url_raw((string) ($x['stamp'] ?? '')),
+                'signature' => esc_url_raw((string) ($x['signature'] ?? '')), 'signer' => self::s($x['signer'] ?? '', 80),
+                'next' => array_merge(['normal' => 1, 'tax' => 1, 'credit' => 1], (array) ($prev[$id]['next'] ?? []), array_map('intval', array_filter((array) ($x['next'] ?? []), 'is_numeric')))];
+        }
+        return $out;
+    }
+
+    /** The issuer: 'main' (the settings themselves) or one of the extra companies. */
+    public static function issuer($id = 'main') {
+        $c = self::cfg();
+        foreach ($c['issuers'] as $i) { if ($i['id'] === $id) { return $i; } }
+        return ['id' => 'main', 'nameAr' => $c['nameAr'], 'nameEn' => $c['nameEn'], 'brand' => $c['brand'], 'cityLine' => $c['cityLine'], 'vatNo' => $c['vatNo'], 'crNo' => $c['crNo'], 'phones' => $c['phones'],
+            'address' => $c['address'], 'logo' => $c['logo'], 'stamp' => $c['stamp'], 'signature' => $c['signature'], 'signer' => $c['signer'], 'note' => $c['note'], 'next' => $c['next']];
+    }
+
+    /** The next number of that type for that issuer, taken under a lock so two people saving at once never share one. */
+    private static function take_number($type, $iid = 'main') {
         global $wpdb;
         $lock = 'mutqan_invoice_n';
         $got = $wpdb && method_exists($wpdb, 'get_var') ? (int) $wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, 5)', $lock)) : 1;
         try {
             if (function_exists('wp_cache_delete')) { wp_cache_delete(self::OPT, 'options'); wp_cache_delete('alloptions', 'options'); }
-            $c = self::cfg(); $n = (int) $c['next'][$type];
-            // never reuse a number already in the register
-            foreach (Mutqan_Store::select(self::COLL, ['type' => $type], ['limit' => 1], self::sys()) as $last) { $n = max($n, (int) ($last['number'] ?? 0) + 1); }
+            $c = self::cfg(); $is = self::issuer($iid); $n = (int) ($is['next'][$type] ?? 1);
+            // never reuse a number already in the register (of this issuer)
+            foreach (Mutqan_Store::select(self::COLL, ['type' => $type], ['limit' => 300], self::sys()) as $last) {
+                if (($last['issuer'] ?? 'main') === $is['id']) { $n = max($n, (int) ($last['number'] ?? 0) + 1); }
+            }
             $raw = get_option(self::OPT, []); $raw = is_array($raw) ? $raw : [];
-            $raw['next'] = array_merge($c['next'], [$type => $n + 1]);
+            if ($is['id'] === 'main') { $raw['next'] = array_merge($c['next'], [$type => $n + 1]); }
+            else { $raw['issuers'] = array_map(function ($x) use ($is, $type, $n) { if (($x['id'] ?? '') === $is['id']) { $x['next'][$type] = $n + 1; } return $x; }, $c['issuers']); }
             update_option(self::OPT, $raw, false);
             return $n;
         } finally { if ($got && $wpdb && method_exists($wpdb, 'query')) { $wpdb->query($wpdb->prepare('SELECT RELEASE_LOCK(%s)', $lock)); } }
@@ -144,9 +182,9 @@ final class Mutqan_Invoice {
     /** Issue an invoice. $in: type, template, client{}, items[], tech{id,name}, pay, note, orderId, stamped, at. */
     public static function save($in, $p) {
         if (!Mutqan_Policy::has_power($p, 'write')) { throw new Mutqan_Error('forbidden', 'إصدار الفواتير للمالك والعمليات.', 403); }
-        $type = isset(self::TYPES[$in['type'] ?? '']) ? (string) $in['type'] : 'normal';
+        $type = in_array($in['type'] ?? '', ['normal', 'tax'], true) ? (string) $in['type'] : 'normal';
         $tax = $type === 'tax';
-        $c = self::cfg();
+        $c = array_merge(self::cfg(), self::issuer((string) ($in['issuer'] ?? 'main')));
         if ($tax && !preg_match('/^3\d{13}3$/', (string) $c['vatNo'])) { throw new Mutqan_Error('bad_input', 'اكتب الرقم الضريبي للمؤسسة في إعدادات الفواتير الأول.', 400); }
         $cl = (array) ($in['client'] ?? []);
         $client = ['name' => self::s($cl['name'] ?? '', 160), 'phone' => self::digits($cl['phone'] ?? '', 15), 'vatNo' => self::digits($cl['vatNo'] ?? '', 15), 'number' => self::s($cl['number'] ?? '', 30),
@@ -161,10 +199,14 @@ final class Mutqan_Invoice {
         $calc = self::calc($items, $tax, (float) $c['vatRate'], $inclusive);
         if ($calc['totals']['net'] <= 0) { throw new Mutqan_Error('bad_input', 'إجمالي الفاتورة صفر — اكتب الأسعار.', 400); }
         $at = !empty($in['at']) && strtotime((string) $in['at']) ? gmdate('c', strtotime((string) $in['at'])) : gmdate('c');
-        $num = self::take_number($type);
+        $num = self::take_number($type, $c['id']);
         $tech = (array) ($in['tech'] ?? []);
+        // the customer's file: found or created, and the papers read for this invoice put on his shelf
+        $clientId = (string) ($in['clientId'] ?? '');
+        if ($clientId === '' || !Mutqan_Store::get_raw(Mutqan_Accounts::COLL, $clientId)) { $clientId = Mutqan_Accounts::link($client, $p); }
+        foreach ((array) ($in['fileIds'] ?? []) as $fid) { try { Mutqan_Accounts::add_file($clientId, (string) $fid, $p); } catch (Throwable $e) { /* a lost paper never blocks the invoice */ } }
         $doc = [
-            'type' => $type, 'number' => $num, 'at' => $at, 'template' => isset(self::TEMPLATES[$in['template'] ?? '']) ? (string) $in['template'] : $c['template'][$type],
+            'type' => $type, 'number' => $num, 'at' => $at, 'issuer' => $c['id'], 'clientId' => $clientId, 'template' => isset(self::TEMPLATES[$in['template'] ?? '']) ? (string) $in['template'] : $c['template'][$type],
             'client' => $client, 'rows' => $calc['rows'], 'totals' => $calc['totals'], 'vatRate' => $tax ? (float) $c['vatRate'] : 0, 'inclusive' => $inclusive,
             'tech' => ['id' => self::s($tech['id'] ?? '', 64), 'name' => self::s($tech['name'] ?? '', 80)],
             'pay' => isset(self::PAY[$in['pay'] ?? '']) ? (string) $in['pay'] : 'cash', 'note' => self::s($in['note'] ?? '', 400),
@@ -197,28 +239,98 @@ final class Mutqan_Invoice {
             if ($type !== '' && ($r['type'] ?? '') !== $type) { continue; }
             if ($q !== '' && mb_stripos(implode(' ', [$r['number'] ?? '', $r['client']['name'] ?? '', $r['client']['phone'] ?? '', $r['tech']['name'] ?? '', $r['orderId'] ?? '']), $q) === false) { continue; }
             $out[] = ['id' => (string) $r['id'], 'type' => $r['type'], 'number' => (int) $r['number'], 'at' => $r['at'], 'client' => $r['client']['name'] ?? '', 'phone' => $r['client']['phone'] ?? '',
-                'net' => (float) ($r['totals']['net'] ?? 0), 'vat' => (float) ($r['totals']['vat'] ?? 0), 'stamped' => !empty($r['stamped']), 'status' => $r['status'] ?? 'issued', 'tech' => $r['tech']['name'] ?? '', 'template' => $r['template'] ?? ''];
+                'net' => (float) ($r['totals']['net'] ?? 0), 'vat' => (float) ($r['totals']['vat'] ?? 0), 'stamped' => !empty($r['stamped']), 'status' => $r['status'] ?? 'issued', 'tech' => $r['tech']['name'] ?? '', 'template' => $r['template'] ?? '',
+                'clientId' => $r['clientId'] ?? '', 'issuer' => $r['company']['nameAr'] ?? '', 'ref' => $r['ref'] ?? null, 'returned' => (float) ($r['returnedNet'] ?? 0), 'tax' => !empty($r['tax']) || ($r['type'] ?? '') === 'tax'];
         }
         return $out;
+    }
+
+    /**
+     * A return («مرتجع») — for a tax invoice, a credit note («إشعار دائن») — against an issued invoice: the lines and
+     * quantities returned (never more than is left), the reason, its own numbers, the original invoice named on it.
+     */
+    public static function credit($in, $p) {
+        if (!Mutqan_Policy::has_power($p, 'write')) { throw new Mutqan_Error('forbidden', 'المرتجعات للمالك والعمليات.', 403); }
+        $orig = self::get($in['ref'] ?? '');
+        if (($orig['type'] ?? '') === 'credit') { throw new Mutqan_Error('bad_input', 'ده مرتجع أصلاً.', 400); }
+        if (($orig['status'] ?? '') === 'void') { throw new Mutqan_Error('bad_input', 'الفاتورة ملغاة — مفيش مرتجع عليها.', 400); }
+        $reason = self::s($in['reason'] ?? '', 300);
+        if ($reason === '') { throw new Mutqan_Error('bad_input', 'اكتب سبب المرتجع.', 400); }
+        // what was returned before, per line
+        $done = [];
+        foreach (Mutqan_Store::select(self::COLL, ['type' => 'credit'], ['limit' => 2000], self::sys()) as $cr) {
+            if (($cr['ref']['id'] ?? '') !== $orig['id'] || ($cr['status'] ?? '') === 'void') { continue; }
+            foreach ((array) $cr['rows'] as $r) { $done[(int) $r['refNo']] = ($done[(int) $r['refNo']] ?? 0) + (float) $r['qty']; }
+        }
+        $want = [];
+        foreach ((array) ($in['lines'] ?? []) as $l) { $no = (int) ($l['no'] ?? 0); $q = (float) ($l['qty'] ?? 0); if ($no > 0 && $q > 0) { $want[$no] = ($want[$no] ?? 0) + $q; } }
+        if (!$want) { throw new Mutqan_Error('bad_input', 'اختار البنود والكميات المرتجعة.', 400); }
+        $items = []; $refNos = [];
+        foreach ((array) $orig['rows'] as $r) {
+            $no = (int) $r['no']; if (!isset($want[$no])) { continue; }
+            $left = round((float) $r['qty'] - ($done[$no] ?? 0), 4);
+            if ($want[$no] > $left + 1e-9) { throw new Mutqan_Error('bad_input', 'البند «' . $r['name'] . '»: المتبقي للمرتجع ' . $left . ' بس.', 400); }
+            $q = $want[$no]; $share = (float) $r['qty'] > 0 ? $q / (float) $r['qty'] : 0;
+            $items[] = ['code' => $r['code'] ?? '', 'name' => $r['name'], 'unit' => $r['unit'], 'qty' => $q, 'price' => $r['price'], 'discount' => round((float) ($r['discount'] ?? 0) * ((bool) $orig['inclusive'] ? 1 + (float) $orig['vatRate'] / 100 : 1) * $share, 2)];
+            $refNos[] = $no;
+        }
+        if (count($items) !== count($want)) { throw new Mutqan_Error('bad_input', 'فيه بند مش موجود في الفاتورة.', 400); }
+        $tax = $orig['type'] === 'tax';
+        $calc = self::calc($items, $tax, (float) ($orig['vatRate'] ?: 15), (bool) $orig['inclusive']);
+        foreach ($calc['rows'] as $i => $r) { $calc['rows'][$i]['refNo'] = $refNos[$i]; }
+        $iid = (string) ($orig['issuer'] ?? 'main');
+        $num = self::take_number('credit', $iid);
+        $at = gmdate('c');
+        $doc = ['type' => 'credit', 'number' => $num, 'at' => $at, 'issuer' => $iid, 'clientId' => $orig['clientId'] ?? '', 'template' => $orig['template'],
+            'ref' => ['id' => $orig['id'], 'number' => $orig['number'], 'type' => $orig['type'], 'at' => $orig['at']], 'reason' => $reason, 'tax' => $tax,
+            'client' => $orig['client'], 'rows' => $calc['rows'], 'totals' => $calc['totals'], 'vatRate' => $tax ? (float) $orig['vatRate'] : 0, 'inclusive' => (bool) $orig['inclusive'],
+            'tech' => $orig['tech'] ?? [], 'pay' => (string) ($in['pay'] ?? ($orig['pay'] ?? 'cash')), 'note' => self::s($in['note'] ?? '', 300), 'orderId' => $orig['orderId'] ?? '',
+            'stamped' => !empty($in['stamped']), 'signed' => !empty($in['signed']) && !empty($orig['company']['signature']), 'receiver' => '', 'hideReceiver' => true,
+            'company' => $orig['company'], 'by' => ['id' => (string) ($p['id'] ?? ''), 'name' => (string) ($p['name'] ?? '')], 'status' => 'issued'];
+        if ($tax) { $doc['qr'] = self::zatca_qr($orig['company']['nameAr'], $orig['company']['vatNo'], $at, $calc['totals']['net'], $calc['totals']['vat']); }
+        $saved = Mutqan_Store::insert(self::COLL, $doc, null, ['groupId' => 'main', 'visibleTo' => 'group', 'writableBy' => 'admins'], self::sys());
+        $returns = array_merge((array) ($orig['returns'] ?? []), [['id' => (string) $saved['id'], 'number' => $num, 'net' => $calc['totals']['net']]]);
+        Mutqan_Store::update(self::COLL, $orig['id'], ['returns' => $returns, 'returnedNet' => round((float) ($orig['returnedNet'] ?? 0) + $calc['totals']['net'], 2)], self::sys());
+        return self::get((string) $saved['id']);
+    }
+
+    /** What is left to return on each line of an invoice. */
+    public static function returnable($id) {
+        $orig = self::get($id); $done = [];
+        foreach (Mutqan_Store::select(self::COLL, ['type' => 'credit'], ['limit' => 2000], self::sys()) as $cr) {
+            if (($cr['ref']['id'] ?? '') !== $orig['id'] || ($cr['status'] ?? '') === 'void') { continue; }
+            foreach ((array) $cr['rows'] as $r) { $done[(int) $r['refNo']] = ($done[(int) $r['refNo']] ?? 0) + (float) $r['qty']; }
+        }
+        return ['invoice' => $orig, 'rows' => array_map(function ($r) use ($done) { return ['no' => $r['no'], 'name' => $r['name'], 'qty' => $r['qty'], 'returned' => $done[(int) $r['no']] ?? 0, 'left' => round((float) $r['qty'] - ($done[(int) $r['no']] ?? 0), 4), 'net' => $r['net']]; }, (array) $orig['rows'])];
     }
 
     /** Never deleted: the owner voids it, the number stays in the register. */
     public static function void($id, $reason, $p) {
         if (($p['role'] ?? '') !== 'owner') { throw new Mutqan_Error('forbidden', 'إلغاء الفواتير للمالك بس.', 403); }
         self::get($id);
+        $inv = self::get($id);
+        if (($inv['status'] ?? '') === 'void') { return $inv; }
+        if (($inv['type'] ?? '') !== 'credit' && !empty($inv['returns'])) { throw new Mutqan_Error('locked', 'الفاتورة عليها مرتجعات — ألغِ المرتجعات الأول.', 409); }
         Mutqan_Store::update(self::COLL, (string) $id, ['status' => 'void', 'voidAt' => gmdate('c'), 'voidReason' => self::s($reason, 200), 'voidBy' => (string) ($p['name'] ?? '')], self::sys());
+        // a voided return gives the quantities back to its invoice
+        if (($inv['type'] ?? '') === 'credit' && !empty($inv['ref']['id']) && ($o = Mutqan_Store::get_raw(self::COLL, (string) $inv['ref']['id']))) {
+            $rest = array_values(array_filter((array) ($o['returns'] ?? []), function ($x) use ($id) { return (string) $x['id'] !== (string) $id; }));
+            Mutqan_Store::update(self::COLL, (string) $inv['ref']['id'], ['returns' => $rest, 'returnedNet' => round(array_sum(array_column($rest, 'net')), 2)], self::sys());
+        }
         return self::get($id);
     }
 
     /** One door for the app: op = invoice_cfg | invoice_cfg_set | invoice_save | invoice_list | invoice_get | invoice_void. */
     public static function op($op, $in, $p) {
         switch ($op) {
-            case 'invoice_cfg': return self::cfg() + ['types' => self::TYPES, 'templates' => self::TEMPLATES, 'pays' => self::PAY];
+            case 'invoice_cfg': return self::cfg() + ['types' => self::TYPES, 'templates' => self::TEMPLATES, 'pays' => self::PAY, 'issuerList' => array_merge([self::issuer('main')], self::cfg()['issuers'])];
             case 'invoice_cfg_set': return self::cfg_set((array) ($in['cfg'] ?? []), $p);
             case 'invoice_save': return self::save((array) ($in['invoice'] ?? []), $p);
             case 'invoice_list': return ['items' => self::lst($in)];
             case 'invoice_get': return self::get($in['id'] ?? '');
             case 'invoice_void': return self::void($in['id'] ?? '', $in['reason'] ?? '', $p);
+            case 'invoice_credit': return self::credit($in, $p);
+            case 'invoice_returnable': return self::returnable($in['id'] ?? '');
         }
         throw new Mutqan_Error('bad_input', 'عملية غير معروفة.', 400);
     }
