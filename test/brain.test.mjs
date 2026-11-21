@@ -42,7 +42,7 @@ const wp = async (op, b) => {
   if (op === 'reopen') { const o = orders[b.id]; Object.assign(o, b.patch, { status: 'new', techId: null, techName: null }); return view(o) }
   if (op === 'approve') { const o = orders[b.id]; Object.assign(o, { techId: 't1', techName: 'الفني علي', status: 'assigned' }); emit('order.assigned', o); return { text: '✅ اتسند للفني علي' } }
   if (op === 'eta_ask') return { result: 'asked' }
-  if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; if (b.confirmed) o.customerConfirmed = true; o.acQuote = b.acQuote; o.spec = b.spec; emit('order.created', o); return view(o) }
+  if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; if (b.confirmed) o.customerConfirmed = true; o.acQuote = b.acQuote; o.spec = b.spec; o.mode = b.mode; o.acType = b.acType; o.desc = b.desc; emit('order.created', o); return { ...view(o), details: ['🛠 الخدمة: ' + b.service + ' [' + b.mode + '/' + (b.acType || '-') + ']', '📅 الموعد: ' + b.time] } }
   if (op === 'claim') { const o = b.seal ? Object.values(orders).find((x) => b.seal.startsWith(x.seal || '#')) : byNum(b.number); if (!o || o.claimCode !== b.code) return null; const first = !o.customerConfirmed; Object.assign(o, { clientPhone: b.phone, customerConfirmed: true }); return { first, card: first ? '🔔 *طلب جديد — رعد السماء*\nرقم الطلب: #' + o.number : '', ...view(o) } }
   if (op === 'report') return { text: '📋 تقرير' }
   if (op === 'info') return /سعر|اسعار/.test(b.text) ? { text: 'أسعار المالك' } : null
@@ -351,6 +351,45 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   orders.ow = { id: 'xx5bfb9', number: 1555, status: 'new', clientPhone: '', service: 'غسيل مكيف', site: 'متقن', seal: '6KHZCYHR' }
   const m = await say(SW, '🔔 *طلب جديد — متقن*\nرقم الطلب: #5bfb9\n🛠️ الخدمة: صيانة وتكييف\n📍 الموقع: https://maps.google.com/?q=21.4,39.8\n✅ للتحقق من صحة الطلب (توثيق): https://mutqan.oxygen11.com/v/6KHZCYHR-f4ab50')
   t('the site order message binds his number, gets a receipt (no welcome), the room is told', T.pkey(orders.ow.clientPhone) === T.pkey(SW) && /تم استلام طلبك رقم \*1555\*/.test(to(m, SW)) && !/مرحبًا بكم/.test(to(m, SW)) && /أكد طلب #1555 من واتساب/.test(to(m, ROOM)), JSON.stringify(m))
+}
+
+// ===== Y. every A/C type and the exact service reach the site; the confirmation carries the whole order =====
+{
+  const SY = '966500000093'
+  let r = await say(SY, 'عايز غسيل 2 مكيف كونسيلد'); await sleep(); r = r.concat(take())
+  t('«غسيل 2 كونسيلد» → no split-table price, survey first, asks for the pin', !/ر\.س\*/.test(to(r, SY)) && /بعد المعاينة/.test(to(r, SY)) && /اللوكيشن نفسه/.test(to(r, SY)), JSON.stringify(r))
+  await say(SY, 'https://maps.google.com/?q=21.4011,39.8122'); await sleep(); take()
+  await say(SY, '1'); await sleep(); take()
+  r = await say(SY, '1'); await sleep(); r = r.concat(take())
+  const oy = Object.values(orders).find((o) => T.pkey(o.clientPhone) === T.pkey(SY))
+  t('…booked as wash / concealed, no price, the label says what it is', oy && oy.mode === 'wash' && oy.acType === 'concealed' && !oy.agreedPrice && /غسيل 2 مكيف كونسيلد/.test(oy.service), JSON.stringify(oy))
+  t('…the confirmation shows the whole order (service, time)', /تم تأكيد طلبك رقم/.test(to(r, SY)) && /🛠 الخدمة: غسيل 2 مكيف كونسيلد/.test(to(r, SY)) && /📅 الموعد/.test(to(r, SY)), JSON.stringify(r))
+
+  const SZ = '966500000094'
+  await say(SZ, 'السلام عليكم'); await sleep(); take()
+  await say(SZ, '1'); await sleep(); take()
+  r = await say(SZ, '2'); await sleep(); r = r.concat(take())
+  t('repair menu lists every type (دولابي، كاسيت، كونسيلد/داكت، باكيدج/مركزي)', /دولابي/.test(to(r, SZ)) && /كاسيت/.test(to(r, SZ)) && /داكت/.test(to(r, SZ)) && /مركزي/.test(to(r, SZ)), JSON.stringify(r))
+  await say(SZ, '6'); await sleep(); take()
+  await say(SZ, 'مش بيبرد'); await sleep(); take()
+  await say(SZ, 'https://maps.google.com/?q=21.4021,39.8133'); await sleep(); take()
+  await say(SZ, '1'); await sleep(); take()
+  await say(SZ, '1'); await sleep(); take()
+  const oz = Object.values(orders).find((o) => T.pkey(o.clientPhone) === T.pkey(SZ))
+  t('…repair on a package unit reaches the site as repair / package with the problem', oz && oz.mode === 'repair' && oz.acType === 'package' && oz.desc === 'مش بيبرد', JSON.stringify(oz))
+
+  const SW = '966500000095'
+  await say(SW, 'السلام عليكم'); await sleep(); take()
+  await say(SW, '1'); await sleep(); take()
+  await say(SW, '3'); await sleep(); take()
+  await say(SW, '3'); await sleep(); take()
+  await say(SW, '2'); await sleep(); take()
+  await say(SW, '1'); await sleep(); take()
+  await say(SW, 'https://maps.google.com/?q=21.4031,39.8144'); await sleep(); take()
+  await say(SW, '1'); await sleep(); take()
+  await say(SW, '1'); await sleep(); take()
+  const ow = Object.values(orders).find((o) => T.pkey(o.clientPhone) === T.pkey(SW))
+  t('install menu → «فك وتركيب» of a standing unit reaches the site as move / standing', ow && ow.mode === 'move' && ow.acType === 'standing' && /فك وتركيب 1 مكيف دولابي/.test(ow.service), JSON.stringify(ow))
 }
 
 // ===== X. one brain with the site: same cancel procedure, same answers =====

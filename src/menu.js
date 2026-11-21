@@ -38,18 +38,23 @@ export function numberIn(text) {
 export function parseAc(text) {
   const n = norm(text).replace(/اسبليت|سبلت|اسبلت|سبيلت/g, 'سبليت').replace(/شبابيك/g, 'شباك')
   const tok = n.split(' ').filter(Boolean)
-  const out = { split: 0, window: 0, other: 0, any: 0 }
-  const kind = (w) => (/سبليت/.test(w) ? 'split' : /شباك/.test(w) ? 'window' : /(كاسيت|مخفي|دولابي|كونسيلد|مركزي|داكت)/.test(w) ? 'other' : '')
+  const out = { split: 0, window: 0, other: 0, any: 0, big: 0, otherType: '', bigType: '' }
+  // standing and cassette are priced from the table («other»); duct, concealed, package and central are surveyed first («big»)
+  const kind = (w) => (/سبليت/.test(w) ? 'split' : /شباك/.test(w) ? 'window' : /(دولابي|عمودي|فريستاند)/.test(w) ? 'other:standing' : /(كاسيت|سقفي)/.test(w) ? 'other:cassette'
+    : /(داكت|دكت)/.test(w) ? 'big:duct' : /(كونسيلد|كونسلد|مخفي)/.test(w) ? 'big:concealed' : /(باكيدج|باكج|بكج|باكدج)/.test(w) ? 'big:package' : /(مركزي|تشيلر)/.test(w) ? 'big:central' : '')
   let typed = false
   tok.forEach((w, i) => {
-    const k = kind(w); if (!k) return
+    let k = kind(w); if (!k) return
     typed = true
+    if (k.includes(':')) { const [a, b] = k.split(':'); k = a; out[a + 'Type'] = out[a + 'Type'] || b }
     let q = null
     for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
       const c = countOf(tok[j]); if (c) { q = c; break }
       if (!FILLER.has(tok[j].replace(/^و/, '')) && !/^مكيف/.test(tok[j])) break
     }
     if (q === null && tok[i + 1]) q = countOf(tok[i + 1])   // «سبليت 2»
+    // «سبليت دولابي»: one standing unit, not a split plus a standing
+    if (k === 'other' && i > 0 && /سبليت/.test(tok[i - 1]) && out.split) { out.other += out.split; out.split = 0; return }
     out[k] += q || 1
   })
   if (!typed) {
@@ -128,7 +133,12 @@ export const subMenu = (k) => { const s = SUBS[k]; return s ? s.icon + ' *' + s.
 /** A message that is only a greeting («السلام عليكم», «مرحبا», «هلا») — nothing asked yet. */
 export const isGreeting = (t) => /^(السلام عليكم( ورحمه الله( وبركاته)?)?|سلام عليكم|سلام|السلام|مرحبا|مرحبًا|مرحبتين|اهلا|أهلا|اهلين|هلا|هلا والله|هاي|hi|hello|صباح الخير|مساء الخير|صباح النور|مساء النور|يعطيكم العافيه|كيف الحال|السلام عليكم كيف الحال)$/.test(norm(t).replace(/[!.،,؟?🌷👋🙏]/gu, '').trim())
 
-export const TYPES = '1️⃣ سبليت\n2️⃣ شباك\n3️⃣ سبليت + شباك\n4️⃣ كاسيت / مخفي / دولابي'
+export const TYPES = '1️⃣ سبليت\n2️⃣ شباك\n3️⃣ سبليت + شباك\n4️⃣ دولابي\n5️⃣ كاسيت\n6️⃣ كونسيلد / داكت (مخفي)\n7️⃣ باكيدج / مركزي'
+/** Every A/C type by its key: what the site's order and every message call it. */
+export const AC_NAMES = { split: 'سبليت', window: 'شباك', standing: 'دولابي', cassette: 'كاسيت', concealed: 'كونسيلد', duct: 'داكت', package: 'باكيدج', central: 'مركزي' }
+/** The type question for repair / install: number → key. */
+export const KINDS = '1️⃣ سبليت\n2️⃣ شباك\n3️⃣ دولابي\n4️⃣ كاسيت\n5️⃣ كونسيلد / داكت (مخفي)\n6️⃣ باكيدج / مركزي'
+export const KIND_OF = { 1: 'split', 2: 'window', 3: 'standing', 4: 'cassette', 5: 'concealed', 6: 'package' }
 export const FOOT = '\n\n0️⃣ القائمة الرئيسية'
 
 const r5 = (v) => Math.max(5, Math.round(v / 5) * 5)

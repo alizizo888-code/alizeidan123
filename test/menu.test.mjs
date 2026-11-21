@@ -29,5 +29,9 @@ const m2 = { price: { total: 100, floor: 100, label: 'غسيل 1 سبليت' } }
 h = M.haggle(m2, null); t('«ممنوع فصال» (floor = list) → a polite no', !h.agreed && /مفيش عليه خصم/.test(h.text), h)
 t('time: 9 am → today options', M.timeChoices(9).mode === 'today' && M.timeChoices(9).opts[0].startsWith('اليوم'))
 t('time: 22 → late, 23 and 2 am → tomorrow', M.timeChoices(22).mode === 'late' && M.timeChoices(23).mode === 'tomorrow' && M.timeChoices(2).opts[0].startsWith('النهارده الصبح'))
+{ const p = M.parseAc('غسيل 2 داكت'); t('«2 داكت» → a big unit (survey), not priced as split', p.big === 2 && p.bigType === 'duct' && p.units === 0, p) }
+{ const p = M.parseAc('عندي 3 باكيدج'); t('«3 باكيدج» → big / package', p.big === 3 && p.bigType === 'package', p) }
+{ const p = M.parseAc('مكيف سبليت دولابي'); t('«سبليت دولابي» → one standing unit, not split + standing', p.other === 1 && p.split === 0 && p.otherType === 'standing', p) }
+{ const p = M.parseAc('2 كاسيت و سبليت'); t('«2 كاسيت و سبليت» → cassette 2 + split 1', p.other === 2 && p.split === 1 && p.otherType === 'cassette', p) }
 console.log(`wa-hub menu: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
