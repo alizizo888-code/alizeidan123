@@ -118,6 +118,8 @@ final class Mutqan_Dispatch {
 
     public static function available($t, $orders) {
         if (($t['active'] ?? true) === false) { return false; }
+        // frozen by the owner, or prepaid with too little credit (Mutqan_Wallet)
+        if (class_exists('Mutqan_Wallet') && Mutqan_Wallet::blocked($t, $orders) !== '') { return false; }
         return self::remaining($t, $orders) > 0;
     }
 
@@ -163,6 +165,9 @@ final class Mutqan_Dispatch {
 
     /* ------------------------------------------------------------------ choosing */
 
+    /** A rating is a number (app) or ['stars' => n] (WhatsApp); casting the array gave every WhatsApp rating 1 star. */
+    public static function stars($o) { $r = $o['rating'] ?? null; $n = (float) (is_array($r) ? ($r['stars'] ?? 0) : $r); if ($n <= 0) { $n = (float) ($o['customerRating'] ?? 0); } return ($n >= 1 && $n <= 5) ? $n : 0.0; }
+
     /** scoreTechnicians() — the same eight measures and weights. */
     public static function score($order, $t, $orders, $all) {
         $urgent = ($order['priority'] ?? '') === 'urgent';
@@ -177,8 +182,8 @@ final class Mutqan_Dispatch {
         $scopeS = $scope === 'wash_maintenance_install' ? 1 : ($scope === 'wash_maintenance' ? 0.75 : 0.5);
         $levels = ['junior' => 0.4, 'senior' => 0.7, 'expert' => 1];
         $lw = $levels[$t['level'] ?? 'senior'] ?? 0.7;
-        $rated = array_filter($orders, function ($o) use ($t) { return ($o['technicianId'] ?? null) === $t['userId'] && !empty($o['rating']); });
-        $rating = $rated ? array_sum(array_map(function ($o) { return (float) $o['rating']; }, $rated)) / count($rated) : null;
+        $rated = array_filter($orders, function ($o) use ($t) { return ($o['technicianId'] ?? null) === $t['userId'] && self::stars($o) > 0; });
+        $rating = $rated ? array_sum(array_map(function ($o) { return self::stars($o); }, $rated)) / count($rated) : null;
         $qualS = $lw * 0.6 + ($rating ? $rating / 5 : 0.7) * 0.4;
         $pres = self::presence($t);
         $presS = $pres === 'online' ? 1 : ($pres === 'recent' ? 0.5 : 0);
@@ -191,7 +196,9 @@ final class Mutqan_Dispatch {
             : ['dist' => 0.22, 'pres' => 0.16, 'free' => 0.12, 'spec' => 0.14, 'work' => 0.1, 'scope' => 0.04, 'qual' => 0.1, 'prod' => 0.12];
         $s = $distS * $w['dist'] + $presS * $w['pres'] + $freeS * $w['free'] + $specS * $w['spec'] + $workS * $w['work'] + $scopeS * $w['scope'] + $qualS * $w['qual'] + $prodS * $w['prod'];
         if ($pres === 'offline') { $s *= 0.7; }
-        return (int) round($s * 100);
+        // the owner's own push for a technician (−30 … +30), on top of rating and efficiency
+        $boost = class_exists('Mutqan_Wallet') ? Mutqan_Wallet::boost((string) ($t['userId'] ?? '')) : 0;
+        return max(0, (int) round($s * 100) + $boost);
     }
 
     /** pickTechnician() — smart, capacity or nearest. Null when nobody can take it. */

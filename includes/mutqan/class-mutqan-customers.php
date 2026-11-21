@@ -257,9 +257,16 @@ final class Mutqan_Customers {
                 foreach (self::pay_methods() as $m) {
                     $line = '• ' . (string) ($m['name'] ?? '');
                     if (!empty($m['instructions'])) { $line .= ' — ' . $m['instructions']; }
-                    if (!empty($m['iban'])) { $line .= "\n  🏦 " . trim((string) ($m['bankName'] ?? '') . ' · ' . (string) ($m['accountHolder'] ?? '')) . "\n  IBAN: " . $m['iban']; }
+                    if (!empty($m['iban']) || !empty($m['accountNumber']) || !empty($m['walletPhone'])) {
+                        $line .= "\n  🏦 " . trim((string) ($m['bankName'] ?? '') . ' · ' . (string) ($m['accountHolder'] ?? ''), ' ·');
+                        if (!empty($m['iban'])) { $line .= "\n  IBAN: " . preg_replace('/\s+/', '', (string) $m['iban']); }
+                        if (!empty($m['accountNumber'])) { $line .= "\n  رقم الحساب: " . preg_replace('/\s+/', '', (string) $m['accountNumber']); }
+                        if (!empty($m['walletPhone'])) { $line .= "\n  الجوال: " . $m['walletPhone']; }
+                        $hasAcct = true;
+                    }
                     $L[] = $line;
                 }
+                if (!empty($hasAcct)) { $L[] = '📲 نسخ الأرقام بضغطة ومسح الـQR: ' . home_url('/app/#/pay'); }
                 $L[] = $who === 'customer' ? 'الدفع بعد الخدمة بفاتورة، ومتدفعش أي مبلغ برا الطرق دي.' : 'العميل يدفع بالطرق دي بس، وأي مبلغ يتسجل على الطلب.';
                 break;
             case 'offers':

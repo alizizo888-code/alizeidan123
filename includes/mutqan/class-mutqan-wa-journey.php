@@ -456,7 +456,13 @@ final class Mutqan_WA_Journey {
                     self::tell_room('✅ *تمت المهمة* — طلب #' . $n . "\n👤 " . $who . ($tech !== '' ? "\n👷 الفني: " . $tech : '') . ($price > 0 ? "\n💰 " . $price . ' ر.س' : '') . "\n⭐ تقييم العميل هيوصلك هنا أول ما يرد.", 'jr-done-' . $doc['id'], $doc);
                     if ($phone !== '') {
                         self::put($phone, $doc['id'], 'rate');
-                        self::tell_customer($doc, "🙏 شكرًا لثقتك" . (self::site_name($doc) !== '' ? ' في *' . self::site_name($doc) . '*' : '') . ".\nقيّم الخدمة والفني" . ($tech !== '' ? ' ' . $tech : '') . " برقم من *1* لـ *5* ⭐ (5 = ممتازة)، ورأيك بيوصل للمدير مباشرة.");
+                        $ask = "🙏 شكرًا لثقتك" . (self::site_name($doc) !== '' ? ' في *' . self::site_name($doc) . '*' : '') . ".\nقيّم الخدمة والفني" . ($tech !== '' ? ' ' . $tech : '') . " — اضغط على تقييمك، أو اكتب رقم من *1* لـ *5* ⭐، ورأيك بيوصل للمدير مباشرة.";
+                        // On the official number the customer just taps: «ممتاز / كويس / سيء» (the stars in the title are what the parser counts).
+                        $sent = false;
+                        if (class_exists('Mutqan_Meta_WA') && Mutqan_Meta_WA::on()) {
+                            try { Mutqan_Meta_WA::buttons($phone, self::sign($doc, $ask), ['⭐⭐⭐⭐⭐ ممتاز', '⭐⭐⭐ كويس', '⭐ سيء']); $sent = true; } catch (Throwable $e) { error_log('[mutqan] rate buttons ' . $e->getMessage()); }
+                        }
+                        if (!$sent) { self::tell_customer($doc, $ask . "\n\n⭐⭐⭐⭐⭐ ممتاز · ⭐⭐⭐⭐ جيد جدًا · ⭐⭐⭐ كويس · ⭐⭐ مش راضي · ⭐ سيء"); }
                     }
                     return true;
                 case 'cancelled':
