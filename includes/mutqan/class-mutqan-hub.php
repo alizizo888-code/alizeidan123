@@ -520,6 +520,18 @@ final class Mutqan_Hub {
         return self::status();
     }
     public static function set_on($on) { $c = self::cfg(); $c['on'] = $on ? 1 : 0; update_option(self::OPT, $c, false); return self::status(); }
+    /** The recent customer conversations on the VPS line (owner review). $phone: one customer, or '' for the latest. */
+    public static function chats($phone = '', $limit = 3, $msgs = 60) {
+        $c = self::cfg();
+        if ((string) $c['url'] === '' || strlen((string) $c['secret']) < 32) { throw new Mutqan_Error('hub_off', 'مركز الواتساب مش مربوط.', 400); }
+        $raw = wp_json_encode(['ts' => time(), 'phone' => (string) $phone, 'limit' => (int) $limit, 'msgs' => (int) $msgs]);
+        $r = wp_remote_post(rtrim((string) $c['url'], '/') . '/wp/chats', ['timeout' => 15, 'headers' => ['content-type' => 'application/json', 'x-mq-hub' => hash_hmac('sha256', $raw, (string) $c['secret'])], 'body' => $raw]);
+        if (is_wp_error($r)) { throw new Mutqan_Error('hub_down', 'مركز الواتساب مش بيرد: ' . $r->get_error_message(), 502); }
+        $j = json_decode((string) wp_remote_retrieve_body($r), true);
+        if ((int) wp_remote_retrieve_response_code($r) !== 200 || !is_array($j)) { throw new Mutqan_Error('hub_down', 'مركز الواتساب رد بخطأ ' . wp_remote_retrieve_response_code($r), 502); }
+        return (array) ($j['chats'] ?? []);
+    }
+
     public static function status() { $c = self::cfg(); return ['on' => self::on(), 'url' => (string) $c['url'], 'paired' => strlen((string) $c['secret']) >= 32, 'queued' => count((array) get_option(self::QUEUE, []))]; }
 
     /** POST /hubadmin {op: status|pair|on|off} — the owner only. */
