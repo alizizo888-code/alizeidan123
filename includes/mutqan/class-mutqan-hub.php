@@ -277,11 +277,11 @@ final class Mutqan_Hub {
     public static function who($phone) {
         $k = substr(preg_replace('/\D/', '', (string) $phone), -9);
         if (strlen($k) < 9) { return ['kind' => 'customer']; }
-        // One of the company's own numbers (Mutqan_Lines): the manager is the room; any other line is ours — never a customer.
-        if (class_exists('Mutqan_Lines') && ($ln = Mutqan_Lines::ours($phone))) {
-            if ($ln['role'] === 'manager' && $ln['status'] === 'active') { return ['kind' => 'staff', 'name' => 'المدير', 'role' => 'owner', 'line' => 'manager']; }
-            return ['kind' => 'line', 'name' => $ln['label'] ?: 'رقم الشركة', 'role' => $ln['role']];
-        }
+        // One of the company's own numbers (Mutqan_Lines): the manager is the room; a sales or outreach line is ours — never
+        // a customer. A reserve number (a technician's own phone) falls through to the technician / staff lookup below.
+        $ln = class_exists('Mutqan_Lines') ? Mutqan_Lines::ours($phone) : null;
+        if ($ln && $ln['role'] === 'manager' && $ln['status'] === 'active') { return ['kind' => 'staff', 'name' => 'المدير', 'role' => 'owner', 'line' => 'manager']; }
+        if ($ln && $ln['role'] !== 'reserve') { return ['kind' => 'line', 'name' => $ln['label'] ?: 'رقم الشركة', 'role' => $ln['role']]; }
         foreach (Mutqan_Store::select('tech_profiles', [], ['limit' => 400], self::sys()) as $t) {
             if (!empty($t['phone']) && substr(preg_replace('/\D/', '', (string) $t['phone']), -9) === $k) {
                 $tid = (string) ($t['userId'] ?? ($t['id'] ?? ''));

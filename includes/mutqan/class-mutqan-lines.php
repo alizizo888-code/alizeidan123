@@ -35,9 +35,26 @@ final class Mutqan_Lines {
         ['phone' => '966549715646', 'role' => 'sales',    'label' => 'مبيعات ٤', 'status' => 'active', 'channels' => ['ads', 'maps', 'haraj', 'articles', 'blogger']],
         ['phone' => '966546619205', 'role' => 'outreach', 'label' => 'استقطاب ١', 'status' => 'active'],
         ['phone' => '966547512660', 'role' => 'outreach', 'label' => 'استقطاب ٢', 'status' => 'active'],
-        ['phone' => '96649648890',  'role' => 'reserve',  'label' => 'رقم ناقص', 'status' => 'invalid', 'note' => 'الرقم ناقصه رقم (8 أرقام بعد 966) — محتاج تصحيح'],
+        // corrected by the owner (2026-11-21): the short 96649648890 was 966549648890 — his own test-technician phone
+        // («علي (فني تجربة)»), so it is kept in reserve: the technician flow on it keeps working, it is never a sales line.
+        ['phone' => '966549648890', 'role' => 'reserve',  'label' => 'فني التجربة (علي)', 'status' => 'active', 'note' => 'رقم فني التجربة — احتياطي، مش بيظهر للعملاء'],
     ];
-    const ROTATE_DAYS = 7;   // a page keeps its number a week, then moves to the next one
+    const ROTATE_DAYS = 7;
+    /** The services the WhatsApp menu offers (its sections, in order). The owner can stop any of them from the desk. */
+    const SECTIONS = [1 => ['ac', 'المكيفات'], 2 => ['fridge', 'غرف التبريد والتجميد'], 3 => ['plumbing', 'السباكة'], 4 => ['electric', 'الكهرباء'], 5 => ['carpentry', 'النجارة'], 6 => ['cameras', 'الكاميرات والدش'], 7 => ['other', 'خدمات تانية']];
+    /** The site's own specialties behind each WhatsApp section: a service the owner switched off in «تحكمات المالك ← الخدمات»
+     *  (pricing row services_off) takes its section off WhatsApp too, once all its specialties are off. */
+    const SECTION_SPECS = [1 => ['ac'], 2 => ['fridge'], 3 => ['plumbing'], 4 => ['electric'], 5 => [], 6 => ['cameras', 'satellite'], 7 => ['paint', 'tiling', 'appliances']];
+    public static function off_sections() {
+        $o = get_option(self::OPT, []);
+        $off = array_map('intval', (array) (is_array($o) ? ($o['off'] ?? []) : []));
+        $svc = [];
+        if (class_exists('Mutqan_Store')) { try { $d = Mutqan_Store::peek_doc('pricing', 'services_off'); $svc = array_map('strval', (array) ($d['ids'] ?? [])); } catch (Throwable $e) { /* optional */ } }
+        foreach (self::SECTION_SPECS as $n => $specs) { if ($specs && !array_diff($specs, $svc)) { $off[] = $n; } }
+        $off = array_values(array_unique(array_intersect($off, array_keys(self::SECTIONS))));
+        sort($off);
+        return $off;
+    }   // a page keeps its number a week, then moves to the next one
 
     /** 9665XXXXXXXX from any spelling (05…, 5…, +966…, ٠٥…); '' when it is not a Saudi mobile. */
     public static function norm($v) {
@@ -121,9 +138,9 @@ final class Mutqan_Lines {
     /** What the VPS WhatsApp hub needs: the role of each of our numbers, and the manager once it is active. */
     public static function hub_config() {
         $roles = [];
-        foreach (self::all() as $r) { if ($r['status'] !== 'invalid') { $roles[self::key($r['phone'])] = ['role' => $r['role'], 'label' => $r['label'], 'active' => $r['status'] === 'active']; } }
+        foreach (self::all() as $r) { if ($r['status'] !== 'invalid' && $r['role'] !== 'reserve') { $roles[self::key($r['phone'])] = ['role' => $r['role'], 'label' => $r['label'], 'active' => $r['status'] === 'active', 'status' => $r['status'], 'local' => $r['local']]; } }
         $m = self::manager();
-        return ['ourNumbers' => $roles, 'managerPhone' => $m ? $m['phone'] : ''];
+        return ['ourNumbers' => $roles, 'managerPhone' => $m ? $m['phone'] : '', 'offSections' => self::off_sections()];
     }
 
     /* ------------------------------------------------------------------ owner edits */
@@ -149,6 +166,7 @@ final class Mutqan_Lines {
             $o['extra'][] = ['phone' => $n, 'role' => isset(self::ROLES[$a['role'] ?? '']) ? $a['role'] : 'reserve', 'label' => mb_substr((string) ($a['label'] ?? ''), 0, 40), 'status' => 'pending'];
         }
         if (isset($in['rotate'])) { $o['rotate'] = $in['rotate'] ? 1 : 0; }
+        if (isset($in['off']) && is_array($in['off'])) { $o['off'] = array_values(array_intersect(array_map('intval', $in['off']), array_keys(self::SECTIONS))); }
         // one manager only: making a number the manager moves the old one to sales
         $mgr = array_values(array_filter(self::all($o), function ($r) { return $r['role'] === 'manager' && $r['status'] !== 'invalid'; }));
         if (count($mgr) > 1) { foreach (array_slice($mgr, 0, -1) as $old) { $o['edits'][$old['raw']]['role'] = 'sales'; } }
@@ -171,7 +189,8 @@ final class Mutqan_Lines {
 
     public static function view() {
         $o = get_option(self::OPT, []);
-        return ['numbers' => self::all(), 'roles' => self::ROLES, 'rotate' => !(is_array($o) && isset($o['rotate']) && !$o['rotate']), 'rotateDays' => self::ROTATE_DAYS];
+        $sec = []; foreach (self::SECTIONS as $n => $x) { $sec[] = ['n' => $n, 'key' => $x[0], 'label' => $x[1], 'on' => !in_array($n, self::off_sections(), true)]; }
+        return ['numbers' => self::all(), 'roles' => self::ROLES, 'sections' => $sec, 'rotate' => !(is_array($o) && isset($o['rotate']) && !$o['rotate']), 'rotateDays' => self::ROTATE_DAYS];
     }
 
     /* ------------------------------------------------------------------ REST */
