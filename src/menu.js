@@ -38,23 +38,18 @@ export function numberIn(text) {
 export function parseAc(text) {
   const n = norm(text).replace(/اسبليت|سبلت|اسبلت|سبيلت/g, 'سبليت').replace(/شبابيك/g, 'شباك')
   const tok = n.split(' ').filter(Boolean)
-  const out = { split: 0, window: 0, other: 0, any: 0, big: 0, otherType: '', bigType: '' }
-  // standing and cassette are priced from the table («other»); duct, concealed, package and central are surveyed first («big»)
-  const kind = (w) => (/سبليت/.test(w) ? 'split' : /شباك/.test(w) ? 'window' : /(دولابي|عمودي|فريستاند)/.test(w) ? 'other:standing' : /(كاسيت|سقفي)/.test(w) ? 'other:cassette'
-    : /(داكت|دكت)/.test(w) ? 'big:duct' : /(كونسيلد|كونسلد|مخفي)/.test(w) ? 'big:concealed' : /(باكيدج|باكج|بكج|باكدج)/.test(w) ? 'big:package' : /(مركزي|تشيلر)/.test(w) ? 'big:central' : '')
+  const out = { split: 0, window: 0, other: 0, any: 0 }
+  const kind = (w) => (/سبليت/.test(w) ? 'split' : /شباك/.test(w) ? 'window' : /(كاسيت|مخفي|دولابي|كونسيلد|مركزي|داكت)/.test(w) ? 'other' : '')
   let typed = false
   tok.forEach((w, i) => {
-    let k = kind(w); if (!k) return
+    const k = kind(w); if (!k) return
     typed = true
-    if (k.includes(':')) { const [a, b] = k.split(':'); k = a; out[a + 'Type'] = out[a + 'Type'] || b }
     let q = null
     for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
       const c = countOf(tok[j]); if (c) { q = c; break }
       if (!FILLER.has(tok[j].replace(/^و/, '')) && !/^مكيف/.test(tok[j])) break
     }
     if (q === null && tok[i + 1]) q = countOf(tok[i + 1])   // «سبليت 2»
-    // «سبليت دولابي»: one standing unit, not a split plus a standing
-    if (k === 'other' && i > 0 && /سبليت/.test(tok[i - 1]) && out.split) { out.other += out.split; out.split = 0; return }
     out[k] += q || 1
   })
   if (!typed) {
@@ -78,7 +73,7 @@ export function sectionOf(t) {
   if (/(مكيف|تكييف|سبليت|اسبليت|شباك|كاسيت|دولابي|مخفي)/.test(n)) return 0
   if (/(غرفه تبريد|غرف تبريد|غرفه تجميد|غرف تجميد|تجميد|فريزر|ثلاجه عرض|ثلاجات عرض|براد)/.test(n)) return 2
   if (/(سباك|سباكه|تسريب|تسرب|مويه|مياه|مجاري|مجرى|بلاعه|حمام|مغسله|سيفون|خلاط|سخان|شطاف|انسداد|مسدود)/.test(n)) return 3
-  if (/(كهربا|كهرباء|كهربائي|فيش|افياش|اناره|لمبه|لمبات|قاطع|طبلون|لوحه كهربا|تمديدات كهربا|شورت|ماس)/.test(n)) return 4
+  if (/(كهربا|كهرباء|كهربائي|فيش|افياش|اناره|لمبه|لمبات|قاطع|طبلون|لوحه كهربا|تمديدات كهربا|شورت)/.test(n)) return 4
   if (/(نجار|نجاره|باب|ابواب|دولاب|دواليب|خشب|اثاث|غرفه نوم|مطبخ|مطابخ|قفل|اقفال|كالون)/.test(n)) return 5
   if (/(كاميرا|كاميرات|مراقبه|دش|رسيفر|ستلايت|ساتلايت|قنوات)/.test(n)) return 6
   if (/(دهان|دهانات|بويه|ديكور|ترميم|بلاط|تبليط|سيراميك|غساله|غسالات|ثلاجه|ثلاجات|نشافه|فرن)/.test(n)) return 7
@@ -120,6 +115,9 @@ export const SECTIONS = [
   '8️⃣ طلبي: متابعة / تأجيل / إلغاء',
   '9️⃣ كلّم موظف',
 ].join('\n')
+/** The sections menu without the ones the owner stopped (their numbers stay the same, so «3» is always plumbing). */
+export const sectionsText = (off = []) => SECTIONS.split('\n').filter((l, i) => !(i >= 1 && i <= 7 && off.includes(i))).join('\n')
+export const STOPPED = 'الخدمة دي متوقفة عندنا مؤقتًا 🙏 حوّلتك لموظف يشوف معاك البديل.'
 /** Each section's own services: [label, spec on the website]. */
 export const SUBS = {
   2: { name: 'غرف التبريد والتجميد', icon: '❄️', items: [['صيانة وإصلاح عطل', 'fridge'], ['تركيب غرفة جديدة', 'fridge'], ['فحص وشحن فريون', 'fridge'], ['عقد صيانة دورية', 'fridge']], ex: 'الغرفة مش بتبرد، الكمبروسر بيفصل، تلج على المبخر' },
@@ -133,12 +131,7 @@ export const subMenu = (k) => { const s = SUBS[k]; return s ? s.icon + ' *' + s.
 /** A message that is only a greeting («السلام عليكم», «مرحبا», «هلا») — nothing asked yet. */
 export const isGreeting = (t) => /^(السلام عليكم( ورحمه الله( وبركاته)?)?|سلام عليكم|سلام|السلام|مرحبا|مرحبًا|مرحبتين|اهلا|أهلا|اهلين|هلا|هلا والله|هاي|hi|hello|صباح الخير|مساء الخير|صباح النور|مساء النور|يعطيكم العافيه|كيف الحال|السلام عليكم كيف الحال)$/.test(norm(t).replace(/[!.،,؟?🌷👋🙏]/gu, '').trim())
 
-export const TYPES = '1️⃣ سبليت\n2️⃣ شباك\n3️⃣ سبليت + شباك\n4️⃣ دولابي\n5️⃣ كاسيت\n6️⃣ كونسيلد / داكت (مخفي)\n7️⃣ باكيدج / مركزي'
-/** Every A/C type by its key: what the site's order and every message call it. */
-export const AC_NAMES = { split: 'سبليت', window: 'شباك', standing: 'دولابي', cassette: 'كاسيت', concealed: 'كونسيلد', duct: 'داكت', package: 'باكيدج', central: 'مركزي' }
-/** The type question for repair / install: number → key. */
-export const KINDS = '1️⃣ سبليت\n2️⃣ شباك\n3️⃣ دولابي\n4️⃣ كاسيت\n5️⃣ كونسيلد / داكت (مخفي)\n6️⃣ باكيدج / مركزي'
-export const KIND_OF = { 1: 'split', 2: 'window', 3: 'standing', 4: 'cassette', 5: 'concealed', 6: 'package' }
+export const TYPES = '1️⃣ سبليت\n2️⃣ شباك\n3️⃣ سبليت + شباك\n4️⃣ كاسيت / مخفي / دولابي'
 export const FOOT = '\n\n0️⃣ القائمة الرئيسية'
 
 const r5 = (v) => Math.max(5, Math.round(v / 5) * 5)

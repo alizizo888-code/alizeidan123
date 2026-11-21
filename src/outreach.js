@@ -14,7 +14,8 @@ export function roleOf(phone, ourNumbers = {}) {
 }
 
 /** The hub's own role names for a number's job: the manager is team, outreach is outreach, sales serve customers. */
-export function hubRole(role, current = 'customers') {
+export function hubRole(role, current = 'customers', status = 'active') {
+  if (status === 'paused') return 'paused'
   return role === 'manager' ? 'team' : role === 'outreach' ? 'outreach' : role === 'sales' ? 'customers' : current
 }
 
@@ -32,11 +33,20 @@ export function pickLine(o, open, set = {}) {
   if (o.line && open.some((l) => l.id === o.line)) return o.line
   const notSelf = open.filter((l) => pkey(l.phone) !== pkey(o.phone))
   let pool = notSelf.length ? notSelf : open
-  const noOut = pool.filter((l) => l.role !== 'outreach')
+  const noOut = pool.filter((l) => l.role !== 'outreach' && l.role !== 'paused')
   if (noOut.length) pool = noOut
   if (o.brand && set.brandLines && set.brandLines[o.brand] && pool.some((l) => l.id === set.brandLines[o.brand])) return set.brandLines[o.brand]
   const want = ['room', 'tech', 'agent'].includes(o.purpose) ? 'team' : 'customers'
   return (pool.find((l) => l.role === want) || pool.find((l) => l.role === 'customers') || pool[0]).id
+}
+
+/**
+ * Lines to prepare for linking (owner, 2026-11-21): every number of ours with a job that has no line yet gets one,
+ * named and given its role, waiting for its QR scan. ours = {last9: {role, label, status, local}}; lines = store lines.
+ */
+export function toPrepare(ours = {}, lines = []) {
+  const have = new Set(lines.flatMap((l) => [l.phone ? pkey(l.phone) : '', String(l.id).startsWith('n') ? String(l.id).slice(1) : '']).filter(Boolean))
+  return Object.entries(ours).filter(([k, r]) => !have.has(k) && r.role !== 'reserve').map(([k, r]) => ({ id: 'n' + k, label: (r.label || 'رقم') + ' — ' + (r.local || '0' + k), role: hubRole(r.role, 'customers', r.status), phone: '' }))
 }
 
 /** Seconds a line waits between two campaign messages: 70–200, different every time (a fixed beat looks like a bot). */

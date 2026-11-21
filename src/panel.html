@@ -49,7 +49,7 @@ const $ = (s, el = document) => el.querySelector(s)
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const api = async (p, b) => { const r = await fetch(p, b ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) } : {}); const j = await r.json().catch(() => ({})); if (r.status === 401 && p !== '/api/login') { boot(); throw new Error('سجّل الدخول') } if (!r.ok) throw new Error(j.error || 'خطأ'); return j }
 const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? 'دلوقتي' : s < 3600 ? Math.round(s / 60) + ' د' : s < 86400 ? Math.round(s / 3600) + ' س' : new Date(t).toLocaleDateString('ar-EG') }
-const ST = { open: ['متصل', 'ok'], qr: ['امسح الكود', 'warn'], connecting: ['بيتصل…', 'warn'], closed: ['مقطوع — بيحاول تاني', 'bad'], logged_out: ['اتفصل — اربطه تاني', 'bad'], stopped: ['متوقف', 'bad'] }
+const ST = { open: ['متصل', 'ok'], qr: ['امسح الكود', 'warn'], connecting: ['بيتصل…', 'warn'], closed: ['مقطوع — بيحاول تاني', 'bad'], logged_out: ['اتفصل — اربطه تاني', 'bad'], stopped: ['جاهز للربط', 'warn'] }
 let S = { tab: 'chats', state: null, chats: [], pk: '', filter: '', timer: 0 }
 
 async function boot() {
@@ -120,10 +120,10 @@ window.newMsg = async () => { const p = prompt('رقم العميل:'); if (!p) 
 function linesView() {
   const L = (S.state?.lines || []).map((l) => { const [lab, cls] = ST[l.status] || [l.status, '']
     return `<div class="card"><div class="row"><b class="grow">${esc(l.label)} ${l.phone ? `<span class="mut">${esc(l.phone)}</span>` : ''}</b><span class="pill ${cls}">${lab}</span></div>
-      <div class="row mut" style="margin-top:6px">الدور: <select onchange="lineSet('${l.id}',{role:this.value})"><option value="customers" ${l.role === 'customers' ? 'selected' : ''}>العملاء والطلبات</option><option value="team" ${l.role === 'team' ? 'selected' : ''}>الفريق والفنيين والغرفة</option></select>
+      <div class="row mut" style="margin-top:6px">الدور: <select onchange="lineSet('${l.id}',{role:this.value})"><option value="customers" ${l.role === 'customers' ? 'selected' : ''}>مبيعات — العملاء والطلبات</option><option value="team" ${l.role === 'team' ? 'selected' : ''}>المدير — الفريق والفنيين والغرفة</option><option value="outreach" ${l.role === 'outreach' ? 'selected' : ''}>استقطاب — رسايل الحملات</option><option value="paused" ${l.role === 'paused' ? 'selected' : ''}>موقوف</option></select>
       <span>اتبعت النهارده: ${l.sentToday}/${l.cap}</span></div>
       ${l.qr ? `<p class="mut">من موبايل الرقم: واتساب ← ⋮ ← الأجهزة المرتبطة ← ربط جهاز، وامسح الكود ده:</p><img class="qr" src="${l.qr}" alt="QR">` : ''}
-      <div class="row" style="margin-top:8px"><button class="ghost" onclick="lineAct('restart','${l.id}')">🔄 إعادة اتصال</button><button class="bad" onclick="lineDel('${l.id}')">فصل وحذف</button></div></div>` }).join('')
+      <div class="row" style="margin-top:8px"><button class="${l.status === 'stopped' ? '' : 'ghost'}" onclick="lineAct('restart','${l.id}')">${l.status === 'stopped' ? '🔗 ربط بالـQR' : '🔄 إعادة اتصال'}</button><button class="bad" onclick="lineDel('${l.id}')">فصل وحذف</button></div></div>` }).join('')
   const cwv = S.state?.chatwoot || {}
   const cwCard = `<div class="card"><div class="row"><b class="grow">📱 تطبيق الإدارة (Chatwoot)</b><span class="pill ${cwv.linked ? 'ok' : 'warn'}">${cwv.linked ? 'مربوط — ' + (cwv.inboxes || 0) + ' صندوق' : 'مش مربوط لسه'}</span></div>
     <p class="mut">كل محادثات العملاء بتظهر في تطبيق Chatwoot على موبايلك، وتقدر ترد منه، والبوت بيسكت لما حد يرد. في التطبيق: اختار سيرفر خاص (self-hosted)، واكتب <b dir="ltr">chat.oxygen11.com</b>، وادخل بحسابك.</p>

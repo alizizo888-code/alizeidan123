@@ -61,7 +61,8 @@ async function initLines() {
     for (const l of store.lines()) { fs.rmSync(path.join(DATA, 'auth', l.id), { recursive: true, force: true }); store.putLine({ ...l, phone: '' }) }
     store.set('relinkDone', relink); log('line', 'كل الأرقام اتصفّرت عشان تتربط من جديد بالـQR')
   }
-  for (const l of store.lines()) lines.start(l.id).catch((e) => log('error', 'start ' + l.id + ': ' + e.message))
+  // A line linked before starts by itself; one only prepared waits for «ربط بالـQR» on the panel (no QR loop nobody scans).
+  for (const l of store.lines()) { if (l.phone || fs.existsSync(path.join(DATA, 'auth', l.id))) lines.start(l.id).catch((e) => log('error', 'start ' + l.id + ': ' + e.message)) }
 }
 
 /* ------------------------------------------------------------------ sending: one queue, paced per line */
@@ -128,11 +129,18 @@ function syncRoles() {
   const our = (store.get('wpConfig', {}) || {}).ourNumbers || {}
   for (const l of store.lines()) {
     if (!l.phone) continue
-    const want = OR.hubRole(OR.roleOf(l.phone, our), l.role)
+    const r = our[pkey(l.phone)]
+    const want = OR.hubRole(r ? r.role : '', l.role, r ? r.status : 'active')
     if (want !== l.role) { store.putLine({ ...l, role: want }); log('line', (l.label || l.id) + ': دوره بقى «' + want + '» من لوحة الأرقام') }
   }
 }
 setInterval(syncRoles, 60000).unref?.()
+// Every number on the desk's list gets its line ready (named, with its role), waiting for the QR scan from the panel.
+function prepareLines() {
+  const our = (store.get('wpConfig', {}) || {}).ourNumbers || {}
+  for (const l of OR.toPrepare(our, store.lines())) { store.putLine(l); log('line', 'اتجهز للربط: ' + l.label + ' — امسح الكود من اللوحة') }
+}
+setInterval(prepareLines, 120000).unref?.(); setTimeout(prepareLines, 15000).unref?.()
 
 // The campaigns: every five minutes the website says who each connected outreach line invites next (it keeps the plan,
 // the hours and each line's daily ceiling); the queue sends them one by one, a random minute or more apart per line.

@@ -156,11 +156,7 @@ export const missingText = (miss) => [
   ...(miss.includes('time') ? ['📅 الموعد المناسب ليك (مثال: بكرة العصر، أو اليوم الساعة 6)'] : []),
   ...(miss.includes('place') ? ['📍 اللوكيشن نفسه من واتساب: 📎 ← الموقع ← إرسال موقعي الحالي (اسم الحي لوحده مش كفاية)'] : []),
 ]
-/** For operations: the same lines plus the warnings (price computed for another service…). */
-export function opsSummary(o) { return Array.isArray(o.opsDetails) && o.opsDetails.length ? o.opsDetails.slice() : summary(o) }
-/** For the customer: the whole order as the site saved it. */
 export function summary(o) {
-  if (Array.isArray(o.details) && o.details.length) return o.details.slice()
   const L = []
   if (o.service) L.push('🛠 الخدمة: ' + String(o.service).slice(0, 120))
   if (o.address) L.push('🏠 العنوان: ' + String(o.address).slice(0, 140))

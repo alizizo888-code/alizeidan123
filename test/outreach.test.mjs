@@ -23,5 +23,16 @@ t('the pause between two campaign messages is 70–200 s and never fixed', lo >=
 const last = new Map([['o', { at: 1000000, gap: 90 }]])
 t('due: not before the pause, yes after it, yes for a line that never sent', !OR.due('o', last, 1000000 + 89000) && OR.due('o', last, 1000000 + 90000) && OR.due('n', last, 0))
 
+// prepared lines and paused numbers (owner, 2026-11-21)
+const ours = { 549247636: { role: 'manager', label: 'المدير', status: 'pending', local: '0549247636' }, 546619205: { role: 'outreach', label: 'استقطاب ١', status: 'active', local: '0546619205' }, 549715646: { role: 'sales', label: 'مبيعات ٤', status: 'paused', local: '0549715646' }, 549648890: { role: 'reserve', label: 'فني', status: 'active' } }
+const prep = OR.toPrepare(ours, [{ id: 'l1', phone: '966546619205', role: 'outreach' }])
+t('every number of ours without a line gets one, named, with its role (a linked one and a reserve one are skipped)', prep.length === 2 && prep.some((l) => l.id === 'n549247636' && l.role === 'team' && /المدير — 0549247636/.test(l.label)) && prep.some((l) => l.id === 'n549715646' && l.role === 'paused'), prep)
+t('…and never twice: a prepared line (still without a phone) is not prepared again', OR.toPrepare(ours, [{ id: 'l1', phone: '966546619205' }, ...prep]).length === 0)
+t('a paused number: hub role «paused»', OR.hubRole('sales', 'customers', 'paused') === 'paused' && OR.hubRole('outreach', 'customers', 'active') === 'outreach')
+const P = { id: 'p', phone: '966549715646', role: 'paused' }
+t('a paused line takes no new conversation', OR.pickLine({ purpose: 'reply', phone: '966500000001' }, [P, S]) === 's')
+t('…but a chat already on it is answered from it (nothing is cut mid-conversation)', OR.pickLine({ purpose: 'reply', line: 'p', phone: '966500000001' }, [P, S]) === 'p')
+t('…and it never carries a campaign', OR.pickLine({ purpose: 'outreach', line: 'p', phone: '966500000001' }, [P, O]) === null)
+
 console.log('wa-hub outreach: ' + pass + ' passed, ' + fail + ' failed')
 if (fail) process.exit(1)
