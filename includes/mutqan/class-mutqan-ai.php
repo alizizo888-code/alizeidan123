@@ -210,7 +210,22 @@ final class Mutqan_AI {
     }
 
     /** @return array ['text' => string, 'json' => ?array, 'provider' => string] @throws Mutqan_Error */
+    /** Output size and patience for one call. Normal answers stay short and fast (900 tokens, seconds); a long job (an
+     *  article rewrite of 700+ words) asks for room with opts max_tokens + long — the old fixed 900 tokens cut every
+     *  rewrite in half, so the uniqueness gate held every new article as a draft (2026-11-21). */
+    private static $out = 0;
+    private static $long = false;
+    private static function mt($def) { return self::$out > 0 ? self::$out : $def; }
+
     public static function run($prompt, $opts, $p) {
+        $prev = [self::$out, self::$long];
+        self::$out = isset($opts['max_tokens']) ? max(256, min(8000, (int) $opts['max_tokens'])) : 0;
+        self::$long = !empty($opts['long']);
+        try { return self::run_inner($prompt, $opts, $p); }
+        finally { list(self::$out, self::$long) = $prev; }
+    }
+
+    private static function run_inner($prompt, $opts, $p) {
         $prompt = (string) $prompt;
         if ($prompt === '') { throw new Mutqan_Error('empty_prompt', 'الرسالة فارغة.', 400); }
         if (mb_strlen($prompt) > self::MAX_PROMPT_CHARS) { throw new Mutqan_Error('prompt_too_large', 'الطلب كبير جدًا.', 413); }
@@ -251,7 +266,7 @@ final class Mutqan_AI {
         $model = self::tier_model($tier, $s);
         if ($model !== '' && class_exists('Mutqan_Points') && !Mutqan_Points::available()) { $model = ''; }   // wallet empty: free chain
         if ($model !== '' && !self::cooling('anthropic')) {
-            self::$cap = (int) max(6, min(25, (float) ($opts['budget'] ?? 20)));
+            self::$cap = (int) max(6, min(self::$long ? 90 : 25, (float) ($opts['budget'] ?? 20)));
             $r = self::call_anthropic(array_merge($s['providers']['anthropic'], ['model' => $model]), $prompt, $wantJson, $temp);
             self::$cap = 0;
             if ($r['ok']) {
@@ -273,13 +288,13 @@ final class Mutqan_AI {
         // guess about a quota, not a fact: when nobody is left, the two oldest-cooled doors are tried once more anyway.
         if (!$fresh) { $fresh = array_slice($chain, 0, 2); }
         // One answer has a budget in seconds, whatever the chain: a WhatsApp reply that waits a minute is a bot that hangs.
-        $deadline = microtime(true) + max(6, min(40, (float) ($opts['budget'] ?? 20)));
+        $deadline = microtime(true) + max(6, min(self::$long ? 180 : 40, (float) ($opts['budget'] ?? 20)));
         foreach ($fresh as $id) {
             $c = $s['providers'][$id];
             if ($tried >= $max) { break; }
             $left = $deadline - microtime(true);
             if ($tried > 0 && $left < 4) { break; }
-            self::$cap = (int) max(4, min(14, floor($left)));
+            self::$cap = (int) max(4, min(self::$long ? 90 : 14, floor($left)));
             $tried++;
             $r = self::call($id, $c, $prompt, $wantJson, $temp);
             self::$cap = 0;
@@ -300,7 +315,7 @@ final class Mutqan_AI {
         // next, owner/operations → the strong one), once, still under the wallet and the cooldown.
         $fb = self::fallback_model($aud, $s);
         if ($fb !== '' && $fb !== $model && !self::cooling('anthropic') && (!class_exists('Mutqan_Points') || Mutqan_Points::available())) {
-            self::$cap = (int) max(6, min(20, $deadline - microtime(true) + 8));
+            self::$cap = (int) max(6, min(self::$long ? 90 : 20, $deadline - microtime(true) + 8));
             $r = self::call_anthropic(array_merge($s['providers']['anthropic'], ['model' => $fb]), $prompt, $wantJson, $temp);
             self::$cap = 0;
             if ($r['ok']) {
@@ -384,6 +399,7 @@ final class Mutqan_AI {
 
     private static $cap = 0;   // seconds one provider may take inside a budgeted answer (0 = the caller's own timeout: the advisor's long tool turns)
     private static function http($url, $headers, $body, $timeout = 22) {
+        if (self::$long) { $timeout = max((int) $timeout, 90); }
         if (self::$cap > 0) { $timeout = min((int) $timeout, self::$cap); }
         $res = wp_remote_post($url, ['timeout' => $timeout, 'headers' => $headers, 'body' => wp_json_encode($body)]);
         if (is_wp_error($res)) { return [0, null, $res->get_error_message(), '']; }
@@ -420,7 +436,7 @@ final class Mutqan_AI {
     }
 
     private static function call_openai_compat($url, $c, $prompt, $json, $temp, $extra_headers) {
-        $body = ['model' => $c['model'], 'messages' => [['role' => 'user', 'content' => $prompt]], 'temperature' => $temp, 'max_tokens' => 900];
+        $body = ['model' => $c['model'], 'messages' => [['role' => 'user', 'content' => $prompt]], 'temperature' => $temp, 'max_tokens' => self::mt(900)];
         if ($json) { $body['response_format'] = ['type' => 'json_object']; }
         $h = array_merge(['Authorization' => 'Bearer ' . $c['key'], 'Content-Type' => 'application/json'], $extra_headers);
         list($code, $data, $raw, $retry) = self::http($url, $h, $body);
@@ -471,7 +487,7 @@ final class Mutqan_AI {
 
     private static function call_gemini($c, $prompt, $json, $temp) {
         $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($c['model']) . ':generateContent';
-        $gen = ['temperature' => $temp, 'maxOutputTokens' => 900];
+        $gen = ['temperature' => $temp, 'maxOutputTokens' => self::mt(900)];
         if ($json) { $gen['responseMimeType'] = 'application/json'; }
         list($code, $data, $raw, $retry) = self::http($url, ['x-goog-api-key' => $c['key'], 'Content-Type' => 'application/json'], [
             'contents' => [['role' => 'user', 'parts' => [['text' => $prompt]]]], 'generationConfig' => $gen,
@@ -491,7 +507,7 @@ final class Mutqan_AI {
     }
 
     private static function call_anthropic($c, $prompt, $json, $temp) {
-        $body = ['model' => $c['model'], 'max_tokens' => 1200, 'temperature' => $temp, 'messages' => [['role' => 'user', 'content' => $prompt]]];
+        $body = ['model' => $c['model'], 'max_tokens' => self::mt(1200), 'temperature' => $temp, 'messages' => [['role' => 'user', 'content' => $prompt]]];
         if ($json) { $body['system'] = 'Reply with one JSON object only.'; }
         list($code, $data, $raw, $retry) = self::anthropic_request($body, $c['key']);
         if ($code >= 200 && $code < 300 && isset($data['content'])) {
@@ -515,7 +531,7 @@ final class Mutqan_AI {
     private static function call_cloudflare($c, $prompt, $temp) {
         $url = 'https://api.cloudflare.com/client/v4/accounts/' . rawurlencode($c['account']) . '/ai/run/' . $c['model'];
         list($code, $data, $raw, $retry) = self::http($url, ['Authorization' => 'Bearer ' . $c['key'], 'Content-Type' => 'application/json'], [
-            'messages' => [['role' => 'user', 'content' => $prompt]], 'max_tokens' => 900, 'temperature' => $temp,
+            'messages' => [['role' => 'user', 'content' => $prompt]], 'max_tokens' => self::mt(900), 'temperature' => $temp,
         ]);
         if ($code >= 200 && $code < 300 && isset($data['result']['response']) && is_string($data['result']['response'])) {
             return ['ok' => true, 'text' => $data['result']['response']];

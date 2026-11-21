@@ -114,9 +114,13 @@ final class Mutqan_Fp {
         return $best;
     }
 
-    public static function add_local($sig, $site, $url, $key = '', $at = '') {
+    public static function add_local($sig, $site, $url, $key = '', $at = '', $replace = false) {
         self::ensure();
         global $wpdb;
+        if ($replace && $url !== '') {
+            $old = (int) $wpdb->get_var($wpdb->prepare("SELECT id FROM " . self::t('fp') . " WHERE url = %s", $url));
+            if ($old) { $wpdb->delete(self::t('fpb'), ['fp' => $old]); $wpdb->delete(self::t('fp'), ['id' => $old]); }
+        }
         if ($url === '' || $wpdb->get_var($wpdb->prepare("SELECT id FROM " . self::t('fp') . " WHERE url = %s", $url))) { return false; }
         $wpdb->insert(self::t('fp'), ['site' => mb_substr($site, 0, 24), 'url' => mb_substr($url, 0, 255), 'k' => mb_substr($key, 0, 100), 'created' => $at ?: current_time('mysql', true), 'sig' => wp_json_encode($sig)]);
         $id = (int) $wpdb->insert_id;
@@ -150,6 +154,7 @@ final class Mutqan_Fp {
         $out = ['sim' => 0];
         if ($op === 'check' || $op === 'check_add') { $out = self::check_local($sig, $url); }
         if (($op === 'add' || $op === 'check_add') && $site !== '' && $url !== '' && empty($in['dry'])) { $out['added'] = self::add_local($sig, $site, $url, (string) ($in['key'] ?? ''), (string) ($in['at'] ?? '')); }
+        if ($op === 'replace' && $site !== '' && $url !== '') { $out['added'] = self::add_local($sig, $site, $url, (string) ($in['key'] ?? ''), (string) ($in['at'] ?? ''), true); }
         return $out;
     }
 
@@ -159,7 +164,7 @@ final class Mutqan_Fp {
         if (self::is_hub()) {
             try { return self::handle(['op' => $op] + $args, ['id' => 'system', 'role' => 'owner', 'kind' => 'user']); } catch (Throwable $e) { return null; }
         }
-        $r = wp_remote_post(self::HUB, ['timeout' => $op === 'rewrite' ? 90 : 15, 'headers' => ['Content-Type' => 'application/json'], 'body' => wp_json_encode(['op' => $op] + $args)]);
+        $r = wp_remote_post(self::HUB, ['timeout' => $op === 'rewrite' ? 170 : 15, 'headers' => ['Content-Type' => 'application/json'], 'body' => wp_json_encode(['op' => $op] + $args)]);
         if (is_wp_error($r) || (int) wp_remote_retrieve_response_code($r) !== 200) { return null; }
         $j = json_decode((string) wp_remote_retrieve_body($r), true);
         return is_array($j) ? ($j['data'] ?? null) : null;
@@ -179,10 +184,10 @@ final class Mutqan_Fp {
             . "- ممنوع ذكر أسعار أو أرقام هواتف أو نسب أو تراخيص أو سنوات خبرة أو تقييمات، وممنوع اختراع قصص عملاء.\n"
             . "- الطول 1200 كلمة على الأقل. أرجع HTML فقط (h2, h3, p, ul, li, strong) بدون أي شرح وبدون ```.\n\n"
             . "العنوان: " . $title . "\n\nالمقال:\n" . $plain;
-        try { $r = Mutqan_AI::run($prompt, ['tier' => 'low', 'temperature' => 0.8, 'feature' => 'articles', 'budget' => 6], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user']); }
+        try { $r = Mutqan_AI::run($prompt, ['tier' => 'low', 'temperature' => 0.8, 'feature' => 'articles', 'budget' => 150, 'long' => 1, 'max_tokens' => 7000], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user']); }
         catch (Throwable $e) { return ['html' => '']; }
         $out = trim(preg_replace('/^```(?:html)?|```$/m', '', (string) ($r['text'] ?? '')));
         $out = wp_kses($out, ['h2' => [], 'h3' => [], 'p' => [], 'ul' => [], 'ol' => [], 'li' => [], 'strong' => [], 'em' => [], 'br' => []]);
-        return ['html' => count(self::words($out)) >= 700 ? $out : '', 'provider' => (string) ($r['provider'] ?? '')];
+        return ['html' => count(self::words($out)) >= 450 ? $out : '', 'provider' => (string) ($r['provider'] ?? '')];
     }
 }

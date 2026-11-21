@@ -15,10 +15,15 @@ final class Oxygen_Uniq {
     const NOINDEX = 0.50;
     const CRON = 'oxygen_uniq_backfill';
     const BATCH = 25;
+    const FIX = 'oxygen_uniq_fix';      // hourly: held drafts and noindexed copies get an AI rewrite and go (back) out
+    const FIX_BATCH = 5;
+    const FIX_TRIES = 3;
 
     public static function boot() {
         add_action('init', function () { if (!wp_next_scheduled(self::CRON)) { wp_schedule_event(time() + 300 + wp_rand(0, 1800), 'hourly', self::CRON); } });
         add_action(self::CRON, [__CLASS__, 'backfill']);
+        add_action('init', function () { if (!wp_next_scheduled(self::FIX)) { wp_schedule_event(time() + 120 + wp_rand(0, 600), 'hourly', self::FIX); } });
+        add_action(self::FIX, [__CLASS__, 'fix']);
         // a copy that was taken out stays out: robots meta, Yoast, core sitemaps
         add_filter('wp_robots', function ($r) { if (is_singular() && self::is_dup(get_queried_object_id())) { $r['noindex'] = true; $r['follow'] = true; unset($r['index'], $r['max-image-preview']); } return $r; }, 99);
         add_filter('wpseo_robots', function ($s) { return is_singular() && self::is_dup(get_queried_object_id()) ? 'noindex, follow' : $s; }, 99);
@@ -48,21 +53,86 @@ final class Oxygen_Uniq {
         if (!is_array($r)) { return $out; }
         $out['sim'] = (float) ($r['sim'] ?? 0);
         if ($out['sim'] < self::GATE) { return $out; }
-        // too close to something already out there: a rewrite in this site's own voice (local AI first, then the hub's)
-        $angle = class_exists('Oxygen_Network_SEO') && defined('Oxygen_Network_SEO::HOOKS') ? (Oxygen_Network_SEO::HOOKS[self::site()] ?? '') : '';
+        // too close to something already out there: a rewrite in this site's own voice (local AI first, then the hub's).
+        // A long rewrite takes up to a minute or two, so one request does one inline; the rest wait as drafts for fix().
+        static $inline = 0;
         $title = (string) ($item['title'] ?? '');
-        $rw = (class_exists('Mutqan_AI') && Mutqan_AI::any_enabled()) ? Mutqan_Fp::rewrite_local($b['html'], $title, self::brand(), $angle) : Mutqan_Fp::call('rewrite', ['text' => $b['html'], 'title' => $title, 'brand' => self::brand(), 'angle' => $angle]);
-        $new = is_array($rw) ? (string) ($rw['html'] ?? '') : '';
-        if ($new !== '') {
-            $img = preg_match('#^\s*<p><img[^>]+></p>#u', $b['html'], $m) ? $m[0] : '';
-            $r2 = Mutqan_Fp::call('check', ['text' => $new]);
-            $s2 = is_array($r2) ? (float) ($r2['sim'] ?? 1) : 1.0;
-            if ($s2 < self::GATE) { return ['html' => $img . $new, 'status' => null, 'sim' => $s2, 'rewritten' => true]; }
-            $out['sim'] = $s2;
+        if ($inline < 1) {
+            $inline++;
+            $new = self::rewrite_html($b['html'], $title);
+            if ($new !== '') {
+                $r2 = Mutqan_Fp::call('check', ['text' => $new]);
+                $s2 = is_array($r2) ? (float) ($r2['sim'] ?? 1) : 1.0;
+                if ($s2 < self::GATE) { return ['html' => $new, 'status' => null, 'sim' => $s2, 'rewritten' => true]; }
+                $out['sim'] = $s2;
+            }
         }
         $out['status'] = 'draft';
         self::note('held', $title, $out['sim'], (string) ($r['url'] ?? ''));
         return $out;
+    }
+
+    /** The article rewritten by the AI in this site's voice (the cover image kept on top), or '' when the AI could not. */
+    private static function rewrite_html($html, $title) {
+        $angle = class_exists('Oxygen_Network_SEO') && defined('Oxygen_Network_SEO::HOOKS') ? (Oxygen_Network_SEO::HOOKS[self::site()] ?? '') : '';
+        $rw = (class_exists('Mutqan_AI') && Mutqan_AI::any_enabled()) ? Mutqan_Fp::rewrite_local($html, $title, self::brand(), $angle) : Mutqan_Fp::call('rewrite', ['text' => $html, 'title' => $title, 'brand' => self::brand(), 'angle' => $angle]);
+        $new = is_array($rw) ? (string) ($rw['html'] ?? '') : '';
+        if ($new === '') { return ''; }
+        $img = preg_match('#^\s*<p><img[^>]+></p>#u', (string) $html, $m) ? $m[0] : '';
+        return $img . $new;
+    }
+
+    /**
+     * Hourly repair (2026-11-21): every article the gate held as a draft, then every published article taken out of the
+     * index as a copy, gets a full AI rewrite. Unique now (< GATE) → a held draft is published, a noindexed article goes
+     * back into the index with its new text. Still too close after FIX_TRIES attempts → it stays as it is.
+     */
+    public static function fix() {
+        if (!class_exists('Mutqan_Fp') || get_transient('oxygen_uniq_fix_lock')) { return; }
+        set_transient('oxygen_uniq_fix_lock', 1, 15 * MINUTE_IN_SECONDS);
+        if (function_exists('set_time_limit')) { @set_time_limit(900); }
+        $t0 = time(); $done = 0; $pub = 0; $back = 0;
+        $tries = ['relation' => 'OR', ['key' => '_oxy_uniq_tries', 'compare' => 'NOT EXISTS'], ['key' => '_oxy_uniq_tries', 'value' => self::FIX_TRIES, 'compare' => '<', 'type' => 'NUMERIC']];
+        $held = get_posts(['post_type' => 'post', 'post_status' => 'draft', 'numberposts' => self::FIX_BATCH, 'orderby' => 'date', 'order' => 'ASC', 'fields' => 'ids',
+            'meta_query' => [['key' => '_oxy_held_dup', 'compare' => 'EXISTS'], $tries]]);
+        $dups = count($held) < self::FIX_BATCH ? get_posts(['post_type' => 'post', 'post_status' => 'publish', 'numberposts' => self::FIX_BATCH - count($held), 'orderby' => 'date', 'order' => 'DESC', 'fields' => 'ids',
+            'meta_query' => [['key' => '_oxy_dup', 'compare' => 'EXISTS'], $tries]]) : [];
+        foreach (array_merge($held, $dups) as $id) {
+            if (time() - $t0 > 600) { break; }
+            $p = get_post($id);
+            if (!$p) { continue; }
+            $live = $p->post_status === 'publish';
+            $new = self::rewrite_html($p->post_content, $p->post_title);
+            $url = $live ? (string) get_permalink($p) : '';
+            $r = $new !== '' ? Mutqan_Fp::call('check', ['text' => $new, 'url' => $url]) : null;
+            $sim = is_array($r) ? (float) ($r['sim'] ?? 1) : 1.0;
+            if ($new === '' || $sim >= self::GATE) {
+                update_post_meta($id, '_oxy_uniq_tries', (int) get_post_meta($id, '_oxy_uniq_tries', true) + 1);
+                if ($new === '' && !is_array($r)) { break; }   // the AI / the hub is not answering now: try next hour
+                continue;
+            }
+            $upd = ['ID' => $id, 'post_content' => $new];
+            if (!$live) { $now = current_time('mysql'); $upd += ['post_status' => 'publish', 'post_date' => $now, 'post_date_gmt' => get_gmt_from_date($now), 'edit_date' => true]; }
+            $ok = wp_update_post($upd, true);
+            if (is_wp_error($ok) || !$ok) { continue; }
+            update_post_meta($id, '_oxy_rewritten', 1);
+            update_post_meta($id, '_oxy_fp_sim', $sim);
+            delete_post_meta($id, '_oxy_uniq_tries');
+            if ($live) {
+                delete_post_meta($id, '_oxy_dup'); delete_post_meta($id, '_yoast_wpseo_meta-robots-noindex');
+                Mutqan_Fp::call('replace', ['site' => self::site(), 'url' => $url, 'key' => (string) get_post_meta($id, '_oxy_seo_key', true), 'text' => $new, 'at' => $p->post_date_gmt]);
+                update_post_meta($id, '_oxy_fp_done', 1);
+                $back++;
+            } else {
+                delete_post_meta($id, '_oxy_held_dup');
+                self::after($id, ['sim' => $sim, 'rewritten' => true, 'status' => null]);
+                $pub++;
+            }
+            if (class_exists('Oxygen_SEO_Engine')) { Oxygen_SEO_Engine::indexnow([get_permalink($id)]); }
+            $done++;
+        }
+        if ($done) { self::note('fixed', "$pub drafts published, $back back in the index", 0, ''); }
+        delete_transient('oxygen_uniq_fix_lock');
     }
 
     /** After the insert: a published article joins the network's memory. */
@@ -109,7 +179,7 @@ final class Oxygen_Uniq {
     public static function summary() {
         global $wpdb;
         $c = function ($k) use ($wpdb) { return (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = %s", $k)); };
-        return ['checked' => $c('_oxy_fp_done'), 'noindexed' => $c('_oxy_dup'), 'held' => $c('_oxy_held_dup'), 'rewritten' => $c('_oxy_rewritten'), 'log' => array_slice(array_reverse((array) get_option('oxygen_uniq_log', [])), 0, 20)];
+        return ['checked' => $c('_oxy_fp_done'), 'noindexed' => $c('_oxy_dup'), 'held' => $c('_oxy_held_dup'), 'rewritten' => $c('_oxy_rewritten'), 'given_up' => (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = '_oxy_uniq_tries' AND CAST(meta_value AS UNSIGNED) >= %d", self::FIX_TRIES)), 'log' => array_slice(array_reverse((array) get_option('oxygen_uniq_log', [])), 0, 20)];
     }
 }
 Oxygen_Uniq::boot();
