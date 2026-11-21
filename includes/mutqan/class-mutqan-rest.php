@@ -36,7 +36,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner', 'fp', 'field', 'trainer', 'concierge'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner', 'fp', 'field', 'trainer', 'concierge', 'lines', 'outreach'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -600,6 +600,10 @@ final class Mutqan_Rest {
     /** «جاي منين»: an article code (#oxygen/a26) → the article, and the search across every site of the network. */
     /** The network's article memory (Mutqan_Fp): check / add / rewrite, used by every site before it publishes. */
     public static function h_fp($req, $p) { return Mutqan_Fp::handle(self::body($req), $p); }
+    /** «أرقامنا»: each company number and its job (manager / sales / outreach / reserve). */
+    public static function h_lines($req, $p) { return Mutqan_Lines::handle(self::body($req), $p); }
+    /** «حملات الاستقطاب»: the prospects base and the daily invitation plan. */
+    public static function h_outreach($req, $p) { return Mutqan_Outreach::handle(self::body($req), $p); }
     /** The field: map pin cards, old customers nearby, «couldn't fix it» reports. */
     public static function h_field($req, $p) { return Mutqan_Field::handle(self::body($req), $p); }
     public static function h_trainer($req, $p) { return Mutqan_Trainer::handle(self::body($req), $p); }

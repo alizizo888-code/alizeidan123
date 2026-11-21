@@ -164,10 +164,12 @@ final class Mutqan_KB {
     }
 
     /** The block to put in front of the prompt, or '' when nothing the owner wrote bears on it. */
-    public static function context($q, $p) {
+    public static function context($q, $p, $numbers = true) {
         $aud = self::audience($p);
         $rows = self::pick($q, $aud);
-        if ($rows === []) { return ''; }
+        // The company's own numbers and their jobs (Mutqan_Lines): every model on every channel knows them as ours.
+        $ours = $numbers && class_exists('Mutqan_Lines') ? Mutqan_Lines::facts($aud) : '';
+        if ($rows === []) { return $ours; }
         $open = []; $closed = [];
         foreach ($rows as $r) {
             $line = ($r['title'] !== '' ? '- ' . $r['title'] . ': ' : '- ') . $r['body'];
@@ -181,6 +183,7 @@ final class Mutqan_KB {
                 . ($aud === 'customer' ? '، ولا تكشف للعميل حدود الخصم ولا أي رقم داخلي' : '')
                 . ".\n" . implode("\n", $closed) . "\n";
         }
+        $out .= $ours;
         $out .= "\nاعتمد على ما سبق قبل أي معرفة عامة. وما ليس مكتوبًا هنا لا تخترعه — قل إنك ستتأكد وحوّل الكلام لمسؤول.\n";
         return $out;
     }
@@ -188,7 +191,8 @@ final class Mutqan_KB {
     /** Puts the owner's facts in front of a prompt on its way to the model. */
     public static function inject($prompt, $opts, $p) {
         if (isset($opts['kb']) && !$opts['kb']) { return $prompt; }
-        try { $ctx = self::context($prompt, $p); } catch (Throwable $e) { return $prompt; }
+        // Article writing is not a conversation: the company's numbers stay out of it (they would end up in the text).
+        try { $ctx = self::context($prompt, $p, ($opts['feature'] ?? '') !== 'articles'); } catch (Throwable $e) { return $prompt; }
         return $ctx === '' ? $prompt : $ctx . "\n" . $prompt;
     }
 }

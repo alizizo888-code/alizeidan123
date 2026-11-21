@@ -259,10 +259,15 @@ final class Mutqan_Hub {
             // «رقم التجربة» set on the site (one phone that is both a customer and the room) is the hub's too.
             // The owner's hours (2026-11-20) — the VPS hub follows the site, not its own panel.
             case 'config': return ['testCustomer' => (string) get_option('mutqan_test_customer', ''), 'site' => home_url('/'), 'hoursFrom' => 7, 'hoursTo' => 23]
+                + (class_exists('Mutqan_Lines') ? Mutqan_Lines::hub_config() : [])
                 + (class_exists('Mutqan_Kit') ? ['washVideos' => array_map(function ($v) { return ['label' => (string) $v['label'], 'url' => (string) $v['url']]; }, (array) Mutqan_Kit::get()['washVideos'])] : []);
             // One procedure for both lines (Mutqan_Deal::cancel): before a technician accepted, cancelled at once.
             case 'cancel': { $o = self::need($in); if (!class_exists('Mutqan_Deal')) { return ['reply' => null]; } $r = Mutqan_Deal::cancel($o, (string) ($in['text'] ?? '')); return $r + ['num' => self::num($o)]; }
             // The same answers as the site chat (Mutqan_Concierge): an order by number, payment, warranty, offers, his live order.
+            // «حملات الاستقطاب»: the hub asks for its outreach lines' next messages, and reports a «إيقاف» or a reply.
+            case 'outreach_batch': return class_exists('Mutqan_Outreach') ? Mutqan_Outreach::batch((array) ($in['lines'] ?? [])) : ['items' => []];
+            case 'outreach_optout': return class_exists('Mutqan_Outreach') ? Mutqan_Outreach::optout((string) ($in['phone'] ?? '')) : ['ok' => false];
+            case 'outreach_reply': return class_exists('Mutqan_Outreach') ? Mutqan_Outreach::replied((string) ($in['phone'] ?? '')) : ['ok' => false];
             case 'answer': { if (!class_exists('Mutqan_Concierge')) { return ['reply' => null]; } $a = Mutqan_Concierge::answer((string) ($in['text'] ?? ''), ['channel' => 'wa', 'phone' => (string) ($in['phone'] ?? ''), 'verified' => true, 'brand' => (string) ($in['brand'] ?? '')]); return $a ?: ['reply' => null]; }
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
@@ -274,6 +279,11 @@ final class Mutqan_Hub {
     public static function who($phone) {
         $k = substr(preg_replace('/\D/', '', (string) $phone), -9);
         if (strlen($k) < 9) { return ['kind' => 'customer']; }
+        // One of the company's own numbers (Mutqan_Lines): the manager is the room; any other line is ours — never a customer.
+        if (class_exists('Mutqan_Lines') && ($ln = Mutqan_Lines::ours($phone))) {
+            if ($ln['role'] === 'manager' && $ln['status'] === 'active') { return ['kind' => 'staff', 'name' => 'المدير', 'role' => 'owner', 'line' => 'manager']; }
+            return ['kind' => 'line', 'name' => $ln['label'] ?: 'رقم الشركة', 'role' => $ln['role']];
+        }
         foreach (Mutqan_Store::select('tech_profiles', [], ['limit' => 400], self::sys()) as $t) {
             if (!empty($t['phone']) && substr(preg_replace('/\D/', '', (string) $t['phone']), -9) === $k) {
                 $tid = (string) ($t['userId'] ?? ($t['id'] ?? ''));
