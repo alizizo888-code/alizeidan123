@@ -396,6 +396,8 @@ final class Mutqan_Store {
         if ($coll === 'orders' && is_array($data) && class_exists('Mutqan_Ledger') && empty($data['history'])) {
             try { $h = Mutqan_Ledger::history_for($data); if ($h) { $data['history'] = $h; } } catch (Throwable $e) { error_log('[mutqan] history ' . $e->getMessage()); }
         }
+        // What the order is (wash / repair / install…, and which A/C, how many): one reading, written on the order.
+        if ($coll === 'orders' && is_array($data) && class_exists('Mutqan_Service')) { $data = Mutqan_Service::stamp($data); }
         list($data, $json) = self::clean_data($data);
         $id = ($id !== null && $id !== '') ? self::valid_id($id) : wp_generate_uuid4();
         if (!$private) { Mutqan_Policy::check_insert_id($coll, $id, $p); }
@@ -446,6 +448,7 @@ final class Mutqan_Store {
         foreach (['id', 'createdAt', 'updatedAt'] as $k) { unset($patch[$k]); }
         $new = array_merge($old, $patch);
         foreach ($patch as $k => $v) { if ($v === null) { $new[$k] = null; } }
+        if ($coll === 'orders' && class_exists('Mutqan_Service')) { $new = Mutqan_Service::stamp($new); }
         list($new, $json) = self::clean_data($new);
         $wpdb->update(self::table('docs'), ['data' => $json, 'updated_at' => self::now()], ['pk' => $row['pk']]);
         self::bump($coll);

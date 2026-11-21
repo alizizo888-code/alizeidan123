@@ -386,10 +386,9 @@ final class Mutqan_Rest {
         $high = (($doc['escalation']['reason'] ?? '') === 'high_value');
         $lines = array_filter([
             'الطلب: #' . substr((string) $doc['id'], -5) . ' · المصدر: ' . $src,
-            !empty($doc['specialtyId']) ? 'الخدمة: ' . self::spec_label($doc['specialtyId']) : '',
+            'الخدمة: ' . Mutqan_Service::label($doc),
             $price ? 'السعر: ' . $price . ' ر.س' : '',
-            self::kind_label($doc) ? 'نوع الطلب: ' . self::kind_label($doc) : '',
-            self::units_text($doc) ? ((($doc['specialtyId'] ?? '') === 'ac' ? 'المكيفات: ' : 'العدد: ') . self::units_text($doc)) : '',
+            Mutqan_Service::read($doc)['warn'],
             self::note_text($doc) ? 'التفاصيل: ' . self::note_text($doc) : '',
             'الموعد: ' . self::when_text($doc),
             'وقت إرسال الطلب: ' . self::full_when(gmdate('c')),

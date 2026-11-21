@@ -41,9 +41,7 @@ final class Mutqan_Hub {
         $id = (string) $o['id'];
         $f = class_exists('Mutqan_OrderBot') ? Mutqan_OrderBot::facts($o) : [];
         $tech = !empty($o['technicianId']) ? (Mutqan_Store::get_raw('tech_profiles', (string) $o['technicianId']) ?: []) : [];
-        $svc = (string) ($o['serviceLabel'] ?? ($o['service'] ?? ''));
-        if ($svc === '' && !empty($o['specialtyId']) && class_exists('Mutqan_Rest')) { $svc = (string) Mutqan_Rest::spec_label($o['specialtyId']); }
-        if (!empty($o['serviceDetails'])) { $svc = trim($svc . ($svc !== '' ? ' — ' : '') . (string) $o['serviceDetails']); }
+        $svc = Mutqan_Service::label($o);
         $site = '';
         $card = (array) ($o['card'] ?? []);
         if (!empty($card['site']) && $card['site'] !== 'غير محدد') { $site = (string) $card['site']; }
@@ -55,7 +53,7 @@ final class Mutqan_Hub {
             'id' => $id, 'number' => (string) ($o['number'] ?? '') ?: substr($id, -5), 'status' => $st, 'statusLabel' => self::LABELS[$st] ?? $st,
             'source' => (string) ($o['source'] ?? ''), 'brand' => (string) ($o['brand'] ?? ''), 'site' => $site,
             'origin' => is_array($o['origin'] ?? null) ? $o['origin'] : null, 'originLine' => class_exists('Mutqan_Source') ? Mutqan_Source::line((array) ($o['origin'] ?? [])) : '', 'historyText' => (string) ($o['history']['text'] ?? ''),
-            'service' => mb_substr($svc, 0, 160), 'clientName' => (string) ($o['clientName'] ?? ''), 'clientPhone' => (string) ($o['clientPhone'] ?? ''),
+            'service' => mb_substr($svc, 0, 160), 'details' => Mutqan_Service::lines($o, true), 'opsDetails' => Mutqan_Service::lines($o, false), 'clientName' => (string) ($o['clientName'] ?? ''), 'clientPhone' => (string) ($o['clientPhone'] ?? ''),
             'address' => (string) ($o['address'] ?? ''), 'lat' => is_numeric($o['lat'] ?? null) ? (float) $o['lat'] : null, 'lng' => is_numeric($o['lng'] ?? null) ? (float) $o['lng'] : null,
             'appointment' => $appt, 'preferredTime' => (string) ($o['preferredTime'] ?? ''), 'note' => (string) ($o['note'] ?? ''),
             'price' => class_exists('Mutqan_Sales') ? (int) Mutqan_Sales::amount($o) : 0,
@@ -345,6 +343,10 @@ final class Mutqan_Hub {
             // The WhatsApp menu showed him the whole order and he pressed «تأكيد»: confirmed already.
             'customerConfirmed' => !empty($in['confirmed']) ? true : null, 'confirmedAt' => !empty($in['confirmed']) ? gmdate('c') : null, 'confirmedVia' => !empty($in['confirmed']) ? 'whatsapp' : null,
             'qty' => is_numeric($in['units'] ?? null) ? (int) $in['units'] : null,
+            // what the menu chose, exactly: the mode and the A/C type (the label is read from these, not guessed)
+            'svcMode' => isset(Mutqan_Service::MODES[$in['mode'] ?? '']) ? (string) $in['mode'] : null,
+            'acType' => isset(Mutqan_Service::TYPES[$in['acType'] ?? '']) ? (string) $in['acType'] : null,
+            'description' => mb_substr(trim((string) ($in['desc'] ?? '')), 0, 300) ?: null,
         ], static function ($v) { return $v !== null && $v !== ''; });
         // The hub writes as the system, which the store's price guard trusts — so the floor is checked here: a price
         // under what the owner allows never reaches the order (it becomes a note for operations; the order is kept).
@@ -555,6 +557,8 @@ final class Mutqan_Hub {
     public static function ac_price($in) {
         $types = ['split' => 'سبليت', 'window' => 'شباك', 'other' => 'دولابي'];
         $items = []; $lines = []; $total = 0; $floor = 0; $units = 0;
+        // standing or cassette: priced from the same row, named as what it is
+        $otherName = Mutqan_Service::TYPES[$in['otherType'] ?? ''] ?? 'كاسيت/مخفي/دولابي';
         foreach ($types as $k => $t) {
             $q = max(0, min(50, (int) ($in[$k] ?? 0)));
             if ($q < 1) { continue; }
@@ -562,12 +566,12 @@ final class Mutqan_Hub {
             $sum = (int) round(Mutqan_Policy::ac_total($one));
             $fl = min($sum, max(0, (int) Mutqan_Policy::ac_floor($one) + 1));
             $items[] = ['type' => $t, 'qty' => $q, 'full' => empty($in['inner'])];
-            $lines[] = $q . ' ' . ($k === 'other' ? 'كاسيت/مخفي/دولابي' : $t) . ' = ' . $sum . ' ر.س';
+            $lines[] = $q . ' ' . ($k === 'other' ? $otherName : $t) . ' = ' . $sum . ' ر.س';
             $total += $sum; $floor += $fl; $units += $q;
         }
         if (!$items) { return ['total' => 0]; }
         if (class_exists('Mutqan_Deal') && Mutqan_Deal::band()['mode'] === 'fixed') { $floor = $total; }
-        $label = 'غسيل ' . implode(' + ', array_map(function ($it) { return $it['qty'] . ' ' . ($it['type'] === 'دولابي' ? 'كاسيت/مخفي' : $it['type']); }, $items)) . (empty($in['inner']) ? '' : ' (داخلي فقط)');
+        $label = 'غسيل ' . implode(' + ', array_map(function ($it) use ($otherName) { return $it['qty'] . ' ' . ($it['type'] === 'دولابي' ? $otherName : $it['type']); }, $items)) . (empty($in['inner']) ? '' : ' (داخلي فقط)');
         $acQuote = count($items) === 1 ? ['mode' => 'wash', 'type' => $items[0]['type'], 'qty' => $items[0]['qty'], 'full' => $items[0]['full']] : ['mode' => 'wash', 'items' => $items];
         return ['total' => $total, 'floor' => min($floor, $total), 'units' => $units, 'lines' => $lines, 'label' => $label, 'acQuote' => $acQuote, 'spec' => 'ac'];
     }
@@ -609,20 +613,45 @@ final class Mutqan_Hub {
     }
 
     /** The photo of the part from the media library (title contains its name), or ''. */
-    public static function part_image($p) {
-        if (!function_exists('get_posts')) { return ''; }
-        $key = 'mq_part_img_' . $p['id'];
-        $c = get_transient($key);
-        if ($c !== false) { return (string) $c; }
-        $url = '';
-        // The owner titles the photo with the part's own name: «المكثف», «الترموستات», «الكونتاكتور», «الكمبروسر»…
-        $core = trim(preg_replace(['/^(تغيير|شحن)\s+/u', '/\s*\(.*\)$/u'], '', (string) $p['label']));
-        foreach (array_unique(array_merge([$core, preg_replace('/^ال/u', '', $core)], (array) $p['words'])) as $w) {
-            $q = get_posts(['post_type' => 'attachment', 'post_mime_type' => 'image', 'post_status' => 'inherit', 's' => (string) $w, 'numberposts' => 1, 'suppress_filters' => false]);
-            if ($q) { $url = (string) wp_get_attachment_url($q[0]->ID); $b = basename(parse_url($url, PHP_URL_PATH)); $url = substr($url, 0, -strlen($b)) . rawurlencode(rawurldecode($b)); break; }   // Arabic file names, encoded for WhatsApp
+    /**
+     * The photo of that repair from the media library, titled by the owner with the part's own name («المكثف — …»,
+     * «الفريون R410»…). Several photos per part: the one whose title matches what the customer said (410, 22, شباك,
+     * DC, خارجي…) wins; otherwise the first one uploaded for that part.
+     */
+    public static function part_image($p, $text = '') {
+        $all = self::part_images($p);
+        if (!$all) { return ''; }
+        $n = class_exists('Mutqan_Playbook') ? Mutqan_Playbook::norm($text) : mb_strtolower((string) $text);
+        $want = [];
+        foreach (['410' => '/410/u', 'R22' => '/(^|\D)22(\D|$)/u', 'R32' => '/(^|\D)32(\D|$)/u', '134' => '/134/u', 'DC' => '/(انفرتر|انفيرتر|dc|دي سي|ديسي)/u', 'شباك' => '/شباك/u',
+            'سبليت' => '/(سبليت|سبلت|اسبليت)/u', 'خارجي' => '/(خارجي|برا|بره|الكمبروسر|الكومبروسر)/u', 'داخلي' => '/(داخلي|جوه|جوا)/u', 'مروحة' => '/مروح/u', '3 فاز' => '/(3 فاز|تلات فاز|ثلاث فاز|380)/u'] as $tag => $rx) {
+            if ($n !== '' && preg_match($rx, $n)) { $want[] = $tag; }
         }
-        set_transient($key, $url, $url !== '' ? DAY_IN_SECONDS : HOUR_IN_SECONDS);
-        return $url;
+        $best = $all[0]; $score = 0;
+        foreach ($all as $im) { $sc = 0; foreach ($want as $w) { if (mb_stripos($im['title'], $w) !== false) { $sc++; } } if ($sc > $score) { $score = $sc; $best = $im; } }
+        return $best['url'];
+    }
+
+    /** Every photo of that part, oldest first: [['url', 'title']]. */
+    public static function part_images($p) {
+        if (!function_exists('get_posts')) { return []; }
+        $key = 'mq_part_imgs_' . $p['id'];
+        $c = get_transient($key);
+        if (is_array($c)) { return $c; }
+        $core = trim(preg_replace(['/^(تغيير|شحن)\s+/u', '/\s*\(.*\)$/u'], '', (string) $p['label']));
+        $out = [];
+        foreach (array_unique(array_merge([$core, preg_replace('/^ال/u', '', $core)], (array) $p['words'])) as $w) {
+            $q = get_posts(['post_type' => 'attachment', 'post_mime_type' => 'image', 'post_status' => 'inherit', 's' => (string) $w, 'numberposts' => 20, 'orderby' => 'ID', 'order' => 'ASC', 'suppress_filters' => false]);
+            foreach ($q as $x) {
+                if (mb_strpos(get_the_title($x->ID), preg_replace('/^ال/u', '', $core)) === false && $w !== $core) { continue; }
+                $url = (string) wp_get_attachment_url($x->ID); $bn = basename(parse_url($url, PHP_URL_PATH));
+                $out[$x->ID] = ['url' => substr($url, 0, -strlen($bn)) . rawurlencode(rawurldecode($bn)), 'title' => (string) get_the_title($x->ID)];   // Arabic file names, encoded for WhatsApp
+            }
+            if ($out) { break; }
+        }
+        ksort($out); $out = array_values($out);
+        set_transient($key, $out, $out ? DAY_IN_SECONDS : HOUR_IN_SECONDS);
+        return $out;
     }
 
     /** The parts he named; [] when he named none. */
@@ -644,7 +673,7 @@ final class Mutqan_Hub {
             foreach (array_slice($hit, 0, 3) as $p) {
                 $pr = self::part_price($p);
                 $L[] = $pr !== '' ? '🔧 *' . $p['label'] . '*: *' . $pr . '*' : '🔧 *' . $p['label'] . '*: بنأكدلك السعر بعد الكشف، والفني بيقولك قبل أي شغل.';
-                if ($img === '') { $img = self::part_image($p); }
+                if ($img === '') { $img = self::part_image($p, $text); }
             }
             $L[] = 'بالضمان ✅ — إحنا بنجيب القطعة ونركّبها ونجرب الجهاز قدامك.';
             return ['text' => implode("\n", $L), 'image' => $img, 'parts' => array_column($hit, 'id')];
