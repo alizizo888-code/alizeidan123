@@ -603,9 +603,11 @@ final class Mutqan_Hub {
         $c = get_transient($key);
         if ($c !== false) { return (string) $c; }
         $url = '';
-        foreach (array_merge([preg_replace('/\s*\(.*\)$/u', '', (string) $p['label'])], (array) $p['words']) as $w) {
+        // The owner titles the photo with the part's own name: «المكثف», «الترموستات», «الكونتاكتور», «الكمبروسر»…
+        $core = trim(preg_replace(['/^(تغيير|شحن)\s+/u', '/\s*\(.*\)$/u'], '', (string) $p['label']));
+        foreach (array_unique(array_merge([$core, preg_replace('/^ال/u', '', $core)], (array) $p['words'])) as $w) {
             $q = get_posts(['post_type' => 'attachment', 'post_mime_type' => 'image', 'post_status' => 'inherit', 's' => (string) $w, 'numberposts' => 1, 'suppress_filters' => false]);
-            if ($q) { $url = (string) wp_get_attachment_url($q[0]->ID); break; }
+            if ($q) { $url = (string) wp_get_attachment_url($q[0]->ID); $b = basename(parse_url($url, PHP_URL_PATH)); $url = substr($url, 0, -strlen($b)) . rawurlencode(rawurldecode($b)); break; }   // Arabic file names, encoded for WhatsApp
         }
         set_transient($key, $url, $url !== '' ? DAY_IN_SECONDS : HOUR_IN_SECONDS);
         return $url;
