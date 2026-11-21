@@ -10,6 +10,7 @@ import { createWp, hmac, safeEq } from './wp.js'
 import { createBrain, DEFAULTS } from './brain.js'
 import { intl, pkey } from './text.js'
 import { createChatwoot } from './chatwoot.js'
+import * as OR from './outreach.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 8787)
@@ -67,15 +68,9 @@ async function initLines() {
 
 function pickLine(o) {
   const open = store.lines().filter((l) => lines?.isOpen(l.id))
-  if (!open.length) return null
-  if (o.line && open.some((l) => l.id === o.line)) return o.line
-  const set = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }
-  const notSelf = open.filter((l) => pkey(l.phone) !== pkey(o.phone))
-  const pool = notSelf.length ? notSelf : open
-  if (o.brand && set.brandLines && set.brandLines[o.brand] && pool.some((l) => l.id === set.brandLines[o.brand])) return set.brandLines[o.brand]
-  const want = ['room', 'tech', 'agent'].includes(o.purpose) ? 'team' : 'customers'
-  return (pool.find((l) => l.role === want) || pool.find((l) => l.role === 'customers') || pool[0]).id
+  return OR.pickLine(o, open, { ...DEFAULTS, ...(store.get('settings', {}) || {}) })
 }
+const outLast = new Map()   // line id → {at, gap}: the pause between two campaign messages of one line
 
 function send(phone, text, o = {}) {
   if (!phone || !String(text || '').trim()) return 0
@@ -94,6 +89,7 @@ async function pump() {
       if (Date.now() - row.at > EXPIRE_MS) { store.outDone(row.id, 'expired', 'فات عليها أكتر من 6 ساعات'); continue }
       const lineId = pickLine({ line: row.line, phone: row.phone, purpose: row.purpose, brand: meta.get(row.id)?.brand })
       if (!lineId || busy.has(lineId)) continue
+      if (row.purpose === 'outreach') { if (!OR.due(lineId, outLast)) continue; outLast.set(lineId, { at: Date.now(), gap: OR.gapSec() }) }
       // The daily cap protects the line from a ban on mass sending to customers; the room and the technicians are ours.
       if (!['room', 'tech', 'agent'].includes(row.purpose) && store.sentToday(lineId) >= DAILY_CAP) {
         store.outRetry(row.id, 'الحد اليومي للخط')
@@ -126,6 +122,31 @@ setTimeout(() => { const open = store.lines().filter((l) => lines?.isOpen(l.id))
 // The site's own settings the hub follows (the test phone), refreshed every ten minutes.
 const syncConfig = async () => { if (!store.get('pair')?.secret) return; try { const c = await wp('config', {}); if (c) store.set('wpConfig', c) } catch (e) { log('warn', 'config: ' + e.message) } try { const a = await wp('ai', {}); if (a) store.set('wpAi', a) } catch {} }
 setTimeout(syncConfig, 3000); setInterval(syncConfig, 600000).unref?.()
+
+// Each connected line takes the job the desk gave its number (Mutqan_Lines): manager → team, outreach, sales → customers.
+function syncRoles() {
+  const our = (store.get('wpConfig', {}) || {}).ourNumbers || {}
+  for (const l of store.lines()) {
+    if (!l.phone) continue
+    const want = OR.hubRole(OR.roleOf(l.phone, our), l.role)
+    if (want !== l.role) { store.putLine({ ...l, role: want }); log('line', (l.label || l.id) + ': دوره بقى «' + want + '» من لوحة الأرقام') }
+  }
+}
+setInterval(syncRoles, 60000).unref?.()
+
+// The campaigns: every five minutes the website says who each connected outreach line invites next (it keeps the plan,
+// the hours and each line's daily ceiling); the queue sends them one by one, a random minute or more apart per line.
+async function outreachTick() {
+  if (!store.get('pair')?.secret || !lines) return
+  const ol = store.lines().filter((l) => l.role === 'outreach' && l.phone && lines.isOpen(l.id))
+  if (!ol.length) return
+  if (store.nextOut(500).some((r) => r.purpose === 'outreach')) return   // the last batch is still going out
+  let r = null
+  try { r = await wp('outreach_batch', { lines: ol.map((l) => ({ id: l.id, phone: l.phone, sentToday: store.sentToday(l.id) })) }) } catch (e) { log('warn', 'outreach: ' + e.message); return }
+  for (const it of (r && r.items) || []) { if (it.phone && it.text && it.line) send(it.phone, it.text, { line: it.line, purpose: 'outreach', dedup: 'out-' + it.id + '-' + new Date().toISOString().slice(0, 10) }) }
+  if (r?.items?.length) log('outreach', 'دفعة حملات: ' + r.items.length + ' رسالة')
+}
+setInterval(() => outreachTick().catch(() => {}), 300000).unref?.()
 
 setInterval(() => brain.daily().catch(() => {}), 60000).unref?.()
 

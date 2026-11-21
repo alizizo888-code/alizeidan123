@@ -2,6 +2,7 @@
 import { openStore } from '../src/store.js'
 import { createBrain } from '../src/brain.js'
 import * as T from '../src/text.js'
+import * as M from '../src/menu.js'
 import fs from 'node:fs'
 
 let pass = 0; let fail = 0
@@ -41,7 +42,7 @@ const wp = async (op, b) => {
   if (op === 'reopen') { const o = orders[b.id]; Object.assign(o, b.patch, { status: 'new', techId: null, techName: null }); return view(o) }
   if (op === 'approve') { const o = orders[b.id]; Object.assign(o, { techId: 't1', techName: 'الفني علي', status: 'assigned' }); emit('order.assigned', o); return { text: '✅ اتسند للفني علي' } }
   if (op === 'eta_ask') return { result: 'asked' }
-  if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; if (b.confirmed) o.customerConfirmed = true; o.acQuote = b.acQuote; emit('order.created', o); return view(o) }
+  if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; if (b.confirmed) o.customerConfirmed = true; o.acQuote = b.acQuote; o.spec = b.spec; emit('order.created', o); return view(o) }
   if (op === 'claim') { const o = b.seal ? Object.values(orders).find((x) => b.seal.startsWith(x.seal || '#')) : byNum(b.number); if (!o || o.claimCode !== b.code) return null; const first = !o.customerConfirmed; Object.assign(o, { clientPhone: b.phone, customerConfirmed: true }); return { first, card: first ? '🔔 *طلب جديد — رعد السماء*\nرقم الطلب: #' + o.number : '', ...view(o) } }
   if (op === 'report') return { text: '📋 تقرير' }
   if (op === 'info') return /سعر|اسعار/.test(b.text) ? { text: 'أسعار المالك' } : null
@@ -116,13 +117,15 @@ t('rating saved and sent to the room', orders.o1.customerRating === 5 && /تقي
 // ===== E. a stranger writes: welcome, a person, an order from the chat =====
 transcript.push('\n### هـ) عميل جديد بيكلم الخط: ترحيب، موظف، وطلب من الشات')
 m = await say(NEW, 'السلام عليكم')
-t('welcome with the etiquette: the company and what we do', /مرحبًا بكم في \*رعد السماء\*/.test(to(m, NEW)) && /غرف التبريد والتجميد/.test(to(m, NEW)) && /السباكة والنجارة والكهرباء/.test(to(m, NEW)), to(m, NEW))
-t('…and the menu right after it', /1️⃣ غسيل مكيفات/.test(to(m, NEW)) && /7️⃣ كلّم الدعم الفني/.test(to(m, NEW)), to(m, NEW))
+t('a bare greeting: the company\'s welcome and «what do you need?» — no AC details dumped', /مرحبًا بكم في \*رعد السماء\*/.test(to(m, NEW)) && /إيش الخدمة اللي تحتاجها/.test(to(m, NEW)) && !/غسيل كامل|المضخة|سبليت/.test(to(m, NEW)), to(m, NEW))
+t('…and the sections right after it (AC, cold rooms, plumbing, electricity, carpentry, cameras)', /1️⃣ المكيفات/.test(to(m, NEW)) && /2️⃣ غرف التبريد/.test(to(m, NEW)) && /3️⃣ السباكة/.test(to(m, NEW)) && /6️⃣ الكاميرات والدش/.test(to(m, NEW)) && /9️⃣ كلّم موظف/.test(to(m, NEW)), to(m, NEW))
+m = await say(NEW, '1')
+t('«1» (AC) → the AC services only: wash, repair, install…', /1️⃣ غسيل مكيفات/.test(to(m, NEW)) && /3️⃣ تركيب/.test(to(m, NEW)), to(m, NEW))
 m = await say(NEW, '4')
 t('«4» → the owner\'s price table', /جدول المالك/.test(to(m, NEW)), to(m, NEW))
 m = await say(NEW, '0')
-t('«0» → the main menu again', /1️⃣ غسيل مكيفات/.test(to(m, NEW)), to(m, NEW))
-m = await say(NEW, '7')
+t('«0» → the main menu (the sections) again', /1️⃣ المكيفات/.test(to(m, NEW)) && /3️⃣ السباكة/.test(to(m, NEW)), to(m, NEW))
+m = await say(NEW, '9')
 t('«7» → agent told on WhatsApp, customer acknowledged', /عميل محتاج موظف/.test(to(m, '0511111111')) && /بلّغت موظف/.test(to(m, NEW)), JSON.stringify(m))
 m = await say(NEW, 'عايز غسيل 2 مكيف سبليت')
 t('«غسيل 2 مكيف سبليت» → priced by the owner\'s table at once, with the split wash video', /\*140 ر\.س\*/.test(to(m, NEW)) && /youtu\.be\/wvtQ_aztCrE/.test(to(m, NEW)) && /1️⃣ تمام، كمّل الحجز/.test(to(m, NEW)), to(m, NEW))
@@ -150,7 +153,11 @@ t('room «عميل رقم نص» reaches any customer', /أهلا بيك/.test(t
 // ===== G. the etiquette: old customers, people the owner knows, a person answering first =====
 transcript.push('\n### و) عميل قديم، ومعارف، وموظف بيرد قبل البوت')
 m = await say(OLDC, 'السلام عليكم')
-t('an old customer is welcomed back by name with his last job', /أهلًا بعودتك يا أبو فهد/.test(to(m, OLDC)) && /غسيل مكيفين/.test(to(m, OLDC)), to(m, OLDC))
+t('an old customer: no welcome at once — operations are told he is back and get their minutes', !to(m, OLDC) && /عميل قديم رجع/.test(to(m, '0511111111') + to(m, ROOM)), JSON.stringify(m))
+await sleep(); m = take()
+t('…nobody answered: welcomed back by name with his last job, same or new service', /أهلًا بعودتك يا أبو فهد/.test(to(m, OLDC)) && /غسيل مكيفين/.test(to(m, OLDC)) && /1️⃣ نفس الخدمة تاني/.test(to(m, OLDC)) && /2️⃣ خدمة جديدة/.test(to(m, OLDC)), to(m, OLDC))
+m = await say(OLDC, '1')
+t('…«1» → the same service again, straight into it', /غسيل مكيفات|نوع المكيفات|ر\.س/.test(to(m, OLDC)), to(m, OLDC))
 brain.contact(FRIEND, 'خالي محمد')
 m = await say(FRIEND, 'إزيك يا علي عامل ايه')
 t('a name saved in the phone, not from our sites: left alone', !to(m, FRIEND) && store.chat(T.pkey(FRIEND)).kind === 'personal', JSON.stringify(m))
@@ -226,15 +233,79 @@ t('«بكام المكثف» → that repair only, with its photo', /تغيير 
 m = await say(PRT, 'غالي، في المحل ب 40')
 t('haggling over a part → «we are a maintenance company, not a parts shop»', /مش محل قطع غيار/.test(to(m, PRT)), to(m, PRT))
 m = await say(PRT, '0')
-t('«0» → the menu', /1️⃣ غسيل مكيفات/.test(to(m, PRT)), to(m, PRT))
+t('«0» → the menu', /1️⃣ المكيفات/.test(to(m, PRT)), to(m, PRT))
+await say(PRT, '1')
 m = await say(PRT, '5')
 t('«5» → the wash videos', /youtu\.be\/qz8gaYjDHmI/.test(to(m, PRT)) && /tiktok/.test(to(m, PRT)), to(m, PRT))
 
 // the same reply a third time → a person
 const REP = '966500000063'
-await say(REP, 'السلام عليكم'); await say(REP, '1')
+await say(REP, 'السلام عليكم'); await say(REP, '1'); await say(REP, '1')
 await say(REP, 'مش عارف'); await say(REP, 'مش عارف'); m = await say(REP, 'مش عارف')
 t('the same reply a third time → a person is called instead', /مش فاهمك كويس/.test(to(m, REP)) && /البوت كرر/.test(to(m, '0511111111') + to(m, ROOM)), JSON.stringify(m))
+
+// ===== H. sections, old customers by history, our own numbers, campaigns (owner, 2026-11-21) =====
+transcript.push('\n### ز) الأقسام، العميل القديم من المحادثة، أرقامنا، الحملات')
+const PL = '966500000070'
+await say(PL, 'مرحبا')
+m = await say(PL, '3')
+t('sections: «3» → plumbing\'s own services, nothing about ACs', /السباكة/.test(to(m, PL)) && /تسريب مياه/.test(to(m, PL)) && /تسليك مجاري/.test(to(m, PL)) && !/مكيف/.test(to(m, PL)), to(m, PL))
+m = await say(PL, '1')
+t('…a service → «write the details» with a plumbing example', /اكتب تفاصيل المطلوب/.test(to(m, PL)) && /المغسلة|مسدود/.test(to(m, PL)), to(m, PL))
+m = await say(PL, 'تسريب تحت المغسلة من امبارح')
+t('…details → inspection wording without «free for two units», then the pin', /هيعاين/.test(to(m, PL)) && !/لحد جهازين/.test(to(m, PL)) && /اللوكيشن نفسه/.test(to(m, PL)), to(m, PL))
+await say(PL, 'https://maps.google.com/?q=21.4012,39.8523'); await say(PL, '1')
+m = await say(PL, '1')
+const plo = Object.values(orders).find((o) => T.pkey(o.clientPhone) === T.pkey(PL))
+t('…booked as a plumbing order', plo && /السباكة — تسريب مياه/.test(plo.service) && plo.spec === 'plumbing', JSON.stringify(plo))
+
+const EL = '966500000071'
+m = await say(EL, 'عندي فيش محروق في المطبخ ومحتاج كهربائي')
+t('a request in words for electricity → the electricity section, never the AC wash', /الكهرباء/.test(to(m, EL)) && !/غسيل مكيفات|نوع المكيفات/.test(to(m, EL)), to(m, EL))
+const CAM = '966500000072'
+m = await say(CAM, 'ابغى اركب كاميرات للبيت')
+t('«ابغى اركب كاميرات» → cameras and satellite, not AC install', /الكاميرات والدش/.test(to(m, CAM)) && !/نوع المكيف/.test(to(m, CAM)), to(m, CAM))
+
+// an old chat (never ordered) comes back after days: operations first, then the last topic
+const HIS = '966500000073'
+await say(HIS, 'غسيل مكيف سبليت كم'); take()
+store.touchChat(T.pkey(HIS), { welcomedAt: Date.now() - 3 * 86400000, lead: '' })
+store.db.prepare('UPDATE msgs SET at = ? WHERE pk = ?').run(Date.now() - 3 * 86400000, T.pkey(HIS))
+m = await say(HIS, 'السلام عليكم')
+t('a returning chat: quiet at first, operations told', !to(m, HIS) && /عميل قديم رجع/.test(to(m, '0511111111') + to(m, ROOM)), JSON.stringify(m))
+await brain.inbound({ line: 'l1', phone: HIS, text: 'أهلين، نورتنا تاني — تحب نحجزلك؟', fromMe: true })
+await sleep(); m = take()
+t('…operations answered in time → the bot stays out', !to(m, HIS), to(m, HIS))
+const HIS2 = '966500000074'
+await say(HIS2, 'عايز اغسل مكيف شباك'); take()
+store.touchChat(T.pkey(HIS2), { welcomedAt: Date.now() - 2 * 86400000, lead: '' })
+store.db.prepare('UPDATE msgs SET at = ? WHERE pk = ?').run(Date.now() - 2 * 86400000, T.pkey(HIS2))
+await say(HIS2, 'مساء الخير'); await sleep(); m = take()
+t('…nobody answered → welcome back from the last contact', /أهلًا بعودتك/.test(to(m, HIS2)) && /آخر مرة كنا بنتكلم عن/.test(to(m, HIS2)) && /شباك/.test(to(m, HIS2)), to(m, HIS2))
+
+// our own numbers
+const OUT1 = '966546619205'; const MGR = '966549247636'
+store.set('wpConfig', { ourNumbers: { [T.pkey(OUT1)]: { role: 'outreach', label: 'استقطاب ١', active: true }, [T.pkey(MGR)]: { role: 'manager', label: 'المدير', active: false } } })
+m = await say(OUT1, 'السلام عليكم')
+t('a message from one of our outreach numbers → no welcome, no reply (lines never answer each other)', !to(m, OUT1) && store.chat(T.pkey(OUT1)).kind === 'team', JSON.stringify(m))
+m = await say(MGR, 'تقرير')
+t('the manager number before it is active is ours but not the room', !/تقرير/.test(to(m, MGR)), JSON.stringify(m))
+store.set('wpConfig', { managerPhone: MGR, ourNumbers: { [T.pkey(MGR)]: { role: 'manager', label: 'المدير', active: true } } })
+m = await say(MGR, 'تقرير')
+t('…once active it IS the room: its commands run, reports go to it', /تقرير/.test(to(m, MGR)) && brain.cfg().roomPhone === MGR, JSON.stringify(m))
+store.set('wpConfig', {})
+
+// campaigns: «إيقاف», and a reply to a campaign message
+const PROS = '966500000075'
+store.addMsg({ pk: T.pkey(PROS), line: 'l1', dir: 'out', text: 'عرض الصيانة', by: 'outreach' })
+m = await say(PROS, 'إيقاف')
+t('«إيقاف» → out of the campaigns for good, told once', calls.some((c) => c.startsWith('outreach_optout')) && /مش هنبعتلك رسايل تاني/.test(to(m, PROS)), JSON.stringify(m))
+const PROS2 = '966500000076'
+store.addMsg({ pk: T.pkey(PROS2), line: 'l1', dir: 'out', text: 'عرض الصيانة', by: 'outreach' })
+await say(PROS2, 'حجز')
+t('a reply to a campaign → marked as replied (once) and answered like any customer', calls.filter((c) => c.startsWith('outreach_reply')).length === 1, calls.filter((c) => c.startsWith('outreach')).join(' | '))
+t('isStop never takes «وقف الطلب» for an unsubscribe', !M.isStop('وقف الطلب') && M.isStop('ايقاف') && M.isStop('Stop'))
+t('isGreeting: «السلام عليكم» yes, «السلام عليكم عندي مكيف خربان» no', M.isGreeting('السلام عليكم') && !M.isGreeting('السلام عليكم عندي مكيف خربان'))
 
 // ===== text helpers =====
 t('stepOf: «وصلت 1002»', T.stepOf('وصلت 1002') === 'arrived')

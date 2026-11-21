@@ -23,7 +23,8 @@ export const DEFAULTS = {
   autoReply: true,
   siteName: 'أكسجين للصيانة',
   hoursFrom: 7, hoursTo: 23,     // owner, 2026-11-20: 7 am–10 pm same day; from 11 pm the next morning (the site's config wins)
-  welcome: 'مرحبًا بكم في *{site}* 🌷\nنقدّم خدمات صيانة وإصلاح جميع أنواع المكيفات، وغرف التبريد والتجميد، وكمان خدمات السباكة والنجارة والكهرباء، والمزيد…\n\nاكتب لنا الخدمة اللي محتاجها والحي، ويسعدنا نخدمك.',
+  welcome: 'مرحبًا بكم في *{site}* 🌷 تحت أمرك — إيش الخدمة اللي تحتاجها؟',
+  returningWaitSec: 180,          // an old customer writes: operations get three minutes to answer him before the bot does
   welcomeBack: 'أهلًا بعودتك{name} 🌷 نورتنا تاني في *{site}*.{last}\nتحب نكرر نفس الخدمة، ولا محتاج حاجة جديدة؟',
   afterHours: '🌙 إحنا دلوقتي برا مواعيد العمل؛ نقدر نحجزلك أقرب موعد الصبح. ولو الموضوع طارئ اتصل بينا مباشرة على *{phone}*.',
   emergencyPhone: '0536554731',
@@ -37,7 +38,11 @@ export const DEFAULTS = {
 export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now = () => Date.now(), log = () => {}, later = (fn, ms) => setTimeout(fn, ms), cancel = (h) => clearTimeout(h) }) {
   // «الفني الفني علي»: a technician whose name already starts with «الفني» is named once.
   const send = (phone, text, o) => rawSend(phone, String(text).replace(/(الفن[يى])\s+(?=الفن[يى]\s)/g, ''), o)
-  const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; const wc = store.get('wpConfig', {}) || {}; if (!c.testPhone) c.testPhone = wc.testCustomer || ''; if (Number.isFinite(wc.hoursFrom)) c.hoursFrom = wc.hoursFrom; if (Number.isFinite(wc.hoursTo)) c.hoursTo = wc.hoursTo; if (Array.isArray(wc.washVideos) && wc.washVideos.length) c.washVideos = wc.washVideos; if (/1️⃣ طلب خدمة/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome; return c }
+  const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; const wc = store.get('wpConfig', {}) || {}; if (!c.testPhone) c.testPhone = wc.testCustomer || ''; if (Number.isFinite(wc.hoursFrom)) c.hoursFrom = wc.hoursFrom; if (Number.isFinite(wc.hoursTo)) c.hoursTo = wc.hoursTo; if (Array.isArray(wc.washVideos) && wc.washVideos.length) c.washVideos = wc.washVideos; if (/1️⃣ طلب خدمة|نقدّم خدمات صيانة وإصلاح جميع أنواع المكيفات/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome
+    // The desk's numbers (Mutqan_Lines): the manager becomes the room once the owner marked it active.
+    if (wc.managerPhone) c.roomPhone = wc.managerPhone
+    c.ourNumbers = wc.ourNumbers || {}
+    return c }
   const who$ = new Map()   // phone → {at, who}: one question to the website per person per ten minutes
 
   /* ------------------------------------------------------------------ sending */
@@ -181,6 +186,10 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (k && k === T.pkey(c.roomPhone)) return { kind: 'staff', name: 'غرفة العمليات', role: 'owner' }
     const ag = (c.agents || []).find((a) => T.pkey(a.phone) === k)
     if (ag) return { kind: 'staff', name: ag.name, role: 'operations' }
+    // Our own numbers: never a customer, never welcomed — a line writing to a line would answer itself forever.
+    const ours = (c.ourNumbers || {})[k]
+    if (ours) return ours.role === 'manager' && ours.active ? { kind: 'staff', name: 'المدير', role: 'owner' } : { kind: 'line', name: ours.label || 'رقم الشركة', role: ours.role }
+    if ((store.lines?.() || []).some((l) => l.phone && T.pkey(l.phone) === k)) return { kind: 'line', name: 'رقم الشركة', role: 'line' }
     const hit = who$.get(k)
     if (hit && now() - hit.at < 600000) return hit.who
     let w = { kind: 'customer' }
@@ -236,6 +245,16 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (!text && kind !== 'location') return     // a picture or a voice note: a person will look at it
 
     const w = await who(phone)
+    if (w.kind === 'line') { store.touchChat(pk, { kind: 'team', unread: 0 }); return }
+    // «إيقاف»: out of every campaign list for good, and told so once.
+    if (w.kind === 'customer' && M.isStop(text)) {
+      try { await wp('outreach_optout', { phone: T.intl(phone) }) } catch (e) { log('warn', 'optout: ' + e.message) }
+      return say(phone, line, 'تمام ✅ مش هنبعتلك رسايل تاني. ولو احتجت أي خدمة في يوم إحنا موجودين 🌷')
+    }
+    // He answered a campaign message: a conversation now (the base marks him as replied, once).
+    if (w.kind === 'customer' && !store.get('or:' + pk) && store.msgs(pk, 6).some((m) => m.by === 'outreach')) {
+      store.set('or:' + pk, 1); wp('outreach_reply', { phone: T.intl(phone) }).catch(() => {})
+    }
     const testing = cfg().testPhone && T.pkey(cfg().testPhone) === pk
     if (w.kind !== 'customer' && !(testing && !T.roomCommand(text) && !/^عميل\s/.test(text))) {
       // A colleague: no welcome, no small talk — only his work words (a technician's step, the room's commands).
@@ -274,7 +293,41 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     t = t.includes('{last}') ? t.replace('{last}', last) : t.replace(/\n/, last + '\n')
     if (!back && g.source) t += '\nشايفين إنك جاي من «' + g.source + '» — نقدر نساعدك فيها على طول.'
     if (!isOpen()) t += '\n\n' + C.afterHours.replace(/\{phone\}/g, C.emergencyPhone)
-    return t + '\n\n' + M.HOME
+    return t + '\n\n' + M.SECTIONS
+  }
+  /** One line before getting straight to what he asked for — no list of everything we do. */
+  function hello(g) {
+    const C = cfg()
+    return 'مرحبًا بكم في *' + (g.site || C.siteName) + '* 🌷' + (isOpen() ? '' : '\n' + C.afterHours.replace(/\{phone\}/g, C.emergencyPhone))
+  }
+
+  /** What we last talked about with him: the last order summary or the last service he asked for, before today. */
+  function lastTopic(pk, before) {
+    const old = store.msgs(pk, 60).filter((m) => m.at < before)
+    for (let i = old.length - 1; i >= 0; i--) {
+      const t = String(old[i].text || '')
+      const s = t.match(/🛠\s*([^\n]{3,60})/); if (s) return s[1].trim()
+      if (old[i].dir === 'in' && wantsService(t)) return t.replace(/\s+/g, ' ').slice(0, 60)
+    }
+    return ''
+  }
+
+  /**
+   * An old customer writes (owner, 2026-11-21): no welcome as if he were new. Operations are told and get their minutes
+   * to answer; nobody did → the bot reads the last contact and welcomes him back from it: the same service again, or a
+   * new one.
+   */
+  async function welcomeBack(c, line, phone, text, name, g, since) {
+    if (wantsService(text)) { say(phone, line, 'أهلًا بعودتك' + (g.name ? ' يا ' + g.name : '') + ' 🌷'); return startFrom(store.chat(c.pk), line, phone, text, name) }
+    const topic = g.lastService || lastTopic(c.pk, since)
+    const L = ['أهلًا بعودتك' + (g.name ? ' يا ' + g.name : '') + ' 🌷 نورتنا تاني في *' + (g.site || cfg().siteName) + '*.']
+    if (g.lastService) L.push('آخر مرة نفذنالك «' + g.lastService + '»' + (g.lastDays ? ' من ' + g.lastDays + ' يوم' : '') + (g.warrantyLeft ? '، وضمانها لسه ساري ' + g.warrantyLeft + ' يوم 🛡' : '') + '.')
+    else if (topic) L.push('آخر مرة كنا بنتكلم عن «' + topic + '».')
+    L.push('', topic ? 'تحب نكمل في نفس الموضوع، ولا محتاج خدمة جديدة؟' : 'تحت أمرك، إيش اللي تحتاجه النهارده؟')
+    if (topic) L.push('1️⃣ نفس الخدمة تاني', '2️⃣ خدمة جديدة', '3️⃣ متابعة طلب', '4️⃣ كلّم موظف')
+    if (!isOpen()) L.push('', cfg().afterHours.replace(/\{phone\}/g, cfg().emergencyPhone))
+    saveFlow(c.pk, topic ? { step: 'back', again: topic } : { step: 'main' })
+    return say(phone, line, L.join('\n') + (topic ? '' : '\n\n' + M.SECTIONS))
   }
 
   /** The site's confirm button sent this from his own WhatsApp: the order is his, confirmed, and on its way. */
@@ -344,12 +397,20 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       return
     }
     const first = !c.welcomedAt || now() - c.welcomedAt > WELCOME_EVERY
+    const back = ['returning', 'vip'].includes(g.kind) || !!c.welcomedAt
+    if (first && back && !(EMERGENCY.test(T.norm(text)) && !isOpen())) {
+      // An old customer: operations first. They hear he is back, and get their minutes before the bot says anything.
+      const since = now()
+      store.touchChat(c.pk, { welcomedAt: since })
+      notifyHuman(store.chat(c.pk), '↩️ عميل قديم رجع' + (g.lastService ? ' (آخر خدمة: ' + g.lastService + ')' : '') + ': ' + text, false)
+      return holdThen(c.pk, text, Math.max(0, Number(C.returningWaitSec ?? 180)) * 1000, (t) => welcomeBack(store.chat(c.pk), line, phone, t, name, g, since))
+    }
     if (first) {
       store.touchChat(c.pk, { welcomedAt: now() })
-      // The welcome carries the menu. A message that already says what he wants goes straight into it.
-      if (!isOpen() && EMERGENCY.test(T.norm(text))) { say(phone, line, welcome(g).replace('\n\n' + M.HOME, '')); return reception(store.chat(c.pk), line, phone, text, name) }
-      if (wantsService(text)) { say(phone, line, welcome(g).replace('\n\n' + M.HOME, '')); return startFrom(store.chat(c.pk), line, phone, text, name) }
-      saveFlow(c.pk, { step: 'home' })
+      // He said what he wants: one line of welcome, then straight to it. A bare greeting: the welcome and the sections.
+      if (!isOpen() && EMERGENCY.test(T.norm(text))) { say(phone, line, hello(g)); return reception(store.chat(c.pk), line, phone, text, name) }
+      if (wantsService(text)) { say(phone, line, hello(g)); return startFrom(store.chat(c.pk), line, phone, text, name) }
+      saveFlow(c.pk, { step: 'main' })
       say(phone, line, welcome(g))
       return
     }
@@ -375,7 +436,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       if (n === '3') return say(phone, line, 'مفيش طلب مفتوح على رقمك دلوقتي 🌷 قولّي الخدمة اللي محتاجها والحي، وأنا أجهز طلبك.')
     }
     if (it === 'human') return notifyHuman(c, text, true)
-    if (M.isMenu(text) || /^[1-7]$/.test(n)) return flow(c, line, phone, text, name, flowOf(c) || { step: 'home' })
+    if (M.isMenu(text) || /^[1-9]$/.test(n)) return flow(c, line, phone, text, name, flowOf(c) || { step: 'main' })
     if (wantsService(text)) return startFrom(c, line, phone, text, name)
 
     // The site's AI: understands the request, prices and bargains within the owner's floor, books, hands over.
@@ -434,6 +495,9 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   /** From his own words («غسيل مكيف اسبليت و مكيف شباك بكام»): straight to the right step, nothing guessed. */
   async function startFrom(c, line, phone, text, name, extra = {}) {
     const n = T.norm(text); const pa = M.parseAc(text)
+    // Not an AC job (plumbing, electricity, carpentry, cameras…): that section's own services, never the AC wash.
+    const sec = M.sectionOf(text)
+    if (sec && !pa.found) { saveFlow(c.pk, { step: 'sub', sec, ...extra }); return say(phone, line, M.subMenu(sec) + M.FOOT) }
     if (PARTS.test(n)) return partAnswer(c, line, phone, text)
     if (REPAIR.test(n) && !/(غسيل|غسل|اغسل|تنظيف)/.test(n)) return flow(c, line, phone, '2', name, { step: 'home', ...extra, pre: text })
     if (INSTALL.test(n) && !/(غسيل|غسل|اغسل)/.test(n)) return flow(c, line, phone, '3', name, { step: 'home', ...extra })
@@ -479,7 +543,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   }
   function summary(c, line, phone, m) {
     m.step = 'summary'; saveFlow(c.pk, m)
-    const price = m.svc === 'wash' ? '💰 السعر: *' + (m.agreed || m.offer) + ' ر.س*' : '💰 ' + (m.svc === 'repair' ? 'الكشف مجاني لحد جهازين، والسعر بعد الكشف وقبل أي شغل' : 'السعر بعد المعاينة (حسب النوع وطول النحاس) وقبل أي شغل')
+    const price = m.svc === 'wash' ? '💰 السعر: *' + (m.agreed || m.offer) + ' ر.س*' : '💰 ' + (m.svc === 'repair' ? (['ac', 'fridge'].includes(m.spec || 'ac') ? 'الكشف مجاني لحد جهازين، والسعر بعد الكشف وقبل أي شغل' : 'السعر بعد المعاينة وقبل أي شغل') : 'السعر بعد المعاينة (حسب النوع وطول النحاس) وقبل أي شغل')
     return say(phone, line, ['📝 *ملخص طلبك*', '🛠 ' + m.label, price, '📍 اللوكيشن اتبعت ✅' + (m.place ? ' (' + m.place + ')' : ''), '📅 ' + m.time, '', '1️⃣ تأكيد الطلب ✅', '2️⃣ تعديل', '3️⃣ إلغاء'].join('\n'))
   }
 
@@ -509,7 +573,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const k = /^\d{1,2}$/.test(n) ? Number(n) : null
     const C = cfg()
     const home = (prefix = '') => { saveFlow(c.pk, { step: 'home' }); return say(phone, line, (prefix ? prefix + '\n\n' : '') + M.HOME) }
-    if (M.isMenu(text)) return home()
+    const main = (prefix = '') => { saveFlow(c.pk, { step: 'main' }); return say(phone, line, (prefix ? prefix + '\n\n' : '') + M.SECTIONS) }
+    if (M.isMenu(text)) return main()
     if (M.isAbuse(text)) return abuse(c, line, phone, text)
     const pa = M.parseAc(text)
     const writing = ['place', 'time_text', 'rep_desc', 'ins_desc', 'tech_msg', 'postpone_when'].includes(m.step)
@@ -518,6 +583,33 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const coords = T.coords(text)
 
     switch (m.step) {
+      case 'main': {
+        if (k === 1) return home('❄️ *المكيفات*')
+        if (M.SUBS[k]) { saveFlow(c.pk, { step: 'sub', sec: k }); return say(phone, line, M.subMenu(k) + M.FOOT) }
+        if (k === 8) return flow(c, line, phone, '6', name, { step: 'home' })
+        if (k === 9) { saveFlow(c.pk, null); return notifyHuman(c, 'طلب موظف من القائمة', true) }
+        if (wantsService(text)) return startFrom(c, line, phone, text, name)
+        if (M.isGreeting(text)) return main('تحت أمرك 🌷')
+        if (k !== null) return main('اختار رقم القسم 👇')
+        // A question in his own words: the conversation (the site's AI), not the menu again.
+        saveFlow(c.pk, null)
+        return reception(store.chat(c.pk), line, phone, text, name)
+      }
+      case 'sub': {
+        const S = M.SUBS[m.sec]; const it = S && k ? S.items[k - 1] : null
+        if (!it) return say(phone, line, (S ? M.subMenu(m.sec) : M.SECTIONS) + M.FOOT)
+        Object.assign(m, { step: 'rep_desc', svc: 'repair', spec: it[1], label: S.name + ' — ' + it[0] }); saveFlow(c.pk, m)
+        return say(phone, line, 'اكتب تفاصيل المطلوب باختصار 👇\n(مثال: ' + S.ex + ')')
+      }
+      case 'back': {
+        if (k === 1) return startFrom(c, line, phone, m.again || 'غسيل', name)
+        if (k === 2) return main()
+        if (k === 3) return flow(c, line, phone, '6', name, { step: 'home' })
+        if (k === 4) { saveFlow(c.pk, null); return notifyHuman(c, 'عميل قديم طلب موظف', true) }
+        if (wantsService(text)) return startFrom(c, line, phone, text, name)
+        saveFlow(c.pk, null)
+        return reception(store.chat(c.pk), line, phone, text, name)
+      }
       case 'home': {
         if (k === 1) return startFrom(c, line, phone, 'غسيل', name)
         if (k === 2) { saveFlow(c.pk, { step: 'rep_type', svc: 'repair', pre: m.pre || '', place: m.place || '' }); return say(phone, line, '🔧 *صيانة وإصلاح* — نوع الجهاز إيه؟\n1️⃣ مكيف سبليت\n2️⃣ مكيف شباك\n3️⃣ كاسيت / مخفي / دولابي\n4️⃣ غرفة تبريد / تجميد\n5️⃣ حاجة تانية (سباكة، كهربا، أجهزة…)' + M.FOOT) }
@@ -591,7 +683,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
         m.desc = String(text).slice(0, 200)
         let parts = ''
         if (PARTS.test(T.norm(text)) || /فريون/.test(T.norm(text))) { try { const pr = await wp('parts', { text }); if (pr?.parts?.length) parts = pr.text } catch {} }
-        return askPlace(c, line, phone, m, 'تمام ✅ الفني هيكشف ويحدد العطل ويقولك السعر قبل أي شغل — والكشف مجاني لحد جهازين.' + (parts ? '\n\n' + parts : ''))
+        const acLike = ['ac', 'fridge'].includes(m.spec || 'ac')
+        return askPlace(c, line, phone, m, (acLike ? 'تمام ✅ الفني هيكشف ويحدد العطل ويقولك السعر قبل أي شغل — والكشف مجاني لحد جهازين.' : 'تمام ✅ الفني هيعاين ويقولك السعر قبل أي شغل.') + (parts ? '\n\n' + parts : ''))
       }
       case 'ins_type': {
         const t = { 1: 'سبليت', 2: 'شباك', 3: 'كاسيت / مخفي' }[k]

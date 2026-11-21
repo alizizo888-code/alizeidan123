@@ -65,6 +65,20 @@ export function parseAc(text) {
 
 export const ABUSE = /(غبي|اغبي|حمار|زفت|تافه|اهبل|هبل|اعمي|يلعن|لعنه|كلب|حيوان|خرا|زباله|نصاب|حرامي|كذاب|غشاش|تخلف|متخلف)/
 export const isAbuse = (t) => ABUSE.test(norm(t))
+/** «إيقاف» and its kin: take me off your lists. Only the whole message counts («وقف الطلب» is not a stop). */
+export const isStop = (t) => /^(ايقاف|وقف|توقف|الغاء الاشتراك|لا ترسل|لاترسل|stop|unsubscribe|لا تراسلني|ما ابغي رسايل|ما ابي رسايل|ابغي اوقف الرسايل)$/.test(norm(t).replace(/[!.،,؟?]/g, '').trim())
+/** A request that names a non-AC section: its section number in SECTIONS, or 0. AC words always win (the AC menu). */
+export function sectionOf(t) {
+  const n = norm(t)
+  if (/(مكيف|تكييف|سبليت|اسبليت|شباك|كاسيت|دولابي|مخفي)/.test(n)) return 0
+  if (/(غرفه تبريد|غرف تبريد|غرفه تجميد|غرف تجميد|تجميد|فريزر|ثلاجه عرض|ثلاجات عرض|براد)/.test(n)) return 2
+  if (/(سباك|سباكه|تسريب|تسرب|مويه|مياه|مجاري|مجرى|بلاعه|حمام|مغسله|سيفون|خلاط|سخان|شطاف|انسداد|مسدود)/.test(n)) return 3
+  if (/(كهربا|كهرباء|كهربائي|فيش|افياش|اناره|لمبه|لمبات|قاطع|طبلون|لوحه كهربا|تمديدات كهربا|شورت|ماس)/.test(n)) return 4
+  if (/(نجار|نجاره|باب|ابواب|دولاب|دواليب|خشب|اثاث|غرفه نوم|مطبخ|مطابخ|قفل|اقفال|كالون)/.test(n)) return 5
+  if (/(كاميرا|كاميرات|مراقبه|دش|رسيفر|ستلايت|ساتلايت|قنوات)/.test(n)) return 6
+  if (/(دهان|دهانات|بويه|ديكور|ترميم|بلاط|تبليط|سيراميك|غساله|غسالات|ثلاجه|ثلاجات|نشافه|فرن)/.test(n)) return 7
+  return 0
+}
 export const isMenu = (t) => /^(0|٠|القائمه|قائمه|القائمة|قائمة|منيو|menu|الرئيسيه|ابدا من جديد|من الاول|رجوع للقائمه)$/.test(norm(t).replace(/[!.،,؟?]/g, '').trim())
 
 /** The owner's three videos (2026-11-21), kept in the hub's settings so he can change them. */
@@ -84,6 +98,35 @@ export const HOME = [
   '6️⃣ طلبي: متابعة / تأجيل / إلغاء',
   '7️⃣ كلّم الدعم الفني (موظف)',
 ].join('\n')
+
+/**
+ * «إيش تحتاج؟» (owner, 2026-11-21): a bare «السلام عليكم» gets the company's welcome and the sections — not every AC
+ * detail at once. Picking a section shows only its own services; the AC section opens the AC menu (HOME).
+ */
+export const SECTIONS = [
+  'اختار القسم 👇',
+  '1️⃣ المكيفات (غسيل • صيانة • تركيب)',
+  '2️⃣ غرف التبريد والتجميد',
+  '3️⃣ السباكة',
+  '4️⃣ الكهرباء',
+  '5️⃣ النجارة',
+  '6️⃣ الكاميرات والدش',
+  '7️⃣ خدمات تانية (دهان، ترميم، أجهزة منزلية…)',
+  '8️⃣ طلبي: متابعة / تأجيل / إلغاء',
+  '9️⃣ كلّم موظف',
+].join('\n')
+/** Each section's own services: [label, spec on the website]. */
+export const SUBS = {
+  2: { name: 'غرف التبريد والتجميد', icon: '❄️', items: [['صيانة وإصلاح عطل', 'fridge'], ['تركيب غرفة جديدة', 'fridge'], ['فحص وشحن فريون', 'fridge'], ['عقد صيانة دورية', 'fridge']], ex: 'الغرفة مش بتبرد، الكمبروسر بيفصل، تلج على المبخر' },
+  3: { name: 'السباكة', icon: '🚰', items: [['تسريب مياه', 'plumbing'], ['تسليك مجاري', 'plumbing'], ['تركيب أدوات صحية (خلاط، مغسلة، سيفون)', 'plumbing'], ['سخانات', 'plumbing'], ['تمديدات جديدة', 'plumbing']], ex: 'تسريب تحت المغسلة، الحمام مسدود' },
+  4: { name: 'الكهرباء', icon: '⚡', items: [['عطل أو فصل كهربا', 'electric'], ['تركيب إنارة وأفياش', 'electric'], ['تمديدات جديدة', 'electric'], ['لوحة كهربا', 'electric']], ex: 'الكهربا بتفصل في غرفة، فيش محروق' },
+  5: { name: 'النجارة', icon: '🪚', items: [['تصليح أبواب ودواليب', 'general'], ['تركيب غرف نوم ومطابخ', 'general'], ['فك وتركيب أثاث', 'general'], ['أقفال', 'locks']], ex: 'باب الغرفة مش بيقفل، دولاب محتاج تركيب' },
+  6: { name: 'الكاميرات والدش', icon: '📹', items: [['تركيب كاميرات مراقبة', 'cameras'], ['صيانة كاميرات', 'cameras'], ['تركيب دش ورسيفر', 'satellite'], ['ضبط القنوات', 'satellite']], ex: '4 كاميرات للبيت، الدش مفيهوش إشارة' },
+  7: { name: 'خدمات تانية', icon: '🛠', items: [['دهان وديكور', 'paint'], ['ترميم وتبليط', 'tiling'], ['أجهزة منزلية (غسالات، ثلاجات)', 'appliances'], ['حاجة تانية', 'general']], ex: 'غسالة مش بتصرف، دهان شقة 3 غرف' },
+}
+export const subMenu = (k) => { const s = SUBS[k]; return s ? s.icon + ' *' + s.name + '* — إيش المطلوب؟\n' + s.items.map((x, i) => ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'][i] + ' ' + x[0]).join('\n') : '' }
+/** A message that is only a greeting («السلام عليكم», «مرحبا», «هلا») — nothing asked yet. */
+export const isGreeting = (t) => /^(السلام عليكم( ورحمه الله( وبركاته)?)?|سلام عليكم|سلام|السلام|مرحبا|مرحبًا|مرحبتين|اهلا|أهلا|اهلين|هلا|هلا والله|هاي|hi|hello|صباح الخير|مساء الخير|صباح النور|مساء النور|يعطيكم العافيه|كيف الحال|السلام عليكم كيف الحال)$/.test(norm(t).replace(/[!.،,؟?🌷👋🙏]/gu, '').trim())
 
 export const TYPES = '1️⃣ سبليت\n2️⃣ شباك\n3️⃣ سبليت + شباك\n4️⃣ كاسيت / مخفي / دولابي'
 export const FOOT = '\n\n0️⃣ القائمة الرئيسية'
