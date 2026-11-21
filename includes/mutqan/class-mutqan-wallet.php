@@ -25,10 +25,11 @@ final class Mutqan_Wallet {
     public static function boost($techId) { return max(-30, min(30, (int) (self::settings($techId)['scoreBoost'] ?? 0))); }
 
     /** Prepaid credit, same sum as custody().credit. */
-    public static function credit($techId, $orders, $share) {
+    public static function credit($techId, $orders, $share, $cashShare = 0) {
         $w = self::settings($techId);
         if (($w['mode'] ?? '') !== 'prepaid') { return null; }
         $sp = (float) ($w['sharePct'] ?? 0); if ($sp <= 0 || $sp > 100) { $sp = (float) $share; }
+        $cs = 0; foreach ([(float) ($w['cashSharePct'] ?? 0), (float) $cashShare] as $v) { if ($v > 0 && $v <= 100) { $cs = $v; break; } } if (!$cs) { $cs = $sp; }
         $since = !empty($w['modeSince']) ? (int) strtotime((string) $w['modeSince']) : 0;
         $c = 0.0;
         foreach ((array) $orders as $o) {
@@ -36,7 +37,7 @@ final class Mutqan_Wallet {
             $t = (int) strtotime((string) ($o['completedAt'] ?? ($o['updatedAt'] ?? ''))); if ($t < $since) { continue; }
             $a = class_exists('Mutqan_Ops') ? Mutqan_Ops::amount($o) : (float) ($o['price'] ?? 0);
             $cash = preg_match('/cash|نقد/i', (string) ($o['paymentMethod'] ?? ''));
-            if ($cash || ($o['paymentStatus'] ?? '') !== 'paid') { $c -= $a * (100 - $sp) / 100; } else { $c += $a * $sp / 100; }
+            if ($cash || ($o['paymentStatus'] ?? '') !== 'paid') { $c -= $a * (100 - $cs) / 100; } else { $c += $a * $sp / 100; }
         }
         if (self::$s === null) { self::$s = Mutqan_Store::select('settlements', [], ['limit' => 3000], self::sys()); }
         foreach (self::$s as $s) {
@@ -56,8 +57,8 @@ final class Mutqan_Wallet {
         $w = self::settings($id);
         if (!empty($w['frozen'])) { return 'frozen'; }
         if (($w['mode'] ?? '') === 'prepaid') {
-            $share = 0; $r = Mutqan_Store::select('tech_pay', [], ['limit' => 1], self::sys()); $share = (float) ($r[0]['sharePct'] ?? 0);
-            $c = self::credit($id, $orders, $share);
+            $r = Mutqan_Store::select('tech_pay', [], ['limit' => 1], self::sys());
+            $c = self::credit($id, $orders, (float) ($r[0]['sharePct'] ?? 0), (float) ($r[0]['cashSharePct'] ?? 0));
             if ($c !== null && $c < (float) ($w['minBalance'] ?? 0)) { return 'low_credit'; }
         }
         return '';

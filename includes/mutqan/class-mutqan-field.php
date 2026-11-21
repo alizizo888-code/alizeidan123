@@ -33,6 +33,7 @@ final class Mutqan_Field {
         if ($op === 'near') { Mutqan_Limiter::hit('field_near', 300, 3600); return self::near((float) ($in['lat'] ?? 0), (float) ($in['lng'] ?? 0), (float) ($in['km'] ?? 5), $p); }
         if ($op === 'abort') { return self::abort($in, $p); }
         if ($op === 'reasons') { return self::ABORT_REASONS; }
+        if (class_exists('Mutqan_Fieldops')) { $r = Mutqan_Fieldops::handle($op, $in, $p); if ($r !== null) { return $r; } }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
     }
 
