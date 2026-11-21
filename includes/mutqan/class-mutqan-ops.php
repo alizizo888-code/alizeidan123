@@ -49,6 +49,10 @@ final class Mutqan_Ops {
         if ($op === 'pos') { if (is_numeric($in['acc'] ?? null) && (float) $in['acc'] > Mutqan_Track::MAX_ACCURACY_M) { return ['ok' => false, 'reason' => 'low_accuracy']; } return self::ping($p, $in['lat'] ?? null, $in['lng'] ?? null); }
         // «الخريطة الحية»: every technician (code, colour, trail, speed, next job, ETA), operations staff and customers.
         if ($op === 'fleet') { return Mutqan_Route::fleet(); }
+        // invoices: plain and tax (owner, 2026-11-22)
+        if (strpos($op, 'invoice_') === 0) { return Mutqan_Invoice::op($op, $in, $p); }
+        // quotations, their wordings, the AI writer and the document reader (owner, 2026-11-22)
+        if (strpos($op, 'quote_') === 0 || $op === 'doc_extract') { return Mutqan_Quote::op($op, $in, $p); }
         // the permanent customer layer + the hand-dropped pins (owner, 2026-11-21)
         if ($op === 'old_clients') { return ['clients' => Mutqan_Ledger::map_rows(), 'pins' => Mutqan_Ledger::pins()]; }
         if ($op === 'client_card') { $r = Mutqan_Ledger::card($in['key'] ?? ''); if (!$r) { throw new Mutqan_Error('not_found', 'مش لاقي العميل ده.', 404); } return $r; }
