@@ -12,7 +12,7 @@ const AI = { on: false }
 const store = openStore(':memory:')
 store.set('settings', { roomPhone: ROOM, agents: [{ name: 'سارة', phone: '0511111111' }], humanFirstSec: 0.3, hoursFrom: 0, hoursTo: 24 })
 const out = []
-const send = (phone, text, o = {}) => { out.push({ phone, text, purpose: o.purpose, dedup: o.dedup }); return out.length }
+const send = (phone, text, o = {}) => { out.push({ phone, text, purpose: o.purpose, dedup: o.dedup, image: o.image || '' }); return out.length }
 const transcript = []
 const toWho = (p) => (T.pkey(p) === T.pkey(ROOM) ? 'الغرفة' : T.pkey(p) === T.pkey(TECH) ? 'الفني' : T.pkey(p) === T.pkey(CUST) ? 'العميل' : T.pkey(p) === T.pkey(NEW) ? 'عميل جديد' : p)
 const take = () => { const x = out.splice(0); for (const m of x) transcript.push('  → ' + toWho(m.phone) + ': ' + m.text.replace(/\n/g, '\n      ')); return x }
@@ -41,12 +41,15 @@ const wp = async (op, b) => {
   if (op === 'reopen') { const o = orders[b.id]; Object.assign(o, b.patch, { status: 'new', techId: null, techName: null }); return view(o) }
   if (op === 'approve') { const o = orders[b.id]; Object.assign(o, { techId: 't1', techName: 'الفني علي', status: 'assigned' }); emit('order.assigned', o); return { text: '✅ اتسند للفني علي' } }
   if (op === 'eta_ask') return { result: 'asked' }
-  if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; emit('order.created', o); return view(o) }
+  if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; if (b.confirmed) o.customerConfirmed = true; o.acQuote = b.acQuote; emit('order.created', o); return view(o) }
   if (op === 'claim') { const o = b.seal ? Object.values(orders).find((x) => b.seal.startsWith(x.seal || '#')) : byNum(b.number); if (!o || o.claimCode !== b.code) return null; const first = !o.customerConfirmed; Object.assign(o, { clientPhone: b.phone, customerConfirmed: true }); return { first, card: first ? '🔔 *طلب جديد — رعد السماء*\nرقم الطلب: #' + o.number : '', ...view(o) } }
   if (op === 'report') return { text: '📋 تقرير' }
   if (op === 'info') return /سعر|اسعار/.test(b.text) ? { text: 'أسعار المالك' } : null
   if (op === 'quote') { const n = T.norm(b.text); if (!/مكيف|سبليت|تسريب|سباك/.test(n)) return null; const q = /مكيفين|2/.test(n) ? 2 : 1; return /غسيل|اغسل/.test(n) ? { spec: 'ac', fixed: true, label: 'غسيل ' + q + ' مكيف سبليت', qty: q, total: q === 2 ? 140 : 100, floor: q === 2 ? 125 : 89, acQuote: { mode: 'wash', type: 'سبليت', qty: q } } : { spec: 'plumbing', fixed: false, label: 'سباكة', from: 120, total: 120, floor: 100 } }
   if (op === 'greet') return T.pkey(b.phone) === T.pkey(OLDC) ? { site: 'رعد السماء', kind: 'returning', name: 'أبو فهد', lastService: 'غسيل مكيفين', lastDays: 40, fromUs: false } : { site: 'رعد السماء', kind: 'new', fromUs: /#raad|من موقع/.test(b.text) }
+  if (op === 'ac_price') { const sp = { 1: 100, 2: 140, 3: 200, 4: 267, 6: 400 }; const wn = { 1: 60, 2: 100, 3: 150 }; let total = 0; const lines = []; const items = []; if (b.split) { total += sp[b.split] || b.split * 66; lines.push(b.split + ' سبليت = ' + (sp[b.split] || b.split * 66)); items.push({ type: 'سبليت', qty: b.split }) } if (b.window) { total += wn[b.window] || b.window * 50; lines.push(b.window + ' شباك = ' + (wn[b.window] || b.window * 50)); items.push({ type: 'شباك', qty: b.window }) } if (b.other) { total += 180 * b.other; items.push({ type: 'دولابي', qty: b.other }) } return { total, floor: Math.round(total * 0.9), units: (b.split || 0) + (b.window || 0) + (b.other || 0), lines, label: 'غسيل ' + items.map((i) => i.qty + ' ' + i.type).join(' + '), acQuote: { mode: 'wash', items } } }
+  if (op === 'ac_table') return { text: 'جدول المالك' }
+  if (op === 'parts') return /مكثف/.test(b.text) ? { text: '🔧 *تغيير المكثف*: *150 ر.س*', image: 'https://oxygen11.com/cap.jpg', parts: ['capacitor'], strategy: 'إحنا مش محل قطع غيار 🙏 بنبيعلك حل العطل' } : { text: '🔧 *أسعار الإصلاح*', parts: [], strategy: 'إحنا مش محل قطع غيار' }
   if (op === 'cancel' && SITE.on) { const o = orders[b.id]; if (['accepted', 'en_route', 'nearby', 'arrived', 'in_progress'].includes(o.status)) { o.cancelRequest = { text: b.text }; return { done: 'requested', reply: 'وصلني طلب الإلغاء ✅ الفني كان متحرك لك، فبلّغته يستنى' } } o.status = 'cancelled'; return { done: 'cancelled', reply: 'تم إلغاء طلبك #' + o.number + ' ✅' } }
   if (op === 'answer' && SITE.on) { const m = T.norm(b.text).match(/طلب\s*#?(\d{3,})/); if (m) { const o = Object.values(orders).find((x) => String(x.number) === m[1]); return { reply: o && T.pkey(o.clientPhone) === T.pkey(b.phone) ? 'طلبك #' + o.number + ' — ' + (SL[o.status] || o.status) : 'مش لاقي طلب رقم ' + m[1] + ' على رقمك' } } if (/طرق الدفع/.test(b.text)) return { reply: '💳 *طرق الدفع* (من الموقع)' }; return { reply: null } }
   if (op === 'converse') return AI.on ? { reply: 'أكيد، غسيل المكيف السبليت بـ 120 ر.س للجهاز. في أي حي؟', lead: { service: 'غسيل 2 سبليت', area: AI.area || '', time: AI.time || '' }, complete: !!(AI.area && AI.time) } : null
@@ -110,17 +113,24 @@ t('rating saved and sent to the room', orders.o1.customerRating === 5 && /تقي
 transcript.push('\n### هـ) عميل جديد بيكلم الخط: ترحيب، موظف، وطلب من الشات')
 m = await say(NEW, 'السلام عليكم')
 t('welcome with the etiquette: the company and what we do', /مرحبًا بكم في \*رعد السماء\*/.test(to(m, NEW)) && /غرف التبريد والتجميد/.test(to(m, NEW)) && /السباكة والنجارة والكهرباء/.test(to(m, NEW)), to(m, NEW))
-m = await say(NEW, 'بكام الاسعار')
-t('prices from the owner\'s own answers', /أسعار المالك/.test(to(m, NEW)), to(m, NEW))
+t('…and the menu right after it', /1️⃣ غسيل مكيفات/.test(to(m, NEW)) && /7️⃣ كلّم الدعم الفني/.test(to(m, NEW)), to(m, NEW))
 m = await say(NEW, '4')
-t('«4» → agent told on WhatsApp, customer acknowledged', /عميل محتاج موظف/.test(to(m, '0511111111')) && /بلّغت موظف/.test(to(m, NEW)), JSON.stringify(m))
+t('«4» → the owner\'s price table', /جدول المالك/.test(to(m, NEW)), to(m, NEW))
+m = await say(NEW, '0')
+t('«0» → the main menu again', /1️⃣ غسيل مكيفات/.test(to(m, NEW)), to(m, NEW))
+m = await say(NEW, '7')
+t('«7» → agent told on WhatsApp, customer acknowledged', /عميل محتاج موظف/.test(to(m, '0511111111')) && /بلّغت موظف/.test(to(m, NEW)), JSON.stringify(m))
 m = await say(NEW, 'عايز غسيل 2 مكيف سبليت')
-t('service → asks for the place', /ابعت موقعك/.test(to(m, NEW)), to(m, NEW))
+t('«غسيل 2 مكيف سبليت» → priced by the owner\'s table at once, with the split wash video', /\*140 ر\.س\*/.test(to(m, NEW)) && /youtu\.be\/wvtQ_aztCrE/.test(to(m, NEW)) && /1️⃣ تمام، كمّل الحجز/.test(to(m, NEW)), to(m, NEW))
+m = await say(NEW, '1')
+t('«1» → asks for the place', /ابعت موقعك/.test(to(m, NEW)), to(m, NEW))
 m = await say(NEW, 'حي العوالي')
-t('place → asks for the time', /الموعد المناسب/.test(to(m, NEW)), to(m, NEW))
+t('place → the time choices', /تحب الموعد إمتى|بعد 1[01] بالليل/.test(to(m, NEW)), to(m, NEW))
 m = await say(NEW, 'بكرة الساعة 5')
+t('time → the whole order to confirm', /ملخص طلبك/.test(to(m, NEW)) && /140 ر\.س/.test(to(m, NEW)) && /1️⃣ تأكيد الطلب/.test(to(m, NEW)), to(m, NEW))
+m = await say(NEW, '1')
 const created = Object.values(orders).find((o) => T.pkey(o.clientPhone) === T.pkey(NEW))
-t('order created from the chat and confirmation sent', created && created.address === 'حي العوالي' && /وصلنا طلبك رقم/.test(to(m, NEW)) && /طلب جديد #/.test(to(m, ROOM)), JSON.stringify(m))
+t('«1» → order created, confirmed, the room told', created && created.address === 'حي العوالي' && created.agreedPrice === 140 && created.customerConfirmed && /تم تأكيد طلبك رقم/.test(to(m, NEW)) && /طلب جديد #/.test(to(m, ROOM)), JSON.stringify(m))
 
 // ===== F. room commands and the help card =====
 m = await say(ROOM, 'تقرير', 'الغرفة')
@@ -139,13 +149,10 @@ brain.contact(FRIEND, 'خالي محمد')
 m = await say(FRIEND, 'إزيك يا علي عامل ايه')
 t('a name saved in the phone, not from our sites: left alone', !to(m, FRIEND) && store.chat(T.pkey(FRIEND)).kind === 'personal', JSON.stringify(m))
 m = await say(NEW.replace(/9$/, '8'), 'عايز اغسل مكيف سبليت')
-t('a full request: welcome at once, the rest waits for a person', /مرحبًا بكم/.test(m.map((x) => x.text).join()) && !/ابعت موقعك/.test(m.map((x) => x.text).join()), JSON.stringify(m))
+t('a full request: welcome and the price at once, no waiting', /مرحبًا بكم/.test(m.map((x) => x.text).join()) && /\*100 ر\.س\*/.test(m.map((x) => x.text).join()), JSON.stringify(m))
 await brain.inbound({ line: 'l1', phone: NEW.replace(/9$/, '8'), text: 'أهلا بيك يا فندم، في أي حي؟', fromMe: true })
-await sleep(450); m = take()
-t('…a person answered within the two minutes: the bot keeps out', !m.length, JSON.stringify(m))
-m = await say(NEW.replace(/9$/, '7'), 'عايز اغسل مكيف سبليت')
-await sleep(450); m = m.concat(take())
-t('…nobody answered: the bot takes the customer', /ابعت موقعك/.test(m.map((x) => x.text).join()), JSON.stringify(m))
+m = await say(NEW.replace(/9$/, '8'), 'العزيزية'); await sleep(450); m = m.concat(take())
+t('…a person took over: the bot keeps out', !to(m, NEW.replace(/9$/, '8')), JSON.stringify(m))
 m = await say(TECH, 'صباح الخير يا جماعة', 'الفني')
 t('a colleague saying hello gets no bot reply', !to(m, TECH), JSON.stringify(m))
 
@@ -155,21 +162,20 @@ store.set('settings', { ...store.get('settings'), hoursFrom: 0, hoursTo: 0, emer
 m = await say(LATE, 'عندي تسريب مياه من المكيف وماس كهربا')
 await sleep(450); m = m.concat(take())
 t('after hours an emergency is told to call the mobile, and the room is alerted', /اتصل بينا حالًا على \*0536554731\*/.test(to(m, LATE)) && /طارئ برا مواعيد العمل/.test(to(m, ROOM)), JSON.stringify(m))
-m = await say(LATE.replace(/0$/, '1'), 'محتاج غسيل مكيف')
-await sleep(450); m = m.concat(take())
-m = await say(LATE.replace(/0$/, '1'), 'حي النسيم')
-t('after hours an ordinary job is booked for the morning', /بكرة الصبح من الساعة 0/.test(to(m, LATE.replace(/0$/, '1'))), JSON.stringify(m))
-m = await say(LATE.replace(/0$/, '1'), 'تمام')
-t('…«تمام» books it', Object.values(orders).some((o) => T.pkey(o.clientPhone) === T.pkey(LATE.replace(/0$/, '1')) && /بكرة الصبح/.test(o.preferredTime)), JSON.stringify(m))
+const L1 = LATE.replace(/0$/, '1')
+m = await say(L1, 'محتاج غسيل مكيف')
+t('«محتاج غسيل مكيف» → the AC type to choose', /نوع المكيفات إيه/.test(to(m, L1)) && /3️⃣ سبليت \+ شباك/.test(to(m, L1)), JSON.stringify(m))
+m = await say(L1, '3'); m = await say(L1, '2'); m = await say(L1, '1')
+t('split + window: counted per type and priced together (2 split + 1 window = 200)', /\*200 ر\.س\*/.test(to(m, L1)) && /2 سبليت = 140/.test(to(m, L1)) && /1 شباك = 60/.test(to(m, L1)), JSON.stringify(m))
 store.set('settings', { ...store.get('settings'), hoursFrom: 0, hoursTo: 24 })
 
 // ===== I. the site's AI talks, prices, and books =====
 AI.on = true
-m = await say(AIC, 'السلام عليكم'); m = await say(AIC, 'بكم غسيل 2 مكيف سبليت؟')
-t('the site\'s AI answers the price question', /120 ر\.س/.test(to(m, AIC)), JSON.stringify(m))
+m = await say(AIC, 'السلام عليكم'); m = await say(AIC, 'عندكم ضمان على الشغل يعني ولا ايه الكلام')
+t('a free question goes to the site\'s AI', /أكيد/.test(to(m, AIC)), JSON.stringify(m))
 AI.area = 'الزاهر'; AI.time = 'بكرة العصر'
 m = await say(AIC, 'في الزاهر بكرة العصر')
-t('…and when it has everything, the order is created and confirmed', Object.values(orders).some((o) => T.pkey(o.clientPhone) === T.pkey(AIC) && o.address === 'الزاهر') && /وصلنا طلبك رقم/.test(to(m, AIC)), JSON.stringify(m))
+t('…when the model thinks it has everything, the menu prices it from the table (the model never books)', !Object.values(orders).some((o) => T.pkey(o.clientPhone) === T.pkey(AIC)) && /\*140 ر\.س\*/.test(to(m, AIC)), JSON.stringify(m))
 AI.on = false
 
 
@@ -177,25 +183,52 @@ AI.on = false
 transcript.push('\n### ح) الأسعار والفصال')
 const HAG = '966500000060'
 m = await say(HAG, 'السلام عليكم')
-m = await say(HAG, 'بكام غسيل 2 مكيف سبليت؟')
-t('price: the owner\'s list price and the next question', /غسيل 2 مكيف سبليت: \*140 ر\.س\*/.test(to(m, HAG)) && /الحي أو اللوكيشن/.test(to(m, HAG)), to(m, HAG))
-m = await say(HAG, 'غالي شوية')
-t('first «غالي»: one step down', /\*130 ر\.س\* بدل 140/.test(to(m, HAG)), to(m, HAG))
-m = await say(HAG, 'لا كتير نزل كمان')
-t('second: the floor, as the last word', /آخر كلام يا غالي: \*125 ر\.س\*/.test(to(m, HAG)), to(m, HAG))
-m = await say(HAG, 'خليها 100')
-t('below the floor: apology, support, room told', /أقل سعر عندنا/.test(to(m, HAG)) && /بيفاصل تحت أقل سعر/.test(to(m, ROOM)), JSON.stringify(m))
-m = await say(HAG, 'تمام')
-t('«تمام» settles on the floor and the room hears the deal', /اتفقنا على \*125 ر\.س\*/.test(to(m, HAG)) && /اتفاق سعر/.test(to(m, ROOM)), JSON.stringify(m))
-m = await say(HAG, 'حي الشوقية'); m = await say(HAG, 'بكرة العصر')
-const hagOrder = Object.values(orders).find((o) => T.pkey(o.clientPhone) === T.pkey(HAG))
-t('…the order carries the agreed price', hagOrder && hagOrder.agreedPrice === 125 && hagOrder.service === 'غسيل 2 مكيف سبليت', hagOrder)
+m = await say(HAG, 'غسيل مكيف اسبليت و مكيف شباك بكام')
+t('«مكيف اسبليت و مكيف شباك» = one of each, 160 (not 100)', /\*160 ر\.س\*/.test(to(m, HAG)) && /1 سبليت = 100/.test(to(m, HAG)) && /1 شباك = 60/.test(to(m, HAG)), to(m, HAG))
+m = await say(HAG, 'غالى ياخى ١٦٠ راعيتا')
+t('first «غالي»: one step down, not to the bottom', /\*150 ر\.س\* بدل 160/.test(to(m, HAG)), to(m, HAG))
+m = await say(HAG, 'يللة خليها ١٠٠ ريال المكيفين توكل على الله')
+t('«خليها 100 المكيفين» is refused — the floor is the last word', /مقدرش أنزل لـ 100/.test(to(m, HAG)) && /\*144 ر\.س\*/.test(to(m, HAG)), to(m, HAG))
+m = await say(HAG, 'انا قلت لك ١٠٠ قبل كده واتفقنا')
+t('«I told you 100 before» is not believed', !/اتفقنا ✅ \*100|اتفقنا على \*100/.test(to(m, HAG)) && /144/.test(to(m, HAG)), to(m, HAG))
+m = await say(HAG, 'لا ابغى غسيل ٢ مكيف و احد شباك و واحد اسبليت')
+t('changing the count re-prices it from the table (the old offer gone)', /عدّلت العدد/.test(to(m, HAG)) && /\*160 ر\.س\*/.test(to(m, HAG)), to(m, HAG))
+m = await say(HAG, '3 سبليت')
+t('«3 سبليت» → 200, not the same 100', /\*200 ر\.س\*/.test(to(m, HAG)), to(m, HAG))
+m = await say(HAG, 'انتا غبى')
+t('cursing: an apology, a person takes over, the bot stops, the room hears', /آسفين جدًا/.test(to(m, HAG)) && /عميل متضايق/.test(to(m, ROOM)), JSON.stringify(m))
+m = await say(HAG, 'طيب')
+t('…and the bot stays out for half an hour', !to(m, HAG) || /موظف/.test(to(m, HAG)), JSON.stringify(m))
 const HAG2 = '966500000061'
 await say(HAG2, 'السلام عليكم'); await say(HAG2, 'كم سعر غسيل مكيف سبليت')
 m = await say(HAG2, 'ب 95 ينفع؟')
-t('a price he names below the first step is countered, not taken', /\*95 ر\.س\* بدل 100|\*94|بدل 100/.test(to(m, HAG2)) || /آخر كلام/.test(to(m, HAG2)), to(m, HAG2))
+t('a price he names before we moved is countered, not taken', /بدل 100/.test(to(m, HAG2)) && !/اتفقنا/.test(to(m, HAG2)), to(m, HAG2))
 m = await say(HAG2, '90 وخلاص')
 t('…after we moved, a price at or above the floor is taken', /اتفقنا على \*90 ر\.س\*/.test(to(m, HAG2)), to(m, HAG2))
+m = await say(HAG2, 'السبت العصر')
+m = await say(HAG2, 'حي الشوقية')
+m = take().concat(m)
+m = await say(HAG2, 'بكره العصر'); m = await say(HAG2, '1')
+const h2 = Object.values(orders).find((o) => T.pkey(o.clientPhone) === T.pkey(HAG2))
+t('…the order carries the agreed price and the AC quote', h2 && h2.agreedPrice === 90 && h2.acQuote, JSON.stringify(h2))
+
+// parts: only that repair's price, its photo, and «we sell the repair, not the part»
+const PRT = '966500000062'
+await say(PRT, 'السلام عليكم')
+m = await say(PRT, 'بكام المكثف')
+t('«بكام المكثف» → that repair only, with its photo', /تغيير المكثف/.test(to(m, PRT)) && m.some((x) => x.image === 'https://oxygen11.com/cap.jpg') && !/أسعار الإصلاح/.test(to(m, PRT)), JSON.stringify(m))
+m = await say(PRT, 'غالي، في المحل ب 40')
+t('haggling over a part → «we are a maintenance company, not a parts shop»', /مش محل قطع غيار/.test(to(m, PRT)), to(m, PRT))
+m = await say(PRT, '0')
+t('«0» → the menu', /1️⃣ غسيل مكيفات/.test(to(m, PRT)), to(m, PRT))
+m = await say(PRT, '5')
+t('«5» → the wash videos', /youtu\.be\/qz8gaYjDHmI/.test(to(m, PRT)) && /tiktok/.test(to(m, PRT)), to(m, PRT))
+
+// the same reply a third time → a person
+const REP = '966500000063'
+await say(REP, 'السلام عليكم'); await say(REP, '1')
+await say(REP, 'مش عارف'); await say(REP, 'مش عارف'); m = await say(REP, 'مش عارف')
+t('the same reply a third time → a person is called instead', /مش فاهمك كويس/.test(to(m, REP)) && /البوت كرر/.test(to(m, '0511111111') + to(m, ROOM)), JSON.stringify(m))
 
 // ===== text helpers =====
 t('stepOf: «وصلت 1002»', T.stepOf('وصلت 1002') === 'arrived')

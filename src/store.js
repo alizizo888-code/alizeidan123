@@ -22,6 +22,7 @@ export function openStore(file) {
   `)
   // Columns added after the first release: added in place, old rows keep working.
   for (const col of ['humanAt INTEGER DEFAULT 0', "contact TEXT DEFAULT ''", "greet TEXT DEFAULT ''"]) { try { db.exec('ALTER TABLE chats ADD COLUMN ' + col) } catch {} }
+  try { db.exec("ALTER TABLE outbox ADD COLUMN media TEXT DEFAULT ''") } catch {}   // a photo sent with the text as its caption
   const q = (sql) => db.prepare(sql)
   const now = () => Date.now()
   const s = {
@@ -70,7 +71,7 @@ export function openStore(file) {
 
     queue(o) {
       try {
-        const r = q('INSERT INTO outbox(line,phone,text,purpose,at,dedup) VALUES(?,?,?,?,?,?)').run(o.line || '', o.phone, o.text, o.purpose || '', now(), o.dedup || null)
+        const r = q('INSERT INTO outbox(line,phone,text,purpose,at,dedup,media) VALUES(?,?,?,?,?,?,?)').run(o.line || '', o.phone, o.text, o.purpose || '', now(), o.dedup || null, o.media || '')
         return Number(r.lastInsertRowid)
       } catch (e) { if (/UNIQUE/.test(String(e))) return 0; throw e }
     },

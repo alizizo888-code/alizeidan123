@@ -4,6 +4,7 @@
 // WhatsApp word is decided and sent from here, so a slow website can never hold a WhatsApp conversation up, and a
 // WhatsApp burst can never slow a website down.
 import * as T from './text.js'
+import * as M from './menu.js'
 
 const DAY = 86400000
 const KEEP = 4 * DAY                        // a conversation about an order nobody answered is forgotten after four days
@@ -29,13 +30,14 @@ export const DEFAULTS = {
   humanFirstSec: 120,             // a person gets two minutes to answer before the bot takes the conversation
   ignoreContacts: true,           // names saved in the line's phone (family, friends) are left alone
   dailyReport: true,              // the day's summary to the room at closing time
+  washVideos: M.WASH_VIDEOS,       // «طريقة الغسيل» (5 in the menu) — the owner's own videos
   prices: 'أسعارنا بتتحدد حسب نوع الجهاز والعدد، والمعاينة مجانية لحد جهازين.\nابعت نوع الخدمة وعدد الأجهزة والحي، ونبعتلك السعر على طول 🌷',
 }
 
 export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now = () => Date.now(), log = () => {}, later = (fn, ms) => setTimeout(fn, ms), cancel = (h) => clearTimeout(h) }) {
   // «الفني الفني علي»: a technician whose name already starts with «الفني» is named once.
   const send = (phone, text, o) => rawSend(phone, String(text).replace(/(الفن[يى])\s+(?=الفن[يى]\s)/g, ''), o)
-  const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; const wc = store.get('wpConfig', {}) || {}; if (!c.testPhone) c.testPhone = wc.testCustomer || ''; if (Number.isFinite(wc.hoursFrom)) c.hoursFrom = wc.hoursFrom; if (Number.isFinite(wc.hoursTo)) c.hoursTo = wc.hoursTo; if (/1️⃣ طلب خدمة/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome; return c }
+  const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; const wc = store.get('wpConfig', {}) || {}; if (!c.testPhone) c.testPhone = wc.testCustomer || ''; if (Number.isFinite(wc.hoursFrom)) c.hoursFrom = wc.hoursFrom; if (Number.isFinite(wc.hoursTo)) c.hoursTo = wc.hoursTo; if (Array.isArray(wc.washVideos) && wc.washVideos.length) c.washVideos = wc.washVideos; if (/1️⃣ طلب خدمة/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome; return c }
   const who$ = new Map()   // phone → {at, who}: one question to the website per person per ten minutes
 
   /* ------------------------------------------------------------------ sending */
@@ -54,7 +56,20 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const ph = o?.techPhone
     return ph ? send(T.intl(ph), text, { purpose: 'tech', dedup }) : 0
   }
-  const say = (phone, line, text) => send(T.intl(phone), text, { line, purpose: 'reply' })
+  // The same reply a third time in a quarter of an hour means we are not understanding him: a person takes over
+  // (owner, 2026-11-21 — the same summary went out three times while the customer was cursing).
+  const recentOut = new Map()
+  const say = (phone, line, text) => {
+    const pk = T.pkey(phone)
+    const r = (recentOut.get(pk) || []).filter((x) => now() - x.at < 900000)
+    if (r.filter((x) => x.t === text).length >= 2) {
+      const c = chatOf(phone); if (c) notifyHuman(c, 'البوت كرر نفس الرد 3 مرات — محتاج موظف', false)
+      text = 'حاسس إني مش فاهمك كويس 🙏 بلّغت موظف خدمة العملاء وهيرد عليك هنا حالًا.\nأو اكتب *0* للقائمة.'
+    }
+    r.push({ t: text, at: now() }); recentOut.set(pk, r.slice(-6))
+    return send(T.intl(phone), text, { line, purpose: 'reply' })
+  }
+  const sayImg = (phone, line, text, image) => (image ? send(T.intl(phone), text, { line, purpose: 'reply', image }) : say(phone, line, text))
 
   /* ------------------------------------------------------------------ stage memory: which order a phone is talking about */
 
@@ -259,7 +274,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     t = t.includes('{last}') ? t.replace('{last}', last) : t.replace(/\n/, last + '\n')
     if (!back && g.source) t += '\nشايفين إنك جاي من «' + g.source + '» — نقدر نساعدك فيها على طول.'
     if (!isOpen()) t += '\n\n' + C.afterHours.replace(/\{phone\}/g, C.emergencyPhone)
-    return t
+    return t + '\n\n' + M.HOME
   }
 
   /** The site's confirm button sent this from his own WhatsApp: the order is his, confirmed, and on its way. */
@@ -295,7 +310,16 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   async function customer({ c, line, phone, text, name }) {
     const C = cfg()
     if (await claimed(c, line, phone, text, name)) return
+    if (M.isAbuse(text) && !humanActive(c, 10 * 60000)) return abuse(c, line, phone, text)
     if (c.welcomedAt && !humanActive(c, 10 * 60000) && await sharedAnswer(line, phone, text)) return
+    // The menu: in the middle of a booking it has the floor; at the main menu it takes the numbers — unless an order's
+    // own question (a rating, why he cancelled, «تأكيد») is waiting for a digit.
+    const fm = flowOf(c)
+    if (fm && !humanActive(c, 10 * 60000) && !(c.botOff && c.botOff > now())) {
+      const js = stageOf(phone)?.s
+      const digit = M.isMenu(text) || /^\d$/.test(T.norm(text).trim())
+      if (fm.step !== 'home' || (digit && !['rate', 'winback', 'winback_time', 'confirm'].includes(js))) return flow(c, line, phone, text, name, fm)
+    }
     const j = stageOf(phone)
     if (j && j.o) {
       // The order's own conversation: at once — unless a person is talking to him right now.
@@ -322,10 +346,12 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const first = !c.welcomedAt || now() - c.welcomedAt > WELCOME_EVERY
     if (first) {
       store.touchChat(c.pk, { welcomedAt: now() })
+      // The welcome carries the menu. A message that already says what he wants goes straight into it.
+      if (!isOpen() && EMERGENCY.test(T.norm(text))) { say(phone, line, welcome(g).replace('\n\n' + M.HOME, '')); return reception(store.chat(c.pk), line, phone, text, name) }
+      if (wantsService(text)) { say(phone, line, welcome(g).replace('\n\n' + M.HOME, '')); return startFrom(store.chat(c.pk), line, phone, text, name) }
+      saveFlow(c.pk, { step: 'home' })
       say(phone, line, welcome(g))
-      // Just «السلام عليكم»: the welcome is the answer. Anything more waits two minutes for a person first.
-      if (text.length <= 25 && !SERVICE_WORDS.some((w) => T.norm(text).includes(T.norm(w))) && T.intent(text) === 'general') return
-      return holdThen(c.pk, text, C.humanFirstSec * 1000, (t) => reception(store.chat(c.pk), line, phone, t, name))
+      return
     }
     if (humanActive(c, 30 * 60000)) return holdThen(c.pk, text, C.humanFirstSec * 1000, (t) => reception(store.chat(c.pk), line, phone, t, name))
     return reception(c, line, phone, text, name)
@@ -348,7 +374,9 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       if (o) { const st = o.customerConfirmed || o.status !== 'new' ? 'live' : 'confirm'; setStage(phone, o.id, st); const r = await journey(st, o, text, phone); if (r) toCustomer({ ...o, waLine: line }, r); return }
       if (n === '3') return say(phone, line, 'مفيش طلب مفتوح على رقمك دلوقتي 🌷 قولّي الخدمة اللي محتاجها والحي، وأنا أجهز طلبك.')
     }
-    if (n === '4' || it === 'human') return notifyHuman(c, text, true)
+    if (it === 'human') return notifyHuman(c, text, true)
+    if (M.isMenu(text) || /^[1-7]$/.test(n)) return flow(c, line, phone, text, name, flowOf(c) || { step: 'home' })
+    if (wantsService(text)) return startFrom(c, line, phone, text, name)
 
     // The site's AI: understands the request, prices and bargains within the owner's floor, books, hands over.
     const g = await greetOf(c, text)
@@ -362,7 +390,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       store.touchChat(c.pk, { lead: JSON.stringify(ai.lead || {}) })
       say(phone, line, ai.reply)
       if (ai.handoff) notifyHuman(store.chat(c.pk), ai.reason || text, false)
-      if (ai.complete && ai.lead && ai.lead.service) return createFrom(store.chat(c.pk), line, phone, { service: [ai.lead.service, ai.lead.note, ai.lead.price ? 'السعر المتفق: ' + ai.lead.price : ''].filter(Boolean).join(' — '), place: ai.lead.area || '', time: ai.lead.time || (open ? 'أقرب وقت' : 'بكرة الصبح'), name: ai.lead.name || name }, true)
+      // The model never books nor prices: what it understood starts the menu, where the price is the owner's table.
+      if (ai.complete && ai.lead && ai.lead.service) return startFrom(store.chat(c.pk), line, phone, [ai.lead.service, ai.lead.note].filter(Boolean).join(' '), ai.lead.name || name, { place: ai.lead.area || '' })
       return
     }
     // No AI: the hub's own rules — the price and the bargaining first, from the owner's own price lists.
@@ -372,6 +401,261 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (n === '1' || SERVICE_WORDS.some((w) => n.includes(T.norm(w))) || (c.stage === 'lead')) return lead(c, line, phone, n === '1' ? '' : text, name, c.stage !== 'lead')
     try { const r = await wp('info', { text }); if (r && r.text) return say(phone, line, r.text) } catch {}
     return notifyHuman(c, text, false)
+  }
+
+
+  /* ------------------------------------------------------------------ the menu: the customer picks (owner, 2026-11-21) */
+
+  const FLOW_TTL = 6 * 3600000
+  const REPAIR = /(عطل|عطلان|خربان|ما يبرد|مش بيبرد|ما يشتغل|ما يشغل|صيانه|اصلاح|تصليح|يقطر|ينقط|صوت|ريحه|فريون|كود|بيفصل|يفصل)/
+  const INSTALL = /(تركيب|ركب|فك|نقل|اركب)/
+  const PARTS = /(قطع غيار|قطع الغيار|سعر القطع|اسعار القطع|سعر القطعه|مكثف|كباستور|كابستور|بطاريه المكيف|ترموستات|ثرموستات|كونتاكتور|كنتاكتور|شريحه|بورده|موتور|ماتور|ريش المروحه|كمبروسر|كمبريسور|ضاغط|فريون)/
+  const hourNow = () => Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Asia/Riyadh' }).format(new Date(now())))
+  function flowOf(c) { let L = {}; try { L = JSON.parse(c?.lead || '{}') } catch {} const m = L.m; return m && m.step && now() - (m.at || 0) < FLOW_TTL ? m : null }
+  function saveFlow(pk, m) {
+    const c = store.chat(pk); let L = {}; try { L = JSON.parse(c?.lead || '{}') } catch {}
+    if (m) { m.at = now(); L.m = m } else delete L.m
+    store.touchChat(pk, { lead: JSON.stringify(L) })
+  }
+  function wantsService(text) {
+    const n = T.norm(text)
+    return M.parseAc(text).found || T.isPriceAsk(text) || PARTS.test(n) || SERVICE_WORDS.some((w) => n.includes(T.norm(w)))
+  }
+
+  async function abuse(c, line, phone, text) {
+    store.touchChat(c.pk, { botOff: now() + 30 * 60000 })
+    saveFlow(c.pk, null)
+    toRoom('🔴 *عميل متضايق* — ' + (c.name || '—') + ' — ' + c.phone + '\n💬 «' + String(text).slice(0, 200) + '»\n\nالبوت وقف معاه نص ساعة — كلّمه: *عميل ' + c.phone + ' النص*', 'abuse-' + c.pk + '-' + Math.floor(now() / 1800000))
+    notifyHuman(store.chat(c.pk), text, false)
+    return say(phone, line, 'آسفين جدًا على اللخبطة 🙏 حقك علينا.\nحوّلت محادثتك لموظف خدمة العملاء وهيكلمك بنفسه حالًا.')
+  }
+
+  /** From his own words («غسيل مكيف اسبليت و مكيف شباك بكام»): straight to the right step, nothing guessed. */
+  async function startFrom(c, line, phone, text, name, extra = {}) {
+    const n = T.norm(text); const pa = M.parseAc(text)
+    if (PARTS.test(n)) return partAnswer(c, line, phone, text)
+    if (REPAIR.test(n) && !/(غسيل|غسل|اغسل|تنظيف)/.test(n)) return flow(c, line, phone, '2', name, { step: 'home', ...extra, pre: text })
+    if (INSTALL.test(n) && !/(غسيل|غسل|اغسل)/.test(n)) return flow(c, line, phone, '3', name, { step: 'home', ...extra })
+    const m = { step: 'wash_type', svc: 'wash', spec: 'ac', items: {}, ...extra }
+    if (pa.units > 0) { m.items = { split: pa.split, window: pa.window, other: pa.other }; return priceStep(c, line, phone, m) }
+    if (pa.any) m.anyCount = pa.any
+    saveFlow(c.pk, m)
+    return say(phone, line, '🧽 *غسيل مكيفات* — نوع المكيفات إيه؟\n' + M.TYPES + M.FOOT)
+  }
+
+  /** «بكام المكثف؟» — that repair's price only (and its photo), never a parts list, never «price of the part». */
+  async function partAnswer(c, line, phone, text) {
+    let r = null; try { r = await wp('parts', { text }) } catch {}
+    saveFlow(c.pk, { step: 'part', strategy: r?.strategy || '' })
+    const body = (r?.text || 'بنأكدلك السعر بعد الكشف 🙏') + '\n\n1️⃣ احجز الإصلاح (كشف وتركيب)\n2️⃣ احجز غسيل' + M.FOOT
+    return sayImg(phone, line, body, r?.image || '')
+  }
+
+  async function priceStep(c, line, phone, m, prefix = '') {
+    let P = null; try { P = await wp('ac_price', { split: m.items.split || 0, window: m.items.window || 0, other: m.items.other || 0 }) } catch (e) { log('warn', 'ac_price: ' + e.message) }
+    if (!P || !P.total) { saveFlow(c.pk, null); notifyHuman(c, 'ما قدرتش أحسب سعر: ' + JSON.stringify(m.items), false); return say(phone, line, 'ثواني 🙏 موظف هيأكدلك السعر حالًا.') }
+    Object.assign(m, { step: 'price', price: P, offer: P.total, round: 0, agreed: null, label: P.label })
+    saveFlow(c.pk, m)
+    const L = [prefix, '💰 *' + P.label + '*']
+    if ((P.lines || []).length > 1) L.push(...P.lines.map((x) => '• ' + x))
+    L.push('الإجمالي: *' + P.total + ' ر.س* — غسيل كامل داخلي وخارجي بالمضخة + ضمان ✅')
+    // His wash only: the video of the type he asked for (owner, 2026-11-21).
+    const vids = (cfg().washVideos || M.WASH_VIDEOS)
+    const v = (m.items.split ? vids.find((x) => /سبليت/.test(x.label)) : null) || (m.items.window ? vids.find((x) => /شباك/.test(x.label)) : null)
+    if (v && !m.videoSent) { L.push('🎥 شوف طريقة الغسيل عندنا: ' + v.url); m.videoSent = 1; saveFlow(c.pk, m) }
+    L.push('', '1️⃣ تمام، كمّل الحجز', '2️⃣ عايز سعر أحسن', '3️⃣ غيّر العدد أو النوع')
+    return say(phone, line, L.filter(Boolean).join('\n') + M.FOOT)
+  }
+
+  function askPlace(c, line, phone, m, prefix = '') {
+    m.step = 'place'; saveFlow(c.pk, m)
+    if (m.place || m.lat !== undefined) return askTime(c, line, phone, m, prefix)
+    return say(phone, line, (prefix ? prefix + '\n\n' : '') + '📍 ابعت موقعك من واتساب (📎 ← الموقع) أو اكتب الحي والعنوان.')
+  }
+  function askTime(c, line, phone, m, prefix = '') {
+    const tc = M.timeChoices(hourNow()); m.step = 'time'; m.tc = tc.opts; saveFlow(c.pk, m)
+    return say(phone, line, (prefix ? prefix + '\n\n' : '') + M.timeText(tc))
+  }
+  function summary(c, line, phone, m) {
+    m.step = 'summary'; saveFlow(c.pk, m)
+    const price = m.svc === 'wash' ? '💰 السعر: *' + (m.agreed || m.offer) + ' ر.س*' : '💰 ' + (m.svc === 'repair' ? 'الكشف مجاني لحد جهازين، والسعر بعد الكشف وقبل أي شغل' : 'السعر بعد المعاينة (حسب النوع وطول النحاس) وقبل أي شغل')
+    return say(phone, line, ['📝 *ملخص طلبك*', '🛠 ' + m.label, price, '📍 ' + (m.place || 'اللوكيشن اتبعت ✅'), '📅 ' + m.time, '', '1️⃣ تأكيد الطلب ✅', '2️⃣ تعديل', '3️⃣ إلغاء'].join('\n'))
+  }
+
+  async function book(c, line, phone, m, name) {
+    let g = null; try { g = JSON.parse(c.greet || 'null') } catch {}
+    let o = null
+    try {
+      o = await wp('create', { phone: T.intl(phone), name: name || c.name || '', service: m.label + (m.desc ? ' — ' + m.desc : ''), address: m.place || '', lat: m.lat ?? null, lng: m.lng ?? null, time: m.time, line,
+        price: m.svc === 'wash' ? (m.agreed || m.offer) : null, acQuote: m.svc === 'wash' ? (m.price?.acQuote || null) : null, spec: m.spec || 'ac', units: m.price?.units || m.count || null, confirmed: true,
+        brand: (g && g.brand) || store.line?.(line)?.brand || '', code: (g && g.code) || '', source: (g && g.source) || '', sourceUrl: (g && g.sourceUrl) || '', platform: (g && g.platform) || '' })
+    } catch (e) { log('error', 'create: ' + e.message) }
+    saveFlow(c.pk, null)
+    if (!o) { notifyHuman(store.chat(c.pk), 'طلب من القائمة ما اتسجلش: ' + m.label + ' — ' + (m.place || '') + ' — ' + m.time, false); return say(phone, line, 'وصلنا طلبك ✅ وموظف هيأكده معاك حالًا.') }
+    store.touchChat(c.pk, { stage: 'live', orderId: o.id || '', stageAt: now() })
+    return say(phone, line, ['✅ *تم تأكيد طلبك رقم ' + T.num(o) + '*', 'جاري تجهيز الفني، وهنبلغك هنا أول ما يتحرك 🚗', o.url ? '🔗 تابع طلبك: ' + o.url : '', '', 'تقدر في أي وقت تكتب *6* لمتابعة طلبك أو تأجيله.'].filter((x, i) => x || i > 2).join('\n'))
+  }
+
+  /** One turn of the menu. m: the conversation's step and what was chosen so far. */
+  async function flow(c, line, phone, text, name, m) {
+    m = m || { step: 'home' }
+    const n = T.norm(text).replace(/[!.،,؟?]/g, '').trim()
+    const k = /^\d{1,2}$/.test(n) ? Number(n) : null
+    const C = cfg()
+    const home = (prefix = '') => { saveFlow(c.pk, { step: 'home' }); return say(phone, line, (prefix ? prefix + '\n\n' : '') + M.HOME) }
+    if (M.isMenu(text)) return home()
+    if (M.isAbuse(text)) return abuse(c, line, phone, text)
+    const pa = M.parseAc(text)
+    const writing = ['place', 'time_text', 'rep_desc', 'ins_desc', 'tech_msg', 'postpone_when'].includes(m.step)
+    // A change of the units at any point of the wash: priced again from the table, the old offer gone.
+    if (m.svc === 'wash' && pa.units > 0 && !writing && k === null) { m.items = { split: pa.split, window: pa.window, other: pa.other }; return priceStep(c, line, phone, m, 'تمام، عدّلت العدد ✅') }
+    const coords = T.coords(text)
+
+    switch (m.step) {
+      case 'home': {
+        if (k === 1) return startFrom(c, line, phone, 'غسيل', name)
+        if (k === 2) { saveFlow(c.pk, { step: 'rep_type', svc: 'repair', pre: m.pre || '', place: m.place || '' }); return say(phone, line, '🔧 *صيانة وإصلاح* — نوع الجهاز إيه؟\n1️⃣ مكيف سبليت\n2️⃣ مكيف شباك\n3️⃣ كاسيت / مخفي / دولابي\n4️⃣ غرفة تبريد / تجميد\n5️⃣ حاجة تانية (سباكة، كهربا، أجهزة…)' + M.FOOT) }
+        if (k === 3) { saveFlow(c.pk, { step: 'ins_type', svc: 'install', spec: 'ac', place: m.place || '' }); return say(phone, line, '🛠 *تركيب / فك ونقل* — نوع المكيف؟\n1️⃣ سبليت\n2️⃣ شباك\n3️⃣ كاسيت / مخفي / دولابي' + M.FOOT) }
+        if (k === 4) {
+          let t = null; try { t = await wp('ac_table', {}) } catch {}
+          saveFlow(c.pk, { step: 'table' })
+          return say(phone, line, (t?.text || C.prices) + '\n\n1️⃣ احجز غسيل\n2️⃣ أسعار الإصلاح (الفريون والقطع)' + M.FOOT)
+        }
+        if (k === 5) { saveFlow(c.pk, { step: 'table' }); return say(phone, line, '🎥 *طريقة الغسيل عندنا*\n' + (C.washVideos || M.WASH_VIDEOS).map((v) => '▶️ ' + v.label + ':\n' + v.url).join('\n') + '\n\n1️⃣ احجز غسيل' + M.FOOT) }
+        if (k === 6) {
+          let o = null; try { o = await wp('order', { phone: T.intl(phone), open: true }) } catch {}
+          if (!o) return home('مفيش طلب مفتوح على رقمك دلوقتي 🌷')
+          saveFlow(c.pk, { step: 'myorder', oid: o.id })
+          return say(phone, line, (o.statusText || ('📋 طلب #' + T.num(o) + ' — ' + (o.statusLabel || o.status))) + (o.techName ? '\n👷 الفني: ' + o.techName : '') + '\n\n1️⃣ الفني فين؟\n2️⃣ تأجيل / تغيير الموعد\n3️⃣ إلغاء الطلب\n4️⃣ رسالة للفني' + M.FOOT)
+        }
+        if (k === 7) { saveFlow(c.pk, null); return notifyHuman(c, 'طلب الدعم الفني من القائمة', true) }
+        if (wantsService(text)) return startFrom(c, line, phone, text, name)
+        return home('اختار رقم من القائمة 👇')
+      }
+      case 'part': {
+        if (k === 1) return flow(c, line, phone, '2', name, { step: 'home' })
+        if (k === 2) return startFrom(c, line, phone, 'غسيل', name)
+        // Haggling over a part, or «I just want the part»: one line — we sell the repair, not the part.
+        if (T.isHaggle(text) || T.moneyIn(text) || /(القطعه بس|قطعه بس|ابيع|اشتري|اشتريها|بجيبها|هجيبها|اجيبها|عندي القطعه|في المحل ب|ارخص في المحل|المحل ب)/.test(n)) {
+          return say(phone, line, (m.strategy || 'إحنا شركة صيانة مش محل قطع غيار 🙏 بنجيب القطعة ونركّبها ونضمنها.') + '\n\n1️⃣ احجز الإصلاح' + M.FOOT)
+        }
+        if (PARTS.test(n)) return partAnswer(c, line, phone, text)
+        return flow(c, line, phone, text, name, { step: 'home' })
+      }
+      case 'table': {
+        if (k === 1) return startFrom(c, line, phone, 'غسيل', name)
+        if (k === 2) { let r = null; try { r = await wp('parts', { text: '' }) } catch {} saveFlow(c.pk, { step: 'part', strategy: r?.strategy || '' }); return say(phone, line, (r?.text || '') + '\n\n1️⃣ احجز الإصلاح' + M.FOOT) }
+        return flow(c, line, phone, text, name, { step: 'home' })
+      }
+      case 'wash_type': {
+        const pick = { 1: { split: 1 }, 2: { window: 1 }, 3: { split: 1, window: 1 }, 4: { other: 1 } }[k]
+        if (!pick) return say(phone, line, 'اختار نوع المكيفات برقم 👇\n' + M.TYPES + M.FOOT)
+        m.want = Object.keys(pick); m.items = {}
+        if (m.anyCount && m.want.length === 1) { m.items[m.want[0]] = m.anyCount; return priceStep(c, line, phone, m) }
+        return askCount(c, line, phone, m)
+      }
+      case 'count': {
+        const q = M.numberIn(text)
+        if (!q || q > 50) return say(phone, line, 'اكتب العدد بالأرقام (مثال: 2)')
+        m.items[m.asking] = q
+        return askCount(c, line, phone, m)
+      }
+      case 'price': {
+        // «غالي يا خي 160» names our own price while complaining: that is not a yes.
+        let money = T.moneyIn(text)
+        if (money && T.isHaggle(text) && money >= m.offer) money = null
+        if (k === 1 || (T.isYes(text) && !money)) { m.agreed = m.agreed || m.offer; return askPlace(c, line, phone, m, 'تمام ✅ اتفقنا على *' + m.agreed + ' ر.س*.') }
+        if (k === 3) { m.step = 'wash_type'; m.items = {}; saveFlow(c.pk, m); return say(phone, line, 'نوع المكيفات إيه؟\n' + M.TYPES + M.FOOT) }
+        if (k === 2 || money || T.isHaggle(text)) {
+          const h = M.haggle(m, money)
+          if (h.agreed) return askPlace(c, line, phone, m, h.text)
+          saveFlow(c.pk, m)
+          return say(phone, line, h.text + '\n\n1️⃣ تمام بـ ' + m.offer + ' ر.س، كمّل الحجز\n3️⃣ غيّر العدد أو النوع\n7️⃣ كلّم الدعم الفني' + M.FOOT)
+        }
+        if (k === 7) { saveFlow(c.pk, null); return notifyHuman(c, 'طلب الدعم الفني وقت السعر', true) }
+        return say(phone, line, 'السعر الحالي *' + m.offer + ' ر.س* لـ' + m.price.label + '\n\n1️⃣ تمام، كمّل الحجز\n2️⃣ عايز سعر أحسن\n3️⃣ غيّر العدد أو النوع' + M.FOOT)
+      }
+      case 'rep_type': {
+        const t = { 1: ['ac', 'مكيف سبليت'], 2: ['ac', 'مكيف شباك'], 3: ['ac', 'مكيف كاسيت / مخفي'], 4: ['fridge', 'غرفة تبريد / تجميد'], 5: ['general', 'صيانة عامة'] }[k]
+        if (!t) return say(phone, line, 'اختار نوع الجهاز برقم من 1 لـ 5 👇' + M.FOOT)
+        Object.assign(m, { spec: t[0], label: 'صيانة وإصلاح — ' + t[1], step: 'rep_desc' }); saveFlow(c.pk, m)
+        return say(phone, line, 'اكتب المشكلة باختصار 👇\n(مثال: مش بيبرد، بيقطّر مية، صوت عالي، بيفصل، كود E4)')
+      }
+      case 'rep_desc': {
+        m.desc = String(text).slice(0, 200)
+        let parts = ''
+        if (PARTS.test(T.norm(text)) || /فريون/.test(T.norm(text))) { try { const pr = await wp('parts', { text }); if (pr?.parts?.length) parts = pr.text } catch {} }
+        return askPlace(c, line, phone, m, 'تمام ✅ الفني هيكشف ويحدد العطل ويقولك السعر قبل أي شغل — والكشف مجاني لحد جهازين.' + (parts ? '\n\n' + parts : ''))
+      }
+      case 'ins_type': {
+        const t = { 1: 'سبليت', 2: 'شباك', 3: 'كاسيت / مخفي' }[k]
+        if (!t) return say(phone, line, 'اختار نوع المكيف برقم 👇\n1️⃣ سبليت\n2️⃣ شباك\n3️⃣ كاسيت / مخفي / دولابي' + M.FOOT)
+        Object.assign(m, { itype: t, step: 'ins_kind' }); saveFlow(c.pk, m)
+        return say(phone, line, 'المطلوب إيه؟\n1️⃣ تركيب جديد\n2️⃣ فك وتركيب في مكان تاني\n3️⃣ فك بس' + M.FOOT)
+      }
+      case 'ins_kind': {
+        const t = { 1: 'تركيب', 2: 'فك وتركيب', 3: 'فك' }[k]
+        if (!t) return say(phone, line, 'اختار برقم 👇\n1️⃣ تركيب جديد\n2️⃣ فك وتركيب في مكان تاني\n3️⃣ فك بس' + M.FOOT)
+        Object.assign(m, { ikind: t, step: 'ins_count' }); saveFlow(c.pk, m)
+        return say(phone, line, 'كام جهاز؟ (اكتب الرقم)')
+      }
+      case 'ins_count': {
+        const q = M.numberIn(text)
+        if (!q || q > 50) return say(phone, line, 'اكتب العدد بالأرقام (مثال: 1)')
+        Object.assign(m, { count: q, label: m.ikind + ' ' + q + ' مكيف ' + m.itype })
+        return askPlace(c, line, phone, m, 'تمام ✅ السعر بيتحدد حسب النوع وطول النحاس، والفني بيأكده معاك قبل أي شغل. ولو حابب تبعت صورة للمكيف ومكانه هنا نقولك السعر أدق.')
+      }
+      case 'place': {
+        if (coords) { m.lat = coords[0]; m.lng = coords[1]; return askTime(c, line, phone, m, 'وصل اللوكيشن ✅') }
+        if (String(text).trim().length < 3 || k !== null) return say(phone, line, '📍 ابعت موقعك من واتساب (📎 ← الموقع) أو اكتب اسم الحي.')
+        m.place = String(text).slice(0, 160); return askTime(c, line, phone, m)
+      }
+      case 'time': {
+        const opts = m.tc || []
+        const o = k ? opts[k - 1] : null
+        if (o === '__other') { m.step = 'time_text'; saveFlow(c.pk, m); return say(phone, line, 'اكتب الموعد اللي يناسبك 👇 (مثال: بكره بعد العصر، السبت الساعة 5)') }
+        if (o) { m.time = o; return summary(c, line, phone, m) }
+        if (T.looksLikeTime(text)) { m.time = String(text).slice(0, 120); return summary(c, line, phone, m) }
+        return askTime(c, line, phone, m)
+      }
+      case 'time_text': { m.time = String(text).slice(0, 120); return summary(c, line, phone, m) }
+      case 'summary': {
+        if (k === 1 || T.isYes(text) || /تاكيد|اكد/.test(n)) return book(c, line, phone, m, name)
+        if (k === 2) return startFrom(c, line, phone, m.svc === 'repair' ? 'صيانه' : m.svc === 'install' ? 'تركيب' : 'غسيل', name, { place: m.place, lat: m.lat, lng: m.lng })
+        if (k === 3) { saveFlow(c.pk, null); return say(phone, line, 'تمام، اتلغى الطلب ده 🌷 ولو احتجت أي حاجة اكتب *0* للقائمة.') }
+        return say(phone, line, 'اختار برقم 👇\n1️⃣ تأكيد الطلب ✅\n2️⃣ تعديل\n3️⃣ إلغاء')
+      }
+      case 'myorder': {
+        let o = null; try { o = await wp('order', { id: m.oid }) } catch {}
+        if (!o) return home('مش لاقي الطلب ده دلوقتي 🙏')
+        if (k === 1) { saveFlow(c.pk, { step: 'home' }); const r = await liveStage(o, 'الفني فين', phone); return say(phone, line, (r || 'بنتابع مع الفني حالًا 🙏') + M.FOOT) }
+        if (k === 2) { saveFlow(c.pk, { ...m, step: 'postpone_when' }); return say(phone, line, 'اكتب الموعد الجديد اللي يناسبك 👇') }
+        if (k === 3) { saveFlow(c.pk, { ...m, step: 'cancel_sure' }); return say(phone, line, 'متأكد إنك عايز تلغي طلب #' + T.num(o) + '؟\n1️⃣ أيوه، الغيه\n2️⃣ لا، خليه') }
+        if (k === 4) { saveFlow(c.pk, { ...m, step: 'tech_msg' }); return say(phone, line, 'اكتب رسالتك للفني 👇') }
+        return say(phone, line, '1️⃣ الفني فين؟\n2️⃣ تأجيل / تغيير الموعد\n3️⃣ إلغاء الطلب\n4️⃣ رسالة للفني' + M.FOOT)
+      }
+      case 'postpone_when': case 'cancel_sure': case 'tech_msg': {
+        let o = null; try { o = await wp('order', { id: m.oid }) } catch {}
+        saveFlow(c.pk, { step: 'home' })
+        if (!o) return home('مش لاقي الطلب ده دلوقتي 🙏')
+        if (m.step === 'cancel_sure') {
+          if (k !== 1) return say(phone, line, 'تمام، طلبك مستمر ✅' + M.FOOT)
+          const r = (await siteCancel(o, 'العميل اختار إلغاء الطلب من القائمة')) || (await liveStage(o, 'الغي الطلب', phone))
+          return say(phone, line, r || 'وصل طلب الإلغاء ✅')
+        }
+        const r = await liveStage(o, (m.step === 'postpone_when' ? 'عايز اغير الموعد: ' : 'قول للفني: ') + String(text).slice(0, 300), phone)
+        return say(phone, line, (r || 'وصلت ✅') + M.FOOT)
+      }
+      default: return home()
+    }
+  }
+
+  function askCount(c, line, phone, m) {
+    const next = (m.want || []).find((t) => !m.items[t])
+    if (!next) return priceStep(c, line, phone, m)
+    m.step = 'count'; m.asking = next; saveFlow(c.pk, m)
+    const name = { split: 'سبليت', window: 'شباك', other: 'كاسيت / مخفي / دولابي' }[next]
+    return say(phone, line, 'كام مكيف ' + name + '؟ (اكتب الرقم)')
   }
 
   /* ------------------------------------------------------------------ the price and the bargaining */
@@ -655,6 +939,9 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       if (/(ممتاز|رائع|جميل|شكرا|حلو|مبدع|تسلم)/.test(n)) stars = 5
       else if (/(سيء|سيئ|وحش|زفت|مش كويس|متاخر|غالي|ما عجبني)/.test(n)) stars = 2
     }
+    // Only a rating is a rating: «السلام عليكم» or «محتاج خدمة جديدة» leaves the stage and goes on as a new talk.
+    if (stars === null && !r.stars && (T.norm(text).length > 2 || M.isMenu(text))) { dropStage(phone); return null }
+    if (r.stars && (M.parseAc(text).found || SERVICE_WORDS.some((w) => T.norm(text).includes(T.norm(w))) || M.isMenu(text) || /(خدمه جديده|طلب جديد|عايز اطلب|ابغي اطلب)/.test(T.norm(text)))) { dropStage(phone); return null }
     const n = T.num(o)
     if (stars !== null && !r.stars) {
       const comment = /[؀-ۿa-zA-Z]{3,}/.test(text) ? text.slice(0, 300) : ''

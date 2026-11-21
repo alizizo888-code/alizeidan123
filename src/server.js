@@ -79,7 +79,7 @@ function pickLine(o) {
 
 function send(phone, text, o = {}) {
   if (!phone || !String(text || '').trim()) return 0
-  const id = store.queue({ line: o.line || '', phone: intl(phone), text: String(text).slice(0, 4000), purpose: o.purpose || '', dedup: o.dedup ? String(o.dedup).slice(0, 120) : null })
+  const id = store.queue({ line: o.line || '', phone: intl(phone), text: String(text).slice(0, 4000), purpose: o.purpose || '', dedup: o.dedup ? String(o.dedup).slice(0, 120) : null, media: /^https:\/\//.test(o.image || '') ? o.image : '' })
   if (id) { meta.set(id, { brand: o.brand || '' }); setImmediate(pump) }
   return id
 }
@@ -101,7 +101,7 @@ async function pump() {
         continue
       }
       busy.add(lineId)
-      lines.sendText(lineId, row.phone, row.text).then((r) => {
+      lines.sendText(lineId, row.phone, row.text, row.media || '').then((r) => {
         store.outDone(row.id, 'sent'); meta.delete(row.id)
         const pk = pkey(row.phone)
         store.addMsg({ pk, line: lineId, dir: 'out', text: row.text, by: row.purpose || 'bot', status: 'sent', waId: r.waId })

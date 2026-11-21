@@ -153,13 +153,16 @@ export function createLines({ dataDir, onMessage, onStatus, onContact, log = pin
     if (logout) fs.rmSync(path.join(AUTH, id), { recursive: true, force: true })
   }
 
-  async function sendText(id, to, text) {
+  async function sendText(id, to, text, media = '') {
     const st = S.get(id)
     if (!st || st.status !== 'open') throw new Error('الخط مش متصل')
     const jid = toJid(to)
     await st.sock.sendPresenceUpdate('composing', jid).catch(() => {})
     await new Promise((r) => setTimeout(r, 600 + Math.random() * 1400))
-    const sent = await st.sock.sendMessage(jid, { text })
+    // A photo (a part from the site's media library) goes with the text as its caption; if it cannot be fetched, the text alone.
+    let sent = null
+    if (media) { try { sent = await st.sock.sendMessage(jid, { image: { url: media }, caption: text }) } catch (e) { log.warn(e) } }
+    if (!sent) sent = await st.sock.sendMessage(jid, { text })
     if (sent?.key?.id) { st.sent.add(sent.key.id); if (st.sent.size > 1000) st.sent.delete(st.sent.values().next().value); keepSent(id, sent.key.id, sent.message || { conversation: text }) }
     st.sock.sendPresenceUpdate('paused', jid).catch(() => {})
     return { waId: sent?.key?.id || '' }
