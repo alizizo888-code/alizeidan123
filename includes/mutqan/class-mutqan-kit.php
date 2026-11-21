@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) { exit; }
 final class Mutqan_Kit {
 
     const OPT = 'mutqan_service_kit';
-    const V = 2;   // a new rule from the owner raises this: stored records get the new rules added, nothing of his removed
+    const V = 3;   // a new rule from the owner raises this: stored records get the new rules added, nothing of his removed
 
     public static function defaults() {
         return [
@@ -47,6 +47,11 @@ final class Mutqan_Kit {
         if (!is_array($k) || empty($k['v'])) { $k = self::defaults(); update_option(self::OPT, $k, false); }
         elseif ((int) $k['v'] < self::V) {
             $k['rules'] = array_values(array_unique(array_merge((array) ($k['rules'] ?? []), self::defaults()['rules'])));
+            // new names for the same part (الفانة، الدينمو، الماتور الكبير…): added to his stored parts, his prices untouched
+            $def = []; foreach ((array) self::defaults()['parts'] as $dp) { $def[$dp['id']] = $dp; }
+            foreach ((array) ($k['parts'] ?? []) as $i => $sp) {
+                if (isset($def[$sp['id'] ?? ''])) { $k['parts'][$i]['words'] = array_values(array_unique(array_merge((array) ($sp['words'] ?? []), (array) $def[$sp['id']]['words']))); }
+            }
             $k['v'] = self::V; update_option(self::OPT, $k, false);
         }
         return array_merge(self::defaults(), $k);
