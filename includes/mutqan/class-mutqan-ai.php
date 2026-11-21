@@ -229,6 +229,8 @@ final class Mutqan_AI {
         if (class_exists('Mutqan_Sales')) { $prompt = Mutqan_Sales::inject($prompt, $opts, $p); }
         // The service encyclopedia: what a seasoned agent knows about the customer's own last message (Mutqan_Lore).
         if (class_exists('Mutqan_Lore')) { $prompt = Mutqan_Lore::inject($prompt, $opts, $p); }
+        // One customer brain for WhatsApp and the site: his orders, the official price of what he asks, the live offers.
+        if (class_exists('Mutqan_Concierge')) { $prompt = Mutqan_Concierge::inject($prompt, $opts, $p); }
         // One house policy for every customer conversation — the site's assistant and the WhatsApp lines alike: the
         // same official prices, the same «today, as soon as possible», the same way of closing an order. Last, so it wins.
         if (in_array((string) ($opts['feature'] ?? ''), self::HOUSE_FEATURES, true)) { $prompt .= "\n\n" . self::house_rules(); }

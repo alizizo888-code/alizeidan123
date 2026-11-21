@@ -76,11 +76,12 @@ final class Mutqan_WA_AI {
         if ($hc >= (int) self::settings()['maxPerHour']) { $out['notify'] = 'محادثة كتير جدًا مع عميل واحد — البوت وقف يرد ساعة، راجعها بنفسك.'; return $out; }
         // A customer with an order on the go asking about it («الفني فين؟», «الغي الطلب», «أجّله»): the system acts on the
         // order and answers from its facts — no model needed, and nothing invented.
-        if (class_exists('Mutqan_Deal')) {
-            try { $sv = Mutqan_Deal::service($phone, (string) $text); } catch (Throwable $e) { $sv = null; error_log('[mutqan] wa service ' . $e->getMessage()); }
+        // Same answers as the website chat (Mutqan_Concierge): his order by number, his live order, payment/warranty/offers.
+        if (class_exists('Mutqan_Concierge')) {
+            try { $sv = Mutqan_Concierge::answer((string) $text, ['channel' => 'wa', 'phone' => $phone, 'verified' => true, 'brand' => (string) ($card['brand'] ?? '')]); } catch (Throwable $e) { $sv = null; error_log('[mutqan] wa concierge ' . $e->getMessage()); }
             if ($sv && ($sv['reply'] ?? '') !== '') {
                 $out['replies'][] = $sv['reply'];
-                $out['patch'] = ['ai' => array_merge($ai, ['hourStart' => $hs, 'hourCount' => $hc + 1, 'lastAt' => $ts, 'service' => $sv['intent']])];
+                $out['patch'] = ['ai' => array_merge($ai, ['hourStart' => $hs, 'hourCount' => $hc + 1, 'lastAt' => $ts, 'service' => $sv['kind']])];
                 return $out;
             }
         }
