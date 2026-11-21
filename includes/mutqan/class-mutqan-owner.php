@@ -19,6 +19,15 @@ final class Mutqan_Owner {
             case 'deleteOrders': { $n = 0; foreach (array_slice((array) ($in['ids'] ?? []), 0, 200) as $id) { if (self::delete_order((string) $id, $p)['deleted']) { $n++; } } return ['deleted' => $n]; }
             case 'voidWarranty': return self::void_warranty((string) ($in['orderId'] ?? ''), $p);
             case 'deleteWarrantyRecord': return self::delete_doc('warranties', (string) ($in['id'] ?? ''), 'ضمان (سجل)', $p);
+            // A warranty claim file (ملف ضمان), and many warranties at once from the warranty center (owner, 2026-11-21).
+            case 'deleteClaim': return self::delete_doc('warranty_claims', (string) ($in['id'] ?? ''), 'ملف ضمان', $p);
+            case 'deleteWarranties': {
+                $n = 0;
+                foreach (array_slice((array) ($in['records'] ?? []), 0, 300) as $id) { if (self::delete_doc('warranties', (string) $id, 'ضمان (سجل)', $p)['deleted']) { $n++; } }
+                foreach (array_slice((array) ($in['claims'] ?? []), 0, 300) as $id) { if (self::delete_doc('warranty_claims', (string) $id, 'ملف ضمان', $p)['deleted']) { $n++; } }
+                foreach (array_slice((array) ($in['orders'] ?? []), 0, 300) as $id) { try { self::void_warranty((string) $id, $p); $n++; } catch (Throwable $e) { /* gone or not completed */ } }
+                return ['deleted' => $n];
+            }
             case 'deleteTech': return self::delete_tech((string) ($in['userId'] ?? ''), $p);
             case 'log': { $l = get_option(self::LOG, []); return array_reverse(is_array($l) ? $l : []); }
         }

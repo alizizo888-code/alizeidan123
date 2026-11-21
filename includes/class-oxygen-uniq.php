@@ -95,6 +95,10 @@ final class Oxygen_Uniq {
         $tries = ['relation' => 'OR', ['key' => '_oxy_uniq_tries', 'compare' => 'NOT EXISTS'], ['key' => '_oxy_uniq_tries', 'value' => self::FIX_TRIES, 'compare' => '<', 'type' => 'NUMERIC']];
         $held = get_posts(['post_type' => 'post', 'post_status' => 'draft', 'numberposts' => self::FIX_BATCH, 'orderby' => 'date', 'order' => 'ASC', 'fields' => 'ids',
             'meta_query' => [['key' => '_oxy_held_dup', 'compare' => 'EXISTS'], $tries]]);
+        // the old daily engine left a batch as drafts (2026-11-15: 120 short articles, some titles «في مكة المكرمة في جدة»)
+        $legacy = count($held) < self::FIX_BATCH ? get_posts(['post_type' => 'post', 'post_status' => 'draft', 'numberposts' => self::FIX_BATCH - count($held), 'orderby' => 'date', 'order' => 'ASC', 'fields' => 'ids',
+            'meta_query' => [['key' => '_oxygen_ac_managed', 'compare' => 'EXISTS'], ['key' => '_oxy_held_dup', 'compare' => 'NOT EXISTS'], $tries]]) : [];
+        $held = array_merge($held, $legacy);
         $dups = count($held) < self::FIX_BATCH ? get_posts(['post_type' => 'post', 'post_status' => 'publish', 'numberposts' => self::FIX_BATCH - count($held), 'orderby' => 'date', 'order' => 'DESC', 'fields' => 'ids',
             'meta_query' => [['key' => '_oxy_dup', 'compare' => 'EXISTS'], $tries]]) : [];
         foreach (array_merge($held, $dups) as $id) {
@@ -112,6 +116,7 @@ final class Oxygen_Uniq {
                 continue;
             }
             $upd = ['ID' => $id, 'post_content' => $new];
+            $tt = self::clean_title($p->post_title); if ($tt !== $p->post_title) { $upd['post_title'] = $tt; }
             if (!$live) { $now = current_time('mysql'); $upd += ['post_status' => 'publish', 'post_date' => $now, 'post_date_gmt' => get_gmt_from_date($now), 'edit_date' => true]; }
             $ok = wp_update_post($upd, true);
             if (is_wp_error($ok) || !$ok) { continue; }
@@ -133,6 +138,13 @@ final class Oxygen_Uniq {
         }
         if ($done) { self::note('fixed', "$pub drafts published, $back back in the index", 0, ''); }
         delete_transient('oxygen_uniq_fix_lock');
+    }
+
+    /** «في مكة المكرمة في جدة» → «في مكة المكرمة وجدة»; doubled spaces and a doubled «في» go. */
+    public static function clean_title($t) {
+        $t = preg_replace('/في\s+(مكة المكرمة|مكة|جدة)\s+في\s+(مكة المكرمة|مكة|جدة)/u', 'في $1 و$2', (string) $t);
+        $t = preg_replace('/\bفي\s+في\b/u', 'في', $t);
+        return trim(preg_replace('/\s{2,}/u', ' ', $t));
     }
 
     /** After the insert: a published article joins the network's memory. */

@@ -31,7 +31,7 @@ final class Mutqan_Outreach {
     public static function defaults() {
         return [
             'on' => 1,
-            'from' => 10, 'to' => 21,          // Riyadh hours; nobody is invited at night
+            'from' => 13, 'to' => 20,          // Riyadh, 1 pm–8 pm (owner, 2026-11-21): people are awake and it is the hours of breakdowns
             'start' => 20, 'ramp' => 5, 'max' => 60,   // per line: 20 on its first day, +5 a day, never above 60
             'perCall' => 4,                    // messages handed to one line per hub request (the hub paces them)
             'cooldown' => 21, 'maxTouches' => 3,
@@ -42,6 +42,8 @@ final class Mutqan_Outreach {
     }
     public static function settings() {
         $s = get_option(self::OPT, []); $s = is_array($s) ? $s : [];
+        // owner, 2026-11-21: the sending window moved to 13:00–20:00 — once, over whatever was saved before
+        if (($s['hoursV'] ?? 0) < 2) { $s['from'] = 13; $s['to'] = 20; $s['hoursV'] = 2; if (function_exists('update_option')) { update_option(self::OPT, $s, false); } }
         $d = self::defaults();
         $s['sources'] = array_merge($d['sources'], is_array($s['sources'] ?? null) ? $s['sources'] : []);
         return array_merge($d, $s);
@@ -272,7 +274,9 @@ final class Mutqan_Outreach {
             $patch[] = ['phone' => (string) $raw, 'role' => (string) ($f['role'] ?? ''), 'status' => (string) ($f['status'] ?? ''), 'label' => (string) ($f['label'] ?? ''), 'channels' => array_keys((array) ($f['ch'] ?? []))] + (trim((string) ($f['fix'] ?? '')) !== '' ? ['fix' => (string) $f['fix']] : []);
         }
         $add = trim((string) wp_unslash($_POST['add_phone'] ?? ''));
-        Mutqan_Lines::save(['patch' => $patch, 'add' => $add !== '' ? [['phone' => $add, 'role' => (string) ($_POST['add_role'] ?? 'reserve'), 'label' => (string) wp_unslash($_POST['add_label'] ?? '')]] : [], 'rotate' => !empty($_POST['rotate'])]);
+        $on = array_map('intval', array_keys((array) ($_POST['sec'] ?? [])));
+        Mutqan_Lines::save(['patch' => $patch, 'add' => $add !== '' ? [['phone' => $add, 'role' => (string) ($_POST['add_role'] ?? 'reserve'), 'label' => (string) wp_unslash($_POST['add_label'] ?? '')]] : [], 'rotate' => !empty($_POST['rotate']),
+            'off' => array_values(array_diff(array_keys(Mutqan_Lines::SECTIONS), $on))]);
         self::back('اتحفظت الأرقام.');
     }
 
@@ -300,7 +304,10 @@ final class Mutqan_Outreach {
         echo '</tbody></table><p>رقم جديد: <input name="add_phone" placeholder="05…" dir="ltr" size="14"> <input name="add_label" placeholder="الاسم" size="12"> <select name="add_role">';
         foreach (Mutqan_Lines::ROLES as $k => $lbl) { echo '<option value="' . esc_attr($k) . '">' . esc_html(strtok($lbl, '—')) . '</option>'; }
         echo '</select></p><p><label><input type="checkbox" name="rotate" value="1"' . checked($L['rotate'], true, false) . '> بدّل أرقام المبيعات على الصفحات كل ' . (int) $L['rotateDays'] . ' أيام</label></p>';
-        submit_button('حفظ الأرقام'); echo '</form>';
+        echo '<h3>الخدمات اللي بيعرضها الواتساب</h3><p>شيل العلامة عن أي خدمة عايز توقفها مؤقتًا — بتختفي من قائمة الواتساب، واللي يطلبها يتقاله إنها متوقفة ويتحول لموظف.</p><p>';
+        foreach ($L['sections'] as $x) { echo '<label style="margin-left:14px"><input type="checkbox" name="sec[' . (int) $x['n'] . ']" value="1"' . checked($x['on'], true, false) . '> ' . esc_html($x['label']) . '</label>'; }
+        echo '</p>';
+        submit_button('حفظ الأرقام والخدمات'); echo '</form>';
 
         // 2. the base
         echo '<h2>قاعدة العملاء المحتملين</h2><table class="widefat striped" style="max-width:700px"><thead><tr><th>المصدر</th><th>الحالة</th><th>العدد</th><th>ردّوا</th></tr></thead><tbody>';
