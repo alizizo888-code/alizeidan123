@@ -23,7 +23,7 @@ final class Mutqan_Command {
 
     /* ------------------------------------------------------------------ who may use which tool */
 
-    const OWNER_ONLY = ['orders_delete', 'prices_adjust', 'prices_revert', 'tech_role', 'sales_brain_set', 'dns_set', 'ai_engine_set', 'settings_set', 'wp_update', 'tech_create'];
+    const OWNER_ONLY = ['wa_chats', 'orders_delete', 'prices_adjust', 'prices_revert', 'tech_role', 'sales_brain_set', 'dns_set', 'ai_engine_set', 'settings_set', 'wp_update', 'tech_create'];
     const TECH_TOOLS = ['my_jobs', 'job_status', 'job_problem'];
     const STAFF_ONLY = ['my_jobs', 'job_status', 'job_problem'];   // the technician's own tools: no use to the office
 
@@ -51,6 +51,7 @@ final class Mutqan_Command {
         $s = function ($props, $req = []) { return ['type' => 'object', 'properties' => (object) $props, 'required' => $req]; };
         $str = ['type' => 'string'];
         return [
+            ['name' => 'wa_chats', 'description' => 'اعرض آخر محادثات العملاء على خط واتساب السيرفر بالنص (لمراجعة ردود البوت). phone اختياري لعميل معين، limit عدد المحادثات.', 'input_schema' => $s(['phone' => $str, 'limit' => ['type' => 'number']])],
             ['name' => 'price_band', 'description' => 'ليميت الأسعار دلوقتي: المينيمم والماكسيمم للمكيف في صفقات 4 مكيفات وطالع، الوضع (تلقائي حسب شغل اليوم/مرن/ماسك/رسمي بس)، وعدد طلبات النهارده.', 'input_schema' => $s([])],
             ['name' => 'price_band_set', 'description' => 'غيّر ليميت الأسعار للبوت: step = +5 (ارفع الليميت) أو -5 (قلّل الليميت)، أو minUnit و maxUnit بالريال للمكيف، و mode = auto (حسب شغل اليوم) أو loose (مرن على المينيمم) أو tight (امسك على الماكسيمم) أو fixed (الأسعار الرسمية بس بدون فصال). hours اختياري لمدة مؤقتة.', 'input_schema' => $s(['step' => ['type' => 'number'], 'minUnit' => ['type' => 'number'], 'maxUnit' => ['type' => 'number'], 'mode' => ['type' => 'string', 'enum' => ['auto', 'loose', 'tight', 'fixed']], 'hours' => ['type' => 'number'], 'note' => $str])],
             ['name' => 'intake_get', 'description' => 'حالة استقبال الطلبات دلوقتي (مفتوح / بنحجز لبكره / موقوف) وتعديل الأسعار الساري.', 'input_schema' => $s([])],
@@ -162,6 +163,15 @@ final class Mutqan_Command {
     public static function run($name, $in, $p) {
         if (!self::allowed($name, $p)) { throw new Exception('الأمر ده مش من صلاحياتك.'); }
         switch ($name) {
+            case 'wa_chats': {
+                $list = Mutqan_Hub::chats((string) ($in['phone'] ?? ''), (int) ($in['limit'] ?? 3), 80);
+                $L = [];
+                foreach ($list as $c) {
+                    $L[] = '══ ' . ($c['name'] ?: '—') . ' · ' . $c['phone'];
+                    foreach ((array) $c['msgs'] as $m) { $L[] = ($m['dir'] === 'in' ? '👤 ' : '🤖 ') . gmdate('H:i', (int) ($m['at'] / 1000) + 3 * 3600) . ' ' . str_replace("\n", ' ⏎ ', (string) $m['text']); }
+                }
+                return ['text' => $L ? implode("\n", $L) : 'مفيش محادثات.', 'chats' => $list];
+            }
             case 'price_band': return ['text' => Mutqan_Deal::status_text(), 'band' => Mutqan_Deal::band(), 'demand' => Mutqan_Deal::demand()];
             case 'price_band_set': {
                 if (!class_exists('Mutqan_Deal')) { throw new Exception('محرك الصفقة مش متاح.'); }
