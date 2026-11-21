@@ -455,6 +455,12 @@ final class Mutqan_Policy {
 
     /** Port of acPricing.js acQuote/acFloor: recompute the AC total from the owner's price table and apply max discount. */
     public static function ac_floor($q) {
+        // Mixed types (split + window …): each line by its own floor (the bulk band included), summed.
+        if (!empty($q['items']) && is_array($q['items'])) {
+            $sum = 0;
+            foreach (array_slice($q['items'], 0, 10) as $it) { $sum += max(0, self::ac_floor(['mode' => 'wash', 'type' => (string) ($it['type'] ?? 'سبليت'), 'qty' => (int) ($it['qty'] ?? 1), 'full' => !isset($it['full']) || $it['full']]) + 1); }
+            return $sum - 1;
+        }
         $total = self::ac_total($q);
         if ($total <= 0) { return 0; }
         $row = Mutqan_Store::get_raw('pricing', 'ac_calc') ?: [];

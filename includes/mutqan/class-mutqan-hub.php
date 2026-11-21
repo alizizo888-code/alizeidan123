@@ -242,6 +242,10 @@ final class Mutqan_Hub {
             case 'greet': return self::greet((string) ($in['phone'] ?? ''), (string) ($in['text'] ?? ''), (string) ($in['brand'] ?? ''));
             case 'converse': return self::converse($in);
             case 'quote': return self::quote((string) ($in['text'] ?? ''));
+            // The WhatsApp menu's price: counted by type (split / window / other), priced by the owner's table — never by a model.
+            case 'ac_price': return self::ac_price($in);
+            case 'ac_table': return ['text' => self::ac_table_text()];
+            case 'parts': return self::parts_answer((string) ($in['text'] ?? '')) + ['strategy' => self::part_strategy()];
             case 'events': return ['events' => self::take_queue()];
             case 'ping': return ['ok' => true, 'site' => home_url('/')];
             case 'ai': return self::ai_status();
@@ -254,7 +258,8 @@ final class Mutqan_Hub {
             case 'ai_keys': return self::save_ai_keys(['providers' => (array) ($in['providers'] ?? [])]);
             // «رقم التجربة» set on the site (one phone that is both a customer and the room) is the hub's too.
             // The owner's hours (2026-11-20) — the VPS hub follows the site, not its own panel.
-            case 'config': return ['testCustomer' => (string) get_option('mutqan_test_customer', ''), 'site' => home_url('/'), 'hoursFrom' => 7, 'hoursTo' => 23];
+            case 'config': return ['testCustomer' => (string) get_option('mutqan_test_customer', ''), 'site' => home_url('/'), 'hoursFrom' => 7, 'hoursTo' => 23]
+                + (class_exists('Mutqan_Kit') ? ['washVideos' => array_map(function ($v) { return ['label' => (string) $v['label'], 'url' => (string) $v['url']]; }, (array) Mutqan_Kit::get()['washVideos'])] : []);
             // One procedure for both lines (Mutqan_Deal::cancel): before a technician accepted, cancelled at once.
             case 'cancel': { $o = self::need($in); if (!class_exists('Mutqan_Deal')) { return ['reply' => null]; } $r = Mutqan_Deal::cancel($o, (string) ($in['text'] ?? '')); return $r + ['num' => self::num($o)]; }
             // The same answers as the site chat (Mutqan_Concierge): an order by number, payment, warranty, offers, his live order.
@@ -306,7 +311,7 @@ final class Mutqan_Hub {
     private static function create($in) {
         $phone = class_exists('Mutqan_WA') ? Mutqan_WA::intl((string) ($in['phone'] ?? '')) : preg_replace('/\D/', '', (string) ($in['phone'] ?? ''));
         if ($phone === '') { throw new Mutqan_Error('bad_input', 'رقم غير صالح.', 400); }
-        $open = self::order_by(['phone' => $phone, 'open' => true]);
+        $open = empty($in['confirmed']) ? self::order_by(['phone' => $phone, 'open' => true]) : null;   // the menu's «تأكيد» is a new order
         $service = mb_substr(trim((string) ($in['service'] ?? '')), 0, 160);
         if ($open) {
             if (class_exists('Mutqan_WA')) { Mutqan_WA::add_step($open['id'], 'wa_more', 'رسالة إضافية من العميل على واتساب: ' . mb_substr($service, 0, 80), 'مركز الواتساب'); }
@@ -325,7 +330,20 @@ final class Mutqan_Hub {
             'agreedPrice' => is_numeric($in['price'] ?? null) && (int) $in['price'] > 0 ? (int) $in['price'] : null,
             'acQuote' => is_array($in['acQuote'] ?? null) ? $in['acQuote'] + ['total' => (int) ($in['price'] ?? 0)] : null, 'specialtyId' => (string) ($in['spec'] ?? '') ?: null,
             'statusHistory' => [['status' => 'new', 'at' => gmdate('c'), 'by' => 'whatsapp']],
+            // The WhatsApp menu showed him the whole order and he pressed «تأكيد»: confirmed already.
+            'customerConfirmed' => !empty($in['confirmed']) ? true : null, 'confirmedAt' => !empty($in['confirmed']) ? gmdate('c') : null, 'confirmedVia' => !empty($in['confirmed']) ? 'whatsapp' : null,
+            'qty' => is_numeric($in['units'] ?? null) ? (int) $in['units'] : null,
         ], static function ($v) { return $v !== null && $v !== ''; });
+        // The hub writes as the system, which the store's price guard trusts — so the floor is checked here: a price
+        // under what the owner allows never reaches the order (it becomes a note for operations; the order is kept).
+        if (isset($order['agreedPrice']) && !empty($order['specialtyId'])) {
+            $fl = ($order['specialtyId'] === 'ac' && !empty($order['acQuote'])) ? Mutqan_Policy::ac_floor($order['acQuote']) : Mutqan_Policy::floor_for($order['specialtyId'], $order['qty'] ?? 1, false);
+            if ((float) $order['agreedPrice'] < $fl - 1) {
+                $order['note'] = trim((string) ($order['note'] ?? '') . "\n⚠️ سعر من واتساب (" . (int) $order['agreedPrice'] . ' ر.س) أقل من المسموح (' . (int) ($fl + 1) . ') — راجعه مع العميل.');
+                unset($order['agreedPrice']);
+                if (isset($order['acQuote']['total'])) { unset($order['acQuote']['total']); }
+            }
+        }
         $doc = Mutqan_Store::insert('orders', $order, null, [], self::sys());
         if (class_exists('Mutqan_WA') && !empty($doc['id'])) { Mutqan_WA::add_step((string) $doc['id'], 'wa_in', 'وصل الطلب من واتساب', 'مركز الواتساب'); }
         return self::view(Mutqan_Store::get_raw('orders', (string) $doc['id']) + ['id' => (string) $doc['id']]);
@@ -400,6 +418,10 @@ final class Mutqan_Hub {
         $reply = trim((string) ($j['reply'] ?? ''));
         if ($reply === '') { return null; }
         $l = array_filter(array_map(static function ($v) { return trim(mb_substr((string) $v, 0, 160)); }, (array) ($j['lead'] ?? [])), 'strlen');
+        // The model never sets a price (owner, 2026-11-21: «خليها 100 المكيفين» was accepted). Any figure it agreed to or
+        // wrote under the owner's floor for what is being priced is replaced by the floor, and no order is completed on it.
+        $g = self::price_guard_reply($reply, array_merge($lead, $l), (string) ($in['text'] ?? ''));
+        if ($g) { $reply = $g['reply']; $l['price'] = (string) $g['price']; $j['complete'] = false; }
         return ['reply' => mb_substr($reply, 0, 1200), 'lead' => array_merge($lead, $l), 'complete' => !empty($j['complete']), 'handoff' => !empty($j['handoff']), 'reason' => mb_substr((string) ($j['handoff_reason'] ?? ''), 0, 140), 'provider' => (string) ($r['provider'] ?? '')];
     }
 
@@ -431,6 +453,29 @@ final class Mutqan_Hub {
     ];
 
     /** How many units: «2 مكيف», «مكيفين», «تلات مكيفات». */
+    /** Units per AC type in normalised text: «2 سبليت و شباك» → split 2, window 1. */
+    public static function ac_counts($n) {
+        $n = preg_replace('/(اسبليت|سبلت|اسبلت|سبيلت)/u', 'سبليت', (string) $n);
+        $words = ['واحد' => 1, 'واحده' => 1, 'وحده' => 1, 'احد' => 1, 'اتنين' => 2, 'اثنين' => 2, 'ثنين' => 2, 'تلاته' => 3, 'ثلاثه' => 3, 'تلات' => 3, 'ثلاث' => 3, 'اربعه' => 4, 'اربع' => 4, 'خمسه' => 5, 'خمس' => 5, 'سته' => 6, 'ست' => 6];
+        $tok = preg_split('/\s+/u', trim($n));
+        $out = ['split' => 0, 'window' => 0, 'other' => 0];
+        foreach ($tok as $i => $w) {
+            $k = preg_match('/سبليت/u', $w) ? 'split' : (preg_match('/شباك/u', $w) ? 'window' : (preg_match('/(كاسيت|مخفي|دولابي|كونسيلد|مركزي|داكت)/u', $w) ? 'other' : ''));
+            if ($k === '') { continue; }
+            $q = 0;
+            for ($j = $i - 1; $j >= max(0, $i - 3); $j--) {
+                $t = preg_replace('/^و(?=\d)/u', '', $tok[$j]);
+                if (preg_match('/^\d{1,2}$/', $t)) { $q = (int) $t; break; }
+                if (isset($words[$t])) { $q = $words[$t]; break; }
+                if (isset($words[preg_replace('/^و/u', '', $t)])) { $q = $words[preg_replace('/^و/u', '', $t)]; break; }
+                if (preg_match('/^(مكيفين|جهازين)$/u', $t)) { $q = 2; break; }
+                if (!preg_match('/^(و|مكيف|مكيفات|جهاز|وحده|نوع|غسيل)$/u', $t)) { break; }
+            }
+            $out[$k] += $q ?: 1;
+        }
+        return $out;
+    }
+
     private static function qty_of($n) {
         if (preg_match('/(?<!\d)(\d{1,2})(?!\d)\s*(مكيف|جهاز|وحده|سبليت|شباك|غرف|غرفه|حنفي|لمب|كاميرا)/u', $n, $m)) { return max(1, min(50, (int) $m[1])); }
         if (preg_match('/(مكيفين|جهازين|غرفتين|اتنين|اثنين|ثنين)/u', $n)) { return 2; }
@@ -454,12 +499,22 @@ final class Mutqan_Hub {
         if ($spec === 'ac') {
             $type = preg_match('/شباك/u', $n) ? 'شباك' : (preg_match('/(دولابي|مخفي|كاسيت|مركزي|داكت)/u', $n) ? 'دولابي' : 'سبليت');
             $wash = (bool) preg_match('/(غسيل|غسل|اغسل|تنظيف|نظافه)/u', $n);
-            if ($wash) {
+            if ($wash || preg_match('/(سبليت|اسبليت|شباك)/u', $n)) {
+                // Count each type on its own: «مكيف سبليت و مكيف شباك» is one of each, not one unit.
+                $cnt = self::ac_counts($n);
+                if ($wash && (($cnt['split'] > 0) + ($cnt['window'] > 0) + ($cnt['other'] > 0)) >= 2) {
+                    $ap = self::ac_price($cnt);
+                    if (!empty($ap['total'])) { return ['spec' => 'ac', 'fixed' => true, 'label' => $ap['label'], 'qty' => $ap['units'], 'total' => $ap['total'], 'floor' => $ap['floor'], 'acQuote' => $ap['acQuote'], 'lines' => $ap['lines']]; }
+                }
+                if (!$wash) { goto repair; }
+                $one = $cnt['split'] ?: ($cnt['window'] ?: $cnt['other']);
+                if ($one > 0) { $qty = $one; }
                 $q = ['mode' => 'wash', 'type' => $type, 'qty' => $qty, 'full' => true];
                 $total = (int) round(Mutqan_Policy::ac_total($q));
                 $floor = max(0, (int) Mutqan_Policy::ac_floor($q));
                 if ($total > 0) { return ['spec' => 'ac', 'fixed' => true, 'label' => 'غسيل ' . $qty . ' ' . ($qty > 1 ? 'مكيف ' : 'مكيف ') . $type, 'qty' => $qty, 'total' => $total, 'floor' => min($floor, $total), 'acQuote' => $q]; }
             }
+            repair:
             $row = Mutqan_Store::get_raw('pricing', 'ac') ?: [];
             $from = (int) (is_numeric($row['base'] ?? null) ? $row['base'] : (Mutqan_Policy::price_bases()['ac'] ?? 100));
             return ['spec' => 'ac', 'fixed' => false, 'label' => 'صيانة وإصلاح ' . ($qty > 1 ? $qty . ' مكيف' : 'المكيف'), 'qty' => $qty, 'from' => $from, 'inspect' => 'المعاينة مجانية لحد جهازين، وأكتر من جهازين من غير شغل رسوم الزيارة 50 ر.س.'];
@@ -471,6 +526,143 @@ final class Mutqan_Hub {
         $total = (int) round($base * (1 + ($qty - 1) * $extra / 100) + $visit);
         $floor = (int) Mutqan_Policy::floor_for($spec, $qty, false);
         return ['spec' => $spec, 'fixed' => false, 'label' => $label, 'qty' => $qty, 'from' => $total, 'total' => $total, 'floor' => min($floor, $total), 'inspect' => 'والسعر النهائي بيتأكد بعد ما الفني يعاين، ومن غير أي حاجة من غير موافقتك.'];
+    }
+
+    /** The floor for what the conversation is pricing, and the reply corrected when the model went under it. */
+    public static function price_guard_reply($reply, $lead, $text) {
+        $q = self::quote(trim((string) ($lead['service'] ?? '') . ' ' . (string) ($lead['note'] ?? '')));
+        if (!$q || empty($q['total'])) { return null; }
+        $floor = (int) ($q['floor'] ?? $q['total']);
+        $nums = function ($s) { preg_match_all('/(\d{2,5})\s*(ريال|ر\.?\s?س|sar)/u', strtr((string) $s, ['٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9']), $m); return array_map('intval', $m[1]); };
+        $low = array_filter(array_merge($nums($reply), $nums((string) ($lead['price'] ?? '') . ' ريال')), function ($v) use ($floor) { return $v > 0 && $v < $floor; });
+        if (!$low) { return null; }
+        return ['price' => $floor, 'reply' => 'آسفين 🙏 أقل سعر نقدر عليه لـ' . $q['label'] . ' هو *' . $floor . ' ر.س* (السعر الرسمي ' . (int) $q['total'] . ')، وشامل الغسيل الكامل والضمان. نكمّل الحجز؟'];
+    }
+
+    /** {split, window, other, inner?} → the official total, the lowest the owner allows today, and the lines. */
+    public static function ac_price($in) {
+        $types = ['split' => 'سبليت', 'window' => 'شباك', 'other' => 'دولابي'];
+        $items = []; $lines = []; $total = 0; $floor = 0; $units = 0;
+        foreach ($types as $k => $t) {
+            $q = max(0, min(50, (int) ($in[$k] ?? 0)));
+            if ($q < 1) { continue; }
+            $one = ['mode' => 'wash', 'type' => $t, 'qty' => $q, 'full' => empty($in['inner'])];
+            $sum = (int) round(Mutqan_Policy::ac_total($one));
+            $fl = min($sum, max(0, (int) Mutqan_Policy::ac_floor($one) + 1));
+            $items[] = ['type' => $t, 'qty' => $q, 'full' => empty($in['inner'])];
+            $lines[] = $q . ' ' . ($k === 'other' ? 'كاسيت/مخفي/دولابي' : $t) . ' = ' . $sum . ' ر.س';
+            $total += $sum; $floor += $fl; $units += $q;
+        }
+        if (!$items) { return ['total' => 0]; }
+        if (class_exists('Mutqan_Deal') && Mutqan_Deal::band()['mode'] === 'fixed') { $floor = $total; }
+        $label = 'غسيل ' . implode(' + ', array_map(function ($it) { return $it['qty'] . ' ' . ($it['type'] === 'دولابي' ? 'كاسيت/مخفي' : $it['type']); }, $items)) . (empty($in['inner']) ? '' : ' (داخلي فقط)');
+        $acQuote = count($items) === 1 ? ['mode' => 'wash', 'type' => $items[0]['type'], 'qty' => $items[0]['qty'], 'full' => $items[0]['full']] : ['mode' => 'wash', 'items' => $items];
+        return ['total' => $total, 'floor' => min($floor, $total), 'units' => $units, 'lines' => $lines, 'label' => $label, 'acQuote' => $acQuote, 'spec' => 'ac'];
+    }
+
+    /**
+     * Spare parts (owner, 2026-11-21). The customer hears one thing: the part's price, or the part with its fitting —
+     * never the ranges by brand / BTU / market, never the fitting rate. «from/to» = the part, «fit» = our fitting
+     * (internal: 50–150 per part), the customer sees part + fit. Big parts (compressor…) have no fixed price: the photo
+     * and «الفني يحدده بعد الكشف». Photos come from the WordPress media library: an image whose title carries the
+     * part's name (e.g. «المكثف»). The owner can replace the table in the option «mutqan_parts».
+     */
+    const PARTS = [
+        ['id' => 'capacitor', 'label' => 'تغيير المكثف (الكباستور)', 'words' => ['مكثف', 'كباستور', 'كاباستور', 'كابستور', 'بطاريه', 'المبينه', 'مبينه'], 'from' => 100, 'to' => 100, 'fit' => 50],
+        ['id' => 'thermostat', 'label' => 'تغيير الترموستات', 'words' => ['ترموستات', 'ثرموستات', 'ثيرموستات', 'حساس الحراره', 'حساس'], 'from' => 50, 'to' => 50, 'fit' => 50],
+        ['id' => 'freon', 'label' => 'شحن الفريون', 'words' => ['فريون', 'شحن غاز', 'تعبيه غاز', 'غاز المكيف'], 'from' => 200, 'to' => 270, 'fit' => 0, 'low' => 150],
+        ['id' => 'contactor', 'label' => 'تغيير الكونتاكتور', 'words' => ['كونتاكتور', 'كنتاكتور', 'ريليه', 'قطع الكهرباء', 'قطع كهرباء'], 'from' => 250, 'to' => 300, 'fit' => 0],
+        ['id' => 'power_board', 'label' => 'تغيير شريحة الكهرباء', 'words' => ['شريحه الكهرباء', 'شريحه كهرباء', 'بورده كهرباء', 'كرت كهرباء'], 'from' => 300, 'to' => 450, 'fit' => 0],
+        ['id' => 'digital_board', 'label' => 'تغيير الشريحة الإلكترونية (الديجيتال)', 'words' => ['شريحه الكترونيه', 'شريحه ديجيتال', 'بورده', 'الكارت', 'كرت', 'شريحه'], 'from' => 300, 'to' => 500, 'fit' => 0],
+        ['id' => 'fan_motor', 'label' => 'تغيير موتور المروحة', 'words' => ['موتور', 'ماتور', 'محرك المروحه'], 'from' => 200, 'to' => 550, 'fit' => 0],
+        ['id' => 'fan_blade', 'label' => 'تغيير ريش المروحة', 'words' => ['ريش', 'ريشه', 'المروحه مكسوره'], 'from' => 150, 'to' => 250, 'fit' => 0],
+        ['id' => 'compressor', 'label' => 'تغيير الكمبروسر', 'words' => ['كمبروسر', 'كمبريسور', 'كومبروسر', 'ضاغط', 'الكباس'], 'noPrice' => true],
+    ];
+
+    /** «إحنا بنبيع حل العطل مش قطعة غيار» — the owner's line for whoever haggles over a part. */
+    const PART_STRATEGY = "إحنا مش محل قطع غيار 🙏 إحنا شركة صيانة — بنجيب القطعة ونركّبها ونضمنها، يعني بنبيعلك *حل العطل* مش القطعة.\nيعني الفني بيكشف، ويركّب، ويجرب، ويضمن الشغل: لو القطعة خربت بعد التركيب، أو حصل تهريب بعد شحن الفريون، إحنا اللي بنرجع ونصلّح على ضماننا.\nالسعر اللي قلناه هو سعر الحل كامل بضمانه.";
+
+    public static function parts() {
+        if (class_exists('Mutqan_Kit')) { $p = (array) Mutqan_Kit::get()['parts']; if ($p) { return $p; } }
+        $o = get_option('mutqan_parts', []);
+        return is_array($o) && $o ? $o : self::PARTS;
+    }
+    public static function part_strategy() { return class_exists('Mutqan_Kit') ? (string) Mutqan_Kit::get()['partStrategy'] : self::PART_STRATEGY; }
+
+    /** The customer's price: the part with its fitting, as one figure or one range. '' when it has no fixed price. */
+    private static function part_price($p) {
+        if (!empty($p['noPrice'])) { return ''; }
+        $f = (int) ($p['fit'] ?? 0); $a = (int) $p['from'] + $f; $b = (int) $p['to'] + $f;
+        return $a === $b ? $a . ' ر.س' : 'من ' . $a . ' لـ ' . $b . ' ر.س';
+    }
+
+    /** The photo of the part from the media library (title contains its name), or ''. */
+    public static function part_image($p) {
+        if (!function_exists('get_posts')) { return ''; }
+        $key = 'mq_part_img_' . $p['id'];
+        $c = get_transient($key);
+        if ($c !== false) { return (string) $c; }
+        $url = '';
+        foreach (array_merge([preg_replace('/\s*\(.*\)$/u', '', (string) $p['label'])], (array) $p['words']) as $w) {
+            $q = get_posts(['post_type' => 'attachment', 'post_mime_type' => 'image', 'post_status' => 'inherit', 's' => (string) $w, 'numberposts' => 1, 'suppress_filters' => false]);
+            if ($q) { $url = (string) wp_get_attachment_url($q[0]->ID); break; }
+        }
+        set_transient($key, $url, $url !== '' ? DAY_IN_SECONDS : HOUR_IN_SECONDS);
+        return $url;
+    }
+
+    /** The parts he named; [] when he named none. */
+    public static function parts_in($text) {
+        $n = class_exists('Mutqan_Playbook') ? Mutqan_Playbook::norm($text) : (string) $text;
+        $hit = [];
+        foreach (self::parts() as $p) { foreach ((array) $p['words'] as $w) { if ($n !== '' && mb_strpos($n, $w) !== false) { $hit[] = $p; break; } } }
+        return $hit;
+    }
+
+    /**
+     * The customer's answer: for the part(s) he asked about only that price (with fitting) and its photo; the short
+     * table when he asked for parts prices in general. ['text', 'image'].
+     */
+    public static function parts_answer($text = '') {
+        $hit = self::parts_in($text);
+        if ($hit) {
+            $L = []; $img = '';
+            foreach (array_slice($hit, 0, 3) as $p) {
+                $pr = self::part_price($p);
+                $L[] = $pr !== '' ? '🔧 *' . $p['label'] . '*: *' . $pr . '*' : '🔧 *' . $p['label'] . '*: بنأكدلك السعر بعد الكشف، والفني بيقولك قبل أي شغل.';
+                if ($img === '') { $img = self::part_image($p); }
+            }
+            $L[] = 'بالضمان ✅ — إحنا بنجيب القطعة ونركّبها ونجرب الجهاز قدامك.';
+            return ['text' => implode("\n", $L), 'image' => $img, 'parts' => array_column($hit, 'id')];
+        }
+        $L = ['🔧 *أسعار الإصلاح*'];
+        foreach (self::parts() as $p) { $pr = self::part_price($p); $L[] = '• ' . $p['label'] . ': ' . ($pr !== '' ? $pr : 'بعد الكشف'); }
+        $L[] = 'الفني بيأكد العطل بعد الكشف وقبل أي شغل ✅';
+        return ['text' => implode("\n", $L), 'image' => ''];
+    }
+
+    /** Kept for callers that want the text only. */
+    public static function parts_text($text = '') { return self::parts_answer($text)['text']; }
+
+    /** For the model: customer prices, the owner's strategy, and what never to tell (internal). */
+    public static function parts_for_prompt() {
+        $L = ['## أسعار الإصلاح للعميل (سعر حل العطل — قوله كده بالظبط، من غير «سعر القطعة» ولا «شامل التركيب»)'];
+        foreach (self::parts() as $p) { $pr = self::part_price($p); $L[] = '- ' . $p['label'] . ': ' . ($pr !== '' ? $pr : 'بعد الكشف (ما تقولش رقم)'); }
+        $L[] = '- (داخلي — ممنوع تقوله للعميل) السعر بيتحرك 20–60% حسب الماركة والقدرة وتوفر القطعة، والتركيب عندنا 50–150 للقطعة، والفريون ممكن ينزل لـ 150 في الركود. ما تفصّلش للعميل سعر القطعة وسعر التركيب لوحدهم، ولا الماركات، ولا النسب.';
+        $L[] = '- إحنا مش بنبيع قطع غيار لوحدها: لو العميل عايز القطعة بس يشتريها، قوله بلطف إننا شركة صيانة مش محل قطع غيار — بنجيب القطعة ونركّبها ونضمنها.';
+        $L[] = '- لو العميل فاصل في سعر قطعة أو قال القطعة دي غالية أو بيجيبها أرخص: فهّمه معلومة واحدة بلطف: إحنا مش محل قطع غيار، إحنا شركة صيانة بنبيع حل العطل بضمانه — لو القطعة خربت بعد التركيب أو حصل تهريب بعد شحن الفريون إحنا اللي بنرجع ونصلح.';
+        return implode("\n", $L);
+    }
+
+    /** The AC wash table in words, from the owner's own numbers. */
+    public static function ac_table_text() {
+        $c = Mutqan_Policy::ac_table();
+        return "💰 *أسعار غسيل المكيفات* (غسيل كامل داخلي وخارجي)\n"
+            . '❄️ سبليت: 1 = ' . (int) $c['split1'] . ' · 2 = ' . (int) $c['split2'] . ' · 3 = ' . (int) $c['split3'] . " ر.س، والزيادة بسعر مخفّض لكل جهاز\n"
+            . '🪟 شباك: 1 = ' . (int) $c['win1'] . ' · 2 = ' . (int) $c['win2'] . ' · 3 = ' . (int) $c['win3'] . ' ر.س، وكل جهاز زيادة ' . (int) $c['winExtra'] . " ر.س\n"
+            . '🏢 كاسيت / مخفي / دولابي: يبدأ من ' . (int) $c['other1'] . " ر.س للجهاز\n"
+            . "🔧 الصيانة والأعطال: الكشف مجاني لحد جهازين، والسعر بعد الكشف وقبل أي شغل.\n"
+            . "🛡 ضمان على الشغل، والدفع بعد الخدمة.";
     }
 
     /* ------------------------------------------------------------------ the AI keys */

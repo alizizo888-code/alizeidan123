@@ -23,7 +23,7 @@ final class Mutqan_Command {
 
     /* ------------------------------------------------------------------ who may use which tool */
 
-    const OWNER_ONLY = ['wa_chats', 'orders_delete', 'prices_adjust', 'prices_revert', 'tech_role', 'sales_brain_set', 'dns_set', 'ai_engine_set', 'settings_set', 'wp_update', 'tech_create'];
+    const OWNER_ONLY = ['wa_chats', 'kit_video', 'kit_part', 'kit_strategy', 'orders_delete', 'prices_adjust', 'prices_revert', 'tech_role', 'sales_brain_set', 'dns_set', 'ai_engine_set', 'settings_set', 'wp_update', 'tech_create'];
     const TECH_TOOLS = ['my_jobs', 'job_status', 'job_problem'];
     const STAFF_ONLY = ['my_jobs', 'job_status', 'job_problem'];   // the technician's own tools: no use to the office
 
@@ -51,6 +51,10 @@ final class Mutqan_Command {
         $s = function ($props, $req = []) { return ['type' => 'object', 'properties' => (object) $props, 'required' => $req]; };
         $str = ['type' => 'string'];
         return [
+            ['name' => 'kit_get', 'description' => 'بيانات الخدمة المحفوظة في قاعدة البيانات: فيديوهات الغسيل، أسعار الإصلاح (القطع)، استراتيجية «بنبيع حل العطل»، قواعد الفصال والمواعيد.', 'input_schema' => $s([])],
+            ['name' => 'kit_video', 'description' => 'غيّر أو ضيف فيديو طريقة غسيل: type = split أو window، url، label اختياري. replace=true يستبدل فيديوهات النوع ده.', 'input_schema' => $s(['type' => ['type' => 'string', 'enum' => ['split', 'window']], 'url' => $str, 'label' => $str, 'replace' => ['type' => 'boolean']])],
+            ['name' => 'kit_part', 'description' => 'غيّر سعر إصلاح قطعة أو ضيف قطعة: id (capacitor, thermostat, freon, contactor, power_board, digital_board, fan_motor, fan_blade, compressor أو جديد)، label، from و to (سعر القطعة)، fit (التركيب)، noPrice=true لو السعر بعد الكشف.', 'input_schema' => $s(['id' => $str, 'label' => $str, 'from' => ['type' => 'number'], 'to' => ['type' => 'number'], 'fit' => ['type' => 'number'], 'noPrice' => ['type' => 'boolean']])],
+            ['name' => 'kit_strategy', 'description' => 'غيّر الجملة اللي البوت بيقولها للي بيفاصل في سعر قطعة (استراتيجية «بنبيع حل العطل مش القطعة»).', 'input_schema' => $s(['text' => $str])],
             ['name' => 'wa_chats', 'description' => 'اعرض آخر محادثات العملاء على خط واتساب السيرفر بالنص (لمراجعة ردود البوت). phone اختياري لعميل معين، limit عدد المحادثات.', 'input_schema' => $s(['phone' => $str, 'limit' => ['type' => 'number']])],
             ['name' => 'price_band', 'description' => 'ليميت الأسعار دلوقتي: المينيمم والماكسيمم للمكيف في صفقات 4 مكيفات وطالع، الوضع (تلقائي حسب شغل اليوم/مرن/ماسك/رسمي بس)، وعدد طلبات النهارده.', 'input_schema' => $s([])],
             ['name' => 'price_band_set', 'description' => 'غيّر ليميت الأسعار للبوت: step = +5 (ارفع الليميت) أو -5 (قلّل الليميت)، أو minUnit و maxUnit بالريال للمكيف، و mode = auto (حسب شغل اليوم) أو loose (مرن على المينيمم) أو tight (امسك على الماكسيمم) أو fixed (الأسعار الرسمية بس بدون فصال). hours اختياري لمدة مؤقتة.', 'input_schema' => $s(['step' => ['type' => 'number'], 'minUnit' => ['type' => 'number'], 'maxUnit' => ['type' => 'number'], 'mode' => ['type' => 'string', 'enum' => ['auto', 'loose', 'tight', 'fixed']], 'hours' => ['type' => 'number'], 'note' => $str])],
@@ -163,6 +167,18 @@ final class Mutqan_Command {
     public static function run($name, $in, $p) {
         if (!self::allowed($name, $p)) { throw new Exception('الأمر ده مش من صلاحياتك.'); }
         switch ($name) {
+            case 'kit_get': return ['text' => Mutqan_Kit::summary()];
+            case 'kit_video': {
+                $url = trim((string) ($in['url'] ?? ''));
+                if (!preg_match('#^https://#', $url)) { throw new Exception('اللينك لازم يبدأ بـ https://'); }
+                $type = ($in['type'] ?? 'split') === 'window' ? 'window' : 'split';
+                $v = array_values(array_filter((array) Mutqan_Kit::get()['washVideos'], function ($x) use ($type, $in) { return empty($in['replace']) || ($x['type'] ?? '') !== $type; }));
+                $v[] = ['type' => $type, 'label' => trim((string) ($in['label'] ?? '')) ?: ($type === 'window' ? 'غسيل المكيف الشباك' : 'غسيل المكيف السبليت'), 'url' => $url];
+                Mutqan_Kit::set(['washVideos' => $v], (string) ($p['name'] ?? ''));
+                return ['text' => "✅ اتحفظ الفيديو في بيانات الخدمة.\n" . Mutqan_Kit::summary()];
+            }
+            case 'kit_part': { Mutqan_Kit::set_part(preg_replace('/[^a-z0-9_]/', '', strtolower((string) ($in['id'] ?? ''))) ?: 'part_' . substr(md5((string) ($in['label'] ?? '')), 0, 6), $in, (string) ($p['name'] ?? '')); return ['text' => "✅ اتحفظ في بيانات الخدمة.\n" . Mutqan_Kit::summary()]; }
+            case 'kit_strategy': { Mutqan_Kit::set(['partStrategy' => (string) ($in['text'] ?? '')], (string) ($p['name'] ?? '')); return ['text' => '✅ اتحفظت الجملة الجديدة.']; }
             case 'wa_chats': {
                 $list = Mutqan_Hub::chats((string) ($in['phone'] ?? ''), (int) ($in['limit'] ?? 3), 80);
                 $L = [];
@@ -443,6 +459,7 @@ final class Mutqan_Command {
             $extra = $cmds ? "\n" . implode("\n", array_map(function ($x) { return '• ' . $x['label']; }, array_slice($cmds, 0, 5))) : '';
             return ($n ? 'لقيت ' . ($n === 1 ? 'نتيجة واحدة' : $n . ' نتايج') . ' عن «' . $o['q'] . '» — اضغط تفتحها:' : 'عن «' . $o['q'] . '»:') . $extra;
         }
+        if (in_array($tool, ['kit_get', 'kit_video', 'kit_part', 'kit_strategy', 'wa_chats'], true)) { return (string) ($o['text'] ?? ''); }
         if ($tool === 'price_band' || $tool === 'price_band_set') { return ($tool === 'price_band_set' ? "✅ اتنفذ — البوت شغال بالليميت الجديد من الرسالة الجاية.\n" : '') . ($o['text'] ?? ''); }
         if ($tool === 'order_open') {
             $x = (array) ($o['order'] ?? []);
