@@ -653,6 +653,8 @@ final class Mutqan_WA {
             'clientPhone' => $intl,
             'service' => mb_substr($service, 0, 120),
             'address' => mb_substr($area, 0, 160),
+            'lat' => is_numeric($lead['lat'] ?? null) ? (float) $lead['lat'] : null,
+            'lng' => is_numeric($lead['lng'] ?? null) ? (float) $lead['lng'] : null,
             'note' => mb_substr((string) ($lead['note'] ?? ''), 0, 300),
             // The time the customer gave is the order's time, not a note: «حلقة الوصل» then does not ask for it again.
             'preferredTime' => mb_substr(trim((string) ($lead['time'] ?? '')), 0, 120),

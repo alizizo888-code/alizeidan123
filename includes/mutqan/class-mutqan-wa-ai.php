@@ -106,9 +106,19 @@ final class Mutqan_WA_AI {
         $out['replies'][] = mb_substr($reply, 0, 1200);
         $lead = array_filter(array_map(function ($v) { return trim(mb_substr((string) $v, 0, 160)); }, (array) ($j['lead'] ?? [])), 'strlen');
         $lead = array_merge((array) ($ai['lead'] ?? []), $lead);
+        // A pin he sent (a WhatsApp location arrives as a maps link) is kept on the lead.
+        if (preg_match('/(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/', (string) $text, $ll)) { $lead['lat'] = (float) $ll[1]; $lead['lng'] = (float) $ll[2]; }
         $done = !empty($j['complete']) && trim((string) ($lead['service'] ?? '')) !== '';
+        if ($done && !isset($lead['lat'])) {
+            // No order on a written address: ask for the location itself and keep what was gathered.
+            $done = false;
+            // and never «سجلت طلبك» before it is registered: the model's line goes when it claims the order is done
+            $last = (string) end($out['replies']);
+            if (preg_match('/(سجلت|اتسجل|تم\s*تسجيل|تم\s*تأكيد|اتأكد|طلبك\s*اتعمل)/u', $last)) { array_pop($out['replies']); }
+            $out['replies'][] = '📍 عشان نثبت الطلب ونوصلك بالظبط، ابعت *اللوكيشن نفسه* من واتساب: 📎 ← الموقع ← إرسال موقعي الحالي.\nاسم الحي لوحده مش كفاية للفني.';
+        }
         if ($done) {
-            $out['lead'] = ['service' => $lead['service'], 'area' => (string) ($lead['area'] ?? ''), 'name' => (string) ($lead['name'] ?? ''), 'note' => trim((string) ($lead['note'] ?? '')), 'time' => (string) ($lead['time'] ?? '') ?: (class_exists('Mutqan_Deal') ? Mutqan_Deal::booking()['defaultTime'] : ''), 'price' => (string) ($lead['price'] ?? '')];
+            $out['lead'] = ['lat' => $lead['lat'], 'lng' => $lead['lng'], 'service' => $lead['service'], 'area' => (string) ($lead['area'] ?? ''), 'name' => (string) ($lead['name'] ?? ''), 'note' => trim((string) ($lead['note'] ?? '')), 'time' => (string) ($lead['time'] ?? '') ?: (class_exists('Mutqan_Deal') ? Mutqan_Deal::booking()['defaultTime'] : ''), 'price' => (string) ($lead['price'] ?? '')];
             $lead = [];
         }
         if (!empty($j['handoff'])) {

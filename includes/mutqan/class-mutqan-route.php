@@ -99,6 +99,7 @@ final class Mutqan_Route {
             elseif (in_array($o['status'], ['new', 'forced'], true) && empty($o['inhouse']) && is_numeric($o['lat'] ?? null)) { $free[] = $o; }
         }
         $techs = [];
+        $trips = get_option(self::TRIPS, []); $trips = is_array($trips) ? $trips : []; $trips0 = $trips;
         foreach (Mutqan_Store::select('tech_profiles', [], ['limit' => 300], $sys) as $t) {
             $id = (string) ($t['userId'] ?? $t['id'] ?? '');
             if ($id === '') { continue; }
@@ -127,11 +128,15 @@ final class Mutqan_Route {
                     $d = self::km($row['lat'], $row['lng'], $next['lat'], $next['lng']);
                     $speed = $mo['kmh'] >= 10 ? $mo['kmh'] : 30;   // city driving when standing still
                     $row['job']['km'] = round($d, 1); $row['job']['etaMin'] = (int) max(1, round($d / $speed * 60));
+                    $trip = self::trip($id, $next, $row, $trail, $d, $speed, $trips);
+                    if ($trip) { $row['job']['trip'] = $trip; }
                 }
             }
             $row['onRoute'] = isset($row['lat']) && !$row['off'] ? self::on_route($row, $free) : [];
             $techs[] = $row;
         }
+        foreach ($trips as $k => $x) { if (time() - (int) ($x['at'] ?? 0) > DAY_IN_SECONDS) { unset($trips[$k]); } }
+        if ($trips !== $trips0) { update_option(self::TRIPS, $trips, false); }
         $staff = [];
         foreach (Mutqan_Ops::positions() as $id => $x) {
             $staff[] = ['id' => (string) $id, 'name' => (string) ($x['name'] ?? '') ?: 'مشرف', 'role' => (string) ($x['role'] ?? ''), 'lat' => (float) $x['lat'], 'lng' => (float) $x['lng'],
@@ -147,6 +152,37 @@ final class Mutqan_Route {
         }
         return ['at' => gmdate('c'), 'techs' => $techs, 'staff' => $staff, 'orders' => $customers,
             'count' => ['live' => count(array_filter($techs, function ($t) { return $t['live']; })), 'moving' => count(array_filter($techs, function ($t) { return $t['motion']['moving']; })), 'free' => count($free)]];
+    }
+
+    const TRIPS = 'mutqan_trips';
+
+    /**
+     * The trip to his current job: where he started (first live position seen once the job is his and moving towards it),
+     * the road covered since then (from his trail), what is left (straight line from where he is), and the time.
+     * $trips is the stored map orderId → start, updated in place.
+     */
+    public static function trip($techId, $job, $row, $trail, $leftKm, $speed, &$trips) {
+        $oid = (string) $job['id'];
+        if (!in_array($job['status'], ['accepted', 'en_route', 'nearby', 'arrived', 'in_progress'], true) || empty($row['live'])) { return isset($trips[$oid]) ? self::trip_row($trips[$oid], $trail, $leftKm, $speed, $job) : null; }
+        if (!isset($trips[$oid]) || ($trips[$oid]['tech'] ?? '') !== (string) $techId) {
+            $trips[$oid] = ['tech' => (string) $techId, 'lat' => (float) $row['lat'], 'lng' => (float) $row['lng'], 'at' => time()];
+        }
+        return self::trip_row($trips[$oid], $trail, $leftKm, $speed, $job);
+    }
+
+    public static function trip_row($start, $trail, $leftKm, $speed, $job) {
+        $done = 0.0; $prev = null;
+        foreach ($trail as $p) {
+            if ((int) ($p[2] ?? 0) < (int) $start['at']) { continue; }
+            if ($prev) { $done += self::km($prev[0], $prev[1], $p[0], $p[1]); }
+            $prev = $p;
+        }
+        $arrived = in_array($job['status'], ['arrived', 'in_progress'], true);
+        $left = $arrived ? 0.0 : (float) $leftKm;
+        $total = $done + $left;
+        return ['startLat' => (float) $start['lat'], 'startLng' => (float) $start['lng'], 'since' => gmdate('c', (int) $start['at']),
+            'min' => (int) floor((time() - (int) $start['at']) / 60), 'total' => round($total, 1), 'done' => round($done, 1), 'left' => round($left, 1),
+            'pct' => $total > 0 ? (int) round($done / $total * 100) : ($arrived ? 100 : 0), 'etaMin' => $arrived ? 0 : (int) max(1, round($left / max($speed, 1) * 60)), 'arrived' => $arrived];
     }
 
     /** Unassigned jobs that cost this technician the least extra road. */

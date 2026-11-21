@@ -41,6 +41,10 @@ final class Mutqan_Policy {
                 'wa_outbox' => ['read', 'write', 'write', 'write'],
                 'customer_profiles' => ['read', 'write', 'write', 'write'],
                 'shops' => ['staff', 'write', 'write', 'write'],
+                // The permanent customer ledger (Mutqan_Ledger): read by the staff, written by the server, removed by the owner only.
+                'client_ledger' => ['read', 'owner', 'owner', 'owner'],
+                // Pins the owner and operations drop on the map: a customer, an old customer, a technician, a shop…
+                'client_pins' => ['read', 'write', 'write', 'write'],
                 'wa_leads' => ['read', 'anon_ok', 'write', 'write'],
                 'ai_logs' => ['read', 'anon_ok', 'write', 'write'],
                 '_ai_usage' => ['read', 'anon_ok', 'write', 'write'],

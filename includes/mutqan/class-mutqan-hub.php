@@ -54,7 +54,7 @@ final class Mutqan_Hub {
         return [
             'id' => $id, 'number' => (string) ($o['number'] ?? '') ?: substr($id, -5), 'status' => $st, 'statusLabel' => self::LABELS[$st] ?? $st,
             'source' => (string) ($o['source'] ?? ''), 'brand' => (string) ($o['brand'] ?? ''), 'site' => $site,
-            'origin' => is_array($o['origin'] ?? null) ? $o['origin'] : null, 'originLine' => class_exists('Mutqan_Source') ? Mutqan_Source::line((array) ($o['origin'] ?? [])) : '',
+            'origin' => is_array($o['origin'] ?? null) ? $o['origin'] : null, 'originLine' => class_exists('Mutqan_Source') ? Mutqan_Source::line((array) ($o['origin'] ?? [])) : '', 'historyText' => (string) ($o['history']['text'] ?? ''),
             'service' => mb_substr($svc, 0, 160), 'clientName' => (string) ($o['clientName'] ?? ''), 'clientPhone' => (string) ($o['clientPhone'] ?? ''),
             'address' => (string) ($o['address'] ?? ''), 'lat' => is_numeric($o['lat'] ?? null) ? (float) $o['lat'] : null, 'lng' => is_numeric($o['lng'] ?? null) ? (float) $o['lng'] : null,
             'appointment' => $appt, 'preferredTime' => (string) ($o['preferredTime'] ?? ''), 'note' => (string) ($o['note'] ?? ''),
@@ -317,6 +317,8 @@ final class Mutqan_Hub {
             if (class_exists('Mutqan_WA')) { Mutqan_WA::add_step($open['id'], 'wa_more', 'رسالة إضافية من العميل على واتساب: ' . mb_substr($service, 0, 80), 'مركز الواتساب'); }
             return self::view($open);
         }
+        // The location itself, never a name (owner, 2026-11-21): «الشرايع عند البيك» does not take a technician to the door.
+        if (!is_numeric($in['lat'] ?? null) || !is_numeric($in['lng'] ?? null)) { throw new Mutqan_Error('need_location', 'لازم اللوكيشن نفسه من واتساب قبل تسجيل الطلب.', 422); }
         $order = array_filter([
             'status' => 'new', 'source' => 'whatsapp', 'clientName' => mb_substr(trim((string) ($in['name'] ?? '')), 0, 80), 'clientPhone' => $phone,
             'service' => $service, 'address' => mb_substr(trim((string) ($in['address'] ?? '')), 0, 160),
