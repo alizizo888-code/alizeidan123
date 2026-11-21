@@ -156,19 +156,39 @@ class Oxygen_Daily_Report {
     }
 
     public static function summarize($day, $rows) {
-        $by = []; $sum = 0; $g = ['ممتاز' => 0, 'جيد' => 0, 'ضعيف' => 0]; $fc = [];
-        foreach ($rows as $r) {
+        $by = []; $sum = 0; $g = ['ممتاز' => 0, 'جيد' => 0, 'ضعيف' => 0]; $fc = []; $st = ['live' => 0, 'held' => 0, 'noindex' => 0, 'gone' => 0];
+        foreach ($rows as &$r) {
+            // what the reader of the report actually gets when he taps the link (2026-11-21: a held draft is a 404 for him)
+            $r['st'] = self::status_of((int) $r['id']); $st[$r['st']]++;
             $by[$r['a']] = ($by[$r['a']] ?? 0) + 1; $sum += $r['s']; $g[self::grade($r['s'])]++;
             foreach ($r['f'] as $k) { $fc[$k] = ($fc[$k] ?? 0) + 1; }
         }
+        unset($r);
         arsort($fc);
         $n = count($rows);
         $weak = $rows; usort($weak, function ($x, $y) { return $x['s'] <=> $y['s']; });
         return [
             'site' => wp_parse_url(home_url('/'), PHP_URL_HOST), 'brand' => Oxygen_SEO_Engine::brand(), 'day' => $day, 'total' => $n,
             'by_type' => $by, 'avg' => $n ? round($sum / $n, 1) : 0, 'grades' => $g, 'top_fails' => array_slice($fc, 0, 6, true),
-            'weakest' => array_slice($weak, 0, 10), 'rows' => $rows,
+            'weakest' => array_slice($weak, 0, 10), 'rows' => $rows, 'status' => $st,
+            'uniq' => class_exists('Oxygen_Uniq') ? Oxygen_Uniq::summary() : null,
         ];
+    }
+
+    /** live | held (draft kept back by the uniqueness gate, waiting for its AI rewrite) | noindex | gone */
+    public static function status_of($id) {
+        if (!function_exists('get_post_status')) { return 'live'; }
+        $ps = get_post_status($id);
+        if ($ps === 'publish') { return get_post_meta($id, '_oxy_dup', true) !== '' ? 'noindex' : 'live'; }
+        return $ps ? 'held' : 'gone';
+    }
+    private static $st_labels = ['live' => '✅ منشور', 'held' => '⏳ مسودة — مستنية إعادة كتابة', 'noindex' => '🚫 منشور بس مستبعد من جوجل (شبه مقال تاني)', 'gone' => '❌ محذوف'];
+    private static function status_line($rep) {
+        $st = (array) ($rep['status'] ?? []); $o = [];
+        foreach (self::$st_labels as $k => $l) { if (!empty($st[$k])) { $o[] = $l . ': ' . (int) $st[$k]; } }
+        $u = $rep['uniq'] ?? null;
+        $tail = is_array($u) ? ' — على الموقع كله: ' . (int) $u['held'] . ' مسودة مستنية، ' . (int) $u['noindexed'] . ' مستبعد من جوجل، ' . (int) $u['rewritten'] . ' اتعاد كتابته' : '';
+        return ($o ? implode(' · ', $o) : '—') . $tail;
     }
 
     public static function snapshot($day, $live = null) {
@@ -196,7 +216,7 @@ class Oxygen_Daily_Report {
     public static function markdown($rep, $max = 60000) {
         $o = "## 📊 تقرير مقالات {$rep['brand']} — {$rep['day']}\n\n";
         $o .= "الموقع: https://{$rep['site']}/\n\n";
-        $o .= "- **إجمالي العمليات:** {$rep['total']}\n- **التفصيل:** " . self::type_line($rep) . "\n";
+        $o .= "- **إجمالي العمليات:** {$rep['total']}\n- **التفصيل:** " . self::type_line($rep) . "\n- **حالة النشر:** " . self::status_line($rep) . "\n";
         $o .= "- **متوسط تقييم SEO:** {$rep['avg']} / 100 — 🟢 {$rep['grades']['ممتاز']} ممتاز · 🟠 {$rep['grades']['جيد']} جيد · 🔴 {$rep['grades']['ضعيف']} ضعيف\n\n";
         $o .= "> التقييم داخلي بمعايير مشابهة لاختبار Rank Math (الكلمة في العنوان/الوصف/الرابط/المقدمة/العناوين الفرعية/الصور، الطول، الكثافة، الروابط، البنية). ليس رقم Rank Math الرسمي.\n\n";
         if ($rep['top_fails']) {
@@ -237,14 +257,14 @@ class Oxygen_Daily_Report {
     public static function html($rep) {
         $h = '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:900px">';
         $h .= '<h2>📊 تقرير مقالات ' . esc_html($rep['brand']) . ' — ' . esc_html($rep['day']) . '</h2>';
-        $h .= '<p><b>الموقع:</b> <a href="https://' . esc_attr($rep['site']) . '/">' . esc_html($rep['site']) . '</a><br><b>إجمالي العمليات:</b> ' . (int) $rep['total'] . '<br><b>التفصيل:</b> ' . esc_html(self::type_line($rep)) . '<br><b>متوسط تقييم SEO:</b> ' . esc_html($rep['avg']) . ' / 100 — 🟢 ' . (int) $rep['grades']['ممتاز'] . ' · 🟠 ' . (int) $rep['grades']['جيد'] . ' · 🔴 ' . (int) $rep['grades']['ضعيف'] . '</p>';
+        $h .= '<p><b>الموقع:</b> <a href="https://' . esc_attr($rep['site']) . '/">' . esc_html($rep['site']) . '</a><br><b>إجمالي العمليات:</b> ' . (int) $rep['total'] . '<br><b>التفصيل:</b> ' . esc_html(self::type_line($rep)) . '<br><b>حالة النشر:</b> ' . esc_html(self::status_line($rep)) . '<br><b>متوسط تقييم SEO:</b> ' . esc_html($rep['avg']) . ' / 100 — 🟢 ' . (int) $rep['grades']['ممتاز'] . ' · 🟠 ' . (int) $rep['grades']['جيد'] . ' · 🔴 ' . (int) $rep['grades']['ضعيف'] . '</p>';
         $h .= '<p style="color:#666;font-size:12px">التقييم داخلي بمعايير مشابهة لاختبار Rank Math، وليس رقم Rank Math الرسمي.</p>';
         if ($rep['top_fails']) { $h .= '<h3>أكثر نقاط الضعف تكرارًا</h3><ul>'; foreach ($rep['top_fails'] as $k => $c) { $h .= '<li>' . esc_html(self::fail_label($k)) . ' — ' . (int) $c . ' مقال</li>'; } $h .= '</ul>'; }
-        $h .= '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px"><tr style="background:#eef"><th>#</th><th>النوع</th><th>الكلمة</th><th>التقييم</th><th>المقال</th></tr>';
+        $h .= '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px"><tr style="background:#eef"><th>#</th><th>النوع</th><th>الكلمة</th><th>التقييم</th><th>الحالة</th><th>المقال</th></tr>';
         $i = 0;
         foreach ($rep['rows'] as $r) {
             $i++;
-            $h .= '<tr><td>' . $i . '</td><td>' . esc_html(self::$labels[$r['a']] ?? $r['a']) . '</td><td>' . esc_html($r['kw']) . '</td><td>' . self::grade_icon($r['s']) . ' ' . (int) $r['s'] . '</td><td><a href="' . esc_url($r['l']) . '">' . esc_html($r['t']) . '</a></td></tr>';
+            $h .= '<tr><td>' . $i . '</td><td>' . esc_html(self::$labels[$r['a']] ?? $r['a']) . '</td><td>' . esc_html($r['kw']) . '</td><td>' . self::grade_icon($r['s']) . ' ' . (int) $r['s'] . '</td><td>' . esc_html(self::$st_labels[$r['st'] ?? 'live'] ?? '') . '</td><td>' . (($r['st'] ?? 'live') === 'live' || ($r['st'] ?? '') === 'noindex' ? '<a href="' . esc_url($r['l']) . '">' . esc_html($r['t']) . '</a>' : esc_html($r['t'])) . '</td></tr>';
         }
         return $h . '</table></div>';
     }
@@ -252,6 +272,7 @@ class Oxygen_Daily_Report {
     public static function telegram_text($rep) {
         $t = '📊 <b>تقرير مقالات ' . esc_html($rep['brand']) . '</b> — ' . esc_html($rep['day']) . "\n" . esc_html($rep['site']) . "\n\n";
         $t .= 'إجمالي العمليات: <b>' . (int) $rep['total'] . "</b>\n" . esc_html(self::type_line($rep)) . "\n";
+        $t .= 'حالة النشر: ' . esc_html(self::status_line($rep)) . "\n";
         $t .= 'متوسط تقييم SEO: <b>' . esc_html($rep['avg']) . '</b>/100 — 🟢 ' . (int) $rep['grades']['ممتاز'] . ' · 🟠 ' . (int) $rep['grades']['جيد'] . ' · 🔴 ' . (int) $rep['grades']['ضعيف'] . "\n";
         if ($rep['top_fails']) { $t .= "\nأكثر نقاط الضعف:\n"; foreach (array_slice($rep['top_fails'], 0, 4, true) as $k => $c) { $t .= '• ' . esc_html(self::fail_label($k)) . ' (' . (int) $c . ")\n"; } }
         if ($rep['weakest']) { $t .= "\nأضعف المقالات:\n"; foreach (array_slice($rep['weakest'], 0, 5) as $r) { $t .= self::grade_icon($r['s']) . ' ' . (int) $r['s'] . ' <a href="' . esc_url($r['l']) . '">' . esc_html(mb_substr($r['t'], 0, 60)) . "</a>\n"; } }
@@ -275,7 +296,7 @@ class Oxygen_Daily_Report {
         $s = self::settings(); $res = [];
         if (!empty($s['email'])) {
             $to = $s['email_to'] !== '' ? $s['email_to'] : get_option('admin_email');
-            $ok = $to && wp_mail($to, '📊 تقرير مقالات ' . $rep['brand'] . ' — ' . $rep['day'] . ' (' . $rep['total'] . ' عملية)', self::html($rep), ['Content-Type: text/html; charset=UTF-8'], []);
+            $ok = $to && wp_mail($to, '📊 تقرير مقالات ' . $rep['brand'] . ' — ' . $rep['day'] . ' (' . $rep['total'] . ' عملية · منشور ' . (int) ($rep['status']['live'] ?? 0) . (!empty($rep['status']['held']) ? ' · مسودة ' . (int) $rep['status']['held'] : '') . ')', self::html($rep), ['Content-Type: text/html; charset=UTF-8'], []);
             $res['email'] = $ok ? 'أُرسل إلى ' . $to : 'تعذر إرسال البريد (تحقق من إعدادات البريد في الاستضافة)';
         }
         if ($s['tg_token'] !== '' && $s['tg_chat'] !== '') {
