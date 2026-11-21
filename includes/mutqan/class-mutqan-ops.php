@@ -53,6 +53,7 @@ final class Mutqan_Ops {
         if (strpos($op, 'invoice_') === 0) { return Mutqan_Invoice::op($op, $in, $p); }
         // quotations, their wordings, the AI writer and the document reader (owner, 2026-11-22)
         if (strpos($op, 'quote_') === 0 || $op === 'doc_extract') { return Mutqan_Quote::op($op, $in, $p); }
+        if (strpos($op, 'account_') === 0) { return Mutqan_Accounts::op($op, $in, $p); }
         // the permanent customer layer + the hand-dropped pins (owner, 2026-11-21)
         if ($op === 'old_clients') { return ['clients' => Mutqan_Ledger::map_rows(), 'pins' => Mutqan_Ledger::pins()]; }
         if ($op === 'client_card') { $r = Mutqan_Ledger::card($in['key'] ?? ''); if (!$r) { throw new Mutqan_Error('not_found', 'مش لاقي العميل ده.', 404); } return $r; }

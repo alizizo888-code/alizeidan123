@@ -127,6 +127,11 @@ final class Mutqan_Quote {
             'staff' => ['name' => self::s($staff['name'] ?? ($p['name'] ?? ''), 80), 'title' => self::s($staff['title'] ?? $c['staffTitle']['ar'], 40), 'titleEn' => self::s($staff['titleEn'] ?? $c['staffTitle']['en'], 40)],
             'stamped' => !empty($in['stamped']), 'signed' => !empty($in['signed']), 'orderId' => self::s($in['orderId'] ?? '', 64),
         ];
+        // the customer's file, and the papers read for this quote put on his shelf
+        $cid = (string) ($in['clientId'] ?? '');
+        if ($cid === '' || !Mutqan_Store::get_raw(Mutqan_Accounts::COLL, $cid)) { $cid = Mutqan_Accounts::link($client, $p); }
+        $doc['clientId'] = $cid;
+        foreach ((array) ($in['fileIds'] ?? []) as $fid) { try { Mutqan_Accounts::add_file($cid, (string) $fid, $p); } catch (Throwable $e) { /* never blocks the quote */ } }
         $id = (string) ($in['id'] ?? '');
         if ($id !== '') {
             $old = Mutqan_Store::get_raw(self::COLL, $id);
@@ -192,7 +197,7 @@ final class Mutqan_Quote {
         if (!empty($q['invoice']['id'])) { throw new Mutqan_Error('exists', 'العرض ده اتعمل له فاتورة رقم ' . $q['invoice']['number'] . ' قبل كده.', 409); }
         $cl = $q['client'];
         $inv = Mutqan_Invoice::save(['type' => in_array($in['type'] ?? 'tax', ['tax', 'normal'], true) ? ($in['type'] ?? 'tax') : 'tax', 'inclusive' => (bool) ($q['inclusive'] ?? false),
-            'client' => ['name' => $cl['name'], 'phone' => $cl['phone'], 'vatNo' => $cl['vatNo'], 'city' => $cl['city'], 'district' => $cl['district'], 'street' => $cl['street'], 'building' => $cl['building'], 'zip' => $cl['zip'], 'addNo' => $cl['addNo']],
+            'clientId' => $q['clientId'] ?? '', 'client' => ['name' => $cl['name'], 'phone' => $cl['phone'], 'vatNo' => $cl['vatNo'], 'city' => $cl['city'], 'district' => $cl['district'], 'street' => $cl['street'], 'building' => $cl['building'], 'zip' => $cl['zip'], 'addNo' => $cl['addNo']],
             'items' => array_map(function ($r) { return ['code' => $r['code'] ?? '', 'name' => $r['name'], 'unit' => $r['unit'], 'qty' => $r['qty'], 'price' => $r['price'], 'discount' => $r['discount'] ?? 0]; }, $q['rows']),
             'note' => 'بناءً على عرض السعر ' . $q['number'], 'stamped' => !empty($in['stamped']), 'signed' => !empty($in['signed']), 'orderId' => $q['orderId'] ?? ''], $p);
         Mutqan_Store::update(self::COLL, (string) $id, ['invoice' => ['id' => (string) $inv['id'], 'number' => $inv['number'], 'type' => $inv['type']], 'status' => 'accepted'], self::sys());
@@ -276,12 +281,17 @@ final class Mutqan_Quote {
         foreach (['docType' => 20, 'name' => 200, 'nameEn' => 200, 'city' => 60, 'district' => 60, 'street' => 80, 'building' => 20, 'addNo' => 20, 'province' => 60, 'email' => 120, 'responsible' => 120, 'activity' => 200, 'expiry' => 40] as $k => $n) { $f[$k] = self::s($j[$k] ?? '', $n); }
         $f['crNo'] = self::digits($j['crNo'] ?? '', 10); $f['vatNo'] = self::digits($j['vatNo'] ?? '', 15); $f['zip'] = self::digits($j['zip'] ?? '', 10); $f['phone'] = self::digits($j['phone'] ?? '', 15);
         if ($f['vatNo'] !== '' && !preg_match('/^3\d{13}3$/', $f['vatNo'])) { $f['vatWarn'] = 'الرقم الضريبي المقروء مش مظبوط (' . $f['vatNo'] . ') — راجعه.'; $f['vatNo'] = ''; }
+        // the paper itself is kept in the private vault: it lands on the customer's shelf when the invoice / quote / customer is saved
+        $kind = in_array($f['docType'], ['cr', 'vat', 'address'], true) ? $f['docType'] : 'other';
+        try { $v = Mutqan_Vault::put($b64, $mime, self::s($in['name'] ?? '', 100) ?: (Mutqan_Vault::KINDS[$kind] . ' — ' . ($f['name'] ?: 'عميل')), $kind, $p, (string) ($in['accountId'] ?? '') !== '' ? 'acc:' . $in['accountId'] : ''); $f['file'] = $v; }
+        catch (Throwable $e) { $f['file'] = null; }
+        if (!empty($in['accountId']) && !empty($f['file']['id'])) { try { Mutqan_Accounts::add_file((string) $in['accountId'], $f['file']['id'], $p); } catch (Throwable $e) {} }
         return $f;
     }
 
     public static function op($op, $in, $p) {
         switch ($op) {
-            case 'quote_cfg': return self::cfg() + ['statuses' => self::STATUS, 'kinds' => self::KINDS, 'company' => self::company()];
+            case 'quote_cfg': $ic = Mutqan_Invoice::cfg(); return self::cfg() + ['statuses' => self::STATUS, 'kinds' => self::KINDS, 'company' => self::company(), 'catalog' => $ic['items'], 'cats' => $ic['cats']];
             case 'quote_cfg_set': return self::cfg_set((array) ($in['cfg'] ?? []), $p);
             case 'quote_save': return self::save((array) ($in['quote'] ?? []), $p);
             case 'quote_get': return self::get($in['id'] ?? '');
