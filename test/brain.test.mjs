@@ -24,6 +24,7 @@ const calls = []
 const SL = { new: 'جديد', assigned: 'مُسند', accepted: 'قَبِل الفني', en_route: 'في الطريق', arrived: 'وصل', completed: 'تم الإنجاز', cancelled: 'ملغي' }
 const view = (o) => ({ ...o, statusLabel: SL[o.status] || o.status, facts: { stepLabel: SL[o.status] }, statusText: '📋 طلب #' + o.number + ' — ' + (SL[o.status] || o.status), techPhone: o.techId ? TECH : '', jobCard: '*🔧 طلب جديد ليك*\n📋 رقم الطلب: *' + o.number + '*\nرد بكلمة: *قبلت*' })
 let brain
+const SITE = { on: false }   // the site's shared brain (cancel / answer ops) — switched on for section X
 const events = []
 function emit(type, o, extra = {}) { events.push({ type, order: view(o), ...extra }) }
 async function flush() { while (events.length) await brain.onEvent(events.shift()) }
@@ -46,6 +47,8 @@ const wp = async (op, b) => {
   if (op === 'info') return /سعر|اسعار/.test(b.text) ? { text: 'أسعار المالك' } : null
   if (op === 'quote') { const n = T.norm(b.text); if (!/مكيف|سبليت|تسريب|سباك/.test(n)) return null; const q = /مكيفين|2/.test(n) ? 2 : 1; return /غسيل|اغسل/.test(n) ? { spec: 'ac', fixed: true, label: 'غسيل ' + q + ' مكيف سبليت', qty: q, total: q === 2 ? 140 : 100, floor: q === 2 ? 125 : 89, acQuote: { mode: 'wash', type: 'سبليت', qty: q } } : { spec: 'plumbing', fixed: false, label: 'سباكة', from: 120, total: 120, floor: 100 } }
   if (op === 'greet') return T.pkey(b.phone) === T.pkey(OLDC) ? { site: 'رعد السماء', kind: 'returning', name: 'أبو فهد', lastService: 'غسيل مكيفين', lastDays: 40, fromUs: false } : { site: 'رعد السماء', kind: 'new', fromUs: /#raad|من موقع/.test(b.text) }
+  if (op === 'cancel' && SITE.on) { const o = orders[b.id]; if (['accepted', 'en_route', 'nearby', 'arrived', 'in_progress'].includes(o.status)) { o.cancelRequest = { text: b.text }; return { done: 'requested', reply: 'وصلني طلب الإلغاء ✅ الفني كان متحرك لك، فبلّغته يستنى' } } o.status = 'cancelled'; return { done: 'cancelled', reply: 'تم إلغاء طلبك #' + o.number + ' ✅' } }
+  if (op === 'answer' && SITE.on) { const m = T.norm(b.text).match(/طلب\s*#?(\d{3,})/); if (m) { const o = Object.values(orders).find((x) => String(x.number) === m[1]); return { reply: o && T.pkey(o.clientPhone) === T.pkey(b.phone) ? 'طلبك #' + o.number + ' — ' + (SL[o.status] || o.status) : 'مش لاقي طلب رقم ' + m[1] + ' على رقمك' } } if (/طرق الدفع/.test(b.text)) return { reply: '💳 *طرق الدفع* (من الموقع)' }; return { reply: null } }
   if (op === 'converse') return AI.on ? { reply: 'أكيد، غسيل المكيف السبليت بـ 120 ر.س للجهاز. في أي حي؟', lead: { service: 'غسيل 2 سبليت', area: AI.area || '', time: AI.time || '' }, complete: !!(AI.area && AI.time) } : null
   return { ok: true }
 }
@@ -238,6 +241,23 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   orders.ow = { id: 'xx5bfb9', number: 1555, status: 'new', clientPhone: '', service: 'غسيل مكيف', site: 'متقن', seal: '6KHZCYHR' }
   const m = await say(SW, '🔔 *طلب جديد — متقن*\nرقم الطلب: #5bfb9\n🛠️ الخدمة: صيانة وتكييف\n📍 الموقع: https://maps.google.com/?q=21.4,39.8\n✅ للتحقق من صحة الطلب (توثيق): https://mutqan.oxygen11.com/v/6KHZCYHR-f4ab50')
   t('the site order message binds his number, gets a receipt (no welcome), the room is told', T.pkey(orders.ow.clientPhone) === T.pkey(SW) && /تم استلام طلبك رقم \*1555\*/.test(to(m, SW)) && !/مرحبًا بكم/.test(to(m, SW)) && /أكد طلب #1555 من واتساب/.test(to(m, ROOM)), JSON.stringify(m))
+}
+
+// ===== X. one brain with the site: same cancel procedure, same answers =====
+{
+  SITE.on = true
+  const SX = '966500000091'
+  orders.ox = { id: 'ox', number: 1999, status: 'assigned', techId: 't1', techName: 'الفني علي', clientPhone: SX, clientName: 'سامي', service: 'غسيل مكيف', customerConfirmed: true }
+  await say(SX, 'السلام عليكم'); await sleep(); take()
+  let r = await say(SX, 'طلب 1999 وصل لفين؟'); await sleep(); r = r.concat(take())
+  t('«طلب 1999 وصل لفين؟» → the site\'s answer (same as the site chat)', /طلبك #1999/.test(to(r, SX)), JSON.stringify(r))
+  r = await say(SX, 'طرق الدفع'); await sleep(); r = r.concat(take())
+  t('«طرق الدفع» → the site\'s text', /من الموقع/.test(to(r, SX)), JSON.stringify(r))
+  r = await say(SX, 'طلب 1002 فين'); await sleep(); r = r.concat(take())
+  t('another customer\'s order number is not shown', /مش لاقي/.test(to(r, SX)), JSON.stringify(r))
+  r = await say(SX, 'الغي الطلب'); await sleep(); r = r.concat(take())
+  t('cancel before the technician accepted → cancelled by the site at once, room told', orders.ox.status === 'cancelled' && /تم إلغاء طلبك/.test(to(r, SX)) && /لغى طلب #1999/.test(to(r, ROOM)), JSON.stringify(r))
+  SITE.on = false
 }
 
 console.log(`wa-hub brain: ${pass} passed, ${fail} failed`)

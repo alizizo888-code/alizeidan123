@@ -21,7 +21,7 @@ export const DEFAULTS = {
   notifyAgents: true,
   autoReply: true,
   siteName: 'أكسجين للصيانة',
-  hoursFrom: 8, hoursTo: 24,
+  hoursFrom: 7, hoursTo: 23,     // owner, 2026-11-20: 7 am–10 pm same day; from 11 pm the next morning (the site's config wins)
   welcome: 'مرحبًا بكم في *{site}* 🌷\nنقدّم خدمات صيانة وإصلاح جميع أنواع المكيفات، وغرف التبريد والتجميد، وكمان خدمات السباكة والنجارة والكهرباء، والمزيد…\n\nاكتب لنا الخدمة اللي محتاجها والحي، ويسعدنا نخدمك.',
   welcomeBack: 'أهلًا بعودتك{name} 🌷 نورتنا تاني في *{site}*.{last}\nتحب نكرر نفس الخدمة، ولا محتاج حاجة جديدة؟',
   afterHours: '🌙 إحنا دلوقتي برا مواعيد العمل؛ نقدر نحجزلك أقرب موعد الصبح. ولو الموضوع طارئ اتصل بينا مباشرة على *{phone}*.',
@@ -35,7 +35,7 @@ export const DEFAULTS = {
 export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now = () => Date.now(), log = () => {}, later = (fn, ms) => setTimeout(fn, ms), cancel = (h) => clearTimeout(h) }) {
   // «الفني الفني علي»: a technician whose name already starts with «الفني» is named once.
   const send = (phone, text, o) => rawSend(phone, String(text).replace(/(الفن[يى])\s+(?=الفن[يى]\s)/g, ''), o)
-  const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; if (!c.testPhone) c.testPhone = (store.get('wpConfig', {}) || {}).testCustomer || ''; if (/1️⃣ طلب خدمة/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome; return c }
+  const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; const wc = store.get('wpConfig', {}) || {}; if (!c.testPhone) c.testPhone = wc.testCustomer || ''; if (Number.isFinite(wc.hoursFrom)) c.hoursFrom = wc.hoursFrom; if (Number.isFinite(wc.hoursTo)) c.hoursTo = wc.hoursTo; if (/1️⃣ طلب خدمة/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome; return c }
   const who$ = new Map()   // phone → {at, who}: one question to the website per person per ten minutes
 
   /* ------------------------------------------------------------------ sending */
@@ -281,9 +281,21 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     return true
   }
 
+  /** The same answers as the site chat (the site's shared brain): an order by its number, payment, warranty, offers. */
+  async function sharedAnswer(line, phone, text) {
+    const n = T.norm(text); const it = T.intent(text)
+    if (!(/(طلب|رقم|#)\s*#?\s*\d{3,7}/.test(n) || ['pay', 'warranty'].includes(it) || /^(العروض|عروض|الخصومات|في عروض|فيه عروض|عندكم عروض|طرق الدفع|الضمان)$/.test(n))) return false
+    let a = null
+    try { a = await wp('answer', { phone: T.intl(phone), text, brand: store.line?.(line)?.brand || '' }) } catch (e) { log('warn', 'answer: ' + e.message) }
+    if (!a || !a.reply) return false
+    say(phone, line, a.reply)
+    return true
+  }
+
   async function customer({ c, line, phone, text, name }) {
     const C = cfg()
     if (await claimed(c, line, phone, text, name)) return
+    if (c.welcomedAt && !humanActive(c, 10 * 60000) && await sharedAnswer(line, phone, text)) return
     const j = stageOf(phone)
     if (j && j.o) {
       // The order's own conversation: at once — unless a person is talking to him right now.
@@ -328,6 +340,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       toRoom('🚨 *طارئ برا مواعيد العمل*\n👤 ' + (c.name || 'بدون اسم') + ' — ' + c.phone + '\n💬 «' + text.slice(0, 200) + '»', 'emg-' + c.pk + '-' + Math.floor(now() / 1800000))
       return say(phone, line, 'سلامتك 🙏 ده يبان طارئ ومحتاج تدخل سريع — اتصل بينا حالًا على *' + C.emergencyPhone + '* وهنتصرف فورًا.\nولو حابب، ابعت الموقع هنا وأنا هسجل البيانات للفني.')
     }
+    if (await sharedAnswer(line, phone, text)) return
     // His order is open: answer about it.
     if (['where', 'urgent', 'status', 'cancel', 'postpone', 'request', 'warranty', 'pay'].includes(it) || n === '3') {
       let o = null
@@ -517,8 +530,20 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     return liveStage(o, text, phone)
   }
 
+  /** «الغي» — the site decides by one procedure for every door (cancelled at once before a technician accepted). */
+  async function siteCancel(o, text) {
+    let r = null
+    try { r = await wp('cancel', { id: o.id, text: text.slice(0, 200) }) } catch (e) { log('warn', 'cancel: ' + e.message) }
+    if (!r || !r.reply) return null
+    const n = T.num(o)
+    if (r.done === 'cancelled') toRoom('❌ العميل لغى طلب #' + n + ' على واتساب (قبل ما فني يقبله — اتلغى)\n💬 «' + text.slice(0, 160) + '»\n👤 ' + (o.clientName || '—') + ' — ' + o.clientPhone, 'cancel-' + o.id)
+    else if (r.done === 'requested') toRoom('❌ *العميل عايز يلغي طلب #' + n + '* — والفني ' + (o.techName || '') + ' ' + (LABEL_ST[o.status] || o.status) + '\n💬 «' + text.slice(0, 160) + '»\n👤 ' + (o.clientName || '—') + ' — ' + o.clientPhone + '\n\nتأكّد الإلغاء: *الغي ' + n + '* · أو كلّمه: *رد ' + n + ' نص الرسالة*', 'cancel-' + o.id + '-' + T.norm(text).slice(0, 20))
+    return r.reply
+  }
+
   async function confirmStage(o, text, phone) {
     if (T.intent(text) === 'cancel') {
+      const done = await siteCancel(o, text); if (done) return done
       await wp('patch', { id: o.id, patch: { cancelRequest: { at: new Date(now()).toISOString(), text: text.slice(0, 200), status: o.status } }, step: { kind: 'wa_cancel_request', text: 'العميل طلب الإلغاء قبل التأكيد: ' + text.slice(0, 80) } })
       toRoom('❌ العميل طلب إلغاء طلب #' + T.num(o) + ' قبل التأكيد: «' + text.slice(0, 120) + '»\n\nتأكّد الإلغاء: *الغي ' + T.num(o) + '*', 'cancel-' + o.id)
       return 'وصلني طلب الإلغاء وبلّغت العمليات، وهيتأكد لك حالًا.'
@@ -565,6 +590,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     let it = T.intent(text)
     const n = T.num(o)
     if (it === 'cancel') {
+      const done = await siteCancel(o, text); if (done) return done
       const moving = MOVING.includes(o.status)
       await wp('patch', { id: o.id, patch: { cancelRequest: { at: new Date(now()).toISOString(), text: text.slice(0, 200), status: o.status } }, step: { kind: 'wa_cancel_request', text: 'العميل طلب الإلغاء على واتساب: ' + text.slice(0, 80) } })
       if (o.techId) await wp('tell_tech', { id: o.id, text: '⏸ العميل طلب إلغاء طلب #' + n + (moving ? ' — استنى مكانك' : '') + ' لحد ما العمليات تأكد. هنبلغك حالًا.' })
