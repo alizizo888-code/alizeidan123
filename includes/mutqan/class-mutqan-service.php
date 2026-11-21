@@ -19,23 +19,23 @@ final class Mutqan_Service {
     public static function boot() {
         add_action('mutqan_service_fill', [__CLASS__, 'fill_step']);
         add_action('init', function () {
-            if (get_option('mutqan_service_filled') || wp_next_scheduled('mutqan_service_fill')) { return; }
+            if (get_option('mutqan_service_filled2') || wp_next_scheduled('mutqan_service_fill')) { return; }
             wp_schedule_single_event(time() + 15, 'mutqan_service_fill');
         }, 31);
     }
     public static function fill_step() {
-        if (get_option('mutqan_service_filled') || get_transient('mutqan_service_lock')) { return; }
+        if (get_option('mutqan_service_filled2') || get_transient('mutqan_service_lock')) { return; }
         set_transient('mutqan_service_lock', 1, 300);
         global $wpdb; $t = Mutqan_Store::table('docs');
-        $off = (int) get_option('mutqan_service_offset', 0);
+        $off = (int) get_option('mutqan_service_offset2', 0);
         $rows = $wpdb->get_results($wpdb->prepare("SELECT pk, data FROM $t WHERE coll = 'orders' ORDER BY pk ASC LIMIT 300 OFFSET %d", $off), ARRAY_A);
         foreach ((array) $rows as $r) {
             $d = json_decode($r['data'], true); if (!is_array($d)) { continue; }
             $n = self::stamp($d);
             if ($n !== $d) { $wpdb->update($t, ['data' => wp_json_encode($n, JSON_UNESCAPED_UNICODE)], ['pk' => $r['pk']]); }
         }
-        if (count((array) $rows) < 300) { update_option('mutqan_service_filled', gmdate('c'), false); delete_option('mutqan_service_offset'); }
-        else { update_option('mutqan_service_offset', $off + 300, false); wp_schedule_single_event(time() + 10, 'mutqan_service_fill'); }
+        if (count((array) $rows) < 300) { update_option('mutqan_service_filled2', gmdate('c'), false); delete_option('mutqan_service_offset2'); }
+        else { update_option('mutqan_service_offset2', $off + 300, false); wp_schedule_single_event(time() + 10, 'mutqan_service_fill'); }
         delete_transient('mutqan_service_lock');
     }
 
@@ -123,9 +123,10 @@ final class Mutqan_Service {
     }
 
     /** The words of the order, without the generic specialty names. */
-    private static function text_of($o) {
+    private static function text_of($o, $withNote = false) {
         $parts = [];
-        foreach (['service', 'serviceDetails', 'description', 'problem', 'note'] as $k) { if (!empty($o[$k]) && is_string($o[$k])) { $parts[] = $o[$k]; } }
+        // the note holds chat lines and operations remarks: read only when the order's own words say nothing
+        foreach (array_merge(['service', 'serviceDetails', 'description', 'problem'], $withNote ? ['note'] : []) as $k) { if (!empty($o[$k]) && is_string($o[$k])) { $parts[] = $o[$k]; } }
         foreach ((array) ($o['items'] ?? []) as $it) { if (is_array($it)) { $parts[] = (string) ($it['name'] ?? $it['label'] ?? ''); } elseif (is_string($it)) { $parts[] = $it; } }
         // the operations warnings we add ourselves are not the customer's words
         return preg_replace('/⚠️[^\n]*/u', ' ', implode(' ، ', array_unique(array_filter($parts))));
@@ -136,6 +137,7 @@ final class Mutqan_Service {
         $o = is_array($o) ? $o : [];
         $spec = (string) ($o['specialtyId'] ?? '');
         $text = self::text_of($o);
+        if (!self::modes($text) && !self::units($text)) { $text = self::text_of($o, true); }
         $aq = is_array($o['acQuote'] ?? null) ? $o['acQuote'] : [];
         $qMode = ['wash' => 'wash', 'install' => 'install', 'maintenance' => 'repair', 'repair' => 'repair', 'move' => 'move', 'remove' => 'remove'][(string) ($aq['mode'] ?? '')] ?? '';
         $menu = (string) ($o['svcMode'] ?? '');
