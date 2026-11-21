@@ -676,6 +676,24 @@ final class Mutqan_WA {
         ];
         if (isset($neg['offer'])) { $order['agreedPrice'] = (int) $neg['offer']; }
 
+        if (class_exists('Mutqan_Hub')) {
+            $q = Mutqan_Hub::quote($service . ' ' . (string) ($lead['note'] ?? ''));
+            if ($q) {
+                $order['specialtyId'] = (string) $q['spec'];
+                $order['qty'] = (int) $q['qty'];
+                if (!empty($q['acQuote'])) { $order['acQuote'] = $q['acQuote'] + ['total' => (int) $q['total']]; }
+                if (!empty($q['total'])) { $order['listPrice'] = (int) $q['total']; $order['plan']['quotedPrice'] = $order['plan']['quotedPrice'] ?? (int) $q['total']; }
+            }
+        }
+        if (!isset($order['agreedPrice']) && !empty($order['plan']['agreedPrice'])) { $order['agreedPrice'] = (int) $order['plan']['agreedPrice']; }
+        // A price said on WhatsApp under what the owner allows never blocks the order: it is kept as a note for operations.
+        if (isset($order['agreedPrice']) && !empty($order['specialtyId'])) {
+            $fl = ($order['specialtyId'] === 'ac' && !empty($order['acQuote'])) ? Mutqan_Policy::ac_floor($order['acQuote']) : Mutqan_Policy::floor_for($order['specialtyId'], $order['qty'] ?? 1, false);
+            if ((float) $order['agreedPrice'] < $fl - 1) {
+                $order['note'] = trim($order['note'] . "\n⚠️ سعر اتقال على واتساب (" . (int) $order['agreedPrice'] . ' ر.س) أقل من المسموح — راجعه مع العميل.');
+                unset($order['agreedPrice']); unset($order['plan']['agreedPrice']);
+            }
+        }
         $doc = Mutqan_Store::insert('orders', $order, null, [], self::sys());
         $id = (string) ($doc['id'] ?? '');
         if ($id === '') { return null; }
