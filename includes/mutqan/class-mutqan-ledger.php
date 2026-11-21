@@ -134,6 +134,18 @@ final class Mutqan_Ledger {
         return ['repeat' => (bool) $prev, 'count' => count($prev), 'last' => $prev[0] ?? null, 'nearby' => $near, 'text' => implode("\n", $L)];
     }
 
+    /** One background step of the first fill: 300 orders, then the next step is scheduled until none are left. */
+    public static function fill_step() {
+        if (get_option('mutqan_ledger_filled') || get_transient('mutqan_ledger_lock')) { return; }
+        set_transient('mutqan_ledger_lock', 1, 300);
+        $off = (int) get_option('mutqan_ledger_offset', 0);
+        $rows = Mutqan_Store::select('orders', [], ['limit' => 300, 'offset' => $off, 'order' => 'createdAt'], self::sys());
+        foreach ($rows as $o) { self::touch($o); }
+        if (count($rows) < 300) { update_option('mutqan_ledger_filled', gmdate('c'), false); delete_option('mutqan_ledger_offset'); }
+        else { update_option('mutqan_ledger_offset', $off + 300, false); wp_schedule_single_event(time() + 10, 'mutqan_ledger_fill'); }
+        delete_transient('mutqan_ledger_lock');
+    }
+
     /** Once: every order already in the system goes into the ledger. */
     public static function backfill($limit = 5000) {
         $n = 0;
@@ -143,9 +155,11 @@ final class Mutqan_Ledger {
     }
 
     public static function boot() {
+        // The first fill runs in the background (cron), in steps of 300 orders, never inside a customer's page load.
+        add_action('mutqan_ledger_fill', [__CLASS__, 'fill_step']);
         add_action('init', function () {
-            if (get_option('mutqan_ledger_filled') || get_transient('mutqan_ledger_lock')) { return; }
-            set_transient('mutqan_ledger_lock', 1, 600); self::backfill(); delete_transient('mutqan_ledger_lock');
+            if (get_option('mutqan_ledger_filled') || wp_next_scheduled('mutqan_ledger_fill')) { return; }
+            wp_schedule_single_event(time() + 5, 'mutqan_ledger_fill');
         }, 30);
     }
 
