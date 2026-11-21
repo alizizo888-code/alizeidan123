@@ -113,7 +113,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const head = '🆕 *طلب جديد #' + T.num(o) + '*' + (o.site ? ' — ' + o.site : '')
     const hint = o.techName ? '👷 اتسند آليًا لـ ' + o.techName : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'
     const waiting = [o.originLine ? '🧭 جاي منين: ' + o.originLine : '', o.historyText ? '✅ تم العمل عنده قبل كده\n' + o.historyText : '', o.clientPhone ? '' : '⏳ رقم العميل يوصل أول ما يبعت رسالة الطلب من واتساب'].filter(Boolean).join('\n')
-    toRoom((card ? [card, waiting, '', hint] : [head, '👤 ' + (o.clientName || 'بدون اسم') + (o.clientPhone ? ' — ' + o.clientPhone : ' — ⏳ مستني تأكيده من واتساب'), ...T.summary(o), o.historyText ? '✅ تم العمل عنده قبل كده\n' + o.historyText : '', '', hint]).filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n'), 'new-' + o.id)
+    toRoom((card ? [card, waiting, '', hint] : [head, '👤 ' + (o.clientName || 'بدون اسم') + (o.clientPhone ? ' — ' + o.clientPhone : ' — ⏳ مستني تأكيده من واتساب'), ...T.opsSummary(o), o.historyText ? '✅ تم العمل عنده قبل كده\n' + o.historyText : '', '', hint]).filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n'), 'new-' + o.id)
     // From the site's order button: the site sends him the full order card itself — no «اكتب تأكيد» for him.
     if (o.clientPhone && ['site', 'mutqan_ai'].includes(o.source)) { setStage(o.clientPhone, o.id, 'live'); return }
     if (!o.clientPhone || o.customerConfirmed || o.waClaim || ['test', 'import'].includes(o.source)) return
@@ -472,7 +472,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   const PIN_ASK = '📍 ابعت *اللوكيشن نفسه* من واتساب: 📎 ← الموقع ← إرسال موقعي الحالي.\nاسم الحي لوحده مش كفاية — الفني بيوصلك باللوكيشن.'
   const REPAIR = /(عطل|عطلان|خربان|ما يبرد|مش بيبرد|ما يشتغل|ما يشغل|صيانه|اصلاح|تصليح|يقطر|ينقط|صوت|ريحه|فريون|كود|بيفصل|يفصل)/
   const INSTALL = /(تركيب|ركب|فك|نقل|اركب)/
-  const PARTS = /(قطع غيار|قطع الغيار|سعر القطع|اسعار القطع|سعر القطعه|مكثف|كباستور|كابستور|بطاريه المكيف|ترموستات|ثرموستات|كونتاكتور|كنتاكتور|شريحه|بورده|موتور|ماتور|ريش المروحه|كمبروسر|كمبريسور|ضاغط|فريون)/
+  const PARTS = /(قطع غيار|قطع الغيار|سعر القطع|اسعار القطع|سعر القطعه|مكثف|كباستور|كابستور|بطاريه المكيف|ترموستات|ثرموستات|كونتاكتور|كنتاكتور|شريحه|بورده|موتور|ماتور|ريش المروحه|كمبروسر|كمبريسور|كمبرسور|ضاغط|فريون|كونتكتر|كنتكتر|فانه|الفان|دينمو|دنمو|دينامو)/
   const hourNow = () => Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Asia/Riyadh' }).format(new Date(now())))
   function flowOf(c) { let L = {}; try { L = JSON.parse(c?.lead || '{}') } catch {} const m = L.m; return m && m.step && now() - (m.at || 0) < FLOW_TTL ? m : null }
   function saveFlow(pk, m) {
@@ -504,6 +504,9 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (REPAIR.test(n) && !/(غسيل|غسل|اغسل|تنظيف)/.test(n)) return flow(c, line, phone, '2', name, { step: 'home', ...extra, pre: text })
     if (INSTALL.test(n) && !/(غسيل|غسل|اغسل)/.test(n)) return flow(c, line, phone, '3', name, { step: 'home', ...extra })
     const m = { step: 'wash_type', svc: 'wash', spec: 'ac', items: {}, ...extra }
+    // duct / concealed / package / central: surveyed first, never priced from the split table
+    if (pa.big > 0) { Object.assign(m, { acType: pa.bigType, count: pa.big }); return bigWash(c, line, phone, m) }
+    if (pa.otherType) m.acType = pa.otherType
     if (pa.units > 0) { m.items = { split: pa.split, window: pa.window, other: pa.other }; return priceStep(c, line, phone, m) }
     if (pa.any) m.anyCount = pa.any
     saveFlow(c.pk, m)
@@ -518,8 +521,16 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     return sayImg(phone, line, body, r?.image || '')
   }
 
+  /** Washing a duct / concealed / package / central unit: the count, then the survey — no table price. */
+  function bigWash(c, line, phone, m) {
+    const nm = M.AC_NAMES[m.acType] || 'مخفي'
+    if (!m.count) { m.step = 'big_count'; saveFlow(c.pk, m); return say(phone, line, 'كام وحدة ' + nm + '؟ (اكتب الرقم)') }
+    Object.assign(m, { label: 'غسيل ' + m.count + ' مكيف ' + nm, priceLater: true })
+    return askPlace(c, line, phone, m, 'تمام ✅ غسيل الـ' + nm + ' سعره بيتحدد بعد المعاينة (حسب الطن وعدد الفتحات)، والفني بيقولك السعر قبل أي شغل.')
+  }
+
   async function priceStep(c, line, phone, m, prefix = '') {
-    let P = null; try { P = await wp('ac_price', { split: m.items.split || 0, window: m.items.window || 0, other: m.items.other || 0 }) } catch (e) { log('warn', 'ac_price: ' + e.message) }
+    let P = null; try { P = await wp('ac_price', { split: m.items.split || 0, window: m.items.window || 0, other: m.items.other || 0, otherType: m.items.other ? (m.acType || '') : '' }) } catch (e) { log('warn', 'ac_price: ' + e.message) }
     if (!P || !P.total) { saveFlow(c.pk, null); notifyHuman(c, 'ما قدرتش أحسب سعر: ' + JSON.stringify(m.items), false); return say(phone, line, 'ثواني 🙏 موظف هيأكدلك السعر حالًا.') }
     Object.assign(m, { step: 'price', price: P, offer: P.total, round: 0, agreed: null, label: P.label })
     saveFlow(c.pk, m)
@@ -545,7 +556,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   }
   function summary(c, line, phone, m) {
     m.step = 'summary'; saveFlow(c.pk, m)
-    const price = m.svc === 'wash' ? '💰 السعر: *' + (m.agreed || m.offer) + ' ر.س*' : '💰 ' + (m.svc === 'repair' ? (['ac', 'fridge'].includes(m.spec || 'ac') ? 'الكشف مجاني لحد جهازين، والسعر بعد الكشف وقبل أي شغل' : 'السعر بعد المعاينة وقبل أي شغل') : 'السعر بعد المعاينة (حسب النوع وطول النحاس) وقبل أي شغل')
+    const price = m.priceLater ? '💰 السعر بعد المعاينة وقبل أي شغل' : m.svc === 'wash' ? '💰 السعر: *' + (m.agreed || m.offer) + ' ر.س*' : '💰 ' + (m.svc === 'repair' ? (['ac', 'fridge'].includes(m.spec || 'ac') ? 'الكشف مجاني لحد جهازين، والسعر بعد الكشف وقبل أي شغل' : 'السعر بعد المعاينة وقبل أي شغل') : 'السعر بعد المعاينة (حسب النوع وطول النحاس) وقبل أي شغل')
     return say(phone, line, ['📝 *ملخص طلبك*', '🛠 ' + m.label, price, '📍 اللوكيشن اتبعت ✅' + (m.place ? ' (' + m.place + ')' : ''), '📅 ' + m.time, '', '1️⃣ تأكيد الطلب ✅', '2️⃣ تعديل', '3️⃣ إلغاء'].join('\n'))
   }
 
@@ -555,7 +566,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     let o = null
     try {
       o = await wp('create', { phone: T.intl(phone), name: name || c.name || '', service: m.label + (m.desc ? ' — ' + m.desc : ''), address: m.place || '', lat: m.lat ?? null, lng: m.lng ?? null, time: m.time, line,
-        price: m.svc === 'wash' ? (m.agreed || m.offer) : null, acQuote: m.svc === 'wash' ? (m.price?.acQuote || null) : null, spec: m.spec || 'ac', units: m.price?.units || m.count || null, confirmed: true,
+        mode: m.svc === 'install' ? (m.imode || 'install') : m.svc, acType: m.acType || '', desc: m.desc || '',
+        price: m.svc === 'wash' && !m.priceLater ? (m.agreed || m.offer) : null, acQuote: m.svc === 'wash' && !m.priceLater ? (m.price?.acQuote || null) : null, spec: m.spec || 'ac', units: m.price?.units || m.count || null, confirmed: true,
         brand: (g && g.brand) || store.line?.(line)?.brand || '', code: (g && g.code) || '', source: (g && g.source) || '', sourceUrl: (g && g.sourceUrl) || '', platform: (g && g.platform) || '' })
     } catch (e) {
       log('error', 'create: ' + e.message)
@@ -565,7 +577,9 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     saveFlow(c.pk, null)
     if (!o) { notifyHuman(store.chat(c.pk), 'طلب من القائمة ما اتسجلش: ' + m.label + ' — ' + (m.place || '') + ' — ' + m.time, false); return say(phone, line, 'وصلنا طلبك ✅ وموظف هيأكده معاك حالًا.') }
     store.touchChat(c.pk, { stage: 'live', orderId: o.id || '', stageAt: now() })
-    return say(phone, line, ['✅ *تم تأكيد طلبك رقم ' + T.num(o) + '*', 'جاري تجهيز الفني، وهنبلغك هنا أول ما يتحرك 🚗', o.url ? '🔗 تابع طلبك: ' + o.url : '', '', 'تقدر في أي وقت تكتب *6* لمتابعة طلبك أو تأجيله.'].filter((x, i) => x || i > 2).join('\n'))
+    // The confirmation carries the whole order as the site saved it: service, A/C type and count, details, address, pin, time, price.
+    const det = Array.isArray(o.details) && o.details.length ? o.details : T.summary(o)
+    return say(phone, line, ['✅ *تم تأكيد طلبك رقم ' + T.num(o) + '*', ...det, '', 'جاري تجهيز الفني، وهنبلغك هنا أول ما يتحرك 🚗', o.url ? '🔗 تابع طلبك: ' + o.url : '', 'تقدر في أي وقت تكتب *6* لمتابعة طلبك أو تأجيله.'].filter((x) => x !== null && x !== undefined && x !== false).filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n'))
   }
 
   /** One turn of the menu. m: the conversation's step and what was chosen so far. */
@@ -616,8 +630,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       }
       case 'home': {
         if (k === 1) return startFrom(c, line, phone, 'غسيل', name)
-        if (k === 2) { saveFlow(c.pk, { step: 'rep_type', svc: 'repair', pre: m.pre || '', place: m.place || '' }); return say(phone, line, '🔧 *صيانة وإصلاح* — نوع الجهاز إيه؟\n1️⃣ مكيف سبليت\n2️⃣ مكيف شباك\n3️⃣ كاسيت / مخفي / دولابي\n4️⃣ غرفة تبريد / تجميد\n5️⃣ حاجة تانية (سباكة، كهربا، أجهزة…)' + M.FOOT) }
-        if (k === 3) { saveFlow(c.pk, { step: 'ins_type', svc: 'install', spec: 'ac', place: m.place || '' }); return say(phone, line, '🛠 *تركيب / فك ونقل* — نوع المكيف؟\n1️⃣ سبليت\n2️⃣ شباك\n3️⃣ كاسيت / مخفي / دولابي' + M.FOOT) }
+        if (k === 2) { saveFlow(c.pk, { step: 'rep_type', svc: 'repair', pre: m.pre || '', place: m.place || '' }); return say(phone, line, '🔧 *صيانة وإصلاح* — نوع الجهاز إيه؟\n' + M.KINDS + '\n7️⃣ غرفة تبريد / تجميد\n8️⃣ حاجة تانية (سباكة، كهربا، أجهزة…)' + M.FOOT) }
+        if (k === 3) { saveFlow(c.pk, { step: 'ins_type', svc: 'install', spec: 'ac', place: m.place || '' }); return say(phone, line, '🛠 *تركيب / فك ونقل* — نوع المكيف؟\n' + M.KINDS + M.FOOT) }
         if (k === 4) {
           let t = null; try { t = await wp('ac_table', {}) } catch {}
           saveFlow(c.pk, { step: 'table' })
@@ -650,11 +664,18 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
         return flow(c, line, phone, text, name, { step: 'home' })
       }
       case 'wash_type': {
-        const pick = { 1: { split: 1 }, 2: { window: 1 }, 3: { split: 1, window: 1 }, 4: { other: 1 } }[k]
+        if (k === 6 || k === 7) { Object.assign(m, { acType: k === 6 ? 'concealed' : 'package', count: 0 }); return bigWash(c, line, phone, m) }
+        const pick = { 1: { split: 1 }, 2: { window: 1 }, 3: { split: 1, window: 1 }, 4: { other: 1 }, 5: { other: 1 } }[k]
         if (!pick) return say(phone, line, 'اختار نوع المكيفات برقم 👇\n' + M.TYPES + M.FOOT)
+        m.acType = { 1: 'split', 2: 'window', 4: 'standing', 5: 'cassette' }[k] || ''
         m.want = Object.keys(pick); m.items = {}
         if (m.anyCount && m.want.length === 1) { m.items[m.want[0]] = m.anyCount; return priceStep(c, line, phone, m) }
         return askCount(c, line, phone, m)
+      }
+      case 'big_count': {
+        const q = M.numberIn(text)
+        if (!q || q > 50) return say(phone, line, 'اكتب العدد بالأرقام (مثال: 2)')
+        m.count = q; return bigWash(c, line, phone, m)
       }
       case 'count': {
         const q = M.numberIn(text)
@@ -678,9 +699,10 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
         return say(phone, line, 'السعر الحالي *' + m.offer + ' ر.س* لـ' + m.price.label + '\n\n1️⃣ تمام، كمّل الحجز\n2️⃣ عايز سعر أحسن\n3️⃣ غيّر العدد أو النوع' + M.FOOT)
       }
       case 'rep_type': {
-        const t = { 1: ['ac', 'مكيف سبليت'], 2: ['ac', 'مكيف شباك'], 3: ['ac', 'مكيف كاسيت / مخفي'], 4: ['fridge', 'غرفة تبريد / تجميد'], 5: ['general', 'صيانة عامة'] }[k]
-        if (!t) return say(phone, line, 'اختار نوع الجهاز برقم من 1 لـ 5 👇' + M.FOOT)
-        Object.assign(m, { spec: t[0], label: 'صيانة وإصلاح — ' + t[1], step: 'rep_desc' }); saveFlow(c.pk, m)
+        const ty = M.KIND_OF[k]
+        const t = ty ? ['ac', 'مكيف ' + M.AC_NAMES[ty]] : { 7: ['fridge', 'غرفة تبريد / تجميد'], 8: ['general', 'صيانة عامة'] }[k]
+        if (!t) return say(phone, line, 'اختار نوع الجهاز برقم من 1 لـ 8 👇' + M.FOOT)
+        Object.assign(m, { spec: t[0], acType: ty || '', label: 'صيانة وإصلاح — ' + t[1], step: 'rep_desc' }); saveFlow(c.pk, m)
         return say(phone, line, 'اكتب المشكلة باختصار 👇\n(مثال: مش بيبرد، بيقطّر مية، صوت عالي، بيفصل، كود E4)')
       }
       case 'rep_desc': {
@@ -691,15 +713,15 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
         return askPlace(c, line, phone, m, (acLike ? 'تمام ✅ الفني هيكشف ويحدد العطل ويقولك السعر قبل أي شغل — والكشف مجاني لحد جهازين.' : 'تمام ✅ الفني هيعاين ويقولك السعر قبل أي شغل.') + (parts ? '\n\n' + parts : ''))
       }
       case 'ins_type': {
-        const t = { 1: 'سبليت', 2: 'شباك', 3: 'كاسيت / مخفي' }[k]
-        if (!t) return say(phone, line, 'اختار نوع المكيف برقم 👇\n1️⃣ سبليت\n2️⃣ شباك\n3️⃣ كاسيت / مخفي / دولابي' + M.FOOT)
-        Object.assign(m, { itype: t, step: 'ins_kind' }); saveFlow(c.pk, m)
+        const ty = M.KIND_OF[k]
+        if (!ty) return say(phone, line, 'اختار نوع المكيف برقم 👇\n' + M.KINDS + M.FOOT)
+        Object.assign(m, { itype: M.AC_NAMES[ty], acType: ty, step: 'ins_kind' }); saveFlow(c.pk, m)
         return say(phone, line, 'المطلوب إيه؟\n1️⃣ تركيب جديد\n2️⃣ فك وتركيب في مكان تاني\n3️⃣ فك بس' + M.FOOT)
       }
       case 'ins_kind': {
         const t = { 1: 'تركيب', 2: 'فك وتركيب', 3: 'فك' }[k]
         if (!t) return say(phone, line, 'اختار برقم 👇\n1️⃣ تركيب جديد\n2️⃣ فك وتركيب في مكان تاني\n3️⃣ فك بس' + M.FOOT)
-        Object.assign(m, { ikind: t, step: 'ins_count' }); saveFlow(c.pk, m)
+        Object.assign(m, { ikind: t, imode: { 1: 'install', 2: 'move', 3: 'remove' }[k], step: 'ins_count' }); saveFlow(c.pk, m)
         return say(phone, line, 'كام جهاز؟ (اكتب الرقم)')
       }
       case 'ins_count': {
@@ -758,7 +780,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const next = (m.want || []).find((t) => !m.items[t])
     if (!next) return priceStep(c, line, phone, m)
     m.step = 'count'; m.asking = next; saveFlow(c.pk, m)
-    const name = { split: 'سبليت', window: 'شباك', other: 'كاسيت / مخفي / دولابي' }[next]
+    const name = { split: 'سبليت', window: 'شباك', other: M.AC_NAMES[m.acType] || 'دولابي' }[next]
     return say(phone, line, 'كام مكيف ' + name + '؟ (اكتب الرقم)')
   }
 
@@ -959,7 +981,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   async function confirm(o, phone) {
     await wp('patch', { id: o.id, patch: { customerConfirmed: true, confirmedAt: new Date(now()).toISOString(), confirmedVia: 'whatsapp' }, step: { kind: 'wa_confirmed', text: 'العميل أكد الطلب على واتساب' } })
     setStage(phone, o.id, 'live')
-    toRoom(['✅ *العميل أكد طلب #' + T.num(o) + '* على واتساب', '👤 ' + (o.clientName || '—') + ' — ' + o.clientPhone, ...T.summary(o), '', o.techId ? '👷 مع الفني: ' + (o.techName || '') : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'].join('\n'), 'ok-' + o.id)
+    toRoom(['✅ *العميل أكد طلب #' + T.num(o) + '* على واتساب', '👤 ' + (o.clientName || '—') + ' — ' + o.clientPhone, ...T.opsSummary(o), '', o.techId ? '👷 مع الفني: ' + (o.techName || '') : 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*'].join('\n'), 'ok-' + o.id)
     return 'تم تأكيد طلبك ✅\nهنبلغك هنا أول ما الفني يستلم ويتحرك، وتقدر تسألني في أي وقت «الفني فين؟» أو تطلب أي حاجة توصل له.'
   }
 
@@ -1083,7 +1105,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const room = ['♻️ *العميل رجّع طلب #' + T.num(o) + '* بعد ما لغاه', '👤 ' + (o.clientName || '—') + ' — ' + o.clientPhone]
     if (wb.reason) room.push('❓ سبب الإلغاء كان: ' + (T.WB_LABEL[wb.reason] || wb.reason) + (wb.text ? ' — «' + wb.text + '»' : ''))
     if (why) room.push('🎯 ' + why)
-    room.push(...T.summary(o), '', 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*')
+    room.push(...T.opsSummary(o), '', 'وزّعه: *اعتمد ' + T.num(o) + '* أو *وجّه ' + T.num(o) + ' لمحمود*')
     toRoom(room.join('\n'), 'wbw-' + o.id + '-' + now())
     return 'رجّعنا طلبك ✅ بنفس البيانات' + (why ? ' (' + why + ')' : '') + '.\nهنبلغك هنا أول ما الفني يستلم ويتحرك. شكرًا لثقتك 🌷'
   }
@@ -1171,7 +1193,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       if (cmd.op === 'report') { const r = await wp('report', { what: cmd.what }); return r?.text || '—' }
       const o = await wp('order', { number: cmd.num })
       if (!o) return '❌ مالقيتش طلب رقمه ' + cmd.num + '.'
-      if (cmd.op === 'show') return ['📋 *طلب #' + T.num(o) + '* — ' + (o.statusLabel || o.status), '👤 ' + (o.clientName || '—') + ' — ' + (o.clientPhone || '📵'), ...T.summary(o), o.techName ? '👷 ' + o.techName : '⚠️ بدون فني', o.staffUrl ? '🔗 ' + o.staffUrl : ''].filter(Boolean).join('\n')
+      if (cmd.op === 'show') return ['📋 *طلب #' + T.num(o) + '* — ' + (o.statusLabel || o.status), '👤 ' + (o.clientName || '—') + ' — ' + (o.clientPhone || '📵'), ...T.opsSummary(o), o.techName ? '👷 ' + o.techName : '⚠️ بدون فني', o.staffUrl ? '🔗 ' + o.staffUrl : ''].filter(Boolean).join('\n')
       if (cmd.op === 'reply') {
         if (!o.clientPhone) return '📵 الطلب ده من غير رقم عميل.'
         toCustomer(o, cmd.text)
