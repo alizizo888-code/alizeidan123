@@ -102,6 +102,7 @@ final class Mutqan_Concierge {
                 elseif (!empty($q['from'])) { $L[] = '- «' . $q['label'] . '»: يبدأ من ' . (int) $q['from'] . ' ر.س — ' . (string) ($q['inspect'] ?? 'السعر النهائي بعد المعاينة') . ''; }
             }
         }
+        if (class_exists('Mutqan_Hub') && preg_match('/(قطع|قطعه|مكثف|كباستور|بطاريه|فريون|كونتاكتور|شريحه|بورده|كرت|موتور|ماتور|ريش|مروحه)/u', Mutqan_Quick::norm($text))) { $L[] = '- ' . str_replace("\n", "\n  ", Mutqan_Hub::parts_text($text)); }
         $sv = self::services_in($text);
         if ($sv) { $L[] = '- خدمات بنقدمها وليها علاقة بكلامه: ' . implode('، ', array_values($sv)) . '.'; }
         $of = self::offers(4);
