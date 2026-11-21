@@ -151,6 +151,20 @@ final class Mutqan_Meta_WA {
         throw new Mutqan_Error('wa_failed', 'واتساب: ' . $r['error'], 502);
     }
 
+    /**
+     * Up to three tap-to-answer buttons (inside the 24-hour window). The customer's tap comes back as a message
+     * whose text is the button's title, so the same parser handles a tap and a typed answer.
+     * Falls back to plain text (titles listed) when Meta refuses.
+     */
+    public static function buttons($to, $body, array $titles) {
+        $to = Mutqan_WA::intl($to) ?: preg_replace('/\D/', '', (string) $to);
+        $btn = [];
+        foreach (array_slice(array_values($titles), 0, 3) as $i => $t) { $btn[] = ['type' => 'reply', 'reply' => ['id' => 'b' . $i, 'title' => mb_substr((string) $t, 0, 20)]]; }
+        $r = self::call(['messaging_product' => 'whatsapp', 'to' => $to, 'type' => 'interactive', 'interactive' => ['type' => 'button', 'body' => ['text' => mb_substr((string) $body, 0, 1024)], 'action' => ['buttons' => $btn]]]);
+        if ($r['ok']) { return $r['id']; }
+        return self::send($to, $body . "\n\n" . implode(' · ', $titles));
+    }
+
     /** Any Graph call (POST) with the stored token: used by «تفعيل الرقم». */
     private static function graph_post($path, $body) {
         $c = self::cfg();

@@ -24,7 +24,12 @@ final class Mutqan_Policy {
                 'used_ac' => $pub, 'schedule_cfg' => $pub,
                 'used_ac_private' => ['read', 'write', 'write', 'write'], 'used_offers' => ['read', 'write', 'write', 'write'], 'order_seals' => ['read', 'write', 'write', 'write'], 'pay_links' => ['read', 'write', 'write', 'write'],
                 'assignment_settings' => ['staff', 'write', 'write', 'write'], 'tech_pay' => ['staff', 'write', 'write', 'write'],
-                'pricing_internal' => ['read', 'write', 'write', 'write'], 'settlements' => ['tech_own', 'write', 'write', 'write'], 'order_msgs' => ['chat', 'anon_ok', 'write', 'write'], 'stock_items' => ['read', 'write', 'write', 'write'], 'stock_moves' => ['read', 'write', 'write', 'write'],
+                'pricing_internal' => ['read', 'write', 'write', 'write'], 'settlements' => ['tech_own', 'write', 'write', 'write'],
+                // Per-technician money & terms (owner order 2026-11-22): mode (commission / prepaid), share, freeze, score boost,
+                // payout account, contract. The office writes it; a technician reads his own only.
+                'tech_wallet' => ['tech_own', 'write', 'write', 'owner'],
+                // His «موافق» on the contract, written by himself, kept for ever.
+                'tech_contract_acks' => ['tech_own', 'authed', 'owner', 'owner'], 'order_msgs' => ['chat', 'anon_ok', 'write', 'write'], 'stock_items' => ['read', 'write', 'write', 'write'], 'stock_moves' => ['read', 'write', 'write', 'write'],
                 'tech_profiles' => ['staff', 'authed', 'creator_or_write', 'owner'],
                 'tech_applications' => ['creator_or_read', 'authed', 'write', 'write'],
                 'orders' => ['orders', 'anon_ok', 'orders', 'owner'],   // delete: the owner only (owner order 2026-11-19)
