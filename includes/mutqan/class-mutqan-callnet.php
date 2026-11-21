@@ -142,7 +142,8 @@ final class Mutqan_Callnet {
         $target = '';
         $orderId = null;
         $o = null;
-        if ($to === 'tech' && $side === 'ops' && !empty($in['toUser']) && empty($in['orderId'])) {
+        if ($to === 'tech' && in_array($side, ['ops', 'tech'], true) && !empty($in['toUser']) && empty($in['orderId'])) {
+            // Operations — or a colleague (owner order 2026-11-22: technicians call each other on the hotline) — rings a technician directly.
             // Operations rings a technician directly (from the team list), not about one order.
             $target = (string) $in['toUser'];
             global $wpdb;

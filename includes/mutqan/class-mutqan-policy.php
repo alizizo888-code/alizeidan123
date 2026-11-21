@@ -29,7 +29,11 @@ final class Mutqan_Policy {
                 // payout account, contract. The office writes it; a technician reads his own only.
                 'tech_wallet' => ['tech_own', 'write', 'write', 'owner'],
                 // His «موافق» on the contract, written by himself, kept for ever.
-                'tech_contract_acks' => ['tech_own', 'authed', 'owner', 'owner'], 'order_msgs' => ['chat', 'anon_ok', 'write', 'write'], 'stock_items' => ['read', 'write', 'write', 'write'], 'stock_moves' => ['read', 'write', 'write', 'write'],
+                'tech_contract_acks' => ['tech_own', 'authed', 'owner', 'owner'],
+                // Field notes / reminders / road warnings (Mutqan_Fieldops): the office reads them all, a technician through /field.
+                'field_posts' => ['read', 'write', 'write', 'owner'],
+                // «حوّل مستحقاتي»: asked by the technician (server-written), settled by the office.
+                'payout_requests' => ['tech_own', 'write', 'write', 'owner'], 'order_msgs' => ['chat', 'anon_ok', 'write', 'write'], 'stock_items' => ['read', 'write', 'write', 'write'], 'stock_moves' => ['read', 'write', 'write', 'write'],
                 'tech_profiles' => ['staff', 'authed', 'creator_or_write', 'owner'],
                 'tech_applications' => ['creator_or_read', 'authed', 'write', 'write'],
                 'orders' => ['orders', 'anon_ok', 'orders', 'owner'],   // delete: the owner only (owner order 2026-11-19)
