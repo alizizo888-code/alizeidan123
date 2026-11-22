@@ -28,6 +28,8 @@ final class Mutqan_Rest {
         }, 20);
         add_action('mutqan_purge', ['Mutqan_Store', 'purge_expired']);
         add_action('mutqan_remind', [__CLASS__, 'send_reminders']);
+        // أي نسخة لـ Chatwoot رفضها (كان وقتها واقع أو بطيء) بتتعاد هنا بدل ما الرسالة تضيع من صندوق الفريق
+        add_action('mutqan_remind', function () { if (class_exists('Mutqan_Chatwoot')) { Mutqan_Chatwoot::drain(); } }, 20);
         add_action('init', function () { if (!wp_next_scheduled('mutqan_remind')) { wp_schedule_event(time() + 120, 'mutqan_5min', 'mutqan_remind'); } }, 3);
         add_filter('cron_schedules', function ($s) { $s['mutqan_5min'] = ['interval' => 300, 'display' => 'Mutqan 5 min']; return $s; });
         add_action('init', function () { if (!wp_next_scheduled('mutqan_purge')) { wp_schedule_event(time() + 600, 'daily', 'mutqan_purge'); } }, 3);
