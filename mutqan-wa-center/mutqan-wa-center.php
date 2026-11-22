@@ -2,7 +2,7 @@
 /**
  * Plugin Name: مركز الواتساب — Mutqan WA Center
  * Description: صندوق محادثات واتساب موحّد لكل أرقام أكسجين/متقن (Meta الرسمي + أرقام QR على السيرفر عبر Evolution API) — صوت، ريكورد، صور، فيديو، ملفات، بروفايل العميل، ردود جاهزة وأزرار خدمات قابلة للتعديل.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Oxygen / Mutqan
  * Text Domain: mutqan-wa-center
  * Requires PHP: 7.4
@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('MWC_VERSION', '1.1.0');
+define('MWC_VERSION', '1.2.0');
 define('MWC_DIR', plugin_dir_path(__FILE__));
 define('MWC_URL', plugin_dir_url(__FILE__));
 define('MWC_NS', 'mwc/v1');
@@ -25,6 +25,7 @@ require_once MWC_DIR . 'includes/class-mwc-campaigns.php';
 require_once MWC_DIR . 'includes/class-mwc-maps.php';
 require_once MWC_DIR . 'includes/class-mwc-push.php';
 require_once MWC_DIR . 'includes/class-mwc-rest2.php';
+require_once MWC_DIR . 'includes/class-mwc-route.php';
 
 register_activation_hook(__FILE__, ['MWC_Store', 'install']);
 register_activation_hook(__FILE__, function () {

@@ -28,6 +28,15 @@ class MWC_Rest2 {
         $r('/logs', 'GET', 'logs', $auth);
         $r('/push/subscribe', 'POST', 'push_sub', $auth);
         $r('/push/test', 'POST', 'push_test', $auth);
+        $r('/push', 'POST', 'native_push', $auth);
+        $r('/dashboard', 'GET', 'dashboard', $auth);
+        $r('/routing', 'GET', 'routing', $auth);
+        $r('/routing', 'POST', 'routing_save', $auth);
+        $r('/transfer', 'POST', 'transfer', $auth);
+        $r('/hub', 'POST', 'hub_save', $auth);
+        $r('/meta/info', 'GET', 'meta_info', $auth);
+        $r('/accounts/(?P<id>\d+)/templates', 'GET', 'templates', $auth);
+        $r('/ext/send', 'POST', 'ext_send', '__return_true');
         // مفتوحة بمفتاح سري: النبض من السيرفر، واستيراد من أي سكرابر/n8n، وسؤال البوت
         $r('/tick', 'GET', 'tick', '__return_true');
         $r('/ext/leads', 'POST', 'ext_import', '__return_true');
@@ -134,6 +143,34 @@ class MWC_Rest2 {
         foreach ($subs as $s) $n += MWC_Push::send($s, ['title' => 'مركز الواتساب ✅', 'body' => 'الإشعارات شغالة على الجهاز ده', 'tag' => 'test', 'url' => home_url('/wa-center/')]) ? 1 : 0;
         return ['devices' => count($subs), 'delivered' => $n];
     }
+
+    /* ---------- v1.2: المدير والتوجيه والبوت وMeta والتطبيق ---------- */
+    static function native_push(WP_REST_Request $q) { return MWC_Route::native_push($q); }
+    static function dashboard() { if ($e = self::deny('chat_view')) return $e; return MWC_Route::dashboard(); }
+    static function routing() {
+        if ($e = self::deny('chat_view')) return $e;
+        $r = MWC_Route::routing(); unset($r['rr']);
+        $h = MWC_Route::hub(); $r['hub'] = ['on' => (int) $h['on'], 'linked' => $h['url'] !== '' && $h['key'] !== ''];
+        $r['staff'] = array_values(array_unique(array_merge(['المالك'], array_column(MWC_Users::all(), 'name'), (array) (MWC_Store::config()['staff'] ?? []))));
+        return $r;
+    }
+    static function routing_save(WP_REST_Request $q) { if ($e = self::deny('settings')) return $e; MWC_Route::save_routing($q->get_json_params() ?: []); return self::routing(); }
+    static function transfer(WP_REST_Request $q) { return MWC_Route::transfer($q); }
+    static function hub_save(WP_REST_Request $q) {
+        if ($e = self::deny('settings')) return $e;
+        $h = get_option('mwc_hub'); $h = is_array($h) ? $h : [];
+        $h['on'] = $q->get_param('on') ? 1 : 0;
+        update_option('mwc_hub', $h, false);
+        MWC_Store::log('bot', 'البوت الذكي على أرقام المركز: ' . ($h['on'] ? 'اتشغّل' : 'اتوقف'));
+        return ['on' => $h['on']];
+    }
+    static function meta_info() { if ($e = self::deny('accounts')) return $e; return MWC_Route::meta_info(); }
+    static function templates(WP_REST_Request $q) {
+        if ($e = MWC_Rest::deny('chat_send', (int) $q['id'])) return $e;
+        $acc = MWC_Store::account((int) $q['id']);
+        return $acc ? MWC_Route::templates($acc) : new WP_Error('nf', 'غير موجود', ['status' => 404]);
+    }
+    static function ext_send(WP_REST_Request $q) { return MWC_Route::ext_send($q); }
 
     /* ---------- open endpoints (secret key) ---------- */
     static function key_ok(WP_REST_Request $q, $opt) { return hash_equals((string) get_option($opt), (string) ($q->get_param('k') ?: $q->get_header('x_mwc_key'))); }

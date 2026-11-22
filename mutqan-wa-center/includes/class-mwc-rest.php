@@ -39,7 +39,7 @@ class MWC_Rest {
 
     /* ---------------- auth ---------------- */
     static function auth(WP_REST_Request $req) {
-        $tok = $req->get_header('x_mwc_token') ?: $req->get_param('token');
+        $tok = $req->get_header('x_mwc_token') ?: ($req->get_header('x_mutqan_token') ?: $req->get_param('token'));
         $who = MWC_Store::check_token($tok);
         if ($who === null) {
             if (current_user_can('manage_options')) { $GLOBALS['mwc_user_obj'] = MWC_Users::owner(); return true; }
@@ -385,6 +385,7 @@ class MWC_Rest {
         }
         $id = MWC_Store::add_message($m);
         MWC_Store::touch_chat($chat_id, self::preview_of($m), $m['ts'], !$from_me);
+        if ($from_me) do_action('mwc_from_phone', $m + ['id' => $id], MWC_Store::chat($chat_id), $acc);
         if (!$from_me) {
             $contact = MWC_Store::contact($cid);
             // جه منين؟ من كود المقالة/الرابط في الرسالة، أو من قاعدة العملاء (خرائط/حملة)
