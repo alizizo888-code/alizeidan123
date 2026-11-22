@@ -233,9 +233,10 @@ final class Mutqan_Hub {
             case 'tell_tech': { $o = self::need($in); return ['ok' => class_exists('Mutqan_OrderBot') ? Mutqan_OrderBot::tell_tech($o, mb_substr((string) ($in['text'] ?? ''), 0, 600)) : false]; }
             case 'alert': { $o = self::need($in); if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert(mb_substr((string) ($in['title'] ?? 'تنبيه'), 0, 80) . ' #' . self::num($o), mb_substr((string) ($in['body'] ?? ''), 0, 300), '#/staff/order/' . $o['id'], 'order_bot', 'high', $o['id']); } return ['ok' => true]; }
             // A WhatsApp chat that needs a person (no order yet): it rings on the phones (the apps' notification service),
-            // and a tap opens «مركز الواتساب» (owner, 2026-11-22).
+            // and a tap opens «مركز الواتساب» — the new Evolution-based Center (owner, 2026-11-22), not the old raw
+            // wa-hub panel at vps.oxygen11.com: that's a bare unstyled admin tool, not what the owner/staff should land on.
             case 'chat_alert': {
-                if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert(mb_substr((string) ($in['title'] ?? '💬 عميل على الواتساب'), 0, 80), mb_substr((string) ($in['body'] ?? ''), 0, 400), 'https://vps.oxygen11.com/', 'wa_chat', 'high'); }
+                if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert(mb_substr((string) ($in['title'] ?? '💬 عميل على الواتساب'), 0, 80), mb_substr((string) ($in['body'] ?? ''), 0, 400), 'https://oxygen11.com/wa-center/', 'wa_chat', 'high'); }
                 return ['ok' => true];
             }
             case 'info': {
