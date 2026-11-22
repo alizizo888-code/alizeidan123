@@ -44,7 +44,8 @@ class MWC_Maps {
 
     static function plan() {
         $p = get_option('mwc_maps_plan');
-        return array_merge(['on' => 0, 'per_day' => 6, 'hour' => 3, 'depth' => 5, 'cursor' => 0, 'last_run' => ''], is_array($p) ? $p : []);
+        return array_merge(['on' => 0, 'per_day' => 6, 'hour' => 3, 'depth' => 5, 'cursor' => 0, 'last_run' => '',
+                            'day' => '', 'started_today' => 0], is_array($p) ? $p : []);
     }
     static function save_plan($in) {
         $p = self::plan();
@@ -69,6 +70,7 @@ class MWC_Maps {
         return [
             'on' => (int) $p['on'], 'per_day' => (int) $p['per_day'], 'hour' => (int) $p['hour'], 'depth' => (int) $p['depth'],
             'cursor' => (int) $p['cursor'], 'total' => $n, 'last_run' => $p['last_run'],
+            'started_today' => (int) ($p['day'] === current_time('Y-m-d') ? $p['started_today'] : 0), 'max_running' => self::MAX_RUNNING,
             'cycle_days' => (int) ceil($n / max(1, $p['per_day'])),
             'next' => $next, 'today' => self::today_stats(),
             'trades' => self::TRADES, 'cities' => array_keys(self::AREAS),
@@ -92,37 +94,44 @@ class MWC_Maps {
     }
 
     /**
-     * بيتنادى مع نبضة الدقيقة: لو النهاردة لسه ما اتسحبش وجه ميعاده، يبعت شغلانات اليوم ويحرّك الدور.
-     * التقسيم على أيام مقصود: أداة السحب بتاخد وقت طويل للشغلانة، وضرب الخرائط بعدد كبير مرة واحدة بيفشل.
+     * بيتنادى مع نبضة الدقيقة. بيشغّل بحث **واحد** في المرة ويستنى لحد ما يخلص قبل اللي بعده، لحد ما يكمّل
+     * عدد اليوم. السبب: الـVPS معالج واحد وأداة السحب بتفتح متصفح — 6 عمليات مع بعض بتخليهم كلهم يزحفوا
+     * ساعات من غير ما تخلص ولا واحدة (اتجرب 2026-11-23). واحدة ورا واحدة أسرع فعليًا وبتسيب نفس للواتساب.
      */
+    const MAX_RUNNING = 2;
+
     static function run_daily() {
+        global $wpdb;
         $p = self::plan();
         if (empty($p['on'])) return false;
+
         $today = current_time('Y-m-d');
-        if ($p['last_run'] === $today) return false;
+        if ($p['day'] !== $today) { $p['day'] = $today; $p['started_today'] = 0; update_option('mwc_maps_plan', $p, false); }
+        if ((int) $p['started_today'] >= (int) $p['per_day']) return false;
         if ((int) current_time('H') < (int) $p['hour']) return false;
+
+        // مزدحم؟ نستنى النبضة الجاية
+        $running = (int) $wpdb->get_var("SELECT COUNT(*) FROM " . MWC_Store::t('jobs') . " WHERE status IN ('working','pending')");
+        if ($running >= self::MAX_RUNNING) return false;
 
         $all = self::plan_list(); $n = count($all);
         if (!$n) return false;
-        $done = 0; $started = [];
-        for ($i = 0; $i < (int) $p['per_day']; $i++) {
-            $c = $all[($p['cursor'] + $i) % $n];
-            $r = self::create([
-                'keywords' => $c['trade'] . ' ' . $c['area'] . ' ' . $c['city'],
-                'city' => $c['city'], 'category' => $c['trade'],
-                'tags' => 'خرائط,يومي,' . $c['area'], 'depth' => $p['depth'],
-            ]);
-            if (is_wp_error($r)) { MWC_Store::log('maps', 'الجدول اليومي: فشل «' . $c['trade'] . ' ' . $c['area'] . '» — ' . $r->get_error_message(), 'النظام'); break; }
-            $done++; $started[] = $c['trade'] . ' — ' . $c['area'];
+        $c = $all[$p['cursor'] % $n];
+        $r = self::create([
+            'keywords' => $c['trade'] . ' ' . $c['area'] . ' ' . $c['city'],
+            'city' => $c['city'], 'category' => $c['trade'],
+            'tags' => 'خرائط,يومي,' . $c['area'], 'depth' => $p['depth'],
+        ]);
+        if (is_wp_error($r)) {
+            MWC_Store::log('maps', 'الجدول اليومي: فشل «' . $c['trade'] . ' ' . $c['area'] . '» — ' . $r->get_error_message(), 'النظام');
+            return false;
         }
-        if (!$done) return false;
-        $p['cursor'] = ($p['cursor'] + $done) % $n;
+        $p['cursor'] = ($p['cursor'] + 1) % $n;
+        $p['started_today'] = (int) $p['started_today'] + 1;
         $p['last_run'] = $today;
         update_option('mwc_maps_plan', $p, false);
-
-        $y = self::today_stats();
-        MWC_Store::log('maps', sprintf('الجدول اليومي شغّل %d بحث: %s. إجمالي اللي دخل النهاردة: %d رقم جديد.',
-            $done, implode('، ', $started), $y['new_today']), 'النظام');
+        MWC_Store::log('maps', sprintf('الجدول اليومي (%d من %d النهاردة): %s — %s %s',
+            $p['started_today'], $p['per_day'], $c['trade'], $c['area'], $c['city']), 'النظام');
         return true;
     }
 
@@ -188,8 +197,8 @@ class MWC_Maps {
         $jobs = $wpdb->get_results("SELECT * FROM " . MWC_Store::t('jobs') . " WHERE status='working' ORDER BY id LIMIT 5", ARRAY_A);
         foreach ($jobs as $j) self::check($j);
         // الجدول اليومي بيركب على نفس النبضة دي بدل كرون لوحده: النبضة جاية من ticker السيرفر ومن ووردبريس
-        // الاتنين، فلو واحد فيهم وقف الجدول بيفضل ماشي.
-        if (count($jobs) < 3) self::run_daily();
+        // الاتنين، فلو واحد فيهم وقف الجدول بيفضل ماشي. وهي بتتحكم في الزحمة بنفسها.
+        self::run_daily();
     }
 
     static function check($j) {
