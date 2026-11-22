@@ -670,13 +670,13 @@ final class Mutqan_Sales {
                 $sent['m'] = $today; update_option('mutqan_sales_digest', $sent, false);
                 $txt = self::digest_text($today);
                 self::notify('خطة اليوم', $txt, 'dg-m|' . $today, 'digest');
-                if (class_exists('Mutqan_WA_Fleet')) { Mutqan_WA_Fleet::send_report($txt); }
+                // the plan and the summary stay in the app's notifications (owner, 2026-11-22: no reports on WhatsApp)
             }
             if ($h >= (int) $s['notify']['eveningHour'] && ($sent['e'] ?? '') !== $today) {
                 $sent['e'] = $today; update_option('mutqan_sales_digest', $sent, false);
                 $txt = self::digest_text($today, true);
                 self::notify('ملخص اليوم', $txt, 'dg-e|' . $today, 'digest');
-                if (class_exists('Mutqan_WA_Fleet')) { Mutqan_WA_Fleet::send_report($txt); }
+                // the plan and the summary stay in the app's notifications (owner, 2026-11-22: no reports on WhatsApp)
             }
         } catch (Throwable $e) { error_log('[mutqan] sales tick ' . $e->getMessage()); }
     }

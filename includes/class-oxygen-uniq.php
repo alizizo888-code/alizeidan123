@@ -24,11 +24,7 @@ final class Oxygen_Uniq {
         add_action(self::CRON, [__CLASS__, 'backfill']);
         add_action('init', function () { if (!wp_next_scheduled(self::FIX)) { wp_schedule_event(time() + 120 + wp_rand(0, 600), 'hourly', self::FIX); } });
         add_action(self::FIX, [__CLASS__, 'fix']);
-        // a copy that was taken out stays out: robots meta, Yoast, core sitemaps
-        add_filter('wp_robots', function ($r) { if (is_singular() && self::is_dup(get_queried_object_id())) { $r['noindex'] = true; $r['follow'] = true; unset($r['index'], $r['max-image-preview']); } return $r; }, 99);
-        add_filter('wpseo_robots', function ($s) { return is_singular() && self::is_dup(get_queried_object_id()) ? 'noindex, follow' : $s; }, 99);
-        add_filter('wpseo_exclude_from_sitemap_by_post_ids', function ($ids) { return array_values(array_unique(array_merge((array) $ids, self::dup_ids()))); });
-        add_filter('wp_sitemaps_posts_query_args', function ($a) { $x = self::dup_ids(); if ($x) { $a['post__not_in'] = array_merge((array) ($a['post__not_in'] ?? []), $x); } return $a; });
+        // Similarity is a repair signal only. Never hide a page, noindex it, or remove it from a sitemap.
     }
 
     public static function is_dup($id) { return $id && get_post_meta($id, '_oxy_dup', true) !== ''; }
@@ -67,8 +63,10 @@ final class Oxygen_Uniq {
                 $out['sim'] = $s2;
             }
         }
-        $out['status'] = 'draft';
-        self::note('held', $title, $out['sim'], (string) ($r['url'] ?? ''));
+        // Keep the publishing pipeline flowing if rewriting is unavailable or still too similar.
+        // Record the issue for repair; do not move the article to draft or suppress its URL.
+        self::note('published_needs_diversity_repair', $title, $out['sim'], (string) ($r['url'] ?? ''));
+        $out['status'] = null;
         return $out;
     }
 
@@ -111,7 +109,23 @@ final class Oxygen_Uniq {
             $r = $new !== '' ? Mutqan_Fp::call('check', ['text' => $new, 'url' => $url]) : null;
             $sim = is_array($r) ? (float) ($r['sim'] ?? 1) : 1.0;
             if ($new === '' || $sim >= self::GATE) {
-                update_post_meta($id, '_oxy_uniq_tries', (int) get_post_meta($id, '_oxy_uniq_tries', true) + 1);
+                $attempts = (int) get_post_meta($id, '_oxy_uniq_tries', true) + 1;
+                update_post_meta($id, '_oxy_uniq_tries', $attempts);
+                if ($attempts >= self::FIX_TRIES) {
+                    // Last-resort availability guarantee: keep the URL public and indexable.
+                    if (!$live) {
+                        $now = current_time('mysql');
+                        wp_update_post(['ID' => $id, 'post_status' => 'publish', 'post_date' => $now, 'post_date_gmt' => get_gmt_from_date($now), 'edit_date' => true]);
+                        delete_post_meta($id, '_oxy_held_dup');
+                        self::after($id, ['sim' => $sim, 'rewritten' => false, 'status' => null]);
+                        self::note('published_after_repair_attempts', $p->post_title, $sim, $url);
+                    } else {
+                        delete_post_meta($id, '_oxy_dup');
+                        delete_post_meta($id, '_yoast_wpseo_meta-robots-noindex');
+                        self::note('visibility_restored_after_repair_attempts', $p->post_title, $sim, $url);
+                    }
+                    delete_post_meta($id, '_oxy_uniq_tries');
+                }
                 if ($new === '' && !is_array($r)) { break; }   // the AI / the hub is not answering now: try next hour
                 continue;
             }
@@ -169,16 +183,15 @@ final class Oxygen_Uniq {
             if (!is_array($r)) { break; }   // hub away: try next hour
             $s = (float) ($r['sim'] ?? 0);
             update_post_meta($p->ID, '_oxy_fp_sim', $s);
-            // a copy of something that was out BEFORE this post (another site's or our own) leaves Google's index
+            // Record high similarity for editorial repair, but never apply noindex or remove the URL.
             if ($s >= self::NOINDEX && !empty($r['at']) && strtotime((string) $r['at']) <= strtotime($p->post_date_gmt . ' UTC')) {
-                update_post_meta($p->ID, '_oxy_dup', wp_json_encode(['sim' => $s, 'of' => (string) $r['url'], 'at' => gmdate('c')]));
-                update_post_meta($p->ID, '_yoast_wpseo_meta-robots-noindex', '1');
+                update_post_meta($p->ID, '_oxy_similarity_review', wp_json_encode(['sim' => $s, 'reference' => (string) ($r['url'] ?? ''), 'at' => gmdate('c')]));
                 $dups++;
             }
             update_post_meta($p->ID, '_oxy_fp_done', 1);
             $n++;
         }
-        if ($n) { self::note('backfill', "$n checked, $dups taken out of the index", 0, ''); }
+        if ($n) { self::note('backfill', "$n checked, $dups flagged for content improvement; no pages hidden", 0, ''); }
     }
 
     private static function note($what, $title, $sim, $of) {

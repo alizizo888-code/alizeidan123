@@ -497,7 +497,7 @@ final class Mutqan_Rest {
             case 'signup': return Mutqan_Auth::signup_customer($in);
             case 'login': return Mutqan_Auth::login($in, false);
             case 'ops': return Mutqan_Auth::ops_login($in);
-            case 'sessionHealth': return Mutqan_Auth::session_health();
+            case 'sessionHealth': Mutqan_Auth::require_owner($p); return Mutqan_Auth::session_health();
             case 'desk': {
                 // Only WRONG guesses are counted (a correct PIN, e.g. a silent session renewal, never locks the owner out).
                 $dk = class_exists('Oxygen_Desk');
@@ -721,7 +721,11 @@ final class Mutqan_Rest {
         // Only the technician themselves, and only about themselves: nobody reports anybody else's
         // whereabouts, and a customer's app has no business here at all.
         $id = (string) ($p['id'] ?? '');
-        if (($p['kind'] ?? 'guest') !== 'user' || $id === '') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
+        if (($p['kind'] ?? 'guest') !== 'user' || ($p['role'] ?? null) !== 'technician' || $id === '') {
+            throw new Mutqan_Error('forbidden', 'تحديث الموقع متاح للفني المسجل دخوله فقط.', 403);
+        }
+        // Bound frequent GPS writes per technician so a stuck client cannot overload the database.
+        Mutqan_Limiter::hit('track', 90, 60, $id);
         $b = json_decode((string) $req->get_body(), true);
         $b = is_array($b) ? $b : [];
         return Mutqan_Track::ping($id, $b['lat'] ?? null, $b['lng'] ?? null, $b['acc'] ?? null);

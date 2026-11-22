@@ -563,7 +563,7 @@ final class Mutqan_WA {
             if ($topic !== '') { try { self::send($acct, $phone, Mutqan_Customers::info($topic, 'customer', (string) ((Mutqan_Store::get_raw('wa_threads', $tid) ?: [])['card']['brand'] ?? '')), 'bot'); } catch (Throwable $ex) {} return ['ok' => true]; }
             // A technician who is not on file yet: the room adds his number, he is told what to do.
             if (preg_match('/(انا|أنا)\s*(فني|فنى)|فني تبعكم|فنى تبعكم|بشتغل معاكم|اشتغل معاكم/u', $txt)) {
-                if (class_exists('Mutqan_WA_Central')) { Mutqan_WA_Central::to_master("رقم بيقول إنه فني ومش متسجل:\n📱 +" . self::intl($phone) . (!empty($th['name']) ? ' — ' . $th['name'] : '') . "\n💬 «" . mb_substr($txt, 0, 160) . "»\n\nضيف رقمه في ملف الفني في التطبيق عشان الطلبات توصله هنا.", 'tech-unknown-' . substr(self::intl($phone), -9), 'review'); }
+                if (class_exists('Mutqan_WA_Central')) { Mutqan_WA_Central::to_system('👷 رقم بيقول إنه فني', "رقم بيقول إنه فني ومش متسجل:\n📱 +" . self::intl($phone) . (!empty($th['name']) ? ' — ' . $th['name'] : '') . "\n💬 «" . mb_substr($txt, 0, 160) . "»\n\nضيف رقمه في ملف الفني في التطبيق عشان الطلبات توصله هنا.", '#/staff/technicians', 'tech_unknown'); }
                 try { self::send($acct, $phone, "أهلًا بيك 👷 رقمك لسه مش متسجل عندنا كفني.\nبلّغت العمليات وهيضيفوه في ملفك، وبعدها الطلبات والتفاصيل هتوصلك هنا، وتقدر ترد بـ *قبلت* · *في الطريق* · *وصلت* · *تم*.", 'bot'); } catch (Throwable $ex) {}
                 return ['ok' => true];
             }
