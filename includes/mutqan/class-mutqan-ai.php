@@ -456,7 +456,9 @@ final class Mutqan_AI {
 
     /** Gemini text-to-speech (one fixed male voice). @return array ['ok'=>true,'wav'=>base64] or ['ok'=>false] */
     public static function tts($text, $voice = 'Charon', $style = null) {
-        $voice = self::VOICE;   // fixed: never another voice, never a woman's
+        // fixed: never another voice, never a woman's — except the alert announcer (Mutqan_Voice), which picks one of
+        // three male voices by how urgent the alert is and always passes its own style
+        if ($style === null || !in_array($voice, ['Charon', 'Orus', 'Iapetus', 'Fenrir', 'Algenib'], true)) { $voice = self::VOICE; }
         $s = self::settings(); $c = $s['providers']['gemini'];
         $text = trim(mb_substr(preg_replace('/[*_#`]/u', '', (string) $text), 0, 700));
         if ($text === '') { return ['ok' => false, 'error' => 'empty']; }

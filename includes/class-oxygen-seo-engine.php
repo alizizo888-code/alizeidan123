@@ -392,7 +392,7 @@ class Oxygen_SEO_Engine {
             $cta = ' اطلب فنياً أو تصفّح العروض.';
         }
         $room = 158 - mb_strlen($cta);
-        if (mb_strlen($lead) > $room) { $lead = mb_substr($lead, 0, $room - 1); $sp = mb_strrpos($lead, ' '); if ($sp > 40) { $lead = mb_substr($lead, 0, $sp); } $lead = rtrim($lead, " ،.:") . '…'; } else { $lead = rtrim($lead, '.') . '.'; }
+        if (mb_strlen($lead) > $room) { $lead = mb_substr($lead, 0, $room - 1); $sp = mb_strrpos($lead, ' '); if ($sp > 40) { $lead = mb_substr($lead, 0, $sp); } $lead = preg_replace('/[\s،.:]+$/u', '', $lead) . '…'; } else { $lead = rtrim($lead, '.') . '.'; }
         return $lead . $cta;
     }
     private static function item_of_post($id) {

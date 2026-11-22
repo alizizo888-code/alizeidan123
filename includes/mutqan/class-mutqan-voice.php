@@ -47,6 +47,76 @@ final class Mutqan_Voice {
     ];
     const DIR = 'mutqan-voice';
 
+    /*
+     * Owner, 2026-11-22 (2): the alert says WHAT it is about, so nobody has to pick up the phone to know — «الفني علي قبل
+     * طلب رقم ألف وأربعة، غسيل مكيفين في العزيزية», «رسالة جديدة من العميل محمد: …», «تقرير نشر المقالات: ستين مقال».
+     * And the voice itself tells how much it matters: three tiers, three male voices and three ways of reading.
+     */
+    const TIERS = [
+        'urgent' => ['voice' => 'Orus', 'open' => 'انتباه! ', 'style' => 'You are the emergency alert announcer of a maintenance company in Saudi Arabia. Read the Arabic text below EXACTLY as written, word for word, in a LOUD, urgent, commanding adult male voice, Saudi accent, fast and sharp like an alarm announcement that demands immediate action. Text:'],
+        'normal' => ['voice' => 'Charon', 'open' => '', 'style' => 'You are the operations announcer of a maintenance company in Saudi Arabia. Read the Arabic text below EXACTLY as written, word for word, in a loud, clear, confident adult male voice, Saudi accent, steady pace, like a clear status update. Text:'],
+        'info'   => ['voice' => 'Iapetus', 'open' => 'للعلم، ', 'style' => 'You are a calm assistant of a maintenance company in Saudi Arabia. Read the Arabic text below EXACTLY as written, word for word, in a calm, relaxed, clear adult male voice, Saudi accent, unhurried, like a friendly report. Text:'],
+    ];
+    const URGENT = ['new_order', 'new_task', 'unassigned', 'tech_rejected', 'cust_rejected', 'cust_cancelled', 'late', 'failed', 'handoff', 'complaint', 'call', 'warranty'];
+
+    /** urgent | normal | info — from the alert's kind, its priority and whether it is a report. */
+    public static function tier($m) {
+        $e = strtolower((string) ($m['event'] ?? '')); $t = (string) ($m['title'] ?? '');
+        if (preg_match('/report|digest|summary|night|weekly|daily|trainer|sales_brain|article|plan|statement/', $e) || preg_match('/تقرير|ملخص|خطة اليوم|كشف حساب|مقالات/u', $t)) { return 'info'; }
+        $k = self::key($e, $t, (string) ($m['body'] ?? ''));
+        if (in_array($k, self::URGENT, true) || (($m['priority'] ?? '') === 'high' && $k === 'alert')) { return 'urgent'; }
+        return 'normal';
+    }
+
+    /** Text fit to be read aloud: no emoji, no links, «#1004» as «رقم 1004», separators as pauses, short. */
+    public static function clean($s) {
+        $s = (string) $s;
+        $s = preg_replace('#https?://\S+#u', '', $s);
+        $s = preg_replace('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE0F}\x{200D}]/u', '', $s);
+        $s = preg_replace('/#\s*(\d+)/u', 'رقم $1', $s);
+        $s = str_replace(['·', '—', '–', '|', '•', '*', '_', '`', '>'], ['، ', '، ', '، ', '، ', '، ', '', ' ', '', ''], $s);
+        $s = preg_replace('/ر\.س/u', 'ريال', $s);
+        $s = preg_replace('/\s*\n+\s*/u', '، ', $s);
+        $s = preg_replace('/(،\s*){2,}/u', '، ', $s);
+        return (string) preg_replace('/^[\s،.:]+|[\s،.:]+$/u', '', (string) preg_replace('/\s{2,}/u', ' ', $s));   // not trim(): it cuts Arabic letters byte by byte
+    }
+
+    /**
+     * The whole sentence for one alert: the urgency word, what happened (its title — or the kind's own sentence when the
+     * title says nothing), then the details (its body), at most ~35 words.
+     */
+    public static function sentence($m) {
+        $tier = self::tier($m);
+        $key = self::key((string) ($m['event'] ?? ''), (string) ($m['title'] ?? ''), (string) ($m['body'] ?? ''));
+        $title = self::clean($m['title'] ?? ''); $body = self::clean($m['body'] ?? '');
+        if (mb_strlen($title) < 6 || preg_match('/^(تنبيه|إشعار|اشعار|تنبيه جديد)$/u', $title)) { $title = preg_replace('/^(انتباه|تنبيه)،\s*/u', '', self::KEYS[$key] ?? self::KEYS['alert']); }
+        $t = self::TIERS[$tier]['open'] . $title . ($body !== '' && mb_strpos($title, $body) === false ? '. ' . $body : '');
+        $w = preg_split('/\s+/u', $t) ?: [];
+        if (count($w) > 35) { $t = implode(' ', array_slice($w, 0, 35)); }
+        return $t;
+    }
+
+    /** The spoken clip of one alert (made once per sentence and tier, then from the file); '' when the voice is down. */
+    public static function speak($m) {
+        $tier = self::tier($m); $text = self::sentence($m);
+        $u = wp_upload_dir(); $dir = rtrim((string) $u['basedir'], '/') . '/' . self::DIR . '/say';
+        $file = $dir . '/' . md5($tier . '|' . $text) . '.wav';
+        if (is_readable($file)) { return (string) file_get_contents($file); }
+        if (get_transient('mq_voice_down')) { return ''; }
+        $T = self::TIERS[$tier];
+        $r = class_exists('Mutqan_AI') ? Mutqan_AI::tts($text, $T['voice'], $T['style']) : ['ok' => false];
+        if (empty($r['ok']) || empty($r['wav'])) { set_transient('mq_voice_down', 1, 120); return ''; }
+        $wav = self::louder((string) base64_decode((string) $r['wav']), $tier === 'urgent' ? 2.8 : ($tier === 'info' ? 1.6 : 2.2));
+        if (is_dir($dir) || wp_mkdir_p($dir)) { @file_put_contents($file, $wav); }
+        return $wav;
+    }
+
+    /** Spoken clips older than a week go (they were for alerts that are long read). */
+    public static function sweep() {
+        $u = wp_upload_dir(); $dir = rtrim((string) $u['basedir'], '/') . '/' . self::DIR . '/say';
+        foreach ((array) glob($dir . '/*.wav') as $f) { if (@filemtime($f) < time() - 7 * 86400) { @unlink($f); } }
+    }
+
     /** The sentence for an alert: by its event first, then by what its title says. Never null: «عندك تنبيه جديد». */
     public static function key($event, $title = '', $body = '') {
         $e = strtolower((string) $event); $t = (string) $title . ' ' . (string) $body;
@@ -102,7 +172,7 @@ final class Mutqan_Voice {
      * Loud: the 16-bit samples are raised so the loudest one sits just under full scale, then given a little more
      * (soft-clipped), so the clip is as loud as a phone plays — an alarm, not a whisper.
      */
-    public static function louder($wav) {
+    public static function louder($wav, $k = 2.2) {
         if (strlen($wav) < 48 || substr($wav, 0, 4) !== 'RIFF') { return $wav; }
         $p = strpos($wav, 'data'); if ($p === false) { return $wav; }
         $head = substr($wav, 0, $p + 8); $pcm = substr($wav, $p + 8);
@@ -110,7 +180,7 @@ final class Mutqan_Voice {
         $s = unpack('s*', substr($pcm, 0, $n * 2));
         $peak = 1; foreach ($s as $v) { $a = abs($v); if ($a > $peak) { $peak = $a; } }
         // normalised to the loudest sample, then compressed (tanh): quiet syllables come up, nothing clips
-        $k = 2.2; $den = tanh($k); $out = '';
+        $den = tanh($k); $out = '';
         foreach ($s as $v) { $out .= pack('s', (int) round(tanh($k * $v / $peak) / $den * 0.97 * 32767)); }
         return $head . $out;
     }
@@ -128,7 +198,7 @@ final class Mutqan_Voice {
     }
 
     public static function boot() {
-        add_action('mutqan_voice_warm', function () { self::warm(); });
+        add_action('mutqan_voice_warm', function () { self::warm(); self::sweep(); });
         add_action('init', function () { if (!wp_next_scheduled('mutqan_voice_warm')) { wp_schedule_event(time() + 120, 'hourly', 'mutqan_voice_warm'); } }, 9);
         add_action('rest_api_init', function () {
             register_rest_route('mutqan/v1', '/voice', ['methods' => 'GET', 'permission_callback' => '__return_true', 'callback' => function ($req) {
