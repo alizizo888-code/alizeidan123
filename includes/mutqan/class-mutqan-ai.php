@@ -455,21 +455,21 @@ final class Mutqan_AI {
     const VOICE_STYLE = 'You are the voice of a customer-service man from Saudi Arabia. Read the Arabic text below aloud EXACTLY as written, word for word: do not add, drop, translate or change any word. Always the same adult male voice, Saudi (Hijazi) accent, calm warm tone, medium-low pitch, steady natural pace, no singing, no emotion changes. Text:';
 
     /** Gemini text-to-speech (one fixed male voice). @return array ['ok'=>true,'wav'=>base64] or ['ok'=>false] */
-    public static function tts($text, $voice = 'Charon') {
+    public static function tts($text, $voice = 'Charon', $style = null) {
         $voice = self::VOICE;   // fixed: never another voice, never a woman's
         $s = self::settings(); $c = $s['providers']['gemini'];
         $text = trim(mb_substr(preg_replace('/[*_#`]/u', '', (string) $text), 0, 700));
         if ($text === '') { return ['ok' => false, 'error' => 'empty']; }
         // The same sentence is spoken the same way every time, and a repeated one costs no quota.
         $dir = ''; $file = '';
-        if (function_exists('wp_upload_dir')) { $u = wp_upload_dir(); $dir = rtrim((string) ($u['basedir'] ?? ''), '/') . '/mutqan-tts'; $file = $dir . '/' . md5($voice . '|' . $text) . '.wav'; }
+        if (function_exists('wp_upload_dir')) { $u = wp_upload_dir(); $dir = rtrim((string) ($u['basedir'] ?? ''), '/') . '/mutqan-tts'; $file = $dir . '/' . md5($voice . '|' . $text . ($style ? '|' . $style : '')) . '.wav'; }
         if ($file !== '' && is_readable($file)) { return ['ok' => true, 'wav' => base64_encode((string) file_get_contents($file)), 'cached' => true]; }
         if (!self::usable('gemini', $c)) { return ['ok' => false, 'error' => 'no_gemini']; }
         $why = '';
         foreach (['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'] as $m) {
             $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $m . ':generateContent';
             list($code, $data, $raw) = self::http($url, ['x-goog-api-key' => $c['key'], 'Content-Type' => 'application/json'], [
-                'contents' => [['role' => 'user', 'parts' => [['text' => self::VOICE_STYLE . "\n" . $text]]]],
+                'contents' => [['role' => 'user', 'parts' => [['text' => ($style ?: self::VOICE_STYLE) . "\n" . $text]]]],
                 'generationConfig' => ['responseModalities' => ['AUDIO'], 'speechConfig' => ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice]]]],
             ], 45);
             $part = $data['candidates'][0]['content']['parts'][0] ?? [];
