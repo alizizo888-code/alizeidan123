@@ -179,7 +179,9 @@ final class Mutqan_Chatwoot {
                 if ($text === '') { $text = '[' . (string) ($m['kind'] ?? 'رسالة') . ']'; }
                 $in = ($m['dir'] ?? '') === 'in';
                 if (!$in) {
-                    $who = ['bot' => '🤖 موظف الاستقبال', 'journey' => '🔗 حلقة الوصل', 'auto' => '⚙️ النظام', 'order' => '⚙️ النظام', 'phone' => '📱 من الموبايل', 'staff' => '👤 ' . (string) ($m['by'] ?? 'الفريق')][$m['via'] ?? ''] ?? '';
+                    // 'phone' (sent straight from the linked phone) shows no label now — owner asked for the
+                    // «📱 من الموبايل» tag to stop appearing on messages (2026-11-22).
+                    $who = ['bot' => '🤖 موظف الاستقبال', 'journey' => '🔗 حلقة الوصل', 'auto' => '⚙️ النظام', 'order' => '⚙️ النظام', 'phone' => '', 'staff' => '👤 ' . (string) ($m['by'] ?? 'الفريق')][$m['via'] ?? ''] ?? '';
                     if ($who !== '') { $text = $who . "\n" . $text; }
                 }
                 self::post_message($conv, $text, $in ? 'incoming' : 'outgoing');
