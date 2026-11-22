@@ -125,6 +125,12 @@ class MWC_Meta extends MWC_Provider {
 
 /* ===================== Evolution API (ربط QR على السيرفر — كل مميزات واتساب ويب) ===================== */
 class MWC_Evolution extends MWC_Provider {
+    function __construct($acc) {
+        parent::__construct($acc);
+        // السيرفر الافتراضي (Evolution على الـVPS) لو الرقم مالوش رابط خاص
+        $def = get_option('mwc_evo_default');
+        if (is_array($def)) { if (empty($this->cfg['base_url'])) $this->cfg['base_url'] = $def['base_url'] ?? ''; if (empty($this->cfg['apikey'])) $this->cfg['apikey'] = $def['apikey'] ?? ''; }
+    }
     private function base() { return rtrim($this->cfg['base_url'] ?? '', '/') . '/'; }
     private function inst() { return rawurlencode($this->cfg['instance'] ?? ('mwc' . $this->acc['id'])); }
     private function h() { return ['apikey' => $this->cfg['apikey'] ?? '']; }

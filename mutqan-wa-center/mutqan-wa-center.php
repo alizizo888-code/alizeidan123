@@ -39,6 +39,28 @@ add_action('plugins_loaded', function () {
 });
 
 add_action('rest_api_init', ['MWC_Rest', 'routes']);
+
+/* أول تشغيل: أرقام الشركة بتتضاف لوحدها (جاهزة لمسح الـQR) لما السيرفر الافتراضي يتظبط */
+add_action('plugins_loaded', function () {
+    if (get_option('mwc_seed_done') || !is_array(get_option('mwc_evo_default'))) return;
+    global $wpdb;
+    if ((int) $wpdb->get_var("SELECT COUNT(*) FROM " . MWC_Store::t('accounts')) > 0) { update_option('mwc_seed_done', 1, false); return; }
+    $seed = [
+        ['المدير', '966549247636', 'meta', 'manager', '#00a884', 'أكسجين للصيانة'],
+        ['أكسجين 0536', '966536554731', 'evolution', 'sales', '#53bdeb', 'أكسجين للصيانة'],
+        ['متقن 3050', '966549423050', 'evolution', 'sales', '#faa774', 'متقن للصيانة'],
+        ['مبيعات 5320', '966549665320', 'evolution', 'sales', '#a695e7', 'أكسجين للصيانة'],
+        ['مبيعات 5646', '966549715646', 'evolution', 'sales', '#6ec9cb', 'أكسجين للصيانة'],
+        ['مبيعات 8890', '966549648890', 'evolution', 'sales', '#7bc862', 'متقن للصيانة'],
+        ['تسويق 9205', '966546619205', 'evolution', 'outreach', '#ee7aae', 'أكسجين للصيانة'],
+        ['تسويق 2660', '966547512660', 'evolution', 'outreach', '#e5ca77', 'متقن للصيانة'],
+    ];
+    foreach ($seed as $i => $a) {
+        $cfg = $a[2] === 'meta' ? ['brand' => $a[5], 'api_version' => 'v21.0'] : ['brand' => $a[5], 'instance' => 'n' . substr($a[1], -9)];
+        MWC_Store::save_account(['label' => $a[0], 'phone' => $a[1], 'provider' => $a[2], 'role' => $a[3], 'color' => $a[4], 'sort' => $i, 'config' => $cfg]);
+    }
+    update_option('mwc_seed_done', 1, false);
+}, 20);
 add_action('rest_api_init', ['MWC_Rest2', 'routes']);
 add_action('admin_menu', ['MWC_Admin', 'menu']);
 add_action('admin_init', ['MWC_Admin', 'register']);
