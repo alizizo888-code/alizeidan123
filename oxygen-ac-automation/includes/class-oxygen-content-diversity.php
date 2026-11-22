@@ -97,15 +97,22 @@ final class Oxygen_Content_Diversity {
         $bank = self::banks();
         $domain = self::domain($title . ' ' . $plain);
         $items = $bank[$domain] ?? $bank['general'];
+        if ($domain !== 'general') { $items = array_merge($items, $bank['general']); }
         $seed = abs(crc32($title . '|' . $source . '|' . get_option('blogname')));
         $pick = $items[$seed % count($items)];
         // A high-overlap article receives a second, different practical angle instead of being discarded.
         $html .= '<section class="oxy-originality-enrichment" data-content-source="' . esc_attr($source) . '">';
         $html .= '<h2>' . self::e($pick[0]) . '</h2><p>' . self::e($pick[1]) . '</p><p>' . self::e($pick[2]) . '</p>';
-        if ($max_similarity >= 0.24) {
-            $second = $items[($seed + 1) % count($items)];
-            if ($second[0] !== $pick[0] && strpos($html, self::e($second[0])) === false) {
-                $html .= '<h2>' . self::e($second[0]) . '</h2><p>' . self::e($second[1]) . '</p><p>' . self::e($second[2]) . '</p>';
+        $second = $items[($seed + 1) % count($items)];
+        if ($second[0] !== $pick[0] && strpos($html, self::e($second[0])) === false) {
+            $html .= '<h2>' . self::e($second[0]) . '</h2><p>' . self::e($second[1]) . '</p><p>' . self::e($second[2]) . '</p>';
+        }
+        // Where the recent corpus shows substantial overlap, add a third complementary angle
+        // to deepen the explanation rather than blocking or hiding the article.
+        if ($max_similarity >= 0.24 && count($items) > 2) {
+            $third = $items[($seed + 2) % count($items)];
+            if ($third[0] !== $pick[0] && $third[0] !== $second[0] && strpos($html, self::e($third[0])) === false) {
+                $html .= '<h2>' . self::e($third[0]) . '</h2><p>' . self::e($third[1]) . '</p><p>' . self::e($third[2]) . '</p>';
             }
         }
         $html .= '</section>';
