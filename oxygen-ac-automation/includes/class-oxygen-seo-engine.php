@@ -499,6 +499,7 @@ class Oxygen_SEO_Engine {
         $s = self::settings();
         $ctx = self::ctx($item, $map);
         $b = self::build($item, 0, $ctx);
+        if (class_exists('Oxygen_Content_Diversity')) { $d = Oxygen_Content_Diversity::enrich($item['title'], $b['html'], 'oxygen-seo'); $b['html'] = $d['html']; update_option('oxygen_content_diversity_last', ['score' => $d['similarity'], 'domain' => $d['domain'], 'title' => $item['title'], 'time' => time()], false); }
         $author = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID']);
         $id = wp_insert_post([
             'post_type' => 'post', 'post_status' => $force_status ?: $s['status'], 'post_title' => $item['title'], 'post_name' => $item['key'],
@@ -616,6 +617,7 @@ class Oxygen_SEO_Engine {
         $rev = (int) get_post_meta($id, '_oxy_seo_rev', true) + 1;
         $ctx = self::ctx($item, $map);
         $b = self::build($item, $rev, $ctx);
+        if (class_exists('Oxygen_Content_Diversity')) { $d = Oxygen_Content_Diversity::enrich($item['title'], $b['html'], 'oxygen-seo-refresh'); $b['html'] = $d['html']; update_option('oxygen_content_diversity_last', ['score' => $d['similarity'], 'domain' => $d['domain'], 'title' => $item['title'], 'time' => time()], false); }
         wp_update_post(['ID' => $id, 'post_title' => $item['title'], 'post_content' => $b['html'], 'post_excerpt' => $b['desc']]);
         update_post_meta($id, '_oxy_seo_rev', $rev);
         self::tag_post($id, $item, $b);

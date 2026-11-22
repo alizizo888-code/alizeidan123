@@ -153,6 +153,7 @@ final class Oxygen_Partner_Articles {
         foreach (self::slots() as $slot) {
             if ($slot['idx'] >= (int) $s['count'] || isset($map[$slot['key']])) { continue; }
             $b = self::build($slot, 0, $nums); $title = self::slot_title($slot);
+            if (class_exists('Oxygen_Content_Diversity')) { $d = Oxygen_Content_Diversity::enrich($title, $b['html'], 'oxygen-partners'); $b['html'] = $d['html']; }
             $author = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID']);
             $id = wp_insert_post(['post_type' => 'post', 'post_status' => $force_status ?: $s['status'], 'post_title' => $title, 'post_name' => $slot['key'], 'post_content' => $b['html'], 'post_excerpt' => $b['desc'], 'post_author' => $author ? (int) $author[0] : 1], true);
             if (is_wp_error($id) || !$id) { return false; }
@@ -175,6 +176,7 @@ final class Oxygen_Partner_Articles {
         usort($cand, function ($a, $b) { return $a[0] <=> $b[0]; });
         $id = $cand[0][1]; $slot = $by[$cand[0][2]]; $rev = (int) get_post_meta($id, '_oxy_pa_rev', true) + 1;
         $b = self::build($slot, $rev, $nums); $title = self::slot_title($slot, $rev);
+        if (class_exists('Oxygen_Content_Diversity')) { $d = Oxygen_Content_Diversity::enrich($title, $b['html'], 'oxygen-partners-refresh'); $b['html'] = $d['html']; }
         wp_update_post(['ID' => $id, 'post_title' => $title, 'post_content' => $b['html'], 'post_excerpt' => $b['desc']]);
         update_post_meta($id, '_oxy_pa_rev', $rev); update_post_meta($id, '_oxy_pa_updated', current_time('mysql')); update_post_meta($id, '_oxy_pa_spec', $b['spec']);
         update_post_meta($id, '_yoast_wpseo_metadesc', $b['desc']); update_post_meta($id, 'rank_math_description', $b['desc']);

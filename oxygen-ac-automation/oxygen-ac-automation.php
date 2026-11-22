@@ -16,6 +16,7 @@ require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-media-library.ph
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-article-index-admin.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-orders-chat.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-domain-guard.php';
+require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-content-diversity.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-seo-engine.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-network-seo.php';
 require_once plugin_dir_path(__FILE__) . 'includes/class-oxygen-network-report.php';
