@@ -76,7 +76,11 @@ final class Mutqan_Voice {
         $s = preg_replace('/#\s*(\d+)/u', 'رقم $1', $s);
         $s = str_replace(['·', '—', '–', '|', '•', '*', '_', '`', '>'], ['، ', '، ', '، ', '، ', '، ', '', ' ', '', ''], $s);
         $s = preg_replace('/ر\.س/u', 'ريال', $s);
+        // read clearly whoever and whatever the data holds (owner): a phone number digit by digit, a code like «AB12CD34» letter by letter
+        $s = preg_replace_callback('/(?<![\d])\+?\d{9,15}(?![\d])/u', function ($x) { return implode(' ', preg_split('//u', ltrim($x[0], '+'), -1, PREG_SPLIT_NO_EMPTY)); }, $s);
+        $s = preg_replace_callback('/\b(?=[A-Za-z0-9-]*[A-Za-z])(?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{4,16}\b/u', function ($x) { return implode(' ', preg_split('//u', strtoupper(str_replace('-', '', $x[0])), -1, PREG_SPLIT_NO_EMPTY)); }, $s);
         $s = preg_replace('/\s*\n+\s*/u', '، ', $s);
+        $s = preg_replace('/\s*،\s*/u', '، ', $s);
         $s = preg_replace('/(،\s*){2,}/u', '، ', $s);
         return (string) preg_replace('/^[\s،.:]+|[\s،.:]+$/u', '', (string) preg_replace('/\s{2,}/u', ' ', $s));   // not trim(): it cuts Arabic letters byte by byte
     }
