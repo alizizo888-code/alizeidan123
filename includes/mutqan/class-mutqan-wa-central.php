@@ -198,9 +198,22 @@ final class Mutqan_WA_Central {
     }
 
     /** One message to every master phone, from the reports line (never from a customers' line). */
+    /**
+     * Owner, 2026-11-22: reports and summaries (the day's report, what was done, the plan, the network) stay in the
+     * system — the app's notifications — and never go to WhatsApp. Only what concerns a customer or an order goes there.
+     */
+    public static function to_system($title, $text, $url = '#/staff/notifications', $event = 'report') {
+        try {
+            $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
+            Mutqan_Store::insert('notifications', ['userId' => null, 'audience' => 'ops', 'event' => $event, 'title' => mb_substr((string) $title, 0, 120), 'body' => mb_substr((string) $text, 0, 3500), 'url' => $url, 'priority' => 'normal', 'read' => false, 'at' => gmdate('c')], null, ['visibleTo' => 'creator-and-admin', 'writableBy' => 'admins', 'expiresAt' => gmdate('c', time() + 60 * 86400)], $sys);
+            return 1;
+        } catch (Throwable $e) { error_log('[mutqan] to_system ' . $e->getMessage()); return 0; }
+    }
+
     public static function to_master($text, $key = '', $kind = '', $o = null) {
         $s = self::settings(); $sent = 0;
         if ($kind === '') { $kind = strpos($key, 'order-') === 0 ? 'order' : (strpos($key, 'daily-') === 0 ? 'report' : 'system'); }
+        if ($kind === 'report') { return self::to_system('📊 تقرير', $text); }
         $text = self::frame($kind, $text, $o);
         if (!$s['master']) { return 0; }
         $acct = Mutqan_WA_Fleet::account_for('report');
@@ -311,7 +324,8 @@ final class Mutqan_WA_Central {
         // One quiet line in the app too, instead of the day's scattered alerts.
         try { Mutqan_Store::insert('_push', ['target' => ['admins' => true], 'title' => '🌙 تقرير الليلة جاهز', 'body' => 'ملخص اليوم واللي اتأجل من التنبيهات', 'url' => '#/staff/notifications', 'priority' => 'normal', 'event' => 'night_report', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 86400)], self::sys()); } catch (Throwable $e) { /* never block */ }
         if (!empty($s['events']['daily'])) { self::emit('daily', ['text' => $text, 'date' => $today]); }
-        return self::to_master($text, 'daily-' . $today);
+        // the report itself lives in the app (notifications), never on WhatsApp (owner, 2026-11-22)
+        return self::to_system('📊 تقرير اليوم ' . $today, $text, '#/staff/notifications', 'daily_report');
     }
 
     /* ------------------------------------------------------------------ 5. n8n */
