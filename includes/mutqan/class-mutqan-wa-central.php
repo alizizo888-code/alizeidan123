@@ -277,7 +277,7 @@ final class Mutqan_WA_Central {
         Mutqan_WA::send($acct, $phone, mb_substr($text, 0, 3000), 'master', (string) ($p['name'] ?? 'الإدارة'));
         $tid = Mutqan_WA::tid($acct, $phone);
         $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: [];
-        $bot = (array) ($th['bot'] ?? []); $bot['pausedUntil'] = time() + 12 * 3600;      // a human answered: the bot steps back
+        $bot = (array) ($th['bot'] ?? []); $bot['pausedUntil'] = max((int) ($bot['pausedUntil'] ?? 0), time() + Mutqan_WA::human_idle()); $bot['humanAt'] = time();      // a human answered: the bot steps back
         Mutqan_WA::put_thread($tid, ['bot' => $bot]);
         return '📤 اتبعت للعميل ' . ((string) ($o['clientName'] ?? '') ?: '+' . $phone) . ' من خط «' . $acct . '».';
     }
