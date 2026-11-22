@@ -2,7 +2,7 @@
 /**
  * Plugin Name: مركز الواتساب — Mutqan WA Center
  * Description: صندوق محادثات واتساب موحّد لكل أرقام أكسجين/متقن (Meta الرسمي + أرقام QR على السيرفر عبر Evolution API) — صوت، ريكورد، صور، فيديو، ملفات، بروفايل العميل، ردود جاهزة وأزرار خدمات قابلة للتعديل.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: Oxygen / Mutqan
  * Text Domain: mutqan-wa-center
  * Requires PHP: 7.4
@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('MWC_VERSION', '1.2.0');
+define('MWC_VERSION', '1.3.0');
 define('MWC_DIR', plugin_dir_path(__FILE__));
 define('MWC_URL', plugin_dir_url(__FILE__));
 define('MWC_NS', 'mwc/v1');
@@ -88,7 +88,10 @@ add_action('template_redirect', function () {
     header('Content-Type: text/html; charset=utf-8');
     header('X-Robots-Tag: noindex, nofollow');
     $html = file_get_contents(MWC_DIR . 'app/index.html');
-    $boot = '<script>window.MWC_API=' . wp_json_encode(esc_url_raw(rest_url(MWC_NS))) . ';</script>';
+    // MWC_VER: التطبيق المتثبّت على الموبايل بيفضل مفتوح أيام من غير ما يتقفل، فبيفضل شغّال بكود قديم بعد أي تحديث.
+    // بيقارن الرقم ده باللي جايله من /poll ويحدّث نفسه لوحده (1.3) — عشان كده لازم يتحقن في الصفحة مش يتقرا من الـAPI بس.
+    $boot = '<script>window.MWC_API=' . wp_json_encode(esc_url_raw(rest_url(MWC_NS)))
+        . ';window.MWC_VER=' . wp_json_encode(MWC_VERSION) . ';</script>';
     echo str_replace('<!--MWC_BOOT-->', $boot, $html);
     exit;
 });
