@@ -174,6 +174,22 @@ function prepareLines() {
 }
 setInterval(prepareLines, 120000).unref?.(); setTimeout(prepareLines, 15000).unref?.()
 
+// A number the desk moved to the new WhatsApp Center (Evolution): the hub logs it out and forgets it — otherwise
+// the same phone carries two live sessions at once, which is what leaves the customer's WhatsApp stuck on
+// «في انتظار هذه الرسالة». A QR-only placeholder (never linked) is just dropped, nothing to log out.
+async function retireCenterLines() {
+  if (!lines) return
+  const our = (store.get('wpConfig', {}) || {}).ourNumbers || {}
+  for (const l of OR.toRetire(our, store.lines())) {
+    const had = l.phone
+    if (had) await lines.stop(l.id, true).catch((e) => log('warn', 'retire ' + l.id + ': ' + e.message))
+    store.dropLine(l.id)
+    log('line', (l.label || l.id) + ': اتفصل من مركز وا-هب ونُقل لمركز الواتساب الجديد' + (had ? ' (كان متصل بـ' + had + ')' : ' (كان لسه مجرد كود QR مستني)'))
+  }
+}
+setInterval(() => retireCenterLines().catch((e) => log('error', 'retire: ' + e.message)), 120000).unref?.()
+setTimeout(() => retireCenterLines().catch((e) => log('error', 'retire: ' + e.message)), 20000).unref?.()
+
 // The campaigns: every five minutes the website says who each connected outreach line invites next (it keeps the plan,
 // the hours and each line's daily ceiling); the queue sends them one by one, a random minute or more apart per line.
 async function outreachTick() {

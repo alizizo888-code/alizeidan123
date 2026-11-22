@@ -34,5 +34,16 @@ t('a paused line takes no new conversation', OR.pickLine({ purpose: 'reply', pho
 t('…but a chat already on it is answered from it (nothing is cut mid-conversation)', OR.pickLine({ purpose: 'reply', line: 'p', phone: '966500000001' }, [P, S]) === 'p')
 t('…and it never carries a campaign', OR.pickLine({ purpose: 'outreach', line: 'p', phone: '966500000001' }, [P, O]) === null)
 
+// a number moved to the new WhatsApp Center (owner, 2026-11-22): never offered a QR here, and any line it already
+// has on this hub (linked or still a QR placeholder) gets logged out and dropped — one live session, not two.
+const oursCenter = { 536554731: { role: 'sales', label: 'مبيعات ٢ (الطوارئ)', status: 'active', local: '0536554731', center: true }, 549423050: { role: 'sales', label: 'مبيعات ١', status: 'active', local: '0549423050' } }
+t('a center-moved number never gets prepared for QR here', OR.toPrepare(oursCenter, []).length === 1 && OR.toPrepare(oursCenter, [])[0].id === 'n549423050')
+const linkedCenter = { id: 'l9', phone: '966536554731', role: 'customers' }
+const placeholderCenter = { id: 'n536554731', phone: '', role: 'customers' }
+const other = { id: 'l1', phone: '966549423050', role: 'customers' }
+t('a center-moved number already linked here is retired', OR.toRetire(oursCenter, [linkedCenter, other]).length === 1 && OR.toRetire(oursCenter, [linkedCenter, other])[0].id === 'l9')
+t('…and so is a bare QR placeholder for it', OR.toRetire(oursCenter, [placeholderCenter, other]).length === 1 && OR.toRetire(oursCenter, [placeholderCenter, other])[0].id === 'n536554731')
+t('…nothing to retire once it is already gone', OR.toRetire(oursCenter, [other]).length === 0)
+
 console.log('wa-hub outreach: ' + pass + ' passed, ' + fail + ' failed')
 if (fail) process.exit(1)

@@ -42,11 +42,24 @@ export function pickLine(o, open, set = {}) {
 
 /**
  * Lines to prepare for linking (owner, 2026-11-21): every number of ours with a job that has no line yet gets one,
- * named and given its role, waiting for its QR scan. ours = {last9: {role, label, status, local}}; lines = store lines.
+ * named and given its role, waiting for its QR scan. ours = {last9: {role, label, status, local, center}}; lines =
+ * store lines. A number moved to the new WhatsApp Center (`center: true`) never gets a line here — its live
+ * session lives on Evolution now, and offering it a QR too would give the same phone two sessions at once.
  */
 export function toPrepare(ours = {}, lines = []) {
   const have = new Set(lines.flatMap((l) => [l.phone ? pkey(l.phone) : '', String(l.id).startsWith('n') ? String(l.id).slice(1) : '']).filter(Boolean))
-  return Object.entries(ours).filter(([k, r]) => !have.has(k) && r.role !== 'reserve').map(([k, r]) => ({ id: 'n' + k, label: (r.label || 'رقم') + ' — ' + (r.local || '0' + k), role: hubRole(r.role, 'customers', r.status), phone: '' }))
+  return Object.entries(ours).filter(([k, r]) => !have.has(k) && r.role !== 'reserve' && !r.center).map(([k, r]) => ({ id: 'n' + k, label: (r.label || 'رقم') + ' — ' + (r.local || '0' + k), role: hubRole(r.role, 'customers', r.status), phone: '' }))
+}
+
+/** Our lines (hub's own, [{id, phone}]) that must now be logged out because the desk moved their number to the
+ *  new WhatsApp Center (`ours[k].center === true`) — whether they are already open or only a QR placeholder. */
+export function toRetire(ours = {}, lines = []) {
+  const centerKeys = new Set(Object.entries(ours).filter(([, r]) => r.center).map(([k]) => k))
+  if (!centerKeys.size) return []
+  return lines.filter((l) => {
+    const k = l.phone ? pkey(l.phone) : (String(l.id).startsWith('n') ? String(l.id).slice(1) : '')
+    return k && centerKeys.has(k)
+  })
 }
 
 /** Seconds a line waits between two campaign messages: 70–200, different every time (a fixed beat looks like a bot). */
