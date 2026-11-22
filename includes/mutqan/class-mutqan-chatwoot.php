@@ -25,6 +25,7 @@ final class Mutqan_Chatwoot {
     const OPT = 'mutqan_chatwoot';
     const MAP = 'mutqan_chatwoot_map';      // acct => inbox_id ; "c:<tid>" => conversation id ; "k:<conv>" => tid
     const Q = 'mutqan_chatwoot_queue';      // mirrors Chatwoot refused, waiting for the 5-minute retry
+    const BRK = 'mutqan_chatwoot_down';     // Chatwoot looks gone: stop knocking for a while
 
     private static function sys() { return ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user', 'name' => 'Chatwoot']; }
 
@@ -171,6 +172,10 @@ final class Mutqan_Chatwoot {
     /** Called for every WhatsApp message stored here. Never throws, never blocks the WhatsApp side. */
     public static function mirror($acct, $phone, $tid, $m) {
         if (!self::ready() || ($m['via'] ?? '') === 'chatwoot') { return false; }
+        // Chatwoot was retired on 2026-11-23 but the bridge stays switched on in each site's settings. Without this,
+        // every message would spend three 10s timeouts and a log line on a host that is not coming back. After five
+        // failures in a row we stop knocking for an hour, and one success clears it — so a real outage self-heals too.
+        if (self::broken()) { return false; }
         if (class_exists('Mutqan_WA') && Mutqan_WA::is_own_number($phone)) { return false; }   // our lines talking to each other are not customers
         $job = function () use ($acct, $phone, $tid, $m) {
             if (!self::send_one($acct, $phone, $tid, $m)) { self::enqueue($acct, $phone, $tid, $m); }
@@ -178,6 +183,20 @@ final class Mutqan_Chatwoot {
         };
         if (function_exists('fastcgi_finish_request') && function_exists('add_action')) { add_action('shutdown', function () use ($job) { @fastcgi_finish_request(); $job(); }, 60); return true; }
         return $job();
+    }
+
+    /** true while Chatwoot has been failing: don't even try until the pause is over. */
+    private static function broken() {
+        $b = get_option(self::BRK);
+        return is_array($b) && (int) ($b['until'] ?? 0) > time();
+    }
+    private static function mark($ok) {
+        $b = get_option(self::BRK);
+        $b = is_array($b) ? $b : ['fails' => 0, 'until' => 0];
+        if ($ok) { if ($b['fails'] || $b['until']) { delete_option(self::BRK); } return; }
+        $b['fails'] = (int) $b['fails'] + 1;
+        if ($b['fails'] >= 5) { $b['until'] = time() + HOUR_IN_SECONDS; $b['fails'] = 0; error_log('[mutqan] chatwoot looks down — pausing the bridge for an hour'); }
+        update_option(self::BRK, $b, false);
     }
 
     /** One attempt at Chatwoot. true if it took the message, false if it was down, slow or rate-limiting. */
@@ -195,8 +214,9 @@ final class Mutqan_Chatwoot {
                 if ($who !== '') { $text = $who . "\n" . $text; }
             }
             self::post_message($conv, $text, $in ? 'incoming' : 'outgoing');
+            self::mark(true);
             return true;
-        } catch (Throwable $e) { error_log('[mutqan] chatwoot mirror ' . $e->getMessage()); return false; }
+        } catch (Throwable $e) { self::mark(false); error_log('[mutqan] chatwoot mirror ' . $e->getMessage()); return false; }
     }
 
     /** A mirror Chatwoot refused waits here instead of being lost: one hiccup on their side used to drop the
@@ -213,7 +233,7 @@ final class Mutqan_Chatwoot {
     public static function drain() {
         $q = get_option(self::Q, []);
         if (!is_array($q) || !$q) { return ['sent' => 0, 'left' => 0]; }
-        if (!self::ready()) { return ['sent' => 0, 'left' => count($q)]; }
+        if (!self::ready() || self::broken()) { return ['sent' => 0, 'left' => count($q)]; }
         $sent = 0; $keep = []; $i = 0; $n = count($q);
         for (; $i < $n; $i++) {
             if ($sent >= 20) { break; }                      // الباقي في النبضة الجاية
