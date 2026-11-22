@@ -480,18 +480,26 @@ function previewOf(m) {
 /* ======================================================================
    API — حقيقي (ووردبريس) أو تجريبي (للعرض)
    ====================================================================== */
+/** توكن دخول الموقع — بيتلغى لما المستخدم يطلب «خروج» عشان يقدر يدخل برقم موظف بدل حساب المدير */
+const sso = () => (sessionStorage.getItem('mwc_no_sso') ? '' : (window.MWC_SSO || ''));
 const Real = {
-  tok: localStorage.getItem('mwc_token') || '',
+  // لو انت داخل على الموقع كمدير، الصفحة بتيجي ومعاها توكن جاهز (MWC_SSO) فمفيش رقم سري تاني تحفظه (1.4)
+  tok: localStorage.getItem('mwc_token') || sso() || '',
   async req(method, path, body) {
     const opt = {method, headers: {'X-MWC-Token': this.tok}};
     if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
     const r = await fetch(window.MWC_API + path, opt);
     let j = null; try { j = await r.json(); } catch (e) {}
-    if (r.status === 401 && path !== '/login') { showLogin(); throw new Error('سجّل دخول'); }
+    if (r.status === 401 && path !== '/login') {
+      // التوكن المحفوظ قديم؟ لو جاي من الموقع توكن صالح، نكمّل بيه بدل ما نوقف المستخدم على شاشة دخول
+      if (sso() && this.tok !== sso()) { this.use(sso()); return this.req(method, path, body); }
+      showLogin(); throw new Error('سجّل دخول');
+    }
     if (!r.ok) throw new Error((j && j.message) || ('خطأ ' + r.status));
     return j;
   },
-  async login(pin, name) { const j = await this.req('POST', '/login', {pin, name}); this.tok = j.token; localStorage.setItem('mwc_token', j.token); return j; },
+  use(t) { this.tok = t; try { localStorage.setItem('mwc_token', t); } catch (e) {} },
+  async login(pin, name) { const j = await this.req('POST', '/login', {pin, name}); sessionStorage.removeItem('mwc_no_sso'); this.use(j.token); return j; },
   bootstrap() { return this.req('GET', '/bootstrap'); },
   poll(since) { return this.req('GET', '/poll?since=' + since); },
   messages(id, before = 0) { return this.req('GET', `/chats/${id}/messages` + (before ? '?before=' + before : '')); },
@@ -711,7 +719,7 @@ function showLogin(err) {
   d.innerHTML = `<div class="lb"><svg viewBox="0 0 24 24" style="width:70px;fill:var(--accent)"><path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.9 5-1.3A10 10 0 1 0 12 2z"/></svg>
     <h2 style="font-weight:400">مركز الواتساب</h2><input id="lname" placeholder="اسمك (يظهر على رسايلك)" style="letter-spacing:0;font-size:15px" value="${esc(localStorage.getItem('mwc_name') || '')}">
     <input id="lpin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••"><div id="lerr" style="color:var(--danger);min-height:22px">${esc(err || '')}</div>
-    <button class="btn" id="lgo" style="width:100%">دخول</button><p class="muted" style="font-size:12px">نفس الرقم السري اللي حددته من لوحة ووردبريس ← مركز الواتساب</p></div>`;
+    <button class="btn" id="lgo" style="width:100%">دخول</button><p class="muted" style="font-size:12px">لو انت مدير الموقع: سجّل دخولك على الموقع وافتح الصفحة دي تاني، هتدخل على طول من غير رقم سري.<br>رقم الموظفين بيتحدد من لوحة ووردبريس ← مركز الواتساب</p></div>`;
   document.body.append(d);
   const go = async () => { try { localStorage.setItem('mwc_name', $('#lname').value); await API.login($('#lpin').value, $('#lname').value); d.remove(); boot(); } catch (e) { $('#lerr').textContent = e.message; } };
   $('#lgo').onclick = go; $('#lpin').onkeydown = e => e.key === 'Enter' && go(); setTimeout(() => $('#lpin').focus(), 50);
@@ -721,6 +729,8 @@ async function boot() {
   if (DEMO) { const r = document.createElement('div'); r.className = 'demo-ribbon'; r.textContent = 'نسخة تجربة — بيانات وهمية'; document.body.append(r); }
   if (!DEMO && !Real.tok) return showLogin();
   let b; try { b = await API.bootstrap(); } catch (e) { return showLogin(e.message); }
+  // الدخول بتاع الموقع مشي، نحفظه عشان التطبيق يفضل شغّال حتى لو جلسة ووردبريس خلصت بعدين
+  if (!DEMO && sso() && Real.tok === sso()) { Real.use(Real.tok); }
   S.me = b.me; S.accounts = b.accounts; S.config = b.config; S.since = b.now;
   S.user = b.user || null; S.vapid = b.vapid || ''; S.roles = b.roles || {}; S.permsList = b.perms || {}; S.leadStatuses = b.lead_statuses || {};
   S.chats.clear(); b.chats.forEach(c => S.chats.set(c.id, c));
@@ -1498,7 +1508,7 @@ $('#btnNotif').onclick = e => {
     [(S.ring ? '🔁 تكرار النغمة لحد ما ترد: شغّال' : '🔁 تكرار النغمة لحد ما ترد: مقفول'), () => { S.ring = !S.ring; localStorage.setItem('mwc_ring', S.ring ? '1' : '0'); if (!S.ring) stopRing(); else if (unreadTotal()) startRing(); toast(S.ring ? 'هيفضل يرن كل 20 ثانية لحد ما تفتح الرسالة' : 'النغمة هتجي مرة واحدة'); }],
     [(S.notif ? '✓ إشعارات الجهاز: شغالة' : '📲 تفعيل إشعارات الجهاز'), async () => { if (!('Notification' in window)) return toast('المتصفح مش بيدعم الإشعارات'); const p = await Notification.requestPermission(); S.notif = p === 'granted' ? !S.notif || true : false; localStorage.setItem('mwc_notif', S.notif ? '1' : '0'); toast(S.notif ? 'الإشعارات اتفعلت ✅' : 'لازم تسمح بالإشعارات من المتصفح'); }],
     [document.body.classList.contains('light') ? '🌙 الوضع الليلي' : '☀️ الوضع النهاري', () => { document.body.classList.toggle('light'); localStorage.setItem('mwc_theme', document.body.classList.contains('light') ? 'light' : 'dark'); }],
-    DEMO ? null : ['🚪 خروج', () => { localStorage.removeItem('mwc_token'); location.reload(); }],
+    DEMO ? null : ['🚪 خروج', () => { localStorage.removeItem('mwc_token'); sessionStorage.setItem('mwc_no_sso', '1'); location.reload(); }],
   ].filter(Boolean), e);
 };
 
