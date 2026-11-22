@@ -662,9 +662,22 @@ final class Mutqan_Rest {
                     || (!empty($t['admins']) && Mutqan_Policy::has_power($p, 'read'));
                 if ($mine) { $out[] = ['id' => $m['id'], 'title' => $m['title'] ?? '', 'body' => $m['body'] ?? '', 'url' => $m['url'] ?? '', 'sound' => $m['sound'] ?? null, 'priority' => $m['priority'] ?? 'normal', 'event' => $m['event'] ?? null, 'at' => $m['createdAt'],
                     // what the phone says out loud for it (Mutqan_Voice)
-                    'voice' => class_exists('Mutqan_Voice') ? Mutqan_Voice::key((string) ($m['event'] ?? ''), (string) ($m['title'] ?? ''), (string) ($m['body'] ?? '')) : null]; }
+                    'voice' => class_exists('Mutqan_Voice') ? Mutqan_Voice::key((string) ($m['event'] ?? ''), (string) ($m['title'] ?? ''), (string) ($m['body'] ?? '')) : null,
+                    // the full sentence it says about itself, and how urgently (owner, 2026-11-22)
+                    'speak' => class_exists('Mutqan_Voice') ? Mutqan_Voice::sentence($m) : null, 'tier' => class_exists('Mutqan_Voice') ? Mutqan_Voice::tier($m) : null]; }
             }
             return ['items' => $out, 'now' => Mutqan_Store::iso(Mutqan_Store::now())];
+        }
+        // «قول التنبيه»: the spoken clip of one of MY alerts — what it is about, in its urgency's voice (Mutqan_Voice).
+        if ($op === 'say') {
+            $m = Mutqan_Store::get_raw('_push', (string) ($in['id'] ?? ''));
+            if (!$m || !class_exists('Mutqan_Voice')) { throw new Mutqan_Error('not_found', 'التنبيه مش موجود.', 404); }
+            $t = $m['target'] ?? [];
+            $mine = (isset($t['user']) && $t['user'] === $p['id']) || (isset($t['role']) && $t['role'] === ($p['role'] ?? '#')) || (!empty($t['admins']) && Mutqan_Policy::has_power($p, 'read'));
+            if (!$mine) { throw new Mutqan_Error('forbidden', 'مش ليك.', 403); }
+            Mutqan_Limiter::hit('push_say', 600, 3600);
+            $wav = Mutqan_Voice::speak($m);
+            return ['text' => Mutqan_Voice::sentence($m), 'tier' => Mutqan_Voice::tier($m), 'wav' => $wav !== '' ? base64_encode($wav) : ''];
         }
         if ($op === 'send') {
             Mutqan_Limiter::hit('push_send', Mutqan_Policy::is_staff($p) ? 400 : 40, 3600);

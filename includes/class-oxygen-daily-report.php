@@ -313,6 +313,11 @@ class Oxygen_Daily_Report {
                 $res['telegram'] = 'تعذر الإرسال (HTTP ' . $code . ') — تأكد من التوكن ومن أنك بدأت محادثة مع البوت';
             }
         }
+        // in the app too (owner, 2026-11-22): «تقرير نشر المقالات» arrives as a notification that says what it holds
+        if (class_exists('Mutqan_Rest') && (!class_exists('Oxygen_Network') || Oxygen_Network::is_hub() || Oxygen_Network::current_id() === 'mutqan')) {
+            $st = (array) ($rep['status'] ?? []);
+            try { Mutqan_Rest::admin_alert('📊 تقرير نشر المقالات — ' . $rep['brand'], (int) $rep['total'] . ' عملية: ' . (int) ($st['live'] ?? 0) . ' مقال اتنشر' . (!empty($st['held']) ? '، و' . (int) $st['held'] . ' مسودة مستنية' : '') . '، ومتوسط السيو ' . round((float) $rep['avg']) . ' من مية', '#/staff', 'article_report', 'normal'); $res['app'] = 'اتبعت في إشعارات التطبيق'; } catch (Throwable $e) { /* optional */ }
+        }
         return $res;
     }
 
