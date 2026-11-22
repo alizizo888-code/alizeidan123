@@ -548,10 +548,15 @@ final class Mutqan_Store {
         }
         // The customer stays in the permanent ledger; only his order goes (marked «deleted» there).
         if ($coll === 'orders' && class_exists('Mutqan_Ledger')) { Mutqan_Ledger::on_delete((json_decode($row['data'], true) ?: []) + ['id' => (string) $row['doc_id']]); }
+        // «سلة المحذوفات»: a copy of the whole row first, so the owner can bring it back (Mutqan_Trash)
+        if (class_exists('Mutqan_Trash')) { Mutqan_Trash::keep($coll, $row, $p); }
         $wpdb->delete(self::table('docs'), ['pk' => $row['pk']]);
         self::bump($coll);
         return true;
     }
+
+    /** A collection changed outside insert/update/delete (the trash putting a row back): tell the live readers. */
+    public static function touch($coll) { self::bump(self::valid_coll($coll)); }
 
     public static function get_raw($coll, $id) {
         $row = self::fetch_row(self::valid_coll($coll), (string) $id);

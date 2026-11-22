@@ -229,7 +229,7 @@ final class Mutqan_Chatwoot {
         if ($text === '') { return ['ok' => true, 'ignored' => 'empty']; }
         $agent = mb_substr((string) ($e['sender']['name'] ?? 'الفريق'), 0, 60);
         // A person answered: the AI receptionist steps back from this conversation, as when someone replies here.
-        $bot = (array) ($th['bot'] ?? []); $bot['pausedUntil'] = time() + 12 * 3600;
+        $bot = (array) ($th['bot'] ?? []); $bot['pausedUntil'] = max((int) ($bot['pausedUntil'] ?? 0), time() + Mutqan_WA::human_idle()); $bot['humanAt'] = time();
         Mutqan_WA::put_thread($tid, ['bot' => $bot, 'status' => 'open', 'unread' => 0]);
         Mutqan_WA::send((string) $th['accountId'], (string) $th['phone'], $text, 'chatwoot', $agent);
         return ['ok' => true, 'sent' => true];

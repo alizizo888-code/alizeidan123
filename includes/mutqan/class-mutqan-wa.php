@@ -180,18 +180,33 @@ final class Mutqan_WA {
     public static function tid($acct, $phone) { return 't' . substr(md5($acct . '|' . $phone), 0, 24); }
     public static function mid($acct, $msgId) { return 'm' . substr(md5($acct . '|' . $msgId), 0, 24); }
 
+    /**
+     * How long the bot stays quiet after a PERSON (owner / operations) wrote in a conversation (owner order 2026-11-22):
+     * every human message starts the window again, so while a person is talking the bot never cuts in; it comes back
+     * only after the person has been silent for the whole window (default 2 hours, wa_bot cfg «humanIdleMin»,
+     * 30 min … 24 h). The customer writing inside the window does not wake it.
+     */
+    public static function human_idle() {
+        $cfg = Mutqan_Store::get_raw('wa_bot', 'cfg') ?: [];
+        $m = (int) ($cfg['humanIdleMin'] ?? 120);
+        return max(30, min(1440, $m ?: 120)) * 60;
+    }
+    public static function human_pause($tid, $th = null, $extra = []) {
+        $th = $th ?: (Mutqan_Store::get_raw('wa_threads', $tid) ?: []);
+        $bot = (array) ($th['bot'] ?? []);
+        $bot['pausedUntil'] = max((int) ($bot['pausedUntil'] ?? 0), time() + self::human_idle());
+        $bot['humanAt'] = time();
+        self::put_thread($tid, ['bot' => $bot] + $extra);
+    }
+
     private static function staff_send($in, $p) {
         $acct = self::id($in['accountId'] ?? '');
         $phone = preg_replace('/\D/', '', (string) ($in['to'] ?? ''));
         $text = mb_substr(trim((string) ($in['text'] ?? '')), 0, 4000);
         if (strlen($phone) < 8 || $text === '') { throw new Mutqan_Error('bad_input', 'بيانات ناقصة.', 400); }
         $r = self::send($acct, $phone, $text, 'staff', $p['name'] ?? '');
-        // A human answered: pause the bot on this thread for 12h.
-        $tid = self::tid($acct, $phone);
-        $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: [];
-        $bot = $th['bot'] ?? [];
-        $bot['pausedUntil'] = time() + 12 * 3600;
-        self::put_thread($tid, ['bot' => $bot, 'unread' => 0]);
+        // A human answered: the bot keeps out until the person has been silent for the idle window.
+        self::human_pause(self::tid($acct, $phone), null, ['unread' => 0]);
         return $r;
     }
 
@@ -535,8 +550,7 @@ final class Mutqan_WA {
         if ($dir === 'in' && class_exists('Mutqan_WA_Central')) { try { Mutqan_WA_Central::on_incoming($acct, $phone, (string) ($e['text'] ?? ''), $tid); } catch (Throwable $ex) { error_log('[mutqan] central card ' . $ex->getMessage()); } }
         $th = Mutqan_Store::get_raw('wa_threads', $tid) ?: [];
         if ($dir === 'out') {   // replied from the phone itself -> human is handling it
-            $bot = $th['bot'] ?? []; $bot['pausedUntil'] = time() + 12 * 3600;
-            self::put_thread($tid, ['bot' => $bot]);
+            self::human_pause($tid, $th);
             self::learn_from_owner((string) ($th['lastIn'] ?? ''), (string) ($e['text'] ?? ''));
             return ['ok' => true];
         }

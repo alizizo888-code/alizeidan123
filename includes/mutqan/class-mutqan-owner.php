@@ -29,6 +29,14 @@ final class Mutqan_Owner {
                 return ['deleted' => $n];
             }
             case 'deleteTech': return self::delete_tech((string) ($in['userId'] ?? ''), $p);
+            case 'trash': return class_exists('Mutqan_Trash') ? Mutqan_Trash::list() : [];
+            case 'restore': {
+                $r = Mutqan_Trash::restore((int) ($in['id'] ?? 0), $p);
+                // a technician comes back with his sign-in (it was only switched off)
+                if ($r['coll'] === 'tech_profiles') { try { Mutqan_Auth::team_op('enableMember', ['userId' => $r['id']], $p); } catch (Throwable $e) { /* profile without an account */ } }
+                self::log('استرجاع', $r['coll'] . ' ' . $r['id'], $p);
+                return $r;
+            }
             case 'log': { $l = get_option(self::LOG, []); return array_reverse(is_array($l) ? $l : []); }
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
@@ -73,7 +81,8 @@ final class Mutqan_Owner {
             Mutqan_Store::update('orders', (string) $o['id'], ['technicianId' => null, 'technicianName' => null, 'status' => 'new'], self::sys()); $moved++;
         }
         Mutqan_Store::delete('tech_profiles', $uid, self::sys());
-        try { Mutqan_Auth::team_op('deleteMember', ['userId' => $uid], $p); } catch (Throwable $e) { /* profile without an account */ }
+        // switched off, not erased, so «استرجاع» brings him back able to sign in
+        try { Mutqan_Auth::team_op('disableMember', ['userId' => $uid], $p); } catch (Throwable $e) { /* profile without an account */ }
         self::log('فني', (string) ($prof['displayName'] ?? $uid) . ($moved ? " (رجّع $moved طلب للتوزيع)" : ''), $p);
         return ['deleted' => true, 'ordersReturned' => $moved];
     }
