@@ -119,7 +119,18 @@ final class Mutqan_Blogger {
 
     public static function publish($brand, $title, $html, $labels = []) {
         $labels = is_array($labels) ? $labels : array_filter(array_map('trim', explode(',', (string) $labels)));
-        $d = self::api('POST', '/blogs/' . self::blog_id($brand) . '/posts/', ['kind' => 'blogger#post', 'title' => wp_strip_all_tags((string) $title), 'content' => (string) $html, 'labels' => array_values(array_slice($labels, 0, 10))]);
+        $title = wp_strip_all_tags((string) $title);
+        $html = (string) $html;
+        // Use the same article-diversity layer as WordPress, then remember this Blogger article
+        // in the shared local corpus so the next WordPress/Blogger draft can take a different angle.
+        if (class_exists('Oxygen_Content_Diversity')) {
+            $prepared = Oxygen_Content_Diversity::enrich($title, $html, 'blogger-' . sanitize_key((string) $brand));
+            $html = $prepared['html'];
+        }
+        $d = self::api('POST', '/blogs/' . self::blog_id($brand) . '/posts/', ['kind' => 'blogger#post', 'title' => $title, 'content' => $html, 'labels' => array_values(array_slice($labels, 0, 10))]);
+        if (class_exists('Oxygen_Content_Diversity')) {
+            Oxygen_Content_Diversity::record_external($title, $html, $d['url'] ?? '');
+        }
         return ['id' => $d['id'] ?? '', 'url' => $d['url'] ?? '', 'title' => $d['title'] ?? ''];
     }
 
