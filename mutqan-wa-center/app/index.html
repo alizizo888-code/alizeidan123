@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111b21">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex,nofollow">
+<link rel="manifest" href="./?mwc_manifest=1">
+<title>مركز الواتساب</title>
+<!--MWC_BOOT-->
+<style>
+:root{
+  --bg:#0b141a;--panel:#111b21;--panel2:#202c33;--panel3:#2a3942;--line:#222d34;--text:#e9edef;--muted:#8696a0;
+  --accent:#00a884;--accent2:#06cf9c;--out:#005c4b;--in:#202c33;--blue:#53bdeb;--danger:#f15c6d;--warn:#ffb02e;
+  --wall:#0b141a;--r:8px;--shadow:0 2px 12px rgba(0,0,0,.35);
+}
+body.light{--bg:#eae6df;--panel:#fff;--panel2:#f0f2f5;--panel3:#e9edef;--line:#e9edef;--text:#111b21;--muted:#667781;--out:#d9fdd3;--in:#fff;--wall:#efeae2;--blue:#027eb5}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14.5px/1.45 "Segoe UI","SF Arabic","Noto Sans Arabic",Tahoma,system-ui,sans-serif;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+input,textarea,select{font:inherit;color:var(--text);background:var(--panel2);border:1px solid transparent;border-radius:8px;padding:9px 12px;outline:none;width:100%}
+input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+a{color:var(--blue)}
+.hidden{display:none!important}
+.ic{width:24px;height:24px;fill:currentColor;flex:none}
+.ibtn{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--muted);flex:none}
+.ibtn:hover{background:var(--panel3)}
+.ibtn.on{color:var(--accent)}
+.av{width:49px;height:49px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:600;color:#fff;overflow:hidden;background:#6b7c85;font-size:18px;user-select:none}
+.av img{width:100%;height:100%;object-fit:cover}
+.av.sm{width:40px;height:40px;font-size:15px}
+.av.xl{width:200px;height:200px;font-size:64px;cursor:zoom-in}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:16px;background:var(--panel2);color:var(--muted);font-size:13.5px;white-space:nowrap}
+.chip.on{background:rgba(0,168,132,.2);color:var(--accent2)}
+.tag{font-size:11px;padding:1px 7px;border-radius:9px;color:#fff;white-space:nowrap}
+.btn{background:var(--accent);color:#111b21;font-weight:600;border-radius:20px;padding:9px 20px}
+.btn.ghost{background:var(--panel3);color:var(--text)}
+.btn.danger{background:var(--danger);color:#fff}
+.muted{color:var(--muted)}
+.row{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+.ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ===== layout ===== */
+#app{display:flex;height:100dvh;width:100%}
+#rail{width:72px;background:var(--panel2);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:6px;border-left:1px solid var(--line);overflow-y:auto;flex:none}
+.racc{position:relative;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;cursor:pointer;flex:none;transition:.15s}
+.racc .av{width:44px;height:44px;font-size:13px;border:2px solid transparent}
+.racc.on .av{border-color:var(--accent);box-shadow:0 0 0 2px var(--panel2)}
+.racc .dot{position:absolute;bottom:4px;left:4px;width:12px;height:12px;border-radius:50%;border:2px solid var(--panel2);background:#8696a0}
+.dot.open{background:#25d366}.dot.connecting,.dot.qr{background:var(--warn)}.dot.close,.dot.error,.dot.not_configured{background:var(--danger)}
+.racc .bdg{position:absolute;top:0;right:0}
+.racc .tip{position:absolute;right:62px;background:#000c;color:#fff;padding:4px 9px;border-radius:6px;font-size:12px;white-space:nowrap;pointer-events:none;opacity:0;z-index:9}
+.racc:hover .tip{opacity:1}
+.rsep{width:32px;height:1px;background:var(--line);margin:4px 0;flex:none}
+.bdg{background:var(--accent);color:#111b21;min-width:20px;height:20px;border-radius:10px;font-size:11.5px;font-weight:700;display:grid;place-items:center;padding:0 5px}
+#side{width:min(420px,36vw);min-width:320px;background:var(--panel);display:flex;flex-direction:column;border-left:1px solid var(--line);flex:none}
+.head{height:60px;background:var(--panel2);display:flex;align-items:center;gap:8px;padding:0 14px;flex:none}
+.search{padding:8px 12px;display:flex;gap:8px;align-items:center}
+.search .box{flex:1;display:flex;align-items:center;background:var(--panel2);border-radius:8px;padding:0 10px}
+.search input{background:none;border:0;padding:8px}
+.filters{display:flex;gap:6px;padding:2px 12px 8px;overflow-x:auto;scrollbar-width:none}
+#list{flex:1;overflow-y:auto}
+.citem{display:flex;gap:12px;align-items:center;padding:0 14px;height:72px;cursor:pointer;position:relative}
+.citem:hover{background:var(--panel2)}
+.citem.on{background:var(--panel3)}
+.citem .body{flex:1;min-width:0;border-bottom:1px solid var(--line);height:100%;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.citem .t1,.citem .t2{display:flex;align-items:center;gap:6px}
+.citem .nm{flex:1;font-size:16px}
+.citem .tm{font-size:12px;color:var(--muted)}
+.citem.unread .tm{color:var(--accent2)}
+.citem .pv{flex:1;color:var(--muted);font-size:13.5px}
+.empty{padding:40px 20px;text-align:center;color:var(--muted)}
+
+#main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--wall);position:relative}
+#main::before{content:"";position:absolute;inset:0;opacity:.06;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23fff' stroke-width='1.2'%3E%3Ccircle cx='14' cy='14' r='5'/%3E%3Cpath d='M50 10l8 8-8 8-8-8z'/%3E%3Cpath d='M10 52q8-8 16 0t16 0'/%3E%3Crect x='52' y='50' width='14' height='10' rx='3'/%3E%3C/g%3E%3C/svg%3E")}
+body.light #main::before{filter:invert(1);opacity:.05}
+#welcome{flex:1;display:grid;place-items:center;text-align:center;color:var(--muted);padding:30px;position:relative;background:var(--panel2);border-bottom:6px solid var(--accent)}
+#welcome h2{color:var(--text);font-weight:300;font-size:30px;margin:14px 0 8px}
+#chat{flex:1;display:flex;flex-direction:column;min-height:0;position:relative}
+#chat .head{cursor:pointer;gap:12px}
+#msgs{flex:1;overflow-y:auto;padding:14px 6% 8px;display:flex;flex-direction:column;gap:2px;position:relative}
+.daysep{align-self:center;background:var(--panel2);color:var(--muted);font-size:12.5px;padding:5px 12px;border-radius:8px;margin:10px 0;box-shadow:0 1px .5px rgba(0,0,0,.13)}
+.m{display:flex;max-width:min(78%,640px);position:relative}
+.m.in{align-self:flex-start}
+.m.out{align-self:flex-end}
+.bub{background:var(--in);border-radius:var(--r);padding:6px 8px 8px 9px;box-shadow:0 1px .5px rgba(0,0,0,.13);position:relative;min-width:84px;word-wrap:break-word;overflow-wrap:anywhere}
+.m.out .bub{background:var(--out)}
+.m.first.in .bub{border-top-right-radius:0}
+.m.first.out .bub{border-top-left-radius:0}
+.m.first{margin-top:8px}
+.bub .txt{white-space:pre-wrap}
+.bub .meta{float:left;margin:6px 10px -4px 0;font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:3px;direction:ltr;white-space:nowrap}
+body:not(.light) .m.out .bub .meta{color:#ffffff99}
+.tick{width:16px;height:11px}
+.tick.read{color:var(--blue)}
+.tick.failed{color:var(--danger)}
+.bub .sender{font-size:12px;color:var(--accent2);font-weight:600;margin-bottom:2px}
+.bub .media{display:block;border-radius:6px;max-width:330px;max-height:360px;width:100%;object-fit:cover;cursor:zoom-in;background:#0003;margin:-2px -4px 4px;width:calc(100% + 8px)}
+.bub video.media{cursor:default}
+.bub .doc{display:flex;align-items:center;gap:10px;background:#0002;padding:10px;border-radius:6px;margin-bottom:4px;min-width:240px;text-decoration:none;color:inherit}
+.doc .di{width:36px;height:44px;border-radius:4px;background:#f15c6d;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:700;flex:none}
+.voice{display:flex;align-items:center;gap:10px;min-width:250px;padding:4px 0}
+.voice .play{width:34px;height:34px;display:grid;place-items:center;color:var(--muted)}
+.voice .bar{flex:1;height:22px;position:relative;cursor:pointer;display:flex;align-items:center;gap:2px}
+.voice .bar i{flex:1;background:var(--muted);opacity:.55;border-radius:2px;min-height:3px}
+.voice .bar i.p{background:var(--accent2);opacity:1}
+.voice .vt{font-size:11px;color:var(--muted);position:absolute;bottom:-4px;right:52px}
+.voice .av{width:44px;height:44px;font-size:14px;position:relative}
+.voice .av::after{content:"🎤";position:absolute;bottom:-2px;left:-2px;font-size:13px}
+.reply-q{background:#0003;border-right:4px solid var(--accent2);border-radius:6px;padding:5px 9px;margin-bottom:5px;font-size:13px;color:var(--muted);cursor:pointer;max-height:60px;overflow:hidden}
+.err{font-size:12px;color:var(--danger);margin-top:3px;display:flex;gap:8px;align-items:center}
+.err button{color:var(--blue);text-decoration:underline}
+.m .mbtn{position:absolute;top:2px;left:4px;opacity:0;background:linear-gradient(90deg,var(--in),transparent);border-radius:50%;width:26px;height:26px;display:grid;place-items:center;color:var(--muted);z-index:2}
+.m.out .mbtn{background:linear-gradient(90deg,var(--out) 60%,transparent)}
+.m:hover .mbtn{opacity:1}
+.loc{display:block;width:260px;height:130px;border-radius:6px;margin-bottom:4px;background:#2a3942 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='130'%3E%3Cpath d='M0 40h260M0 95h260M70 0v130M180 0v130' stroke='%23fff3' stroke-width='6'/%3E%3C/svg%3E");position:relative}
+.loc::after{content:"📍";position:absolute;left:50%;top:50%;transform:translate(-50%,-60%);font-size:34px}
+#tobottom{position:absolute;left:20px;bottom:80px;width:42px;height:42px;border-radius:50%;background:var(--panel2);box-shadow:var(--shadow);display:grid;place-items:center;color:var(--muted);z-index:3}
+#tobottom .bdg{position:absolute;top:-8px;right:-4px}
+
+/* composer */
+#replybar{background:var(--panel2);padding:8px 16px 0;display:flex;gap:8px;align-items:center}
+#replybar .reply-q{flex:1;margin:0}
+#winbar{background:#ffb02e22;color:var(--warn);padding:8px 16px;font-size:13px;display:flex;gap:10px;align-items:center}
+#composer{background:var(--panel2);min-height:62px;display:flex;align-items:flex-end;gap:6px;padding:10px 12px;position:relative;flex:none}
+#composer .ibtn{width:42px;height:42px}
+#tbox{flex:1;background:var(--panel3);border-radius:8px;padding:10px 12px;max-height:140px;min-height:42px;resize:none;border:0;line-height:1.4}
+#sendbtn{background:var(--accent);color:#111b21;width:44px;height:44px}
+#sendbtn:hover{background:var(--accent2)}
+#rec{position:absolute;inset:0;background:var(--panel2);display:flex;align-items:center;gap:14px;padding:0 16px;z-index:3}
+#rec .rdot{width:12px;height:12px;border-radius:50%;background:var(--danger);animation:blink 1s infinite}
+#rec .rtime{font-variant-numeric:tabular-nums;font-size:17px}
+#rec .wave{flex:1;display:flex;align-items:center;gap:2px;height:30px;overflow:hidden;direction:ltr;justify-content:flex-end}
+#rec .wave i{width:3px;background:var(--muted);border-radius:2px;flex:none}
+@keyframes blink{50%{opacity:.2}}
+.pop{position:absolute;background:var(--panel2);border-radius:10px;box-shadow:var(--shadow);z-index:20;padding:8px 0;min-width:200px}
+.pop button{display:flex;align-items:center;gap:12px;width:100%;padding:10px 18px;text-align:right}
+.pop button:hover{background:var(--panel3)}
+.pop .pi{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:18px}
+#attach{bottom:66px;right:56px}
+#qr-pop{bottom:66px;right:12px;left:12px;max-height:280px;overflow-y:auto}
+#qr-pop button{flex-direction:column;align-items:flex-start;gap:2px}
+#qr-pop b{color:var(--accent2)}
+#emoji{bottom:66px;right:12px;width:340px;max-height:260px;overflow-y:auto;display:grid;grid-template-columns:repeat(8,1fr);padding:8px}
+#emoji button{font-size:24px;padding:4px;justify-content:center;width:auto}
+
+/* profile drawer */
+#prof{width:min(420px,34vw);min-width:320px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;flex:none}
+#prof .scroll{flex:1;overflow-y:auto}
+.psec{background:var(--panel);padding:16px 24px;border-bottom:8px solid var(--bg)}
+body.light .psec{border-bottom-color:var(--panel2)}
+.psec h4{margin:0 0 10px;font-weight:400;color:var(--muted);font-size:14px}
+.pcenter{text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+.pname{font-size:22px;outline:none;border-radius:6px;padding:2px 8px}
+.pname:focus{background:var(--panel2)}
+.prow{display:flex;align-items:center;gap:10px;padding:8px 0}
+.pacts{display:flex;justify-content:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.pact{display:flex;flex-direction:column;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:78px;color:var(--accent2);font-size:12.5px}
+.pact:hover{background:var(--panel2)}
+.gal{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.gal .g{aspect-ratio:1;border-radius:4px;overflow:hidden;background:var(--panel2);cursor:pointer;position:relative;display:grid;place-items:center;font-size:24px}
+.gal .g img,.gal .g video{width:100%;height:100%;object-fit:cover}
+.svcbtn{display:flex;align-items:center;gap:12px;padding:11px 0;width:100%;text-align:right;border-bottom:1px solid var(--line)}
+.svcbtn span:first-child{font-size:20px;width:30px;text-align:center}
+
+/* modals */
+.modal{position:fixed;inset:0;background:#000a;z-index:50;display:grid;place-items:center;padding:16px}
+.mbox{background:var(--panel);border-radius:12px;width:min(560px,100%);max-height:92dvh;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.mbox.wide{width:min(980px,100%)}
+.mhead{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);font-size:17px;font-weight:600}
+.mbody{padding:16px 18px;overflow-y:auto;flex:1}
+.mfoot{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:flex-start}
+.fld{margin-bottom:12px}
+.fld label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding:0 12px;overflow-x:auto}
+.tabs button{padding:12px 14px;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
+.tabs button.on{color:var(--accent2);border-color:var(--accent)}
+.card{background:var(--panel2);border-radius:10px;padding:12px;margin-bottom:10px}
+.lrow{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px}
+.lrow textarea{min-height:42px}
+#viewer{position:fixed;inset:0;background:#0b141af2;z-index:60;display:flex;flex-direction:column}
+#viewer .vh{display:flex;align-items:center;gap:10px;padding:10px 16px;color:#fff}
+#viewer .vb{flex:1;display:grid;place-items:center;min-height:0;padding:10px}
+#viewer img,#viewer video{max-width:100%;max-height:100%;object-fit:contain}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#000d;color:#fff;padding:10px 18px;border-radius:8px;z-index:99;font-size:14px;pointer-events:none;opacity:0;transition:.2s}
+#toast.show{opacity:1}
+#login{position:fixed;inset:0;background:var(--panel);z-index:80;display:grid;place-items:center}
+#login .lb{width:min(360px,90vw);text-align:center}
+#login input{text-align:center;font-size:22px;letter-spacing:8px;margin:8px 0}
+.qrimg{width:260px;height:260px;background:#fff;border-radius:10px;padding:8px;margin:auto;display:block}
+.prev{max-height:50dvh;display:grid;place-items:center;background:var(--bg);border-radius:8px;overflow:hidden;margin-bottom:10px}
+.prev img,.prev video{max-width:100%;max-height:50dvh}
+.thumbs{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px}
+.thumbs div{width:56px;height:56px;border-radius:6px;background:var(--panel2);display:grid;place-items:center;flex:none;overflow:hidden;font-size:11px;border:2px solid transparent;cursor:pointer}
+.thumbs div.on{border-color:var(--accent)}
+.thumbs img{width:100%;height:100%;object-fit:cover}
+.progress{height:3px;background:var(--accent);position:absolute;top:0;right:0;transition:width .2s;z-index:4}
+.drop{position:absolute;inset:0;background:#00a88433;border:3px dashed var(--accent);z-index:10;display:grid;place-items:center;font-size:20px;color:#fff;pointer-events:none}
+.demo-ribbon{position:fixed;bottom:76px;left:8px;opacity:.85;pointer-events:none;background:var(--warn);color:#111;font-size:12px;font-weight:700;padding:3px 10px;border-radius:10px;z-index:90}
+
+/* ===== mobile / tablet ===== */
+@media (max-width:1100px){#prof{position:absolute;inset:0 auto 0 0;z-index:30;width:min(420px,100%);box-shadow:var(--shadow)}}
+@media (max-width:760px){
+  #app{flex-direction:column}
+  #rail{width:100%;height:64px;flex-direction:row;padding:6px 8px;border:0;border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden}
+  .rsep{width:1px;height:32px;margin:0 4px}
+  .racc .tip{display:none}
+  #side{width:100%;min-width:0;flex:1;border:0}
+  #main{position:fixed;inset:0;z-index:20;display:none}
+  body.inchat #main{display:flex}
+  body.inchat #rail,body.inchat #side{display:none}
+  #prof{position:fixed;inset:0;width:100%;min-width:0;z-index:40}
+  #msgs{padding:10px 3%}
+  .m{max-width:88%}
+  .bub .media{max-width:240px}
+  .voice{min-width:200px}
+  #emoji{width:auto;left:8px}
+  .grid2{grid-template-columns:1fr}
+  .mbox{max-height:100dvh}
+}
+@media (min-width:761px){.backbtn{display:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <nav id="rail"></nav>
+  <aside id="side">
+    <div class="head">
+      <div class="av sm" id="meav">م</div>
+      <div class="grow"><div class="ell" id="accTitle" style="font-weight:600">كل الأرقام</div><div class="muted ell" id="accSub" style="font-size:12px"></div></div>
+      <button class="ibtn" id="btnNew" title="محادثة جديدة"><svg class="ic" viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v14l4-4h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-3 7h-3v3h-2v-3H8V8h3V5h2v3h3z"/></svg></button>
+      <button class="ibtn" id="btnNotif" title="الإشعارات والصوت"><svg class="ic" viewBox="0 0 24 24"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6V11c0-3.1-1.6-5.6-4.5-6.3V4a1.5 1.5 0 0 0-3 0v.7C7.6 5.4 6 7.9 6 11v5l-2 2v1h16v-1z"/></svg></button>
+      <button class="ibtn" id="btnSettings" title="الإعدادات"><svg class="ic" viewBox="0 0 24 24"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4L10.7 6a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.3 2.6h4l.3-2.6a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg></button>
+    </div>
+    <div class="search"><div class="box"><svg class="ic" viewBox="0 0 24 24" style="width:20px;color:var(--muted)"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg><input id="q" placeholder="ابحث باسم أو رقم أو كلمة"></div></div>
+    <div class="filters" id="filters"></div>
+    <div id="list"></div>
+  </aside>
+  <main id="main">
+    <div id="welcome"><div><svg viewBox="0 0 24 24" style="width:90px;fill:var(--accent)"><path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.9 5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.3-.5 0-1 .3-3.2-.7-2.7-1.1-4.4-3.9-4.5-4.1-.1-.2-1.1-1.4-1.1-2.7s.7-1.9.9-2.2c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg>
+      <h2>مركز الواتساب</h2><p>كل أرقامك في مكان واحد — اختار رقم من الشريط، أو محادثة من القائمة.<br>الرسائل الجديدة بترن بصوت الإشعار حتى لو انت على رقم تاني.</p></div></div>
+    <div id="chat" class="hidden">
+      <div class="progress" id="upprog" style="width:0"></div>
+      <div class="head" id="chead"></div>
+      <div id="msgs"></div>
+      <button id="tobottom" class="hidden"><svg class="ic" viewBox="0 0 24 24"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg></button>
+      <div id="winbar" class="hidden"></div>
+      <div id="replybar" class="hidden"></div>
+      <div id="composer">
+        <div class="pop hidden" id="attach"></div>
+        <div class="pop hidden" id="qr-pop"></div>
+        <div class="pop hidden" id="emoji"></div>
+        <button class="ibtn" id="btnEmoji" title="إيموجي"><svg class="ic" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-3.5-9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm7 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM12 17.5c2.3 0 4.3-1.5 5-3.5H7c.7 2 2.7 3.5 5 3.5z"/></svg></button>
+        <button class="ibtn" id="btnAttach" title="إرفاق"><svg class="ic" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg></button>
+        <button class="ibtn" id="btnQR" title="ردود جاهزة (/)"><svg class="ic" viewBox="0 0 24 24"><path d="M13 3 4 14h7l-1 7 9-11h-7z"/></svg></button>
+        <textarea id="tbox" rows="1" placeholder="اكتب رسالة  ( / للردود الجاهزة )"></textarea>
+        <button class="ibtn" id="sendbtn" title="تسجيل صوتي"></button>
+        <div id="rec" class="hidden">
+          <button class="ibtn" id="recCancel" title="إلغاء"><svg class="ic" viewBox="0 0 24 24" style="color:var(--danger)"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z"/></svg></button>
+          <span class="rdot"></span><span class="rtime" id="recTime">0:00</span>
+          <div class="wave" id="recWave"></div>
+          <button class="ibtn" id="recPause" title="إيقاف مؤقت"><svg class="ic" viewBox="0 0 24 24"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg></button>
+          <button class="ibtn" id="recSend" style="background:var(--accent);color:#111b21;width:44px;height:44px" title="إرسال"><svg class="ic" viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z" transform="scale(-1,1) translate(-24,0)"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </main>
+  <aside id="prof" class="hidden"></aside>
+</div>
+<input type="file" id="fMedia" accept="image/*,video/*" multiple hidden>
+<input type="file" id="fDoc" multiple hidden>
+<input type="file" id="fCam" accept="image/*" capture="environment" hidden>
+<input type="file" id="fAudio" accept="audio/*" hidden>
+<div id="toast"></div>
+
+<script>
+/* =====================================================================
+   مركز الواتساب — Mutqan WA Center (واجهة)
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const DEMO = !window.MWC_API || /[?&]demo=1/.test(location.search);
+const ICON = {
+  send:'<svg class="ic" viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z" transform="scale(-1,1) translate(-24,0)"/></svg>',
+  mic:'<svg class="ic" viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v7a3 3 0 0 0 3 3zm5.3-3a5.3 5.3 0 0 1-10.6 0H5a7 7 0 0 0 6 6.9V22h2v-3.1a7 7 0 0 0 6-6.9z"/></svg>',
+  play:'<svg class="ic" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" transform="scale(-1,1) translate(-24,0)"/></svg>',
+  pause:'<svg class="ic" viewBox="0 0 24 24"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>',
+  down:'<svg class="ic" viewBox="0 0 24 24" style="width:20px"><path d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>',
+  back:'<svg class="ic" viewBox="0 0 24 24"><path d="M4 11h12.2l-5.6-5.6L12 4l8 8-8 8-1.4-1.4 5.6-5.6H4z"/></svg>',
+  close:'<svg class="ic" viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>',
+  dots:'<svg class="ic" viewBox="0 0 24 24"><path d="M12 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>',
+  copy:'<svg class="ic" viewBox="0 0 24 24"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11z"/></svg>',
+  share:'<svg class="ic" viewBox="0 0 24 24"><path d="M18 16a3 3 0 0 0-2 .8l-7.1-4.2a3 3 0 0 0 0-1.2L15.9 7.3A3 3 0 1 0 15 5l.1.6L8 9.8a3 3 0 1 0 0 4.4l7.1 4.2-.1.6a3 3 0 1 0 3-3z"/></svg>',
+  dl:'<svg class="ic" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7zM5 18v2h14v-2z"/></svg>',
+  phone:'<svg class="ic" viewBox="0 0 24 24"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1z"/></svg>',
+};
+const TICKS = {
+  pending:'<svg class="tick" viewBox="0 0 16 15"><path fill="currentColor" d="M8 1.5a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm0 10.8a4.8 4.8 0 1 1 0-9.6 4.8 4.8 0 0 1 0 9.6zM8.6 4H7.4v4.2l3.2 1.9.6-1-2.6-1.5z"/></svg>',
+  sent:'<svg class="tick" viewBox="0 0 16 11"><path fill="currentColor" d="M11.1.6 4.8 7.9 2.2 5.4 1 6.6l3.9 3.8L12.3 1.7z"/></svg>',
+  delivered:'<svg class="tick" viewBox="0 0 16 11"><path fill="currentColor" d="M11.1.6 4.8 7.9 2.2 5.4 1 6.6l3.9 3.8L12.3 1.7zM15 .6 8.7 7.9l-.9-.9-1.1 1.3 2.1 2 7.4-8.6z"/></svg>',
+  failed:'<svg class="tick" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-2h2zm0-4h-2V7h2z"/></svg>',
+};
+TICKS.read = TICKS.delivered; TICKS.received = '';
+const ROLES = {manager:'المدير / التوجيه', sales:'مبيعات', outreach:'تسويق وإرسال', support:'دعم فني', branch:'فرع'};
+const EMOJIS = '😀😁😂🤣😊😍😘😎🤔😅🙏👍👌👏💪🤝✌️🙌🔥✨❤️💚💙⭐✅❌⚠️⏰📍📞📷🎥🎤📄💲🧾🛠️🔧🔩❄️🌬️🏠🚚🕌🌙☀️🎉😢😡🤗🙂😉😇🤲👋🫡💯🆗🆕🔔'.match(/\p{Extended_Pictographic}️?|\p{Emoji_Presentation}/gu);
+
+/* ---------------- state ---------------- */
+const S = {
+  me:'', accounts:[], config:{}, chats:new Map(), msgs:new Map(), curAcc:0, curChat:null, filter:'all', q:'',
+  since:0, replyTo:null, profile:null, loadingOlder:false, newBelow:0,
+  sound: localStorage.getItem('mwc_sound') !== '0', notif: localStorage.getItem('mwc_notif') === '1',
+};
+
+/* ---------------- utils ---------------- */
+function toast(t, ms = 2200) { const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('show'), ms); }
+const pad = n => String(n).padStart(2, '0');
+function fmtTime(ts) { const d = new Date(ts * 1000); let h = d.getHours(), ap = h < 12 ? 'ص' : 'م'; h = h % 12 || 12; return `${h}:${pad(d.getMinutes())} ${ap}`; }
+function dayKey(ts) { const d = new Date(ts * 1000); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
+function fmtDay(ts) {
+  const d = new Date(ts * 1000), n = new Date(); const t0 = new Date(n.getFullYear(), n.getMonth(), n.getDate()) / 1000;
+  if (ts >= t0) return 'اليوم'; if (ts >= t0 - 86400) return 'أمس';
+  if (ts >= t0 - 6 * 86400) return d.toLocaleDateString('ar-SA-u-ca-gregory', {weekday:'long'});
+  return d.toLocaleDateString('ar-SA-u-ca-gregory', {day:'numeric', month:'long', year:'numeric'});
+}
+function fmtListTime(ts) { if (!ts) return ''; const k = fmtDay(ts); return k === 'اليوم' ? fmtTime(ts) : (k.length > 12 ? new Date(ts*1000).toLocaleDateString('en-GB') : k); }
+function fmtDur(s) { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + pad(s % 60); }
+function fmtPhone(p) { p = String(p || ''); if (p.startsWith('lid:')) return 'رقم مخفي'; if (/^9665\d{8}$/.test(p)) return '+966 ' + p.slice(3, 5) + ' ' + p.slice(5, 8) + ' ' + p.slice(8); return '+' + p; }
+function localPhone(p) { p = String(p || ''); return /^9665\d{8}$/.test(p) ? '0' + p.slice(3) : p; }
+function nameOf(c) { return c.name || c.push_name || fmtPhone(c.wa_id); }
+const COLORS = ['#e17076','#7bc862','#e5ca77','#65aadd','#a695e7','#ee7aae','#6ec9cb','#faa774','#00a884'];
+function colorFor(s) { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) | 0; return COLORS[Math.abs(h) % COLORS.length]; }
+function initials(n) { n = String(n || '').replace(/[+\d\s]/g, '').trim(); if (!n) return '👤'; const p = n.split(/\s+/); return (p[0][0] + (p[1] ? p[1][0] : '')).toUpperCase(); }
+function avatar(c, cls = '') {
+  const n = nameOf(c);
+  return c.avatar ? `<div class="av ${cls}"><img src="${esc(c.avatar)}" alt="" loading="lazy" onerror="this.remove()"></div>`
+                  : `<div class="av ${cls}" style="background:${colorFor(c.wa_id || n)}">${esc(initials(n))}</div>`;
+}
+function linkify(t) {
+  return esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(^|\s)_([^_\n]+)_/g, '$1<i>$2</i>').replace(/~([^~\n]+)~/g, '<s>$1</s>');
+}
+function accById(id) { return S.accounts.find(a => a.id == id) || {label:'؟', color:'#888', provider:''}; }
+function fillVars(t, chat) {
+  const acc = chat ? accById(chat.account_id) : {}; const v = Object.assign({}, S.config.vars || {}, (acc.config || {}).vars || {});
+  if (acc.config && acc.config.brand) v.brand = acc.config.brand;
+  const d = new Date(); const tm = new Date(d.getTime() + 86400000);
+  Object.assign(v, {name: chat ? (chat.name || chat.push_name || '') : '', phone: chat ? localPhone(chat.wa_id) : '', me: S.me,
+    date: 'اليوم ' + d.toLocaleDateString('ar-SA-u-ca-gregory', {weekday:'long', day:'numeric', month:'long'}),
+    tomorrow: tm.toLocaleDateString('ar-SA-u-ca-gregory', {weekday:'long', day:'numeric', month:'long'})});
+  return String(t).replace(/\{(\w+)\}/g, (m, k) => v[k] ?? m);
+}
+async function copy(t, msg = 'اتنسخ ✅') {
+  try { await navigator.clipboard.writeText(t); } catch (e) { const ta = document.createElement('textarea'); ta.value = t; document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  toast(msg);
+}
+async function share(data) {
+  if (navigator.share) { try { await navigator.share(data); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  copy([data.title, data.text, data.url].filter(Boolean).join('\n'), 'اتنسخ للمشاركة ✅');
+}
+function download(url, name) { const a = document.createElement('a'); a.href = url; a.download = name || ''; a.target = '_blank'; document.body.append(a); a.click(); a.remove(); }
+
+/* ---------------- sound & notifications (صوت الواتساب) ---------------- */
+let AC = null;
+function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); return AC; }
+function tone(freqs, dur = .09, gap = .07, vol = .22) {
+  try {
+    const c = ac(); let t = c.currentTime + .01;
+    freqs.forEach(f => { const o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.02, t + dur);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(.001, t + dur + .08);
+      o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + .1); t += gap; });
+  } catch (e) {}
+}
+const SND = { incoming: () => tone([1046, 1318], .08, .085, .25), inchat: () => tone([880], .05, 0, .12), sent: () => tone([1568], .03, 0, .06) };
+function notify(chat, m) {
+  if (S.sound) (document.hidden || S.curChat !== chat.id ? SND.incoming : SND.inchat)();
+  if (navigator.vibrate && document.hidden) navigator.vibrate([120, 60, 120]);
+  if (S.notif && 'Notification' in window && Notification.permission === 'granted' && (document.hidden || S.curChat !== chat.id)) {
+    try { const n = new Notification(nameOf(chat) + ' • ' + accById(chat.account_id).label, {body: previewOf(m), icon: chat.avatar || undefined, tag: 'mwc' + chat.id, renotify: true});
+      n.onclick = () => { window.focus(); openChat(chat.id); n.close(); }; } catch (e) {}
+  }
+}
+function updateTitle() { const u = [...S.chats.values()].reduce((s, c) => s + (c.unread ? 1 : 0), 0); document.title = (u ? `(${u}) ` : '') + 'مركز الواتساب'; }
+function previewOf(m) {
+  const map = {image:'📷 صورة', video:'🎥 فيديو', audio:'🎵 ملف صوتي', voice:'🎤 رسالة صوتية', sticker:'🏷️ ملصق', location:'📍 موقع', contact:'👤 جهة اتصال'};
+  if (m.type === 'text' || m.type === 'template') return m.body; if (m.type === 'document') return '📄 ' + (m.file_name || 'ملف');
+  return (map[m.type] || '') + (m.body && m.type !== 'location' && m.type !== 'contact' ? ' ' + m.body : '');
+}
+
+/* ======================================================================
+   API — حقيقي (ووردبريس) أو تجريبي (للعرض)
+   ====================================================================== */
+const Real = {
+  tok: localStorage.getItem('mwc_token') || '',
+  async req(method, path, body) {
+    const opt = {method, headers: {'X-MWC-Token': this.tok}};
+    if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+    const r = await fetch(window.MWC_API + path, opt);
+    let j = null; try { j = await r.json(); } catch (e) {}
+    if (r.status === 401 && path !== '/login') { showLogin(); throw new Error('سجّل دخول'); }
+    if (!r.ok) throw new Error((j && j.message) || ('خطأ ' + r.status));
+    return j;
+  },
+  async login(pin, name) { const j = await this.req('POST', '/login', {pin, name}); this.tok = j.token; localStorage.setItem('mwc_token', j.token); return j; },
+  bootstrap() { return this.req('GET', '/bootstrap'); },
+  poll(since) { return this.req('GET', '/poll?since=' + since); },
+  messages(id, before = 0) { return this.req('GET', `/chats/${id}/messages` + (before ? '?before=' + before : '')); },
+  send(id, p) { return this.req('POST', `/chats/${id}/send`, p); },
+  retry(mid) { return this.req('POST', `/messages/${mid}/retry`, {}); },
+  read(id) { return this.req('POST', `/chats/${id}/read`, {}); },
+  profile(id, refresh) { return this.req('GET', `/chats/${id}/profile` + (refresh ? '?refresh=1' : '')); },
+  updateChat(id, f) { return this.req('POST', `/chats/${id}`, f); },
+  updateContact(id, f) { return this.req('POST', `/contacts/${id}`, f); },
+  start(account_id, phone, name) { return this.req('POST', '/start', {account_id, phone, name}); },
+  saveAccount(a) { return this.req('POST', '/accounts', a); },
+  deleteAccount(id) { return this.req('DELETE', '/accounts/' + id); },
+  connect(id) { return this.req('POST', `/accounts/${id}/connect`, {}); },
+  logout(id) { return this.req('POST', `/accounts/${id}/logout`, {}); },
+  saveConfig(c) { return this.req('POST', '/config', c); },
+  runAction(index, chat_id) { return this.req('POST', '/actions/run', {index, chat_id}); },
+  upload(file, onp) {
+    return new Promise((res, rej) => {
+      const fd = new FormData(); fd.append('file', file, file.name || 'file');
+      const x = new XMLHttpRequest(); x.open('POST', window.MWC_API + '/upload'); x.setRequestHeader('X-MWC-Token', this.tok);
+      x.upload.onprogress = e => e.lengthComputable && onp && onp(e.loaded / e.total);
+      x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch (e) {} x.status < 300 ? res(j) : rej(new Error(j.message || 'فشل الرفع')); };
+      x.onerror = () => rej(new Error('انقطع الاتصال أثناء الرفع')); x.send(fd);
+    });
+  },
+};
+
+/* ---------- Demo backend (بيانات تجريبية للمعاينة فقط) ---------- */
+const Demo = (() => {
+  const now = () => Math.floor(Date.now() / 1000);
+  let mid = 1, cid = 1, kid = 1;
+  const svgImg = (bg, label) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="640" height="480" fill="${bg}"/><rect x="120" y="150" width="400" height="140" rx="20" fill="#fff" opacity=".9"/><rect x="150" y="250" width="340" height="14" rx="7" fill="#9ab"/><text x="320" y="225" font-size="38" text-anchor="middle" font-family="Tahoma" fill="#234">${label}</text></svg>`);
+  const face = (bg, ch) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="${bg}"/><circle cx="100" cy="80" r="38" fill="#fff" opacity=".85"/><ellipse cx="100" cy="185" rx="70" ry="55" fill="#fff" opacity=".85"/><text x="100" y="95" font-size="34" text-anchor="middle" fill="${bg}" font-family="Tahoma">${ch}</text></svg>`);
+  function wav(sec = 4) {
+    const sr = 8000, n = sr * sec, b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
+    const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+    w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) { const t = i / sr, env = Math.abs(Math.sin(t * 3.1)) * .5; v.setInt16(44 + i * 2, Math.sin(2 * Math.PI * (180 + 60 * Math.sin(t * 7)) * t) * env * 9000, true); }
+    return URL.createObjectURL(new Blob([b], {type: 'audio/wav'}));
+  }
+  const accounts = [
+    {id:1, label:'المدير', phone:'966549247636', provider:'meta', role:'manager', branch:'مكة', color:'#00a884', status:'open', active:1, config:{phone_number_id:'1234567890', token:'••••abcd', brand:'أكسجين للصيانة'}},
+    {id:2, label:'مبيعات مكة', phone:'966549665320', provider:'evolution', role:'sales', branch:'مكة', color:'#53bdeb', status:'open', active:1, config:{base_url:'https://vps.oxygen11.com:8080', instance:'sales1', apikey:'••••9f2e', brand:'أكسجين للصيانة'}},
+    {id:3, label:'مبيعات جدة', phone:'966549715646', provider:'evolution', role:'sales', branch:'جدة', color:'#a695e7', status:'open', active:1, config:{base_url:'https://vps.oxygen11.com:8080', instance:'sales2', apikey:'••••9f2e', brand:'متقن للصيانة'}},
+    {id:4, label:'متقن', phone:'966549423050', provider:'evolution', role:'sales', branch:'مكة', color:'#faa774', status:'open', active:1, config:{base_url:'https://vps.oxygen11.com:8080', instance:'mutqan', apikey:'••••9f2e', brand:'متقن للصيانة'}},
+    {id:5, label:'التسويق', phone:'966546619205', provider:'evolution', role:'outreach', branch:'', color:'#ee7aae', status:'qr', active:1, config:{base_url:'https://vps.oxygen11.com:8080', instance:'outreach1', apikey:'••••9f2e'}},
+  ];
+  const contacts = {}, chats = [], msgs = {};
+  function addContact(wa, name, push, avColor, about, source) { const id = kid++; contacts[id] = {id, wa_id:wa, name, push_name:push, avatar: avColor ? face(avColor, (push || name)[0]) : '', about, notes:'', tags:'', source}; return id; }
+  function addChat(acc, k, labels = []) { const c = {id:cid++, account_id:acc, contact_id:k, last_ts:0, last_in_ts:0, preview:'', unread:0, pinned:0, archived:0, labels, assigned:'', status:'open'}; chats.push(c); msgs[c.id] = []; return c; }
+  function addMsg(c, dir, type, body, extra = {}, ago = 0) {
+    const m = Object.assign({id:mid++, chat_id:c.id, dir, type, body, media_url:'', mime:'', file_name:'', duration:0, status: dir === 'out' ? 'read' : 'received', error:'', sender: dir === 'out' ? 'العمليات' : '', ts: now() - ago, ext_id:'x' + mid, reply_to:''}, extra);
+    msgs[c.id].push(m); c.last_ts = m.ts; c.preview = previewOf(m); if (dir === 'in') c.last_in_ts = m.ts; return m;
+  }
+  const VOICE = wav(5);
+  let k = addContact('966551234567', '', 'أبو فهد', '#7bc862', 'الحمد لله دائماً', 'oxygen11.com — غسيل مكيفات');
+  let c = addChat(2, k, ['طلب جديد']);
+  addMsg(c, 'in', 'text', 'السلام عليكم، عندي ٤ مكيفات سبليت أبغى غسيل', {}, 5400);
+  addMsg(c, 'out', 'text', 'وعليكم السلام ورحمة الله 🌬️ مرحبا بكم في أكسجين للصيانة\nغسيل ٤ مكيفات سبليت متاح اليوم أو بكرة، وين موقعك؟', {}, 5300);
+  addMsg(c, 'in', 'location', JSON.stringify({lat:21.396, lng:39.874, name:'العزيزية', address:'مكة المكرمة — العزيزية'}), {}, 5000);
+  addMsg(c, 'in', 'voice', '', {media_url: VOICE, mime:'audio/wav', duration:5}, 4900);
+  addMsg(c, 'out', 'text', 'تمام يا أبو فهد، موعدك اليوم بعد العصر بإذن الله ✅', {}, 4700);
+  addMsg(c, 'in', 'image', 'هذا المكيف اللي يقطّر موية', {media_url: svgImg('#6ec9cb', 'مكيف سبليت'), mime:'image/svg+xml'}, 600); c.unread = 2;
+  addMsg(c, 'in', 'text', 'ممكن تشوفونه بعد؟', {}, 540);
+
+  k = addContact('966503334455', 'م. سعد — مطعم الريم', 'Saad', '#e17076', 'Busy', 'Google Ads — غرف تبريد');
+  c = addChat(1, k, ['متابعة']); c.pinned = 1;
+  addMsg(c, 'in', 'text', 'غرفة التبريد في المطعم ما تبرد كويس من أمس', {}, 86400 * 1.2);
+  addMsg(c, 'out', 'document', 'عرض سعر صيانة غرفة التبريد', {media_url: 'data:application/pdf;base64,JVBERi0xLjQK', mime:'application/pdf', file_name:'عرض-سعر-غرفة-تبريد.pdf'}, 86400);
+  addMsg(c, 'in', 'text', 'تمام موافق، متى يجي الفني؟', {}, 3600);
+  addMsg(c, 'out', 'text', 'الفني محمد في الطريق، يوصل خلال ٤٥ دقيقة 🚚', {status:'delivered'}, 3500);
+
+  k = addContact('966567778899', '', 'نوره', '', '', 'Blogger — صيانة ثلاجات');
+  c = addChat(3, k); addMsg(c, 'in', 'text', 'كم سعر تركيب مكيف شباك؟', {}, 1900); c.unread = 1;
+
+  k = addContact('966598887766', 'عميل قديم — حي الشوقية', 'خالد', '#65aadd', 'متاح', 'عميل عائد');
+  c = addChat(4, k, ['تم التنفيذ']);
+  addMsg(c, 'out', 'text', 'شكراً لتواصلك مع متقن للصيانة 🙏 نسعد بخدمتك دائماً.', {}, 86400 * 3);
+  addMsg(c, 'in', 'video', 'بعد الغسيل الحمدلله صار يبرد', {media_url:'', mime:'video/mp4'}, 86400 * 2.9);
+  k = addContact('966541112233', '', 'محمد العتيبي', '#a695e7', '', 'Google Maps');
+  c = addChat(5, k); addMsg(c, 'out', 'text', 'مرحبا 👋 عروض غسيل المكيفات هذا الأسبوع من أكسجين للصيانة — رد بكلمة «عرض» للتفاصيل', {status:'delivered'}, 7200);
+  // نفس العميل على رقم تاني
+  c = addChat(1, 1); addMsg(c, 'in', 'text', 'تذكير: الفني جا؟', {}, 86400 * 4);
+
+  const chatOut = c => { const k = contacts[c.contact_id]; return Object.assign({}, c, {wa_id:k.wa_id, name:k.name, push_name:k.push_name, avatar:k.avatar, tags:k.tags, source:k.source}); };
+  let changed = [];
+  const mark = (c, m) => changed.push({c, m});
+  const INCOMING = ['السلام عليكم، عندكم فني تكييف اليوم؟', 'كم سعر غسيل المكيف السبليت؟', 'المكيف يطلع صوت عالي 😟', 'متى يوصل الفني؟', 'أبغى أركّب مكيفين جديد', 'تمام جزاكم الله خير'];
+  setInterval(() => {
+    if (Math.random() < .55) return;
+    const c = chats[Math.floor(Math.random() * chats.length)];
+    const m = addMsg(c, 'in', 'text', INCOMING[Math.floor(Math.random() * INCOMING.length)]); c.unread++; mark(c, m);
+  }, 22000);
+  const D = {
+    async login() { return {token:'demo', name:'المالك'}; },
+    async bootstrap() { return {me:'المالك (تجريبي)', now: now(), accounts, config: JSON.parse(JSON.stringify(window.__DEMO_CFG)), chats: chats.map(chatOut)}; },
+    async poll() { const out = {now: now(), chats:[], messages:[], accounts: accounts.map(a => ({id:a.id, status:a.status}))};
+      changed.forEach(x => { out.chats.push(chatOut(x.c)); if (x.m) out.messages.push(Object.assign({}, x.m)); }); changed = []; return out; },
+    async messages(id) { return (msgs[id] || []).map(m => Object.assign({}, m)); },
+    async send(id, p) {
+      const c = chats.find(x => x.id == id); const m = addMsg(c, 'out', p.type, p.body || '', {media_url:p.media_url || '', mime:p.mime || '', file_name:p.file_name || '', duration:p.duration || 0, reply_to:p.reply_to || '', status:'sent', sender:'المالك'});
+      setTimeout(() => { m.status = 'delivered'; mark(c, m); }, 1500); setTimeout(() => { m.status = 'read'; mark(c, m); }, 4000);
+      return Object.assign({}, m);
+    },
+    async retry(mid) { return null; },
+    async read(id) { const c = chats.find(x => x.id == id); if (c) c.unread = 0; return {ok:true}; },
+    async profile(id) { const c = chats.find(x => x.id == id), k = contacts[c.contact_id];
+      return {chat: chatOut(c), contact: Object.assign({}, k), media: msgs[id].filter(m => m.media_url).map(m => ({id:m.id, type:m.type, media_url:m.media_url, mime:m.mime, file_name:m.file_name, ts:m.ts})).reverse(),
+        other_chats: chats.filter(x => x.contact_id === c.contact_id && x.id !== c.id).map(x => ({id:x.id, account_id:x.account_id, last_ts:x.last_ts})),
+        window_open: now() - c.last_in_ts < 86400, provider: accounts.find(a => a.id == c.account_id).provider}; },
+    async updateChat(id, f) { const c = chats.find(x => x.id == id); Object.assign(c, f); return chatOut(c); },
+    async updateContact(id, f) { Object.assign(contacts[id], f); return contacts[id]; },
+    async start(acc, phone, name) { phone = String(phone).replace(/\D/g, '').replace(/^05/, '9665'); let kk = Object.values(contacts).find(x => x.wa_id === phone);
+      const kid2 = kk ? kk.id : addContact(phone, name || '', '', '', '', 'محادثة جديدة'); let c = chats.find(x => x.account_id == acc && x.contact_id === kid2); if (!c) c = addChat(+acc, kid2); return chatOut(c); },
+    async saveAccount(a) { if (a.id) { Object.assign(accounts.find(x => x.id == a.id), a); return a; } a.id = accounts.length + 1; a.status = 'qr'; accounts.push(a); return a; },
+    async deleteAccount(id) { const a = accounts.find(x => x.id == id); if (a) a.active = 0; return {ok:true}; },
+    async connect(id) { const a = accounts.find(x => x.id == id); if (a.provider === 'meta') return {ok:true, state:'open'};
+      return {ok:true, state:'qr', qr: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29" shape-rendering="crispEdges">' + Array.from({length:29*29}, (_, i) => ((i * 7919) % 13 < 6 || (i % 29 < 7 && i < 29*7) ) ? `<rect x="${i%29}" y="${Math.floor(i/29)}" width="1" height="1"/>` : '').join('') + '</svg>')}; },
+    async logout() { return {ok:true}; },
+    async saveConfig(c) { window.__DEMO_CFG = c; return c; },
+    async runAction() { return {ok:true}; },
+    async upload(file, onp) { for (let i = 1; i <= 5; i++) { await new Promise(r => setTimeout(r, 80)); onp && onp(i / 5); } return {url: URL.createObjectURL(file), mime: file.type, name: file.name, size: file.size}; },
+  };
+  return D;
+})();
+window.__DEMO_CFG = {
+  quick_replies:[{key:'ترحيب', text:'مرحبا بكم في {brand} 🌬️ معاك خدمة العملاء، كيف نقدر نخدمك؟ (غسيل مكيفات، تركيب، صيانة، غرف تبريد، سباكة، نجارة، كهرباء)'},
+    {key:'موقع', text:'فضلاً أرسل لنا الموقع (لوكيشن) عشان نرتب لك أقرب فني 📍'}, {key:'موعد', text:'تمام يا {name}، موعدك {date}. الفني بيتواصل معك قبل الوصول بإذن الله.'}, {key:'شكر', text:'شكراً لتواصلك مع {brand} 🙏 نسعد بخدمتك دائماً.'}],
+  labels:[{name:'طلب جديد', color:'#25d366'}, {name:'متابعة', color:'#ffb02e'}, {name:'تم التنفيذ', color:'#53bdeb'}, {name:'شكوى', color:'#ea0038'}],
+  actions:[{label:'جدول الأسعار', icon:'💲', type:'message', payload:'جدول أسعارنا: {site}/prices'}, {label:'فيديو طريقة الغسيل', icon:'🎬', type:'message', payload:'شوف طريقة الغسيل عندنا: {site}/wash-video'},
+    {label:'فتح العميل في غرفة العمليات', icon:'🗺️', type:'link', payload:'https://desk.oxygen11.com/?phone={phone}'}, {label:'إنشاء طلب', icon:'🧾', type:'webhook', payload:''}],
+  vars:{brand:'أكسجين للصيانة', site:'https://oxygen11.com'}, staff:['المالك', 'العمليات'], sound:'whatsapp',
+};
+const API = DEMO ? Demo : Real;
+
+/* ======================================================================
+   البدء والتحديث المستمر
+   ====================================================================== */
+function showLogin(err) {
+  if ($('#login')) { if (err) $('#lerr').textContent = err; return; }
+  const d = document.createElement('div'); d.id = 'login';
+  d.innerHTML = `<div class="lb"><svg viewBox="0 0 24 24" style="width:70px;fill:var(--accent)"><path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.9 5-1.3A10 10 0 1 0 12 2z"/></svg>
+    <h2 style="font-weight:400">مركز الواتساب</h2><input id="lname" placeholder="اسمك (يظهر على رسايلك)" style="letter-spacing:0;font-size:15px" value="${esc(localStorage.getItem('mwc_name') || '')}">
+    <input id="lpin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••"><div id="lerr" style="color:var(--danger);min-height:22px">${esc(err || '')}</div>
+    <button class="btn" id="lgo" style="width:100%">دخول</button><p class="muted" style="font-size:12px">نفس الرقم السري اللي حددته من لوحة ووردبريس ← مركز الواتساب</p></div>`;
+  document.body.append(d);
+  const go = async () => { try { localStorage.setItem('mwc_name', $('#lname').value); await API.login($('#lpin').value, $('#lname').value); d.remove(); boot(); } catch (e) { $('#lerr').textContent = e.message; } };
+  $('#lgo').onclick = go; $('#lpin').onkeydown = e => e.key === 'Enter' && go(); setTimeout(() => $('#lpin').focus(), 50);
+}
+
+async function boot() {
+  if (DEMO) { const r = document.createElement('div'); r.className = 'demo-ribbon'; r.textContent = 'نسخة تجربة — بيانات وهمية'; document.body.append(r); }
+  if (!DEMO && !Real.tok) return showLogin();
+  let b; try { b = await API.bootstrap(); } catch (e) { return showLogin(e.message); }
+  S.me = b.me; S.accounts = b.accounts; S.config = b.config; S.since = b.now;
+  S.chats.clear(); b.chats.forEach(c => S.chats.set(c.id, c));
+  if (localStorage.getItem('mwc_theme') === 'light') document.body.classList.add('light');
+  $('#meav').textContent = initials(S.me) === '👤' ? 'م' : initials(S.me);
+  renderRail(); renderFilters(); renderList(); updateTitle();
+  const want = new URLSearchParams(location.search).get('chat'); if (want && S.chats.has(+want)) openChat(+want);
+  pollLoop();
+}
+
+let pollTimer = null, polling = false;
+async function pollLoop() {
+  clearTimeout(pollTimer);
+  if (!polling) {
+    polling = true;
+    try {
+      const r = await API.poll(S.since);
+      S.since = r.now;
+      (r.accounts || []).forEach(x => { const a = S.accounts.find(a => a.id == x.id); if (a && a.status !== x.status) { a.status = x.status; renderRail(); } });
+      const notifyQueue = [];
+      r.chats.forEach(c => { S.chats.set(c.id, Object.assign(S.chats.get(c.id) || {}, c)); });
+      r.messages.forEach(m => { const isNew = mergeMsg(m); if (isNew && m.dir === 'in') notifyQueue.push(m); });
+      if (r.chats.length || r.messages.length) { renderList(); renderRail(); updateTitle(); }
+      notifyQueue.forEach(m => { const c = S.chats.get(m.chat_id); if (c) notify(c, m); });
+      if (S.curChat && notifyQueue.some(m => m.chat_id === S.curChat) && !document.hidden) markRead(S.curChat);
+    } catch (e) { console.warn(e); }
+    polling = false;
+  }
+  pollTimer = setTimeout(pollLoop, document.hidden ? 12000 : 3000);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollLoop(); if (S.curChat) markRead(S.curChat); } });
+
+function mergeMsg(m) {
+  const arr = S.msgs.get(m.chat_id);
+  if (!arr) return true; // المحادثة مش مفتوحة لسه — هتتحمل لما تتفتح
+  const i = arr.findIndex(x => x.id === m.id);
+  if (i >= 0) { arr[i] = Object.assign(arr[i], m); if (S.curChat === m.chat_id) patchMsg(arr[i]); return false; }
+  arr.push(m); arr.sort((a, b) => a.id - b.id);
+  if (S.curChat === m.chat_id) appendMsg(m);
+  return true;
+}
+
+/* ======================================================================
+   الشريط الجانبي (الأرقام)
+   ====================================================================== */
+function unreadFor(accId) { let n = 0; S.chats.forEach(c => { if ((!accId || c.account_id == accId) && c.unread && !c.archived) n++; }); return n; }
+function renderRail() {
+  const accs = S.accounts.filter(a => a.active);
+  const item = (id, label, inner, extra = '') => {
+    const u = unreadFor(id);
+    return `<div class="racc ${S.curAcc == id ? 'on' : ''}" data-acc="${id}">${inner}${u ? `<span class="bdg">${u}</span>` : ''}${extra}<span class="tip">${esc(label)}</span></div>`;
+  };
+  $('#rail').innerHTML = item(0, 'كل الأرقام', `<div class="av" style="background:var(--panel3);color:var(--accent2);font-size:20px">∑</div>`)
+    + '<div class="rsep"></div>'
+    + accs.map(a => item(a.id, `${a.label} • ${localPhone(a.phone)} • ${a.provider === 'meta' ? 'Meta الرسمي' : 'QR سيرفر'}`,
+        `<div class="av" style="background:${esc(a.color)}">${esc((a.label || '').slice(0, 3))}</div>`, `<span class="dot ${esc(a.status)}"></span>`)).join('')
+    + `<div class="rsep"></div><div class="racc" data-addacc="1"><div class="av" style="background:var(--panel3);color:var(--muted);font-size:24px">+</div><span class="tip">إضافة رقم</span></div>`;
+  $$('#rail [data-acc]').forEach(e => e.onclick = () => { S.curAcc = +e.dataset.acc; renderRail(); renderList(); renderAccHead(); });
+  $('#rail [data-addacc]').onclick = () => openSettings('accounts', 'new');
+  renderAccHead();
+}
+function renderAccHead() {
+  if (!S.curAcc) { $('#accTitle').textContent = 'كل الأرقام'; $('#accSub').textContent = S.accounts.filter(a => a.active).length + ' رقم • ' + S.me; return; }
+  const a = accById(S.curAcc);
+  $('#accTitle').innerHTML = `${esc(a.label)} <span class="muted" style="font-weight:400;font-size:13px">${esc(localPhone(a.phone))}</span>`;
+  const st = {open:'متصل', qr:'محتاج مسح QR', connecting:'بيتصل…', close:'مفصول', error:'خطأ في الربط', not_configured:'محتاج إعداد', unknown:'غير معروف'}[a.status] || a.status;
+  $('#accSub').innerHTML = `${a.provider === 'meta' ? 'Meta الرسمي' : 'QR سيرفر'} • ${esc(ROLES[a.role] || a.role)}${a.branch ? ' • ' + esc(a.branch) : ''} • <span style="color:${a.status === 'open' ? 'var(--accent2)' : 'var(--warn)'}">${st}</span>`;
+}
+
+/* ======================================================================
+   قائمة المحادثات
+   ====================================================================== */
+function renderFilters() {
+  const f = [['all', 'الكل'], ['unread', 'غير مقروءة'], ['pinned', 'مثبتة'], ['mine', 'المسندة لي']].concat((S.config.labels || []).map(l => ['label:' + l.name, l.name])).concat([['archived', 'الأرشيف']]);
+  $('#filters').innerHTML = f.map(([k, t]) => `<button class="chip ${S.filter === k ? 'on' : ''}" data-f="${esc(k)}">${esc(t)}</button>`).join('');
+  $$('#filters .chip').forEach(b => b.onclick = () => { S.filter = b.dataset.f; renderFilters(); renderList(); });
+}
+function visibleChats() {
+  const q = S.q.trim().toLowerCase();
+  return [...S.chats.values()].filter(c => {
+    if (S.curAcc && c.account_id != S.curAcc) return false;
+    if (S.filter === 'archived') { if (!c.archived) return false; } else if (c.archived) return false;
+    if (S.filter === 'unread' && !c.unread) return false;
+    if (S.filter === 'pinned' && !c.pinned) return false;
+    if (S.filter === 'mine' && c.assigned !== S.me) return false;
+    if (S.filter.startsWith('label:') && !(c.labels || []).includes(S.filter.slice(6))) return false;
+    if (q && !(nameOf(c) + ' ' + c.wa_id + ' ' + localPhone(c.wa_id) + ' ' + (c.preview || '') + ' ' + (c.push_name || '')).toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a, b) => (b.pinned - a.pinned) || (b.last_ts - a.last_ts));
+}
+function renderList() {
+  const list = visibleChats(); const lbl = Object.fromEntries((S.config.labels || []).map(l => [l.name, l.color]));
+  if (!list.length) { $('#list').innerHTML = `<div class="empty">${S.q ? 'مفيش نتائج' : 'مفيش محادثات هنا لسه'}<br><br><button class="btn ghost" onclick="newChat()">+ محادثة جديدة</button></div>`; return; }
+  $('#list').innerHTML = list.map(c => {
+    const a = accById(c.account_id);
+    const st = S.msgs.get(c.id)?.slice(-1)[0]; const tick = st && st.dir === 'out' ? `<span class="${st.status === 'read' ? 'tick read' : ''}" style="display:inline-flex;color:${st.status === 'read' ? 'var(--blue)' : 'var(--muted)'}">${TICKS[st.status] || ''}</span>` : '';
+    return `<div class="citem ${c.id === S.curChat ? 'on' : ''} ${c.unread ? 'unread' : ''}" data-id="${c.id}">${avatar(c)}
+      <div class="body"><div class="t1"><span class="nm ell">${esc(nameOf(c))}</span><span class="tm">${fmtListTime(c.last_ts)}</span></div>
+      <div class="t2">${tick}<span class="pv ell">${esc(c.preview || '')}</span>
+        ${(c.labels || []).slice(0, 2).map(l => `<span class="tag" style="background:${esc(lbl[l] || '#667')}">${esc(l)}</span>`).join('')}
+        ${!S.curAcc ? `<span class="tag" style="background:${esc(a.color)}">${esc(a.label)}</span>` : ''}
+        ${c.pinned ? '📌' : ''}${c.unread ? `<span class="bdg">${c.unread}</span>` : ''}</div></div></div>`;
+  }).join('');
+  $$('#list .citem').forEach(e => { e.onclick = () => openChat(+e.dataset.id); e.oncontextmenu = ev => { ev.preventDefault(); chatMenu(+e.dataset.id, ev); }; longPress(e, ev => chatMenu(+e.dataset.id, ev)); });
+}
+$('#q').oninput = e => { S.q = e.target.value; renderList(); };
+
+function longPress(el, cb) {
+  let t; el.addEventListener('touchstart', e => { t = setTimeout(() => { cb(e.touches[0]); t = null; }, 550); }, {passive:true});
+  ['touchend', 'touchmove', 'touchcancel'].forEach(ev => el.addEventListener(ev, () => clearTimeout(t), {passive:true}));
+}
+function menu(items, ev) {
+  closePops();
+  const p = document.createElement('div'); p.className = 'pop'; p.id = 'ctx';
+  p.innerHTML = items.map((it, i) => it ? `<button data-i="${i}">${it[0]}</button>` : '<div style="height:1px;background:var(--line);margin:4px 0"></div>').join('');
+  document.body.append(p);
+  const x = Math.min(ev.clientX ?? ev.pageX, innerWidth - 230), y = Math.min(ev.clientY ?? ev.pageY, innerHeight - p.offsetHeight - 10);
+  p.style.left = Math.max(8, x) + 'px'; p.style.top = Math.max(8, y) + 'px';
+  $$('button', p).forEach(b => b.onclick = () => { p.remove(); items[+b.dataset.i][1](); });
+  setTimeout(() => document.addEventListener('click', function f(e) { if (!p.contains(e.target)) { p.remove(); document.removeEventListener('click', f); } }), 0);
+}
+function chatMenu(id, ev) {
+  const c = S.chats.get(id);
+  const labels = (S.config.labels || []).map(l => [((c.labels || []).includes(l.name) ? '✓ ' : '　') + 'تصنيف: ' + esc(l.name), () => toggleLabel(id, l.name)]);
+  menu([
+    ['💬 فتح', () => openChat(id)],
+    [c.unread ? '✓ تعليم كمقروءة' : '● تعليم كغير مقروءة', () => { API.updateChat(id, {unread: c.unread ? 0 : 1}); c.unread = c.unread ? 0 : 1; renderList(); renderRail(); updateTitle(); }],
+    [c.pinned ? '📌 إلغاء التثبيت' : '📌 تثبيت', () => setChat(id, {pinned: c.pinned ? 0 : 1})],
+    [c.archived ? '📤 إخراج من الأرشيف' : '🗄️ أرشفة', () => setChat(id, {archived: c.archived ? 0 : 1})],
+    ['👤 إسناد لي', () => setChat(id, {assigned: S.me})], null, ...labels, null,
+    ['📋 نسخ الرقم', () => copy(localPhone(c.wa_id))],
+    ['🔗 مشاركة جهة الاتصال', () => shareContact(c)],
+  ], ev);
+}
+async function setChat(id, f) { const c = S.chats.get(id); Object.assign(c, f); renderList(); if (S.curChat === id) renderChatHead(); try { Object.assign(c, await API.updateChat(id, f)); } catch (e) { toast(e.message); } }
+function toggleLabel(id, name) { const c = S.chats.get(id); const l = new Set(c.labels || []); l.has(name) ? l.delete(name) : l.add(name); setChat(id, {labels: [...l]}); }
+
+/* ======================================================================
+   المحادثة
+   ====================================================================== */
+async function openChat(id) {
+  const c = S.chats.get(id); if (!c) return;
+  saveDraft();
+  S.curChat = id; S.replyTo = null; S.newBelow = 0;
+  document.body.classList.add('inchat');
+  $('#welcome').classList.add('hidden'); $('#chat').classList.remove('hidden');
+  renderChatHead(); renderList(); renderReply(); updateComposer();
+  $('#tbox').value = (JSON.parse(localStorage.getItem('mwc_drafts') || '{}'))[id] || ''; autoGrow();
+  $('#msgs').innerHTML = '<div class="empty">بيحمّل…</div>';
+  try { const arr = await API.messages(id); if (S.curChat !== id) return; S.msgs.set(id, arr); renderMsgs(true); } catch (e) { $('#msgs').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  markRead(id);
+  if (!$('#prof').classList.contains('hidden')) openProfile();
+  checkWindow();
+  if (innerWidth > 760) $('#tbox').focus();
+}
+function closeChat() { saveDraft(); S.curChat = null; document.body.classList.remove('inchat'); $('#chat').classList.add('hidden'); $('#welcome').classList.remove('hidden'); $('#prof').classList.add('hidden'); renderList(); }
+function markRead(id) { const c = S.chats.get(id); if (c && c.unread) { c.unread = 0; renderList(); renderRail(); updateTitle(); API.read(id).catch(() => {}); } }
+function saveDraft() { if (!S.curChat) return; const d = JSON.parse(localStorage.getItem('mwc_drafts') || '{}'); const v = $('#tbox').value; if (v) d[S.curChat] = v; else delete d[S.curChat]; localStorage.setItem('mwc_drafts', JSON.stringify(d)); }
+
+function renderChatHead() {
+  const c = S.chats.get(S.curChat); if (!c) return; const a = accById(c.account_id);
+  $('#chead').innerHTML = `<button class="ibtn backbtn" id="backb">${ICON.back}</button>${avatar(c, 'sm')}
+    <div class="grow"><div class="ell" style="font-size:16px">${esc(nameOf(c))}</div>
+      <div class="muted ell" style="font-size:12.5px">${esc(fmtPhone(c.wa_id))} • عبر <span class="tag" style="background:${esc(a.color)}">${esc(a.label)} ${esc(localPhone(a.phone))}</span>${c.assigned ? ' • مسند: ' + esc(c.assigned) : ''}</div></div>
+    <button class="ibtn" id="hCall" title="اتصال">${ICON.phone}</button>
+    <button class="ibtn" id="hMenu" title="المزيد">${ICON.dots}</button>`;
+  $('#backb').onclick = e => { e.stopPropagation(); closeChat(); };
+  $('#hCall').onclick = e => { e.stopPropagation(); location.href = 'tel:+' + c.wa_id; };
+  $('#hMenu').onclick = e => { e.stopPropagation(); chatMenu(c.id, e); };
+  $('#chead').onclick = () => openProfile();
+}
+
+function msgHTML(m, prev) {
+  const c = S.chats.get(m.chat_id) || {};
+  const first = !prev || prev.dir !== m.dir || dayKey(prev.ts) !== dayKey(m.ts) || (m.ts - prev.ts) > 600;
+  let inner = '';
+  if (m.reply_to) { const arr = S.msgs.get(m.chat_id) || []; const q = arr.find(x => x.ext_id === m.reply_to); inner += `<div class="reply-q" data-goto="${q ? q.id : ''}">${q ? esc(previewOf(q)).slice(0, 140) : 'رسالة سابقة'}</div>`; }
+  if (m.dir === 'out' && first && m.sender) inner += `<div class="sender">${esc(m.sender)}</div>`;
+  const u = esc(m.media_url);
+  switch (m.type) {
+    case 'image': case 'sticker':
+      inner += u ? `<img class="media" src="${u}" data-view="${m.id}" loading="lazy" ${m.type === 'sticker' ? 'style="max-width:160px;background:none"' : ''}>` : '<div class="doc">📷 صورة (مش متاحة)</div>'; break;
+    case 'video':
+      inner += u ? `<video class="media" src="${u}" controls preload="metadata" playsinline></video>` : '<div class="doc"><div class="di" style="background:#65aadd">▶</div><div>فيديو</div></div>'; break;
+    case 'voice': case 'audio':
+      if (m.type === 'audio' && !/voice|ptt/.test(m.file_name)) { inner += `<audio src="${u}" controls preload="none" style="width:260px;max-width:100%;margin-bottom:4px"></audio>`; break; }
+      inner += `<div class="voice" data-voice="${m.id}">${m.dir === 'in' ? avatar(c) : ''}<button class="play">${ICON.play}</button>
+        <div class="bar">${Array.from({length: 34}, (_, i) => `<i style="height:${4 + Math.abs(Math.sin((m.id * 13 + i) * 1.7)) * 16}px"></i>`).join('')}</div>
+        <span class="vt">${fmtDur(m.duration)}</span>${m.dir === 'out' ? avatar({name: m.sender || S.me, wa_id: m.sender || 'me'}) : ''}</div>`; break;
+    case 'document': {
+      const ext = (m.file_name.split('.').pop() || 'FILE').slice(0, 4).toUpperCase();
+      inner += `<a class="doc" href="${u}" download="${esc(m.file_name)}" target="_blank"><div class="di">${esc(ext)}</div><div class="grow"><div class="ell">${esc(m.file_name || 'ملف')}</div><div class="muted" style="font-size:12px">${esc(m.mime)}</div></div>${ICON.dl}</a>`; break; }
+    case 'location': {
+      let l = {}; try { l = JSON.parse(m.body); } catch (e) {}
+      const g = `https://www.google.com/maps?q=${l.lat},${l.lng}`;
+      inner += `<a class="loc" href="${g}" target="_blank"></a><div>${esc(l.name || 'موقع')}</div><div class="muted" style="font-size:12px">${esc(l.address || '')}</div>
+        <div class="row" style="gap:12px;margin-top:4px;font-size:13px"><a href="${g}" target="_blank">فتح في الخرائط</a><a href="#" data-copyloc="${esc(g)}">نسخ الرابط</a></div>`; break; }
+    case 'contact': {
+      let k = {}; try { k = JSON.parse(m.body); } catch (e) {}
+      inner += `<div class="row" style="min-width:220px;padding:4px 0">${avatar({name:k.name, wa_id:(k.phones || [''])[0]}, 'sm')}<div class="grow"><b>${esc(k.name || '')}</b><div class="muted" style="font-size:12.5px">${esc((k.phones || []).join(' • '))}</div></div></div>
+        ${(k.phones || []).length ? `<div class="row" style="border-top:1px solid #fff2;padding-top:6px;justify-content:space-around"><a href="#" data-startnum="${esc(k.phones[0])}">مراسلة</a><a href="#" data-copynum="${esc(k.phones.join(', '))}">نسخ</a></div>` : ''}`; break; }
+  }
+  const showBody = m.body && !['location', 'contact'].includes(m.type);
+  inner += `${showBody ? `<span class="txt">${linkify(m.body)}</span>` : ''}<span class="meta">${m.dir === 'out' ? `<span class="tick ${m.status}">${TICKS[m.status] || ''}</span>` : ''}${fmtTime(m.ts)}</span><div style="clear:both"></div>`;
+  if (m.status === 'failed') inner += `<div class="err">⚠️ ${esc(m.error || 'ما اتبعتتش')} <button data-retry="${m.id}">إعادة</button></div>`;
+  const day = !prev || dayKey(prev.ts) !== dayKey(m.ts) ? `<div class="daysep">${fmtDay(m.ts)}</div>` : '';
+  return day + `<div class="m ${m.dir} ${first ? 'first' : ''}" data-mid="${m.id}"><div class="bub">${inner}</div><button class="mbtn">${ICON.down}</button></div>`;
+}
+function bindMsg(root) {
+  $$('[data-view]', root).forEach(e => e.onclick = () => viewMedia(+e.dataset.view));
+  $$('[data-voice]', root).forEach(e => bindVoice(e));
+  $$('[data-retry]', root).forEach(e => e.onclick = async () => { try { const m = await API.retry(+e.dataset.retry); if (m) { const arr = S.msgs.get(S.curChat); const i = arr.findIndex(x => x.id === +e.dataset.retry); if (i >= 0) arr.splice(i, 1); mergeMsg(m); renderMsgs(); } } catch (er) { toast(er.message); } });
+  $$('[data-copyloc]', root).forEach(e => e.onclick = ev => { ev.preventDefault(); copy(e.dataset.copyloc); });
+  $$('[data-copynum]', root).forEach(e => e.onclick = ev => { ev.preventDefault(); copy(e.dataset.copynum); });
+  $$('[data-startnum]', root).forEach(e => e.onclick = async ev => { ev.preventDefault(); const c = S.chats.get(S.curChat); const nc = await API.start(c.account_id, e.dataset.startnum, ''); S.chats.set(nc.id, Object.assign(S.chats.get(nc.id) || {}, nc)); openChat(nc.id); });
+  $$('[data-goto]', root).forEach(e => e.onclick = () => { const t = $(`[data-mid="${e.dataset.goto}"]`); if (t) { t.scrollIntoView({block:'center', behavior:'smooth'}); t.animate([{filter:'brightness(1.6)'}, {filter:'none'}], 1200); } });
+  $$('.m', root).forEach(e => { const id = +e.dataset.mid; $('.mbtn', e).onclick = ev => { ev.stopPropagation(); msgMenu(id, ev); }; e.oncontextmenu = ev => { ev.preventDefault(); msgMenu(id, ev); }; longPress(e, ev => msgMenu(id, ev));
+    let sx = 0; e.addEventListener('touchstart', ev => sx = ev.touches[0].clientX, {passive:true}); e.addEventListener('touchend', ev => { if (Math.abs(ev.changedTouches[0].clientX - sx) > 70) setReply(id); }, {passive:true}); });
+}
+function renderMsgs(toBottom) {
+  const arr = S.msgs.get(S.curChat) || [];
+  const box = $('#msgs');
+  if (!arr.length) { box.innerHTML = '<div class="empty">ابدأ المحادثة 👋</div>'; return; }
+  box.innerHTML = arr.map((m, i) => msgHTML(m, arr[i - 1])).join('');
+  bindMsg(box);
+  if (toBottom) box.scrollTop = box.scrollHeight;
+}
+function appendMsg(m) {
+  const arr = S.msgs.get(S.curChat) || []; const i = arr.findIndex(x => x.id === m.id);
+  const box = $('#msgs'); const near = box.scrollHeight - box.scrollTop - box.clientHeight < 150;
+  if (i !== arr.length - 1 || box.querySelector('.empty')) { renderMsgs(near); return; }
+  const tmp = document.createElement('div'); tmp.innerHTML = msgHTML(m, arr[i - 1]); bindMsg(tmp);
+  [...tmp.childNodes].forEach(n => box.append(n));
+  if (near || m.dir === 'out') box.scrollTop = box.scrollHeight; else { S.newBelow++; showToBottom(); }
+}
+function patchMsg(m) {
+  const el = $(`#msgs [data-mid="${m.id}"]`); if (!el) return;
+  const arr = S.msgs.get(m.chat_id); const i = arr.findIndex(x => x.id === m.id);
+  const tmp = document.createElement('div'); tmp.innerHTML = msgHTML(m, arr[i - 1]); const nm = tmp.querySelector('.m'); bindMsg(tmp); el.replaceWith(nm);
+}
+function showToBottom() { const b = $('#tobottom'); b.classList.remove('hidden'); b.innerHTML = ICON.down.replace('style="width:20px"', '') + (S.newBelow ? `<span class="bdg">${S.newBelow}</span>` : ''); }
+$('#msgs').addEventListener('scroll', async e => {
+  const box = e.target; const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  if (atBottom) { S.newBelow = 0; $('#tobottom').classList.add('hidden'); } else if (box.scrollHeight - box.scrollTop - box.clientHeight > 400) showToBottom();
+  if (box.scrollTop < 60 && !S.loadingOlder && S.curChat) {
+    const arr = S.msgs.get(S.curChat); if (!arr || arr.length < 60 || DEMO) return;
+    S.loadingOlder = true; const h = box.scrollHeight;
+    try { const older = await API.messages(S.curChat, arr[0].id); if (older.length) { S.msgs.set(S.curChat, older.concat(arr)); renderMsgs(); box.scrollTop = box.scrollHeight - h; } } catch (er) {}
+    S.loadingOlder = false;
+  }
+});
+$('#tobottom').onclick = () => { const b = $('#msgs'); b.scrollTo({top: b.scrollHeight, behavior: 'smooth'}); };
+
+/* --- voice player --- */
+let curAudio = null;
+function bindVoice(el) {
+  const m = (S.msgs.get(S.curChat) || []).find(x => x.id === +el.dataset.voice); if (!m) return;
+  const btn = $('.play', el), bars = $$('.bar i', el), vt = $('.vt', el);
+  const paint = (p) => bars.forEach((b, i) => b.classList.toggle('p', i / bars.length < p));
+  btn.onclick = () => {
+    if (!m.media_url) return toast('الملف الصوتي مش متاح');
+    if (curAudio && curAudio._mid === m.id) { curAudio.paused ? curAudio.play() : curAudio.pause(); return; }
+    if (curAudio) { curAudio.pause(); curAudio._stop && curAudio._stop(); }
+    const a = new Audio(m.media_url); a._mid = m.id; curAudio = a;
+    a.onplay = () => btn.innerHTML = ICON.pause; a.onpause = () => btn.innerHTML = ICON.play;
+    a.ontimeupdate = () => { const d = a.duration && isFinite(a.duration) ? a.duration : (m.duration || 1); paint(a.currentTime / d); vt.textContent = fmtDur(a.currentTime); };
+    a.onended = () => { btn.innerHTML = ICON.play; paint(0); vt.textContent = fmtDur(m.duration || a.duration); curAudio = null; };
+    a._stop = () => { btn.innerHTML = ICON.play; paint(0); };
+    a.play().catch(e => toast('مش قادر يشغّل الصوت'));
+  };
+  $('.bar', el).onclick = e => { if (!curAudio || curAudio._mid !== m.id) return btn.onclick(); const r = e.currentTarget.getBoundingClientRect(); const p = (r.right - e.clientX) / r.width; const d = curAudio.duration || m.duration; curAudio.currentTime = Math.max(0, Math.min(1, 1 - p)) * d; };
+  if (!m.duration && m.media_url) { const t = new Audio(); t.preload = 'metadata'; t.src = m.media_url; t.onloadedmetadata = () => { if (isFinite(t.duration)) { m.duration = Math.round(t.duration); vt.textContent = fmtDur(t.duration); } }; }
+}
+
+/* --- message menu --- */
+function msgMenu(id, ev) {
+  const m = (S.msgs.get(S.curChat) || []).find(x => x.id === id); if (!m) return;
+  const items = [['↩️ رد', () => setReply(id)]];
+  if (m.body && !['location', 'contact'].includes(m.type)) items.push(['📋 نسخ النص', () => copy(m.body)]);
+  if (m.type === 'location') { let l = {}; try { l = JSON.parse(m.body); } catch (e) {} items.push(['📋 نسخ رابط الموقع', () => copy(`https://www.google.com/maps?q=${l.lat},${l.lng}`)]); }
+  items.push(['↪️ إعادة توجيه', () => forward(m)]);
+  if (m.media_url) { items.push(['⬇️ تنزيل', () => download(m.media_url, m.file_name || ('wa-' + m.id))]); items.push(['🔗 مشاركة', () => share({title: m.file_name || 'ملف', url: m.media_url})]); }
+  items.push(['⭐ رد جاهز من النص', () => { if (!m.body) return; S.config.quick_replies = (S.config.quick_replies || []).concat([{key: m.body.slice(0, 18), text: m.body}]); API.saveConfig(S.config).then(() => toast('اتضاف للردود الجاهزة ✅')); }]);
+  items.push(['ℹ️ معلومات', () => alertBox('معلومات الرسالة', `<div class="card">النوع: ${esc(m.type)}<br>الحالة: ${esc({received:'مستلمة', pending:'قيد الإرسال', sent:'اتبعتت ✓', delivered:'وصلت ✓✓', read:'اتقرت ✓✓', failed:'فشلت'}[m.status] || m.status)}<br>الوقت: ${new Date(m.ts * 1000).toLocaleString('ar-SA-u-ca-gregory')}<br>${m.sender ? 'بواسطة: ' + esc(m.sender) + '<br>' : ''}${m.error ? 'الخطأ: ' + esc(m.error) : ''}</div>`)]);
+  menu(items, ev);
+}
+function setReply(id) { S.replyTo = (S.msgs.get(S.curChat) || []).find(x => x.id === id) || null; renderReply(); $('#tbox').focus(); }
+function renderReply() {
+  const r = S.replyTo, b = $('#replybar');
+  if (!r) return b.classList.add('hidden');
+  b.classList.remove('hidden'); b.innerHTML = `<div class="reply-q"><b style="color:var(--accent2)">${r.dir === 'out' ? 'انت' : esc(nameOf(S.chats.get(r.chat_id)))}</b><br>${esc(previewOf(r)).slice(0, 160)}</div><button class="ibtn" id="rx">${ICON.close}</button>`;
+  $('#rx').onclick = () => { S.replyTo = null; renderReply(); };
+}
+function forward(m) {
+  pickChat('إعادة توجيه إلى…', async ids => {
+    for (const id of ids) { try { const r = await API.send(id, {type: m.type, body: m.body, media_url: m.media_url, mime: m.mime, file_name: m.file_name, duration: m.duration}); mergeMsg(r); } catch (e) { toast(e.message); } }
+    toast('اتبعتت لـ ' + ids.length + ' محادثة ✅');
+  });
+}
+
+/* ======================================================================
+   الإرسال: نص، صور، فيديو، ملفات، ريكورد، موقع
+   ====================================================================== */
+const tbox = $('#tbox');
+function autoGrow() { tbox.style.height = 'auto'; tbox.style.height = Math.min(140, tbox.scrollHeight) + 'px'; updateComposer(); }
+function updateComposer() { const has = tbox.value.trim().length > 0; $('#sendbtn').innerHTML = has ? ICON.send : ICON.mic; $('#sendbtn').title = has ? 'إرسال' : 'تسجيل صوتي'; }
+tbox.addEventListener('input', () => { autoGrow(); quickRepliesFromSlash(); });
+tbox.addEventListener('keydown', e => {
+  const qp = $('#qr-pop');
+  if (!qp.classList.contains('hidden') && ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+    const bs = $$('button', qp); let i = bs.findIndex(b => b.classList.contains('sel'));
+    if (e.key === 'Escape') { qp.classList.add('hidden'); return; }
+    if (e.key === 'Enter' || e.key === 'Tab') { if (bs[Math.max(0, i)]) { e.preventDefault(); bs[Math.max(0, i)].click(); return; } }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); i = (i + (e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length; bs.forEach((b, j) => { b.classList.toggle('sel', j === i); b.style.background = j === i ? 'var(--panel3)' : ''; }); return; }
+  }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && innerWidth > 760) { e.preventDefault(); sendText(); }
+});
+tbox.addEventListener('paste', e => { const fs = [...(e.clipboardData?.files || [])]; if (fs.length) { e.preventDefault(); pickFiles(fs); } });
+$('#sendbtn').onclick = () => tbox.value.trim() ? sendText() : startRec();
+
+async function sendPayload(p) {
+  const id = S.curChat; if (!id) return;
+  if (S.replyTo && S.replyTo.ext_id) p.reply_to = S.replyTo.ext_id;
+  S.replyTo = null; renderReply();
+  // رسالة مؤقتة تظهر فوراً
+  const temp = Object.assign({id: -Date.now(), chat_id: id, dir: 'out', status: 'pending', ts: Math.floor(Date.now() / 1000), sender: S.me, media_url: '', mime: '', file_name: '', duration: 0, body: '', error: '', ext_id: '', reply_to: ''}, p);
+  const arr = S.msgs.get(id) || []; arr.push(temp); S.msgs.set(id, arr); appendMsg(temp);
+  try {
+    const m = await API.send(id, p);
+    const i = arr.indexOf(temp); if (i >= 0) arr.splice(i, 1);
+    $(`[data-mid="${temp.id}"]`)?.remove();
+    if (!arr.find(x => x.id === m.id)) { arr.push(m); arr.sort((a, b) => a.id - b.id); appendMsg(m); } else patchMsg(m);
+    if (S.sound && m.status !== 'failed') SND.sent();
+    if (m.status === 'failed') toast('⚠️ ' + (m.error || 'ما اتبعتتش'), 4000);
+    const c = S.chats.get(id); c.preview = previewOf(m); c.last_ts = m.ts; renderList();
+  } catch (e) { temp.status = 'failed'; temp.error = e.message; patchMsg(temp); toast(e.message); }
+}
+function sendText() {
+  const t = tbox.value.trim(); if (!t) return;
+  tbox.value = ''; autoGrow(); saveDraft(); $('#qr-pop').classList.add('hidden');
+  sendPayload({type: 'text', body: t});
+}
+
+/* --- attach menu --- */
+$('#btnAttach').onclick = e => {
+  e.stopPropagation(); const p = $('#attach'); const was = !p.classList.contains('hidden'); closePops(); if (was) return;
+  p.innerHTML = [['📷', 'صور وفيديو', '#bf59cf', () => $('#fMedia').click()], ['📸', 'كاميرا', '#d3396d', () => $('#fCam').click()], ['📄', 'ملف / مستند', '#7f66ff', () => $('#fDoc').click()],
+    ['🎵', 'ملف صوتي', '#f96533', () => $('#fAudio').click()], ['📍', 'موقع', '#1fa855', sendLocation], ['👤', 'جهة اتصال', '#009de2', sendContactCard]]
+    .map((x, i) => `<button data-i="${i}"><span class="pi" style="background:${x[2]}">${x[0]}</span>${x[1]}</button>`).join('');
+  const acts = [() => $('#fMedia').click(), () => $('#fCam').click(), () => $('#fDoc').click(), () => $('#fAudio').click(), sendLocation, sendContactCard];
+  $$('button', p).forEach(b => b.onclick = () => { closePops(); acts[+b.dataset.i](); });
+  p.classList.remove('hidden');
+};
+['fMedia', 'fDoc', 'fCam', 'fAudio'].forEach(id => $('#' + id).onchange = e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) pickFiles(fs, id === 'fDoc' ? 'document' : id === 'fAudio' ? 'audio' : null); });
+function closePops() { $$('#attach,#qr-pop,#emoji').forEach(p => p.classList.add('hidden')); $('#ctx')?.remove(); }
+document.addEventListener('click', e => { if (!e.target.closest('.pop') && !e.target.closest('#btnAttach,#btnEmoji,#btnQR')) closePops(); });
+
+function typeOf(file, force) {
+  if (force) return force;
+  const t = file.type || '';
+  if (t.startsWith('image/') && !/svg/.test(t)) return t === 'image/webp' && file.size < 500000 ? 'sticker' : 'image';
+  if (t.startsWith('video/')) return 'video';
+  if (t.startsWith('audio/')) return 'audio';
+  return 'document';
+}
+async function compressImage(file) {
+  if (!/^image\/(jpeg|png)$/.test(file.type) || file.size < 1.5 * 1024 * 1024) return file;
+  try {
+    const bmp = await createImageBitmap(file); const max = 2560; const s = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * s); cv.height = Math.round(bmp.height * s); cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+    const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', .85)); return blob && blob.size < file.size ? new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', {type: 'image/jpeg'}) : file;
+  } catch (e) { return file; }
+}
+function pickFiles(files, force) {
+  if (!S.curChat) return toast('افتح محادثة الأول');
+  const items = files.map(f => ({file: f, type: typeOf(f, force), url: URL.createObjectURL(f), caption: ''}));
+  const acc = accById(S.chats.get(S.curChat).account_id);
+  let cur = 0;
+  const m = modal(`إرسال ${items.length > 1 ? items.length + ' ملفات' : 'ملف'} إلى ${esc(nameOf(S.chats.get(S.curChat)))}`, `<div class="prev" id="pv"></div><div class="thumbs" id="pth"></div>
+    <input id="pcap" placeholder="اكتب تعليق…"><div class="muted" style="font-size:12px;margin-top:6px" id="pwarn"></div>`,
+    `<button class="btn" id="psend">إرسال ${ICON.send.replace('class="ic"', 'class="ic" style="width:18px;vertical-align:middle"')}</button><button class="btn ghost" data-close>إلغاء</button>`);
+  const show = () => {
+    const it = items[cur]; const pv = $('#pv', m);
+    pv.innerHTML = it.type === 'image' || it.type === 'sticker' ? `<img src="${it.url}">` : it.type === 'video' ? `<video src="${it.url}" controls></video>` : it.type === 'audio' ? `<audio src="${it.url}" controls></audio>` : `<div style="padding:40px;text-align:center"><div class="di" style="width:60px;height:74px;margin:auto;border-radius:6px;background:#f15c6d;display:grid;place-items:center;color:#fff">${esc((it.file.name.split('.').pop() || '').toUpperCase())}</div><p>${esc(it.file.name)}<br><span class="muted">${(it.file.size / 1048576).toFixed(2)} MB</span></p></div>`;
+    $('#pcap', m).value = it.caption;
+    $('#pth', m).innerHTML = items.length > 1 ? items.map((x, i) => `<div class="${i === cur ? 'on' : ''}" data-i="${i}">${x.type === 'image' ? `<img src="${x.url}">` : esc(x.type === 'video' ? '🎥' : '📄')}</div>`).join('') : '';
+    $$('#pth div', m).forEach(d => d.onclick = () => { items[cur].caption = $('#pcap', m).value; cur = +d.dataset.i; show(); });
+    const lim = acc.provider === 'meta' ? {image: 5, video: 16, audio: 16, document: 100, sticker: .5} : {image: 30, video: 60, audio: 60, document: 100, sticker: 1};
+    $('#pwarn', m).textContent = items.some(x => x.file.size / 1048576 > (lim[x.type] || 100) && x.type !== 'image') ? `⚠️ فيه ملف أكبر من حد واتساب (${acc.provider === 'meta' ? 'Meta: فيديو 16MB، صور 5MB' : '60MB'}) — ممكن يترفض` : '';
+  };
+  show();
+  $('#pcap', m).oninput = e => items[cur].caption = e.target.value;
+  $('#pcap', m).onkeydown = e => e.key === 'Enter' && $('#psend', m).click();
+  $('#psend', m).onclick = async () => {
+    items[cur].caption = $('#pcap', m).value; m.remove();
+    for (const it of items) await uploadAndSend(it.file, it.type, it.caption);
+  };
+  setTimeout(() => $('#pcap', m).focus(), 50);
+}
+async function uploadAndSend(file, type, caption = '', extra = {}) {
+  const prog = $('#upprog');
+  try {
+    if (type === 'image') file = await compressImage(file);
+    prog.style.width = '2%';
+    const up = await API.upload(file, p => prog.style.width = Math.round(p * 100) + '%');
+    prog.style.width = '0';
+    await sendPayload(Object.assign({type, body: caption, media_url: up.url, mime: up.mime || file.type, file_name: up.name || file.name}, extra));
+  } catch (e) { prog.style.width = '0'; toast('⚠️ ' + e.message, 4000); }
+}
+function sendLocation() {
+  if (!navigator.geolocation) return toast('الموقع مش مدعوم على الجهاز ده');
+  toast('بيحدد موقعك…');
+  navigator.geolocation.getCurrentPosition(p => sendPayload({type: 'location', body: JSON.stringify({lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), name: 'موقعي', address: ''})}),
+    () => { const q = prompt('اكتب الإحداثيات (lat,lng) أو الصق رابط جوجل ماب:'); const mm = q && q.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/); if (mm) sendPayload({type: 'location', body: JSON.stringify({lat: +mm[1], lng: +mm[2], name: 'موقع', address: ''})}); }, {enableHighAccuracy: true, timeout: 10000});
+}
+function sendContactCard() {
+  const m = modal('إرسال جهة اتصال', `<div class="fld"><label>الاسم</label><input id="ccn" placeholder="مثلاً: الدعم الفني — أكسجين"></div><div class="fld"><label>الرقم</label><input id="ccp" inputmode="tel" placeholder="05xxxxxxxx"></div>
+    <div class="muted" style="font-size:12px">أو اختار رقم من أرقام الشركة:</div><div class="row" style="flex-wrap:wrap;gap:6px;margin-top:6px">${S.accounts.filter(a => a.active).map(a => `<button class="chip" data-p="${esc(a.phone)}" data-n="${esc(a.label)}">${esc(a.label)}</button>`).join('')}</div>`,
+    `<button class="btn" id="ccs">إرسال</button><button class="btn ghost" data-close>إلغاء</button>`);
+  $$('[data-p]', m).forEach(b => b.onclick = () => { $('#ccp', m).value = localPhone(b.dataset.p); $('#ccn', m).value = (S.config.vars?.brand || '') + ' — ' + b.dataset.n; });
+  $('#ccs', m).onclick = () => { const n = $('#ccn', m).value.trim(), p = $('#ccp', m).value.trim(); if (!p) return; m.remove();
+    sendPayload({type: 'text', body: `👤 ${n}\n📞 ${p}\nhttps://wa.me/${p.replace(/\D/g, '').replace(/^05/, '9665')}`}); };
+}
+
+/* --- drag & drop --- */
+let dragN = 0;
+$('#main').addEventListener('dragenter', e => { if (!S.curChat || !e.dataTransfer.types.includes('Files')) return; e.preventDefault(); if (dragN++ === 0) { const d = document.createElement('div'); d.className = 'drop'; d.id = 'dropz'; d.textContent = 'سيب الملفات هنا للإرسال'; $('#chat').append(d); } });
+$('#main').addEventListener('dragover', e => e.preventDefault());
+$('#main').addEventListener('dragleave', () => { if (--dragN <= 0) { dragN = 0; $('#dropz')?.remove(); } });
+$('#main').addEventListener('drop', e => { e.preventDefault(); dragN = 0; $('#dropz')?.remove(); const fs = [...e.dataTransfer.files]; if (fs.length) pickFiles(fs); });
+
+/* --- emoji --- */
+$('#btnEmoji').onclick = e => { e.stopPropagation(); const p = $('#emoji'); const was = !p.classList.contains('hidden'); closePops(); if (was) return;
+  p.innerHTML = EMOJIS.map(x => `<button>${x}</button>`).join(''); $$('button', p).forEach(b => b.onclick = ev => { ev.stopPropagation(); insertAtCursor(b.textContent); }); p.classList.remove('hidden'); };
+function insertAtCursor(t) { const s = tbox.selectionStart ?? tbox.value.length, en = tbox.selectionEnd ?? s; tbox.value = tbox.value.slice(0, s) + t + tbox.value.slice(en); tbox.selectionStart = tbox.selectionEnd = s + t.length; tbox.focus(); autoGrow(); }
+
+/* --- quick replies --- */
+$('#btnQR').onclick = e => { e.stopPropagation(); const was = !$('#qr-pop').classList.contains('hidden'); closePops(); if (!was) showQuickReplies(''); };
+function quickRepliesFromSlash() { const v = tbox.value; if (v.startsWith('/')) showQuickReplies(v.slice(1)); else $('#qr-pop').classList.add('hidden'); }
+function showQuickReplies(f) {
+  const chat = S.chats.get(S.curChat);
+  const list = (S.config.quick_replies || []).filter(q => !f || q.key.includes(f) || q.text.includes(f));
+  const p = $('#qr-pop');
+  if (!list.length) { p.innerHTML = `<div class="empty" style="padding:14px">مفيش ردود — ضيف من ⚙️ الإعدادات ← الردود الجاهزة</div>`; p.classList.remove('hidden'); return; }
+  p.innerHTML = list.map((q, i) => `<button data-i="${i}"><b>/${esc(q.key)}</b><span class="muted ell" style="max-width:100%">${esc(fillVars(q.text, chat))}</span></button>`).join('');
+  $$('button', p).forEach(b => b.onclick = () => { tbox.value = fillVars(list[+b.dataset.i].text, chat); p.classList.add('hidden'); autoGrow(); tbox.focus(); });
+  p.classList.remove('hidden');
+}
+
+/* --- 24h window (Meta) --- */
+function checkWindow() {
+  const c = S.chats.get(S.curChat); const a = accById(c.account_id); const bar = $('#winbar');
+  const closed = a.provider === 'meta' && (!c.last_in_ts || Date.now() / 1000 - c.last_in_ts > 86400);
+  if (!closed) return bar.classList.add('hidden');
+  bar.classList.remove('hidden');
+  bar.innerHTML = `⏳ العميل ما راسلش الرقم الرسمي من أكتر من 24 ساعة — Meta بتسمح بس بقالب معتمد. <button class="btn ghost" style="padding:5px 12px" id="tplb">إرسال قالب</button>`;
+  $('#tplb').onclick = () => {
+    const m = modal('إرسال قالب Meta', `<div class="fld"><label>اسم القالب (زي ما هو في WhatsApp Manager)</label><input id="tn" value="${esc(localStorage.getItem('mwc_tpl') || 'hello_world')}"></div>
+      <div class="grid2"><div class="fld"><label>اللغة</label><input id="tl" value="${esc(localStorage.getItem('mwc_tpl_lang') || 'ar')}"></div><div class="fld"><label>المتغيرات {{1}} {{2}} (افصل بـ | )</label><input id="tp" placeholder="أبو فهد | اليوم العصر"></div></div>
+      <p class="muted" style="font-size:12px">رسايل القوالب بتتحاسب من Meta حسب نوعها (تسويق/خدمة/مصادقة).</p>`, `<button class="btn" id="ts">إرسال</button><button class="btn ghost" data-close>إلغاء</button>`);
+    $('#ts', m).onclick = () => { const n = $('#tn', m).value.trim(), l = $('#tl', m).value.trim(), pr = $('#tp', m).value.split('|').map(s => s.trim()).filter(Boolean);
+      localStorage.setItem('mwc_tpl', n); localStorage.setItem('mwc_tpl_lang', l); m.remove(); sendPayload({type: 'template', body: 'قالب: ' + n + (pr.length ? ' (' + pr.join('، ') + ')' : ''), template: {name: n, lang: l, params: pr}}); };
+  };
+}
+
+/* ======================================================================
+   التسجيل الصوتي (ريكورد) — بيطلع رسالة صوتية حقيقية عند العميل
+   ====================================================================== */
+const R = {mr: null, chunks: [], t0: 0, paused: 0, pauseAt: 0, timer: null, stream: null, an: null, mime: ''};
+async function startRec() {
+  if (!S.curChat) return;
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast('التسجيل مش مدعوم على المتصفح ده');
+  try { R.stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true}}); }
+  catch (e) { return toast('اسمح للمتصفح باستخدام المايك 🎤'); }
+  const prefs = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'];
+  R.mime = prefs.find(t => MediaRecorder.isTypeSupported(t)) || '';
+  R.mr = new MediaRecorder(R.stream, R.mime ? {mimeType: R.mime, audioBitsPerSecond: 32000} : undefined);
+  R.mime = R.mr.mimeType || R.mime; R.chunks = [];
+  R.mr.ondataavailable = e => e.data.size && R.chunks.push(e.data);
+  R.mr.start(250); R.t0 = Date.now(); R.paused = 0; R.pauseAt = 0;
+  $('#rec').classList.remove('hidden'); $('#recWave').innerHTML = '';
+  try { const c = ac(); const src = c.createMediaStreamSource(R.stream); R.an = c.createAnalyser(); R.an.fftSize = 256; src.connect(R.an); } catch (e) { R.an = null; }
+  const buf = new Uint8Array(128);
+  R.timer = setInterval(() => {
+    const el = (R.pauseAt ? R.pauseAt : Date.now()) - R.t0 - R.paused; $('#recTime').textContent = fmtDur(el / 1000);
+    if (R.an && !R.pauseAt) { R.an.getByteTimeDomainData(buf); let mx = 0; for (const v of buf) mx = Math.max(mx, Math.abs(v - 128)); const i = document.createElement('i'); i.style.height = Math.max(3, Math.min(28, mx / 2.2)) + 'px'; $('#recWave').append(i); if ($('#recWave').children.length > 120) $('#recWave').firstChild.remove(); }
+    if (el > 15 * 60 * 1000) $('#recSend').click();
+  }, 100);
+  if (S.sound) tone([660], .04, 0, .08);
+}
+function stopRec() { clearInterval(R.timer); $('#rec').classList.add('hidden'); R.stream?.getTracks().forEach(t => t.stop()); }
+$('#recCancel').onclick = () => { if (R.mr && R.mr.state !== 'inactive') { R.mr.onstop = null; R.mr.stop(); } stopRec(); };
+$('#recPause').onclick = () => {
+  if (!R.mr) return;
+  if (R.mr.state === 'recording') { R.mr.pause(); R.pauseAt = Date.now(); $('#recPause').innerHTML = ICON.mic; }
+  else if (R.mr.state === 'paused') { R.mr.resume(); R.paused += Date.now() - R.pauseAt; R.pauseAt = 0; $('#recPause').innerHTML = ICON.pause; }
+};
+$('#recSend').onclick = () => {
+  if (!R.mr) return;
+  const dur = Math.round(((R.pauseAt || Date.now()) - R.t0 - R.paused) / 1000);
+  R.mr.onstop = async () => {
+    stopRec();
+    if (dur < 1) return toast('التسجيل قصير جداً');
+    let blob = new Blob(R.chunks, {type: R.mime || 'audio/webm'}), ext = /ogg/.test(R.mime) ? 'ogg' : /mp4/.test(R.mime) ? 'm4a' : 'webm';
+    // واتساب الرسمي (Meta) بيقبل الرسائل الصوتية بصيغة OGG/Opus بس — نحوّل من WebM لـ OGG على الجهاز من غير سيرفر
+    if (ext === 'webm') { try { const ogg = webmOpusToOgg(new Uint8Array(await blob.arrayBuffer())); if (ogg) { blob = new Blob([ogg], {type: 'audio/ogg'}); ext = 'ogg'; } } catch (e) { console.warn('remux', e); } }
+    const file = new File([blob], `voice-${Date.now()}.${ext}`, {type: ext === 'ogg' ? 'audio/ogg' : blob.type});
+    uploadAndSend(file, 'voice', '', {duration: dur});
+  };
+  R.mr.stop();
+};
+
+/* ---- WebM(Opus) → Ogg(Opus) remux — صغير وبدون مكتبات ---- */
+function webmOpusToOgg(u8) {
+  let pos = 0; const frames = []; let head = null, channels = 1;
+  const vint = (keepMarker) => { const b = u8[pos]; let len = 1, mask = 0x80; while (len <= 8 && !(b & mask)) { len++; mask >>= 1; } if (len > 8) throw 'bad vint';
+    let v = keepMarker ? b : (b & (mask - 1)); let allOnes = (b & (mask - 1)) === mask - 1; for (let i = 1; i < len; i++) { v = v * 256 + u8[pos + i]; if (u8[pos + i] !== 255) allOnes = false; } pos += len; return {v, unknown: allOnes && !keepMarker}; };
+  const MASTER = new Set([0x18538067, 0x1F43B675, 0x1654AE6B, 0xAE, 0xA0, 0xE1]);
+  while (pos < u8.length - 2) {
+    const id = vint(true).v; const sz = vint(false); const start = pos;
+    if (MASTER.has(id)) continue; // ندخل جوه العنصر
+    const size = sz.unknown ? (u8.length - pos) : sz.v;
+    if (id === 0x63A2) head = u8.slice(start, start + size);               // CodecPrivate = OpusHead
+    else if (id === 0x9F) { channels = u8[start] || 1; }                   // Channels
+    else if (id === 0xA3 || id === 0xA1) {                                 // SimpleBlock / Block
+      let p = start; const b = u8[p]; let l = 1, mk = 0x80; while (!(b & mk)) { l++; mk >>= 1; } p += l; p += 2; const flags = u8[p]; p += 1;
+      if ((flags & 0x06) === 0) frames.push(u8.slice(p, start + size)); else return null; // lacing غير مدعوم
+    }
+    pos = start + size;
+  }
+  if (!frames.length) return null;
+  if (!head || String.fromCharCode(...head.slice(0, 8)) !== 'OpusHead') {
+    head = new Uint8Array(19); head.set([79, 112, 117, 115, 72, 101, 97, 100, 1, channels]); new DataView(head.buffer).setUint16(10, 312, true); new DataView(head.buffer).setUint32(12, 48000, true);
+  }
+  const vendor = new TextEncoder().encode('mwc'); const tags = new Uint8Array(8 + 4 + vendor.length + 4); tags.set(new TextEncoder().encode('OpusTags')); new DataView(tags.buffer).setUint32(8, vendor.length, true); tags.set(vendor, 12);
+  const samples = pk => { if (!pk.length) return 0; const toc = pk[0], cfg = toc >> 3; let ms; if (cfg < 12) ms = [10, 20, 40, 60][cfg % 4]; else if (cfg < 16) ms = [10, 20][cfg % 2]; else ms = [2.5, 5, 10, 20][cfg % 4];
+    const c = toc & 3; const n = c === 0 ? 1 : c < 3 ? 2 : (pk[1] & 0x3F); return Math.round(ms * 48 * n); };
+  const CRC = new Uint32Array(256); for (let i = 0; i < 256; i++) { let r = i << 24; for (let j = 0; j < 8; j++) r = r & 0x80000000 ? (r << 1) ^ 0x04c11db7 : r << 1; CRC[i] = r >>> 0; }
+  const serial = (Math.random() * 0xffffffff) >>> 0; let seq = 0; const pages = [];
+  const page = (packets, granule, flag) => {
+    const lace = []; packets.forEach(pk => { let n = pk.length; while (n >= 255) { lace.push(255); n -= 255; } lace.push(n); });
+    const dataLen = packets.reduce((s, p) => s + p.length, 0); const pg = new Uint8Array(27 + lace.length + dataLen); const dv = new DataView(pg.buffer);
+    pg.set([79, 103, 103, 83, 0, flag]); dv.setUint32(6, granule % 0x100000000, true); dv.setUint32(10, Math.floor(granule / 0x100000000), true);
+    dv.setUint32(14, serial, true); dv.setUint32(18, seq++, true); pg[26] = lace.length; pg.set(lace, 27); let o = 27 + lace.length; packets.forEach(p => { pg.set(p, o); o += p.length; });
+    let crc = 0; for (let i = 0; i < pg.length; i++) crc = ((crc << 8) ^ CRC[((crc >>> 24) ^ pg[i]) & 0xff]) >>> 0; dv.setUint32(22, crc, true); pages.push(pg);
+  };
+  page([head], 0, 2); page([tags], 0, 0);
+  let gran = 0, batch = [], segs = 0;
+  frames.forEach((f, i) => {
+    const need = Math.floor(f.length / 255) + 1;
+    if (segs + need > 255) { page(batch, gran, 0); batch = []; segs = 0; }
+    batch.push(f); segs += need; gran += samples(f);
+    if (i === frames.length - 1) page(batch, gran, 4);
+  });
+  const total = pages.reduce((s, p) => s + p.length, 0); const out = new Uint8Array(total); let o = 0; pages.forEach(p => { out.set(p, o); o += p.length; });
+  return out;
+}
+
+/* ======================================================================
+   البروفايل — صورة العميل، بياناته، نسخ ومشاركة، الوسائط، الخدمات
+   ====================================================================== */
+async function openProfile(refresh) {
+  const id = S.curChat; if (!id) return;
+  const P = $('#prof'); P.classList.remove('hidden');
+  if (!S.profile || S.profile.chat.id !== id) P.innerHTML = `<div class="head"><button class="ibtn" id="pclose">${ICON.close}</button><span>بيانات العميل</span></div><div class="empty">بيحمّل…</div>`;
+  $('#pclose') && ($('#pclose').onclick = () => P.classList.add('hidden'));
+  let d; try { d = await API.profile(id, refresh); } catch (e) { return toast(e.message); }
+  if (S.curChat !== id) return;
+  S.profile = d; const k = d.contact, c = S.chats.get(id) || d.chat, a = accById(c.account_id);
+  Object.assign(c, {avatar: k.avatar, push_name: k.push_name, name: k.name}); renderChatHead(); renderList();
+  const lbl = S.config.labels || [];
+  const imgs = d.media.filter(x => ['image', 'video', 'sticker'].includes(x.type)), docs = d.media.filter(x => !['image', 'video', 'sticker'].includes(x.type));
+  P.innerHTML = `<div class="head"><button class="ibtn" id="pclose">${ICON.close}</button><span class="grow">بيانات العميل</span><button class="ibtn" id="pref" title="تحديث الصورة والنبذة من واتساب">⟳</button></div>
+  <div class="scroll">
+    <div class="psec pcenter">
+      <div id="pav">${avatar(Object.assign({}, c, k), 'xl')}</div>
+      <div class="pname" id="pname" contenteditable="true" spellcheck="false" title="اضغط لتعديل الاسم">${esc(k.name || k.push_name || '')}</div>
+      <div class="row" style="justify-content:center;gap:6px"><span style="font-size:16px;direction:ltr">${esc(fmtPhone(k.wa_id))}</span><button class="ibtn" style="width:32px;height:32px" id="pcopyn" title="نسخ الرقم">${ICON.copy}</button></div>
+      ${k.push_name && k.name ? `<div class="muted">~${esc(k.push_name)}</div>` : ''}
+      <div class="pacts">
+        <button class="pact" id="pa-call">${ICON.phone}اتصال</button>
+        <button class="pact" id="pa-share">${ICON.share}مشاركة</button>
+        <button class="pact" id="pa-copy">${ICON.copy}نسخ البيانات</button>
+        <button class="pact" id="pa-vcf">${ICON.dl}حفظ جهة اتصال</button>
+      </div>
+    </div>
+    <div class="psec"><h4>النبذة</h4><div>${esc(k.about || (d.provider === 'meta' ? 'Meta الرسمي ما بيعرضش النبذة ولا الصورة — بتظهر لو نفس العميل كلّم رقم من أرقام QR' : '—'))}</div></div>
+    <div class="psec"><h4>بيانات للفريق</h4>
+      <div class="fld"><label>جه منين (الموقع / المقال / الإعلان)</label><input id="psrc" value="${esc(k.source || '')}" placeholder="مثلاً: oxygen11.com — غسيل مكيفات"></div>
+      <div class="fld"><label>تاجات</label><input id="ptags" value="${esc(k.tags || '')}" placeholder="مطعم، 4 مكيفات، العزيزية"></div>
+      <div class="fld"><label>ملاحظات</label><textarea id="pnotes" rows="3" placeholder="أي حاجة تخص العميل">${esc(k.notes || '')}</textarea></div>
+      <div class="fld"><label>التصنيف</label><div class="row" style="flex-wrap:wrap;gap:6px">${lbl.map(l => `<button class="chip ${(c.labels || []).includes(l.name) ? 'on' : ''}" data-lbl="${esc(l.name)}" style="${(c.labels || []).includes(l.name) ? `background:${esc(l.color)};color:#fff` : ''}">${esc(l.name)}</button>`).join('')}</div></div>
+      <div class="fld"><label>مسند إلى</label><select id="pass"><option value="">— محدش —</option>${(S.config.staff || []).concat(S.me).filter((v, i, s) => s.indexOf(v) === i).map(s => `<option ${c.assigned === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></div>
+      <button class="btn" id="psave" style="width:100%">حفظ</button>
+    </div>
+    <div class="psec"><h4>الخدمات</h4>${(S.config.actions || []).map((x, i) => `<button class="svcbtn" data-act="${i}"><span>${esc(x.icon || '⚡')}</span><span class="grow">${esc(x.label)}</span><span class="muted" style="font-size:11px">${{message:'رسالة', link:'رابط', webhook:'نظام'}[x.type] || ''}</span></button>`).join('') || '<div class="muted">ضيف أزرار من الإعدادات ← الخدمات</div>'}</div>
+    <div class="psec"><h4>نفس العميل على أرقام تانية</h4>${d.other_chats.length ? d.other_chats.map(o => { const oa = accById(o.account_id); return `<button class="svcbtn" data-oc="${o.id}"><span class="tag" style="background:${esc(oa.color)}">${esc(oa.label)}</span><span class="grow">${esc(localPhone(oa.phone))}</span><span class="muted" style="font-size:12px">${fmtListTime(o.last_ts)}</span></button>`; }).join('') : '<div class="muted">مفيش</div>'}
+      <div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap"><span class="muted" style="font-size:12.5px">كلّمه من رقم تاني:</span>${S.accounts.filter(x => x.active && x.id != c.account_id).map(x => `<button class="chip" data-from="${x.id}">${esc(x.label)}</button>`).join('')}</div></div>
+    <div class="psec"><h4>الصور والفيديو (${imgs.length})</h4><div class="gal">${imgs.slice(0, 60).map(x => `<div class="g" data-gm="${x.id}">${x.type === 'video' ? (x.media_url ? `<video src="${esc(x.media_url)}" preload="metadata" muted></video>` : '🎥') : `<img src="${esc(x.media_url)}" loading="lazy">`}</div>`).join('') || '<span class="muted">مفيش</span>'}</div></div>
+    <div class="psec"><h4>الملفات والصوتيات (${docs.length})</h4>${docs.map(x => `<a class="doc" href="${esc(x.media_url)}" download="${esc(x.file_name)}" target="_blank" style="margin-bottom:6px"><div class="di" style="${x.type === 'voice' || x.type === 'audio' ? 'background:#f96533' : ''}">${x.type === 'voice' ? '🎤' : x.type === 'audio' ? '🎵' : esc((x.file_name.split('.').pop() || '').toUpperCase().slice(0, 4))}</div><div class="grow ell">${esc(x.file_name || (x.type === 'voice' ? 'رسالة صوتية' : 'ملف'))}<div class="muted" style="font-size:11.5px">${fmtListTime(x.ts)}</div></div>${ICON.dl}</a>`).join('') || '<span class="muted">مفيش</span>'}</div>
+    <div class="psec"><button class="svcbtn" id="parch" style="color:var(--danger)"><span>🗄️</span><span>${c.archived ? 'إخراج من الأرشيف' : 'أرشفة المحادثة'}</span></button></div>
+  </div>`;
+  $('#pclose').onclick = () => P.classList.add('hidden');
+  $('#pref').onclick = () => openProfile(true);
+  const avImg = $('#pav img'); if (avImg) $('#pav').onclick = () => viewer(k.avatar, 'image', 'صورة ' + nameOf(Object.assign({}, c, k)) + '.jpg');
+  $('#pcopyn').onclick = () => copy(localPhone(k.wa_id));
+  $('#pa-call').onclick = () => location.href = 'tel:+' + k.wa_id;
+  $('#pa-share').onclick = () => shareContact(Object.assign({}, c, k));
+  $('#pa-copy').onclick = () => copy(contactText(Object.assign({}, c, k)), 'اتنسخت بيانات العميل ✅');
+  $('#pa-vcf').onclick = () => { const v = `BEGIN:VCARD\nVERSION:3.0\nFN:${nameOf(Object.assign({}, c, k))}\nTEL;type=CELL;waid=${k.wa_id}:+${k.wa_id}\nNOTE:${(k.source || '') + ' ' + (k.notes || '')}\nEND:VCARD`; download(URL.createObjectURL(new Blob([v], {type: 'text/vcard'})), nameOf(Object.assign({}, c, k)) + '.vcf'); };
+  $('#pname').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } };
+  $('#pname').onblur = async e => { const n = e.target.textContent.trim(); if (n === (k.name || k.push_name || '')) return; await API.updateContact(k.id, {name: n}); k.name = n; S.chats.forEach(x => { if (x.contact_id === k.id) x.name = n; }); renderChatHead(); renderList(); toast('اتحفظ الاسم ✅'); };
+  $$('[data-lbl]', P).forEach(b => b.onclick = () => { toggleLabel(id, b.dataset.lbl); setTimeout(() => openProfile(), 50); });
+  $('#psave').onclick = async () => { await API.updateContact(k.id, {source: $('#psrc').value, tags: $('#ptags').value, notes: $('#pnotes').value}); await setChat(id, {assigned: $('#pass').value}); toast('اتحفظ ✅'); };
+  $$('[data-act]', P).forEach(b => b.onclick = () => runAction(+b.dataset.act));
+  $$('[data-oc]', P).forEach(b => b.onclick = () => openChat(+b.dataset.oc));
+  $$('[data-from]', P).forEach(b => b.onclick = async () => { const nc = await API.start(+b.dataset.from, k.wa_id, k.name); S.chats.set(nc.id, Object.assign(S.chats.get(nc.id) || {}, nc)); openChat(nc.id); });
+  $$('[data-gm]', P).forEach(g => g.onclick = () => { const x = d.media.find(z => z.id === +g.dataset.gm); viewer(x.media_url, x.type, x.file_name); });
+  $('#parch').onclick = () => setChat(id, {archived: c.archived ? 0 : 1}).then(() => openProfile());
+}
+function contactText(c) { return [nameOf(c), 'الرقم: ' + localPhone(c.wa_id), '+' + c.wa_id, 'واتساب: https://wa.me/' + c.wa_id, c.source ? 'المصدر: ' + c.source : '', c.notes ? 'ملاحظات: ' + c.notes : ''].filter(Boolean).join('\n'); }
+function shareContact(c) { share({title: nameOf(c), text: contactText(c), url: 'https://wa.me/' + c.wa_id}); }
+async function runAction(i) {
+  const x = S.config.actions[i]; const c = S.chats.get(S.curChat);
+  if (x.type === 'message') { tbox.value = fillVars(x.payload, c); autoGrow(); tbox.focus(); if (innerWidth < 1100) $('#prof').classList.add('hidden'); return; }
+  if (x.type === 'link') { window.open(fillVars(x.payload, c), '_blank'); return; }
+  try { await API.runAction(i, c.id); toast('اتبعت لـ «' + x.label + '» ✅'); } catch (e) { toast(e.message); }
+}
+
+/* --- viewer --- */
+function viewMedia(mid) { const m = (S.msgs.get(S.curChat) || []).find(x => x.id === mid); if (m) viewer(m.media_url, m.type, m.file_name || ('wa-' + m.id + '.jpg'), m.body); }
+function viewer(url, type, name, caption) {
+  const v = document.createElement('div'); v.id = 'viewer';
+  v.innerHTML = `<div class="vh"><button class="ibtn" data-x style="color:#fff">${ICON.close}</button><span class="grow ell">${esc(caption || name || '')}</span>
+    <button class="ibtn" data-s style="color:#fff" title="مشاركة">${ICON.share}</button><button class="ibtn" data-d style="color:#fff" title="تنزيل">${ICON.dl}</button></div>
+    <div class="vb">${type === 'video' ? `<video src="${esc(url)}" controls autoplay playsinline></video>` : `<img src="${esc(url)}">`}</div>`;
+  document.body.append(v);
+  $('[data-x]', v).onclick = () => v.remove(); $('[data-d]', v).onclick = () => download(url, name); $('[data-s]', v).onclick = () => shareFile(url, name);
+  v.onclick = e => { if (e.target.classList.contains('vb')) v.remove(); };
+  document.addEventListener('keydown', function f(e) { if (e.key === 'Escape') { v.remove(); document.removeEventListener('keydown', f); } });
+}
+async function shareFile(url, name) {
+  try { const b = await (await fetch(url)).blob(); const f = new File([b], name || 'file', {type: b.type}); if (navigator.canShare && navigator.canShare({files: [f]})) return navigator.share({files: [f]}); } catch (e) {}
+  share({title: name, url});
+}
+
+/* ======================================================================
+   نوافذ: محادثة جديدة، اختيار محادثات، الإعدادات
+   ====================================================================== */
+function modal(title, body, foot = '', wide = false) {
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="mbox ${wide ? 'wide' : ''}"><div class="mhead"><span class="grow">${title}</span><button class="ibtn" data-close>${ICON.close}</button></div><div class="mbody">${body}</div>${foot ? `<div class="mfoot">${foot}</div>` : ''}</div>`;
+  document.body.append(m);
+  m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-close]')) m.remove(); });
+  return m;
+}
+function alertBox(t, html) { modal(t, html, '<button class="btn" data-close>تمام</button>'); }
+function newChat() {
+  const accs = S.accounts.filter(a => a.active);
+  const m = modal('محادثة جديدة', `<div class="fld"><label>من رقم</label><select id="nacc">${accs.map(a => `<option value="${a.id}" ${a.id == S.curAcc ? 'selected' : ''}>${esc(a.label)} — ${esc(localPhone(a.phone))} (${a.provider === 'meta' ? 'Meta' : 'QR'})</option>`).join('')}</select></div>
+    <div class="fld"><label>رقم العميل</label><input id="nph" inputmode="tel" placeholder="05xxxxxxxx أو 9665xxxxxxxx"></div>
+    <div class="fld"><label>الاسم (اختياري)</label><input id="nnm"></div>
+    <p class="muted" style="font-size:12px">على الرقم الرسمي (Meta) أول رسالة لعميل جديد لازم تكون قالب معتمد.</p>`, `<button class="btn" id="ngo">فتح المحادثة</button><button class="btn ghost" data-close>إلغاء</button>`);
+  $('#ngo', m).onclick = async () => { try { const c = await API.start(+$('#nacc', m).value, $('#nph', m).value, $('#nnm', m).value); S.chats.set(c.id, Object.assign(S.chats.get(c.id) || {}, c)); m.remove(); renderList(); openChat(c.id); } catch (e) { toast(e.message); } };
+  setTimeout(() => $('#nph', m).focus(), 50);
+}
+$('#btnNew').onclick = newChat;
+function pickChat(title, cb) {
+  const sel = new Set();
+  const m = modal(title, `<input id="pcq" placeholder="ابحث…" style="margin-bottom:8px"><div id="pcl" style="max-height:50dvh;overflow-y:auto"></div>`, `<button class="btn" id="pcgo">إرسال</button><button class="btn ghost" data-close>إلغاء</button>`);
+  const draw = () => { const q = $('#pcq', m).value.toLowerCase(); $('#pcl', m).innerHTML = [...S.chats.values()].filter(c => !q || (nameOf(c) + c.wa_id).toLowerCase().includes(q)).sort((a, b) => b.last_ts - a.last_ts).slice(0, 80)
+    .map(c => `<label class="row" style="padding:8px 4px;cursor:pointer"><input type="checkbox" style="width:auto" value="${c.id}" ${sel.has(c.id) ? 'checked' : ''}>${avatar(c, 'sm')}<span class="grow ell">${esc(nameOf(c))}</span><span class="tag" style="background:${esc(accById(c.account_id).color)}">${esc(accById(c.account_id).label)}</span></label>`).join('');
+    $$('#pcl input', m).forEach(i => i.onchange = () => i.checked ? sel.add(+i.value) : sel.delete(+i.value)); };
+  draw(); $('#pcq', m).oninput = draw;
+  $('#pcgo', m).onclick = () => { if (!sel.size) return toast('اختار محادثة'); m.remove(); cb([...sel]); };
+}
+
+$('#btnNotif').onclick = e => {
+  e.stopPropagation();
+  menu([
+    [(S.sound ? '🔔 صوت الإشعار: شغّال' : '🔕 صوت الإشعار: مقفول'), () => { S.sound = !S.sound; localStorage.setItem('mwc_sound', S.sound ? '1' : '0'); if (S.sound) SND.incoming(); toast(S.sound ? 'الصوت اتفعل' : 'الصوت اتقفل'); }],
+    ['▶️ تجربة الصوت', () => SND.incoming()],
+    [(S.notif ? '✓ إشعارات الجهاز: شغالة' : '📲 تفعيل إشعارات الجهاز'), async () => { if (!('Notification' in window)) return toast('المتصفح مش بيدعم الإشعارات'); const p = await Notification.requestPermission(); S.notif = p === 'granted' ? !S.notif || true : false; localStorage.setItem('mwc_notif', S.notif ? '1' : '0'); toast(S.notif ? 'الإشعارات اتفعلت ✅' : 'لازم تسمح بالإشعارات من المتصفح'); }],
+    [document.body.classList.contains('light') ? '🌙 الوضع الليلي' : '☀️ الوضع النهاري', () => { document.body.classList.toggle('light'); localStorage.setItem('mwc_theme', document.body.classList.contains('light') ? 'light' : 'dark'); }],
+    DEMO ? null : ['🚪 خروج', () => { localStorage.removeItem('mwc_token'); location.reload(); }],
+  ].filter(Boolean), e);
+};
+
+/* ---------------- Settings ---------------- */
+$('#btnSettings').onclick = () => openSettings('accounts');
+function openSettings(tab = 'accounts', sub) {
+  const m = modal('⚙️ إعدادات مركز الواتساب', `<div class="tabs" id="stabs" style="margin:-16px -18px 14px"></div><div id="sbody"></div>`, '', true);
+  const tabs = [['accounts', '📱 الأرقام'], ['quick', '⚡ الردود الجاهزة'], ['labels', '🏷️ التصنيفات'], ['actions', '🧩 الخدمات والأزرار'], ['vars', '🔤 المتغيرات والفريق']];
+  const go = t => { $('#stabs', m).innerHTML = tabs.map(([k, n]) => `<button class="${k === t ? 'on' : ''}" data-t="${k}">${n}</button>`).join(''); $$('#stabs button', m).forEach(b => b.onclick = () => go(b.dataset.t)); ({accounts: setAccounts, quick: setQuick, labels: setLabels, actions: setActions, vars: setVars})[t]($('#sbody', m), sub); sub = null; };
+  go(tab);
+}
+function setAccounts(el, sub) {
+  const list = S.accounts;
+  el.innerHTML = `<p class="muted" style="margin-top:0">كل رقم هنا بيبقى زي واتساب لوحده. الرقم الرسمي على <b>Meta</b>، وباقي الأرقام بتتربط بـ<b>QR</b> من السيرفر (Evolution API). تقدر تغيّر دور أي رقم أو توقفه من غير ما المحادثات تتمسح.</p>
+    ${list.map(a => `<div class="card row" style="opacity:${a.active ? 1 : .5}"><div class="av sm" style="background:${esc(a.color)}">${esc(a.label.slice(0, 3))}</div>
+      <div class="grow"><b>${esc(a.label)}</b> <span class="muted">${esc(localPhone(a.phone))}</span><div class="muted" style="font-size:12.5px">${a.provider === 'meta' ? 'Meta الرسمي' : 'QR سيرفر'} • ${esc(ROLES[a.role] || a.role)}${a.branch ? ' • ' + esc(a.branch) : ''}${a.active ? '' : ' • متوقف'} • <span class="dot ${esc(a.status)}" style="display:inline-block;width:9px;height:9px;border-radius:50%;vertical-align:middle;position:static;border:0"></span> ${esc(a.status)}</div></div>
+      <button class="btn ghost" data-con="${a.id}" style="padding:6px 14px">${a.provider === 'meta' ? 'اختبار' : 'ربط QR'}</button><button class="btn ghost" data-ed="${a.id}" style="padding:6px 14px">تعديل</button></div>`).join('')}
+    <button class="btn" id="addacc">+ إضافة رقم</button>`;
+  $$('[data-ed]', el).forEach(b => b.onclick = () => editAccount(el, list.find(a => a.id == b.dataset.ed)));
+  $$('[data-con]', el).forEach(b => b.onclick = () => connectAccount(list.find(a => a.id == b.dataset.con)));
+  $('#addacc', el).onclick = () => editAccount(el, null);
+  if (sub === 'new') editAccount(el, null);
+}
+function editAccount(el, a) {
+  a = a || {id: 0, label: '', phone: '', provider: 'evolution', role: 'sales', branch: '', color: COLORS[S.accounts.length % COLORS.length], active: 1, config: {}};
+  const c = a.config || {};
+  el.innerHTML = `<div class="grid2">
+      <div class="fld"><label>اسم الرقم (يظهر في الشريط)</label><input id="a_label" value="${esc(a.label)}" placeholder="مبيعات مكة"></div>
+      <div class="fld"><label>الرقم</label><input id="a_phone" value="${esc(localPhone(a.phone))}" inputmode="tel" placeholder="05xxxxxxxx"></div>
+      <div class="fld"><label>طريقة الربط</label><select id="a_prov"><option value="evolution" ${a.provider !== 'meta' ? 'selected' : ''}>QR على السيرفر (Evolution API)</option><option value="meta" ${a.provider === 'meta' ? 'selected' : ''}>Meta الرسمي (Cloud API)</option></select></div>
+      <div class="fld"><label>الدور</label><select id="a_role">${Object.entries(ROLES).map(([k, v]) => `<option value="${k}" ${a.role === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      <div class="fld"><label>الفرع / المدينة</label><input id="a_branch" value="${esc(a.branch)}" placeholder="مكة / جدة"></div>
+      <div class="fld"><label>البراند في الرسائل {brand}</label><input id="a_brand" value="${esc(c.brand || '')}" placeholder="أكسجين للصيانة"></div>
+      <div class="fld"><label>اللون</label><input id="a_color" type="color" value="${esc(a.color)}" style="height:42px;padding:4px"></div>
+      <div class="fld"><label>الحالة</label><select id="a_active"><option value="1" ${a.active ? 'selected' : ''}>شغّال</option><option value="0" ${!a.active ? 'selected' : ''}>متوقف</option></select></div>
+    </div>
+    <div class="card" id="meta_f"><b>بيانات Meta</b> <span class="muted" style="font-size:12px">(من developers.facebook.com ← تطبيقك ← WhatsApp ← API Setup)</span>
+      <div class="grid2" style="margin-top:8px"><div class="fld"><label>Phone Number ID</label><input id="a_pnid" value="${esc(c.phone_number_id || '')}"></div>
+      <div class="fld"><label>Access Token (دائم — System User)</label><input id="a_token" value="${esc(c.token || '')}"></div>
+      <div class="fld"><label>App Secret (لتأمين الـwebhook — اختياري)</label><input id="a_secret" value="${esc(c.app_secret || '')}"></div>
+      <div class="fld"><label>إصدار الـAPI</label><input id="a_ver" value="${esc(c.api_version || 'v21.0')}"></div></div></div>
+    <div class="card" id="evo_f"><b>بيانات السيرفر (Evolution API)</b>
+      <div class="grid2" style="margin-top:8px"><div class="fld"><label>رابط السيرفر</label><input id="a_base" value="${esc(c.base_url || '')}" placeholder="https://wa.vps.oxygen11.com"></div>
+      <div class="fld"><label>API Key</label><input id="a_key" value="${esc(c.apikey || '')}"></div>
+      <div class="fld"><label>اسم الجلسة (instance)</label><input id="a_inst" value="${esc(c.instance || '')}" placeholder="sales1"></div></div></div>
+    <label class="row" style="margin:6px 0 14px"><input type="checkbox" id="a_read" style="width:auto" ${c.send_read ? 'checked' : ''}> لما أفتح المحادثة يظهر عند العميل إنها اتقرت (علامتين زرق)</label>
+    <div class="row"><button class="btn" id="a_save">حفظ</button><button class="btn ghost" id="a_back">رجوع</button>${a.id ? `<span class="grow"></span>${a.provider !== 'meta' ? `<button class="btn ghost" id="a_out">فصل الواتساب</button>` : ''}<button class="btn danger" id="a_del">إيقاف الرقم</button>` : ''}</div>`;
+  const sw = () => { const meta = $('#a_prov', el).value === 'meta'; $('#meta_f', el).classList.toggle('hidden', !meta); $('#evo_f', el).classList.toggle('hidden', meta); }; sw(); $('#a_prov', el).onchange = sw;
+  $('#a_back', el).onclick = () => setAccounts(el);
+  $('#a_save', el).onclick = async () => {
+    const v = id => $('#' + id, el).value.trim();
+    const d = {id: a.id, label: v('a_label') || 'رقم', phone: v('a_phone'), provider: v('a_prov'), role: v('a_role'), branch: v('a_branch'), color: v('a_color'), active: +v('a_active'),
+      config: v('a_prov') === 'meta' ? {phone_number_id: v('a_pnid'), token: v('a_token'), app_secret: v('a_secret'), api_version: v('a_ver') || 'v21.0', brand: v('a_brand'), send_read: $('#a_read', el).checked}
+        : {base_url: v('a_base'), apikey: v('a_key'), instance: v('a_inst') || ('mwc' + (a.id || Date.now() % 1000)), brand: v('a_brand'), send_read: $('#a_read', el).checked}};
+    try { const r = await API.saveAccount(d); const i = S.accounts.findIndex(x => x.id == r.id); if (i >= 0) S.accounts[i] = Object.assign(S.accounts[i], r); else S.accounts.push(r); renderRail(); toast('اتحفظ ✅'); setAccounts(el); if (!a.id) connectAccount(r); } catch (e) { toast(e.message); }
+  };
+  if (a.id) {
+    $('#a_del', el).onclick = async () => { if (!confirm('إيقاف الرقم؟ المحادثات هتفضل محفوظة.')) return; await API.deleteAccount(a.id); a.active = 0; renderRail(); setAccounts(el); };
+    $('#a_out', el) && ($('#a_out', el).onclick = async () => { if (!confirm('فصل الواتساب عن السيرفر؟ هتحتاج تمسح QR تاني.')) return; await API.logout(a.id); a.status = 'close'; renderRail(); toast('اتفصل'); });
+  }
+}
+async function connectAccount(a) {
+  const m = modal('ربط ' + esc(a.label), '<div class="empty">بيتصل…</div>');
+  const body = $('.mbody', m); let stop = false; m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-close]')) stop = true; });
+  const run = async () => {
+    try {
+      const r = await API.connect(a.id); if (stop) return;
+      if (r.state) { a.status = r.state; renderRail(); }
+      if (r.state === 'open') { body.innerHTML = `<div class="empty" style="color:var(--accent2);font-size:18px">✅ الرقم متصل وشغّال${r.info ? `<br><span class="muted" style="font-size:13px">${esc(r.info.verified_name || '')} — ${esc(r.info.display_phone_number || '')} — جودة: ${esc(r.info.quality_rating || '')}</span>` : ''}</div>`; return; }
+      if (!r.ok) { body.innerHTML = `<div class="empty" style="color:var(--danger)">⚠️ ${esc(r.error || 'فشل')}</div>`; return; }
+      body.innerHTML = `<p style="text-align:center">افتح واتساب على موبايل الرقم <b dir="ltr">${esc(localPhone(a.phone))}</b> ← الأجهزة المرتبطة ← ربط جهاز، وامسح الكود:</p>
+        ${r.qr ? `<img class="qrimg" src="${esc(r.qr)}">` : ''}${r.pairing ? `<p style="text-align:center">أو كود الربط: <b style="font-size:22px;letter-spacing:3px">${esc(r.pairing)}</b></p>` : ''}<p class="muted" style="text-align:center;font-size:12px">الكود بيتجدد تلقائي…</p>`;
+      if (!DEMO) setTimeout(() => !stop && document.body.contains(m) && run(), 15000);
+    } catch (e) { body.innerHTML = `<div class="empty" style="color:var(--danger)">⚠️ ${esc(e.message)}</div>`; }
+  };
+  run();
+}
+function listEditor(el, title, hint, key, fields, render) {
+  const arr = S.config[key] = S.config[key] || [];
+  el.innerHTML = `<p class="muted" style="margin-top:0">${hint}</p><div id="le"></div><div class="row"><button class="btn ghost" id="leadd">+ إضافة</button><span class="grow"></span><button class="btn" id="lesave">حفظ</button></div>`;
+  const draw = () => {
+    $('#le', el).innerHTML = arr.map((it, i) => `<div class="lrow" data-i="${i}">${fields.map(f => f.type === 'select' ? `<select data-k="${f.k}" style="width:${f.w || 'auto'}">${f.opts.map(([v, t]) => `<option value="${v}" ${it[f.k] === v ? 'selected' : ''}>${t}</option>`).join('')}</select>`
+      : f.type === 'textarea' ? `<textarea data-k="${f.k}" rows="2" placeholder="${esc(f.ph || '')}" style="flex:1">${esc(it[f.k] || '')}</textarea>`
+      : `<input dir="auto" data-k="${f.k}" ${f.type ? `type="${f.type}"` : ''} value="${esc(it[f.k] || '')}" placeholder="${esc(f.ph || '')}" style="width:${f.w || 'auto'};${f.type === 'color' ? 'height:42px;padding:4px' : ''}${f.flex ? ';flex:1' : ''}">`).join('')}
+      <button class="ibtn" data-up title="لفوق">▲</button><button class="ibtn" data-rm title="حذف" style="color:var(--danger)">${ICON.close}</button></div>`).join('') || '<div class="muted" style="margin-bottom:10px">فاضي</div>';
+    $$('.lrow', el).forEach(r => { const i = +r.dataset.i;
+      $$('[data-k]', r).forEach(inp => inp.oninput = inp.onchange = () => arr[i][inp.dataset.k] = inp.value);
+      $('[data-rm]', r).onclick = () => { arr.splice(i, 1); draw(); };
+      $('[data-up]', r).onclick = () => { if (i) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; draw(); } }; });
+  };
+  draw();
+  $('#leadd', el).onclick = () => { arr.push(Object.fromEntries(fields.map(f => [f.k, f.def || '']))); draw(); };
+  $('#lesave', el).onclick = async () => { try { S.config = await API.saveConfig(S.config); renderFilters(); renderList(); if (S.profile && !$('#prof').classList.contains('hidden')) openProfile(); toast('اتحفظ ✅'); } catch (e) { toast(e.message); } };
+}
+function setQuick(el) { listEditor(el, '', 'الرد بيتكتب بسرعة بـ <b>/</b> + الاختصار. تقدر تستخدم: <code>{name}</code> اسم العميل، <code>{phone}</code>، <code>{brand}</code> براند الرقم، <code>{site}</code>، <code>{date}</code>، <code>{tomorrow}</code>، <code>{me}</code>.', 'quick_replies',
+  [{k: 'key', ph: 'الاختصار', w: '130px'}, {k: 'text', type: 'textarea', ph: 'نص الرد'}]); }
+function setLabels(el) { listEditor(el, '', 'التصنيفات بتظهر كفلاتر فوق القائمة وعلى كل محادثة.', 'labels', [{k: 'name', ph: 'اسم التصنيف', flex: 1}, {k: 'color', type: 'color', w: '70px', def: '#25d366'}]); }
+function setActions(el) { listEditor(el, '', 'دي أزرار «الخدمات» اللي في بروفايل العميل — ضيف أي خدمة تحبها:<br>• <b>رسالة</b>: يكتب نص جاهز (فيه متغيرات)<br>• <b>رابط</b>: يفتح صفحة (مثلاً غرفة العمليات بالرقم <code>{phone}</code>)<br>• <b>نظام</b>: يبعت بيانات العميل لرابط webhook (n8n، الـdesk، أي نظام) — أو يسيبه فاضي ويستقبله أي إضافة على الموقع عن طريق <code>mwc_action</code>.', 'actions',
+  [{k: 'icon', ph: '⚡', w: '56px'}, {k: 'label', ph: 'اسم الزر', w: '170px'}, {k: 'type', type: 'select', opts: [['message', 'رسالة'], ['link', 'رابط'], ['webhook', 'نظام']], def: 'message'}, {k: 'payload', ph: 'النص أو الرابط', flex: 1}]); }
+function setVars(el) {
+  const v = S.config.vars = S.config.vars || {}; const st = S.config.staff = S.config.staff || [];
+  el.innerHTML = `<p class="muted" style="margin-top:0">متغيرات عامة بتتحط في الردود والأزرار. البراند لكل رقم بيتحدد من إعدادات الرقم نفسه.</p><div id="vv"></div><button class="btn ghost" id="vadd">+ متغير</button>
+    <h4>الفريق (للإسناد)</h4><textarea id="vst" rows="3" placeholder="اسم في كل سطر">${esc(st.join('\n'))}</textarea><p><button class="btn" id="vsave">حفظ</button></p>`;
+  const draw = () => { $('#vv', el).innerHTML = Object.entries(v).map(([k, val]) => `<div class="lrow"><input value="${esc(k)}" data-old="${esc(k)}" class="vk" style="width:140px" dir="ltr"><input value="${esc(val)}" data-k="${esc(k)}" class="vval" style="flex:1"></div>`).join(''); };
+  draw(); $('#vadd', el).onclick = () => { v['var' + (Object.keys(v).length + 1)] = ''; draw(); };
+  $('#vsave', el).onclick = async () => { const nv = {}; $$('.lrow', $('#vv', el)).forEach(r => { const k = $('.vk', r).value.trim().replace(/\W/g, ''); if (k) nv[k] = $('.vval', r).value; }); S.config.vars = nv;
+    S.config.staff = $('#vst', el).value.split('\n').map(s => s.trim()).filter(Boolean); try { S.config = await API.saveConfig(S.config); toast('اتحفظ ✅'); } catch (e) { toast(e.message); } };
+}
+
+/* keyboard shortcuts */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if ($('.modal')) return; if (!$('#prof').classList.contains('hidden')) return $('#prof').classList.add('hidden'); if (S.curChat && innerWidth <= 760) closeChat(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); $('#q').focus(); }
+});
+window.addEventListener('popstate', () => { if (S.curChat && innerWidth <= 760) closeChat(); });
+document.addEventListener('click', () => { try { ac(); } catch (e) {} }, {once: true});
+
+boot();
+</script>
+</body>
+</html>
