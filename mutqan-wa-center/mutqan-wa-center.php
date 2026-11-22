@@ -2,7 +2,7 @@
 /**
  * Plugin Name: مركز الواتساب — Mutqan WA Center
  * Description: صندوق محادثات واتساب موحّد لكل أرقام أكسجين/متقن (Meta الرسمي + أرقام QR على السيرفر عبر Evolution API) — صوت، ريكورد، صور، فيديو، ملفات، بروفايل العميل، ردود جاهزة وأزرار خدمات قابلة للتعديل.
- * Version: 1.3.1
+ * Version: 1.4.0
  * Author: Oxygen / Mutqan
  * Text Domain: mutqan-wa-center
  * Requires PHP: 7.4
@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('MWC_VERSION', '1.3.1');
+define('MWC_VERSION', '1.4.0');
 define('MWC_DIR', plugin_dir_path(__FILE__));
 define('MWC_URL', plugin_dir_url(__FILE__));
 define('MWC_NS', 'mwc/v1');
@@ -66,6 +66,21 @@ add_action('rest_api_init', ['MWC_Rest2', 'routes']);
 add_action('admin_menu', ['MWC_Admin', 'menu']);
 add_action('admin_init', ['MWC_Admin', 'register']);
 
+/**
+ * توكن الدخول الموحّد لمدير الموقع. بيتعمل مرة واحدة ويتخزن على المستخدم نفسه، وبيتجدد لما يقرب ينتهي —
+ * عشان كل فتحة للصفحة ما تعملش توكن جديد وتكبّر جدول التوكنات على الفاضي.
+ */
+function mwc_sso_token() {
+    $uid = get_current_user_id();
+    $tok = (string) get_user_meta($uid, 'mwc_sso_token', true);
+    // check_token بترجع null لو التوكن اتمسح أو خلصت مدته — ساعتها بس بنعمل واحد جديد
+    if ($tok !== '' && MWC_Store::check_token($tok)) { return $tok; }
+    $u = wp_get_current_user();
+    $tok = MWC_Store::new_token($u->display_name ?: 'المالك', 'owner');
+    update_user_meta($uid, 'mwc_sso_token', $tok);
+    return $tok;
+}
+
 /* التطبيق نفسه على  /wa-center/  (صفحة كاملة بدون قالب الموقع) */
 add_action('init', function () {
     add_rewrite_rule('^wa-center/?$', 'index.php?mwc_app=1', 'top');
@@ -91,7 +106,14 @@ add_action('template_redirect', function () {
     // MWC_VER: التطبيق المتثبّت على الموبايل بيفضل مفتوح أيام من غير ما يتقفل، فبيفضل شغّال بكود قديم بعد أي تحديث.
     // بيقارن الرقم ده باللي جايله من /poll ويحدّث نفسه لوحده (1.3) — عشان كده لازم يتحقن في الصفحة مش يتقرا من الـAPI بس.
     $boot = '<script>window.MWC_API=' . wp_json_encode(esc_url_raw(rest_url(MWC_NS)))
-        . ';window.MWC_VER=' . wp_json_encode(MWC_VERSION) . ';</script>';
+        . ';window.MWC_VER=' . wp_json_encode(MWC_VERSION);
+    // دخول موحّد: اللي داخل على الموقع كمدير أصلًا، يدخل المركز على طول من غير رقم سري تاني (1.4).
+    // ده مش تسهيل زيادة: مدير الموقع يقدر يغيّر الرقم السري نفسه من اللوحة، فالرقم ما كانش بيضيف أمان عليه —
+    // كان بيضيف خطوة بس، ولما ما يتحددش خالص (الحالة اللي كانت قايمة) بيقفل المركز على الكل.
+    if (function_exists('is_user_logged_in') && is_user_logged_in() && current_user_can('manage_options')) {
+        $boot .= ';window.MWC_SSO=' . wp_json_encode(mwc_sso_token());
+    }
+    $boot .= ';</script>';
     echo str_replace('<!--MWC_BOOT-->', $boot, $html);
     exit;
 });
