@@ -44,7 +44,9 @@ a{color:var(--blue)}
 .ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ===== layout ===== */
-#app{display:flex;height:100dvh;width:100%}
+/* زي واتساب ويب بالظبط: التطبيق له عرض أقصى ويقف في النص. من غير السطر ده، الشاشة العريضة (أو زوم
+   المتصفح لما يبقى طالع برّه) بتفرد القايمة والمحادثة على آخر الشاشة فتبان بعيدة ومتمطّطة. */
+#app{display:flex;height:100dvh;width:100%;max-width:1600px;margin:0 auto;position:relative}
 #rail{width:72px;background:var(--panel2);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:6px;border-left:1px solid var(--line);overflow-y:auto;flex:none}
 .racc{position:relative;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;cursor:pointer;flex:none;transition:.15s}
 .racc .av{width:44px;height:44px;font-size:13px;border:2px solid transparent;white-space:pre-line}
@@ -204,7 +206,7 @@ body.light .psec{border-bottom-color:var(--panel2)}
 .demo-ribbon{position:fixed;bottom:76px;left:8px;opacity:.85;pointer-events:none;background:var(--warn);color:#111;font-size:12px;font-weight:700;padding:3px 10px;border-radius:10px;z-index:90}
 
 /* ===== v1.1 views ===== */
-#view{position:fixed;inset:0 72px 0 0;background:var(--panel);z-index:15;display:flex;flex-direction:column;overflow:hidden}
+#view{position:absolute;inset:0 72px 0 0;background:var(--panel);z-index:15;display:flex;flex-direction:column;overflow:hidden}
 .vhead{min-height:60px;background:var(--panel2);display:flex;align-items:center;gap:8px;padding:8px 16px;flex:none;flex-wrap:wrap}
 .vhead h2{margin:0;font-size:18px;font-weight:600}
 .vbody{flex:1;overflow:auto;padding:16px}
