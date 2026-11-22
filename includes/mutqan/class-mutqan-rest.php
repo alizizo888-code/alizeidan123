@@ -698,6 +698,9 @@ final class Mutqan_Rest {
         if ($f['size'] > 6 * 1024 * 1024) { throw new Mutqan_Error('too_large', 'الحد الأقصى للملف 6 ميجابايت.', 413); }
         $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif', 'application/pdf' => 'pdf'];
         $mime = function_exists('finfo_open') ? finfo_file(finfo_open(FILEINFO_MIME_TYPE), $f['tmp_name']) : '';
+        // the team's voice notes from the field (owner order 2026-11-22) — staff only
+        if (Mutqan_Policy::is_staff($p)) { $allowed += ['audio/webm' => 'webm', 'video/webm' => 'webm', 'audio/ogg' => 'ogg', 'audio/mp4' => 'm4a', 'audio/x-m4a' => 'm4a', 'audio/mpeg' => 'mp3', 'audio/aac' => 'aac', 'video/mp4' => 'm4a'];
+            if (strpos((string) $mime, 'video/') === 0 && !preg_match('/\.(webm|m4a)$/i', (string) ($f['name'] ?? ''))) { unset($allowed[$mime]); } }
         if (!isset($allowed[$mime])) { throw new Mutqan_Error('bad_type', 'نوع الملف غير مدعوم (صور أو PDF فقط).', 415); }
         $up = wp_upload_dir();
         $dir = trailingslashit($up['basedir']) . 'mutqan/' . gmdate('Y/m');

@@ -24,6 +24,41 @@ final class Mutqan_Wallet {
 
     public static function boost($techId) { return max(-30, min(30, (int) (self::settings($techId)['scoreBoost'] ?? 0))); }
 
+    /** Jobs that came back under warranty on his work in the last 60 days: −5 each in dispatch, at most −20. */
+    public static function returns_count($techId, $orders) {
+        $by = []; foreach ((array) $orders as $o) { $by[(string) ($o['id'] ?? '')] = $o; }
+        $n = 0; $cut = time() - 60 * 86400;
+        foreach ((array) $orders as $o) {
+            $b = (string) ($o['warrantyOf'] ?? ($o['returnOf'] ?? ''));
+            if ($b === '' || !isset($by[$b]) || ($by[$b]['technicianId'] ?? '') !== $techId) { continue; }
+            if (strtotime((string) ($o['createdAt'] ?? '')) >= $cut) { $n++; }
+        }
+        return $n;
+    }
+    public static function returns_drag($techId, $orders) { return min(20, 5 * self::returns_count($techId, $orders)); }
+
+    /** Commission mode: what he holds for the company (custody().balance). */
+    public static function owes($techId, $orders, $share, $cashShare = 0) {
+        $w = self::settings($techId);
+        $sp = (float) ($w['sharePct'] ?? 0); if ($sp <= 0 || $sp > 100) { $sp = (float) $share; }
+        $cs = 0; foreach ([(float) ($w['cashSharePct'] ?? 0), (float) $cashShare] as $v) { if ($v > 0 && $v <= 100) { $cs = $v; break; } } if (!$cs) { $cs = $sp; }
+        $b = 0.0;
+        foreach ((array) $orders as $o) {
+            if (($o['technicianId'] ?? null) !== $techId || !in_array($o['status'] ?? '', ['completed', 'closed'], true) || !empty($o['inhouse']) || ($o['dispatch'] ?? '') === 'site' || !empty($o['noCommission'])) { continue; }
+            $a = class_exists('Mutqan_Ops') ? Mutqan_Ops::amount($o) : (float) ($o['price'] ?? 0);
+            $paid = ($o['paymentStatus'] ?? '') === 'paid'; $cash = $paid && preg_match('/cash|نقد/i', (string) ($o['paymentMethod'] ?? ''));
+            $b -= $a * (($cash || !$paid) ? $cs : $sp) / 100;
+            if ($cash) { $b += $a; }
+        }
+        if (self::$s === null) { self::$s = Mutqan_Store::select('settlements', [], ['limit' => 3000], self::sys()); }
+        foreach (self::$s as $s) {
+            if (($s['techId'] ?? null) !== $techId) { continue; }
+            $n = (float) ($s['amount'] ?? 0); $k = (string) ($s['kind'] ?? (($s['dir'] ?? '') === 'out' ? 'out' : 'in'));
+            if ($k === 'in') { $b -= $n; } elseif ($k === 'out' || $k === 'penalty') { $b += $n; } elseif ($k === 'bonus' || $k === 'adjust') { $b -= $n; }
+        }
+        return $b;
+    }
+
     /** Prepaid credit, same sum as custody().credit. */
     public static function credit($techId, $orders, $share, $cashShare = 0) {
         $w = self::settings($techId);
@@ -56,8 +91,11 @@ final class Mutqan_Wallet {
         if ($id === '') { return ''; }
         $w = self::settings($id);
         if (!empty($w['frozen'])) { return 'frozen'; }
+        $r = Mutqan_Store::select('tech_pay', [], ['limit' => 1], self::sys());
+        // commission mode: too much company cash in his pocket → hand it in first
+        $cap = (float) ($w['cashCap'] ?? 0); if ($cap <= 0) { $cap = (float) ($r[0]['cashCap'] ?? 0); }
+        if (($w['mode'] ?? '') !== 'prepaid' && $cap > 0 && $orders && self::owes($id, $orders, (float) ($r[0]['sharePct'] ?? 0), (float) ($r[0]['cashSharePct'] ?? 0)) > $cap) { return 'cash_cap'; }
         if (($w['mode'] ?? '') === 'prepaid') {
-            $r = Mutqan_Store::select('tech_pay', [], ['limit' => 1], self::sys());
             $c = self::credit($id, $orders, (float) ($r[0]['sharePct'] ?? 0), (float) ($r[0]['cashSharePct'] ?? 0));
             if ($c !== null && $c < (float) ($w['minBalance'] ?? 0)) { return 'low_credit'; }
         }

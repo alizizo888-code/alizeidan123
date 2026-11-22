@@ -197,7 +197,7 @@ final class Mutqan_Dispatch {
         $s = $distS * $w['dist'] + $presS * $w['pres'] + $freeS * $w['free'] + $specS * $w['spec'] + $workS * $w['work'] + $scopeS * $w['scope'] + $qualS * $w['qual'] + $prodS * $w['prod'];
         if ($pres === 'offline') { $s *= 0.7; }
         // the owner's own push for a technician (−30 … +30), on top of rating and efficiency
-        $boost = class_exists('Mutqan_Wallet') ? Mutqan_Wallet::boost((string) ($t['userId'] ?? '')) : 0;
+        $boost = class_exists('Mutqan_Wallet') ? Mutqan_Wallet::boost((string) ($t['userId'] ?? '')) - Mutqan_Wallet::returns_drag((string) ($t['userId'] ?? ''), $orders) : 0;
         return max(0, (int) round($s * 100) + $boost);
     }
 

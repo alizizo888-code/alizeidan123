@@ -17,7 +17,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 final class Mutqan_Fieldops {
-    const KINDS = ['job' => '🆕 طلب جديد من الميدان', 'appt' => '📅 موعد', 'warn' => '⚠️ تحذير طريق', 'pin' => '📍 دبوس على الخريطة', 'note' => '📝 ملاحظة / تعليمات', 'remind' => '⏰ تذكير'];
+    const KINDS = ['job' => '🆕 طلب جديد من الميدان', 'appt' => '📅 موعد', 'warn' => '⚠️ تحذير طريق', 'pin' => '📍 دبوس على الخريطة', 'note' => '📝 ملاحظة / تعليمات', 'remind' => '⏰ تذكير', 'voice' => '🎙️ رسالة صوتية'];
     const DECLINE = ['busy' => 'مشغول في طلب تاني', 'far' => 'المسافة بعيدة', 'skill' => 'خارج تخصصي', 'tools' => 'ناقصني عدة / قطع', 'personal' => 'ظرف شخصي', 'other' => 'سبب تاني'];
 
     private static function sys() { return ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user']; }
@@ -38,6 +38,8 @@ final class Mutqan_Fieldops {
             case 'decline': Mutqan_Limiter::hit('field_decline', 30, 3600); return self::decline($in, $p);
             case 'declineReasons': return self::DECLINE;
             case 'payout': Mutqan_Limiter::hit('field_payout', 6, 86400); return self::payout($in, $p);
+            case 'objection': Mutqan_Limiter::hit('field_obj', 20, 86400); return self::objection($in, $p);
+            case 'topup': Mutqan_Limiter::hit('field_topup', 10, 86400); return self::topup($in, $p);
             case 'invoice': Mutqan_Limiter::hit('field_invoice', 30, 3600); return self::invoice($in, $p);
         }
         return null;
@@ -49,7 +51,7 @@ final class Mutqan_Fieldops {
         $kind = (string) ($in['kind'] ?? 'note');
         if (!isset(self::KINDS[$kind])) { throw new Mutqan_Error('bad_input', 'نوع غير معروف.', 400); }
         $text = trim(mb_substr((string) ($in['text'] ?? ''), 0, 1200));
-        if ($text === '' && $kind !== 'pin') { throw new Mutqan_Error('bad_input', 'اكتب التفاصيل.', 400); }
+        if ($text === '' && !in_array($kind, ['pin', 'voice'], true)) { throw new Mutqan_Error('bad_input', 'اكتب التفاصيل.', 400); }
         $to = (string) ($in['to'] ?? 'ops');
         if (!in_array($to, ['self', 'ops', 'all'], true) && strpos($to, 'u:') !== 0) { $to = 'ops'; }
         $photos = array_values(array_filter(array_map(function ($u) { $u = esc_url_raw((string) $u); return $u !== '' ? $u : null; }, array_slice((array) ($in['photos'] ?? []), 0, 6))));
@@ -59,6 +61,7 @@ final class Mutqan_Fieldops {
             'lat' => is_numeric($in['lat'] ?? null) ? (float) $in['lat'] : null, 'lng' => is_numeric($in['lng'] ?? null) ? (float) $in['lng'] : null,
             'place' => mb_substr((string) ($in['place'] ?? ''), 0, 200), 'clientName' => mb_substr((string) ($in['clientName'] ?? ''), 0, 80),
             'clientPhone' => mb_substr(preg_replace('/[^\d+]/', '', (string) ($in['clientPhone'] ?? '')), 0, 20), 'specialtyId' => mb_substr((string) ($in['specialtyId'] ?? ''), 0, 40),
+            'audio' => esc_url_raw((string) ($in['audio'] ?? '')), 'radiusKm' => max(0, min(50, (float) ($in['radiusKm'] ?? 0))),
             'at' => $at, 'rung' => false, 'byId' => self::me($p), 'byName' => self::name($p), 'byRole' => (string) ($p['role'] ?? ''),
             'orderId' => mb_substr((string) ($in['orderId'] ?? ''), 0, 64), 'createdAt' => gmdate('c'), 'acks' => [], 'status' => 'open',
         ];
@@ -72,13 +75,27 @@ final class Mutqan_Fieldops {
     private static function audience($doc) {
         $to = (string) $doc['to'];
         if ($to === 'self') { return [['user' => $doc['byId']]]; }
-        if ($to === 'all') { return [['role' => 'technician'], ['role' => 'operations'], ['role' => 'owner']]; }
+        if ($to === 'all') {
+            // a road warning with a place goes to the technicians within its radius (default 5 km), not the whole team
+            if (($doc['kind'] ?? '') === 'warn' && isset($doc['lat']) && $doc['lat'] !== null) {
+                $r = (float) ($doc['radiusKm'] ?? 0) ?: 5.0; $out = [['role' => 'operations']];
+                foreach (Mutqan_Store::select('tech_profiles', [], ['limit' => 300], self::sys()) as $t) {
+                    $la = $t['lat'] ?? ($t['homeLat'] ?? null); $ln = $t['lng'] ?? ($t['homeLng'] ?? null);
+                    if ($la === null || ($t['userId'] ?? '') === $doc['byId']) { continue; }
+                    if (self::km((float) $doc['lat'], (float) $doc['lng'], (float) $la, (float) $ln) <= $r) { $out[] = ['user' => (string) $t['userId']]; }
+                }
+                return $out;
+            }
+            return [['role' => 'technician'], ['role' => 'operations'], ['role' => 'owner']];
+        }
         if (strpos($to, 'u:') === 0) { return [['user' => substr($to, 2)], ['role' => 'operations']]; }
         return [['role' => 'operations'], ['role' => 'owner']];
     }
 
+    private static function km($a, $b, $c, $d) { $r = 6371; $x = deg2rad($c - $a); $y = deg2rad($d - $b); $h = sin($x / 2) ** 2 + cos(deg2rad($a)) * cos(deg2rad($c)) * sin($y / 2) ** 2; return 2 * $r * asin(min(1, sqrt($h))); }
+
     private static function announce($doc) {
-        $title = self::KINDS[$doc['kind']] . ' — ' . $doc['byName'];
+        $title = (self::KINDS[$doc['kind']] ?? '📣') . ' — ' . $doc['byName'];
         $body = $doc['text'] . ($doc['at'] ? "\n🕒 " . wp_date('D H:i', strtotime($doc['at'])) : '') . ($doc['place'] ? "\n📍 " . $doc['place'] : '');
         foreach (self::audience($doc) as $t) { if (($t['user'] ?? '') !== $doc['byId'] || $doc['to'] === 'self') { self::push($t, $title, $body); } }
         if (in_array($doc['kind'], ['job', 'warn'], true) && $doc['to'] !== 'self' && class_exists('Mutqan_Rest')) {
@@ -98,6 +115,57 @@ final class Mutqan_Fieldops {
                 self::announce($d);
             }
         } catch (Throwable $e) { error_log('[mutqan] fieldops tick ' . $e->getMessage()); }
+        try { self::weekly(); self::monthly(); } catch (Throwable $e) { error_log('[mutqan] fieldops reports ' . $e->getMessage()); }
+    }
+
+    /** Saturday morning (Makkah): last week per technician — declines, failed visits, radar takes, payout asks, late. */
+    private static function weekly() {
+        $tz = new DateTimeZone('Asia/Riyadh'); $now = new DateTime('now', $tz);
+        $key = $now->format('o-W');
+        if ((int) $now->format('N') !== 6 || (int) $now->format('G') < 9 || get_option('mutqan_tech_weekly') === $key) { return; }
+        update_option('mutqan_tech_weekly', $key, false);
+        $since = time() - 7 * 86400; $by = [];
+        $row = function ($id, $name) use (&$by) { if (!isset($by[$id])) { $by[$id] = ['name' => $name ?: 'فني', 'done' => 0, 'decl' => 0, 'abort' => 0, 'radar' => 0, 'late' => 0, 'rate' => [], 'cash' => 0]; } return $id; };
+        foreach (Mutqan_Store::select('orders', [], ['limit' => 1500, 'order' => '-createdAt'], self::sys()) as $o) {
+            foreach ((array) ($o['declines'] ?? []) as $d) { if (strtotime((string) $d['at']) >= $since) { $by[$row($d['techId'], $d['techName'] ?? '')]['decl']++; } }
+            foreach ((array) ($o['techAborts'] ?? []) as $d) { if (strtotime((string) ($d['at'] ?? '')) >= $since && !empty($d['techId'])) { $by[$row($d['techId'], $d['techName'] ?? '')]['abort']++; } }
+            $tid = (string) ($o['technicianId'] ?? ''); if ($tid === '') { continue; }
+            $t = strtotime((string) ($o['completedAt'] ?? ($o['updatedAt'] ?? '')));
+            if (in_array($o['status'] ?? '', ['completed', 'closed'], true) && $t >= $since) {
+                $k = $row($tid, $o['technicianName'] ?? ''); $by[$k]['done']++;
+                $st = class_exists('Mutqan_Dispatch') ? Mutqan_Dispatch::stars($o) : 0; if ($st) { $by[$k]['rate'][] = $st; }
+                if (preg_match('/cash|نقد/i', (string) ($o['paymentMethod'] ?? ''))) { $by[$k]['cash']++; }
+                if (!empty($o['appointmentAt']) && !empty($o['arrivedAt']) && strtotime($o['arrivedAt']) - strtotime($o['appointmentAt']) > 3600) { $by[$k]['late']++; }
+            }
+            if (($o['claimedBy'] ?? '') === $tid && strtotime((string) ($o['acceptedAt'] ?? '')) >= $since) { $by[$row($tid, $o['technicianName'] ?? '')]['radar']++; }
+        }
+        $pay = 0; foreach (Mutqan_Store::select('payout_requests', [], ['limit' => 200], self::sys()) as $r) { if (strtotime((string) ($r['createdAt'] ?? '')) >= $since) { $pay++; } }
+        if (!$by && !$pay) { return; }
+        uasort($by, function ($a, $b) { return $b['done'] <=> $a['done']; });
+        $L = ['📊 تقرير الفنيين — آخر 7 أيام'];
+        foreach (array_slice($by, 0, 15, true) as $r) {
+            $avg = $r['rate'] ? round(array_sum($r['rate']) / count($r['rate']), 1) : '-';
+            $L[] = '• ' . $r['name'] . ': ' . $r['done'] . ' مكتمل · ⭐' . $avg . ($r['decl'] ? ' · اعتذر ' . $r['decl'] : '') . ($r['abort'] ? ' · فشل ' . $r['abort'] : '') . ($r['late'] ? ' · تأخر ' . $r['late'] : '') . ($r['radar'] ? ' · رادار ' . $r['radar'] : '') . ($r['cash'] ? ' · كاش ' . $r['cash'] : '');
+        }
+        if ($pay) { $L[] = '💸 طلبات تحويل مستحقات: ' . $pay; }
+        $txt = implode("\n", $L);
+        Mutqan_Rest::admin_alert('📊 تقرير الفنيين الأسبوعي', $txt, '#/staff/accounts', 'tech_weekly', 'normal');
+        Mutqan_Store::insert('field_posts', ['kind' => 'note', 'text' => $txt, 'to' => 'ops', 'photos' => [], 'lat' => null, 'lng' => null, 'place' => '', 'clientName' => '', 'clientPhone' => '', 'specialtyId' => '', 'audio' => '', 'radiusKm' => 0, 'at' => '', 'rung' => true, 'byId' => 'system', 'byName' => 'النظام', 'byRole' => 'system', 'orderId' => '', 'createdAt' => gmdate('c'), 'acks' => [], 'status' => 'open'], null, ['expiresAt' => gmdate('c', time() + 14 * 86400)], self::sys());
+    }
+
+    /** First of the month: each technician gets his statement link on WhatsApp (the page prints to PDF). */
+    private static function monthly() {
+        $tz = new DateTimeZone('Asia/Riyadh'); $now = new DateTime('now', $tz);
+        $key = $now->format('Y-m');
+        if ((int) $now->format('j') !== 1 || (int) $now->format('G') < 10 || get_option('mutqan_tech_monthly') === $key) { return; }
+        update_option('mutqan_tech_monthly', $key, false);
+        if (!class_exists('Mutqan_WA')) { return; }
+        $prev = (clone $now)->modify('-1 month')->format('Y-m');
+        $base = 'https://desk.oxygen11.com/t/#/staff/statement?month=' . $prev;
+        foreach (Mutqan_Store::select('tech_profiles', [], ['limit' => 300], self::sys()) as $t) {
+            $ph = (string) ($t['phone'] ?? ''); if ($ph === '' || !empty($t['isSite']) || (($t['active'] ?? true) === false)) { continue; }
+            try { $acct = Mutqan_WA::open_account(); if ($acct === '') { continue; } Mutqan_WA::send($acct, $ph, "📄 كشف حسابك لشهر {$prev} جاهز\nافتحه من التطبيق واحفظه PDF:\n{$base}", 'statement', 'system'); } catch (Throwable $e) { error_log('[mutqan] statement wa ' . $e->getMessage()); }
+        }
     }
 
     private static function visible($d, $p) {
@@ -171,8 +239,9 @@ final class Mutqan_Fieldops {
         if (!in_array($st, ['new', 'pending', 'forced', 'assigned'], true)) { throw new Mutqan_Error('bad_state', 'الطلب اتاخد أو اتقفل.', 409); }
         if (in_array($me, array_map('strval', (array) ($o['abortedTechIds'] ?? [])), true)) { throw new Mutqan_Error('forbidden', 'الطلب ده اتسحب منك قبل كده — العمليات بس تقدر ترجعه لك.', 403); }
         $prof = Mutqan_Store::get_raw('tech_profiles', $me) ?: ['userId' => $me, 'displayName' => self::name($p)];
-        if (class_exists('Mutqan_Wallet') && ($why = Mutqan_Wallet::blocked($prof, [])) !== '') {
-            throw new Mutqan_Error('blocked', $why === 'frozen' ? 'حسابك موقوف عن استلام الطلبات — كلّم الإدارة.' : 'رصيدك أقل من الحد — اشحن الأول.', 403);
+        if (class_exists('Mutqan_Wallet') && ($why = Mutqan_Wallet::blocked($prof, Mutqan_Store::select('orders', [], ['limit' => 1500, 'order' => '-createdAt'], self::sys()))) !== '') {
+            $msg = ['frozen' => 'حسابك موقوف عن استلام الطلبات — كلّم الإدارة.', 'cash_cap' => 'معاك نقدية للشركة فوق الحد المسموح — سلّمها الأول عشان تستلم طلبات.', 'low_credit' => 'رصيدك أقل من الحد — اشحن الأول.'];
+            throw new Mutqan_Error('blocked', $msg[$why] ?? 'مش متاح تاخد طلبات دلوقتي.', 403);
         }
         $cur = (string) ($o['technicianId'] ?? '');
         $num = substr((string) $o['id'], -5);
@@ -224,12 +293,35 @@ final class Mutqan_Fieldops {
         if ($amt <= 0) { throw new Mutqan_Error('bad_input', 'اكتب المبلغ.', 400); }
         $me = self::me($p);
         foreach (Mutqan_Store::select('payout_requests', ['techId' => $me, 'status' => 'pending'], ['limit' => 5], self::sys()) as $x) {
+            if (($x['type'] ?? 'payout') !== 'payout') { continue; }
             throw new Mutqan_Error('pending', 'عندك طلب تحويل لسه تحت التنفيذ (' . (float) ($x['amount'] ?? 0) . ' ر.س).', 409);
         }
         $sum = array_map(function ($v) { return is_numeric($v) ? round((float) $v, 2) : $v; }, array_intersect_key((array) ($in['sum'] ?? []), array_flip(['mode', 'jobs', 'sales', 'commission', 'cash', 'balance', 'credit', 'due'])));
         $row = Mutqan_Store::insert('payout_requests', ['techId' => $me, 'techName' => self::name($p), 'amount' => $amt, 'sum' => $sum, 'note' => mb_substr((string) ($in['note'] ?? ''), 0, 300), 'status' => 'pending', 'createdAt' => gmdate('c')], null, [], self::sys());
         Mutqan_Rest::admin_alert('💸 فني بيطلب تحويل مستحقاته', self::name($p) . ' طالب ' . $amt . ' ر.س — افتح الحسابات ← إدارة الفني.', '#/staff/accounts', 'payout_request', 'high');
         return ['ok' => true, 'id' => $row['id'] ?? null, 'eta' => 'خلال 24 ساعة عمل'];
+    }
+
+    /** He disagrees with a deduction — within 48 hours of it; the owner decides (cancel = a reverse line). */
+    private static function objection($in, $p) {
+        $s = Mutqan_Store::get_raw('settlements', (string) ($in['id'] ?? ''));
+        if (!$s || ($s['techId'] ?? '') !== self::me($p) || ($s['kind'] ?? '') !== 'penalty') { throw new Mutqan_Error('not_found', 'الخصم مش موجود.', 404); }
+        if (time() - strtotime((string) ($s['at'] ?? '')) > 48 * 3600) { throw new Mutqan_Error('late', 'مدة الاعتراض (48 ساعة) خلصت — كلّم الإدارة.', 409); }
+        if (!empty($s['objection'])) { throw new Mutqan_Error('dup', 'اعتراضك متسجل بالفعل.', 409); }
+        $txt = trim(mb_substr((string) ($in['text'] ?? ''), 0, 500)); if ($txt === '') { throw new Mutqan_Error('bad_input', 'اكتب سبب اعتراضك.', 400); }
+        Mutqan_Store::update('settlements', $s['id'], ['objection' => ['text' => $txt, 'at' => gmdate('c'), 'status' => 'open']], self::sys());
+        Mutqan_Rest::admin_alert('✋ فني بيعترض على خصم', self::name($p) . ' — ' . (float) $s['amount'] . ' ر.س: ' . $txt, '#/staff/accounts', 'tech_objection', 'high');
+        return ['ok' => true];
+    }
+
+    /** Prepaid: he transferred money and uploads the receipt; the owner approves → credit. */
+    private static function topup($in, $p) {
+        if (!self::is_tech($p)) { throw new Mutqan_Error('forbidden', 'للفنيين.', 403); }
+        $amt = round((float) ($in['amount'] ?? 0), 2); $rc = esc_url_raw((string) ($in['receiptUrl'] ?? ''));
+        if ($amt <= 0 || $rc === '') { throw new Mutqan_Error('bad_input', 'اكتب المبلغ وارفع صورة الإيصال.', 400); }
+        Mutqan_Store::insert('payout_requests', ['techId' => self::me($p), 'techName' => self::name($p), 'type' => 'topup', 'amount' => $amt, 'receiptUrl' => $rc, 'note' => mb_substr((string) ($in['note'] ?? ''), 0, 300), 'status' => 'pending', 'createdAt' => gmdate('c')], null, [], self::sys());
+        Mutqan_Rest::admin_alert('💳 فني شحن رصيد', self::name($p) . ' حوّل ' . $amt . ' ر.س ورفع الإيصال — اعتمده من إدارة الفني.', '#/staff/accounts', 'tech_topup', 'high');
+        return ['ok' => true];
     }
 
     private static function invoice($in, $p) {
