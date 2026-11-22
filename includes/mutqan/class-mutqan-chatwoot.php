@@ -18,12 +18,13 @@ if (!defined('ABSPATH')) { exit; }
  * and what we posted there is remembered by its Chatwoot id so its webhook echo is ignored.
  *
  * Off until the owner gives the Chatwoot address, the account id and an access token. Nothing waits on Chatwoot: a
- * mirror that fails is logged and the WhatsApp side carries on.
+ * mirror that fails goes into a small queue and is retried every 5 minutes (3 tries), and the WhatsApp side carries on.
  */
 final class Mutqan_Chatwoot {
 
     const OPT = 'mutqan_chatwoot';
     const MAP = 'mutqan_chatwoot_map';      // acct => inbox_id ; "c:<tid>" => conversation id ; "k:<conv>" => tid
+    const Q = 'mutqan_chatwoot_queue';      // mirrors Chatwoot refused, waiting for the 5-minute retry
 
     private static function sys() { return ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user', 'name' => 'Chatwoot']; }
 
@@ -172,24 +173,62 @@ final class Mutqan_Chatwoot {
         if (!self::ready() || ($m['via'] ?? '') === 'chatwoot') { return false; }
         if (class_exists('Mutqan_WA') && Mutqan_WA::is_own_number($phone)) { return false; }   // our lines talking to each other are not customers
         $job = function () use ($acct, $phone, $tid, $m) {
-            try {
-                $conv = self::conversation_for($acct, $phone, $tid);
-                $text = trim((string) ($m['text'] ?? ''));
-                if (!empty($m['mediaUrl'])) { $text = trim($text . "\n" . (string) $m['mediaUrl']); }
-                if ($text === '') { $text = '[' . (string) ($m['kind'] ?? 'رسالة') . ']'; }
-                $in = ($m['dir'] ?? '') === 'in';
-                if (!$in) {
-                    // 'phone' (sent straight from the linked phone) shows no label now — owner asked for the
-                    // «📱 من الموبايل» tag to stop appearing on messages (2026-11-22).
-                    $who = ['bot' => '🤖 موظف الاستقبال', 'journey' => '🔗 حلقة الوصل', 'auto' => '⚙️ النظام', 'order' => '⚙️ النظام', 'phone' => '', 'staff' => '👤 ' . (string) ($m['by'] ?? 'الفريق')][$m['via'] ?? ''] ?? '';
-                    if ($who !== '') { $text = $who . "\n" . $text; }
-                }
-                self::post_message($conv, $text, $in ? 'incoming' : 'outgoing');
-                return true;
-            } catch (Throwable $e) { error_log('[mutqan] chatwoot mirror ' . $e->getMessage()); return false; }
+            if (!self::send_one($acct, $phone, $tid, $m)) { self::enqueue($acct, $phone, $tid, $m); }
+            return true;
         };
         if (function_exists('fastcgi_finish_request') && function_exists('add_action')) { add_action('shutdown', function () use ($job) { @fastcgi_finish_request(); $job(); }, 60); return true; }
         return $job();
+    }
+
+    /** One attempt at Chatwoot. true if it took the message, false if it was down, slow or rate-limiting. */
+    private static function send_one($acct, $phone, $tid, $m) {
+        try {
+            $conv = self::conversation_for($acct, $phone, $tid);
+            $text = trim((string) ($m['text'] ?? ''));
+            if (!empty($m['mediaUrl'])) { $text = trim($text . "\n" . (string) $m['mediaUrl']); }
+            if ($text === '') { $text = '[' . (string) ($m['kind'] ?? 'رسالة') . ']'; }
+            $in = ($m['dir'] ?? '') === 'in';
+            if (!$in) {
+                // 'phone' (sent straight from the linked phone) shows no label now — owner asked for the
+                // «📱 من الموبايل» tag to stop appearing on messages (2026-11-22).
+                $who = ['bot' => '🤖 موظف الاستقبال', 'journey' => '🔗 حلقة الوصل', 'auto' => '⚙️ النظام', 'order' => '⚙️ النظام', 'phone' => '', 'staff' => '👤 ' . (string) ($m['by'] ?? 'الفريق')][$m['via'] ?? ''] ?? '';
+                if ($who !== '') { $text = $who . "\n" . $text; }
+            }
+            self::post_message($conv, $text, $in ? 'incoming' : 'outgoing');
+            return true;
+        } catch (Throwable $e) { error_log('[mutqan] chatwoot mirror ' . $e->getMessage()); return false; }
+    }
+
+    /** A mirror Chatwoot refused waits here instead of being lost: one hiccup on their side used to drop the
+     *  message out of the team's inbox for good, with nothing but a line in the error log (2026-11-22). */
+    private static function enqueue($acct, $phone, $tid, $m) {
+        $q = get_option(self::Q, []);
+        if (!is_array($q)) { $q = []; }
+        $q[] = ['acct' => $acct, 'phone' => (string) $phone, 'tid' => $tid, 'm' => (array) $m, 'tries' => 1, 'at' => time()];
+        if (count($q) > 60) { $q = array_slice($q, -60); }   // إسعاف مش أرشيف: الأقدم يسقط بدل ما الصف يكبر بلا حدود
+        update_option(self::Q, $q, false);
+    }
+
+    /** Runs with «mutqan_remind» every 5 minutes: re-sends what Chatwoot refused, 3 tries at most. */
+    public static function drain() {
+        $q = get_option(self::Q, []);
+        if (!is_array($q) || !$q) { return ['sent' => 0, 'left' => 0]; }
+        if (!self::ready()) { return ['sent' => 0, 'left' => count($q)]; }
+        $sent = 0; $keep = []; $i = 0; $n = count($q);
+        for (; $i < $n; $i++) {
+            if ($sent >= 20) { break; }                      // الباقي في النبضة الجاية
+            $j = (array) $q[$i];
+            if (self::send_one($j['acct'] ?? 0, (string) ($j['phone'] ?? ''), $j['tid'] ?? 0, (array) ($j['m'] ?? []))) { $sent++; continue; }
+            // لسه مش راضي: مش هنكمل الصف كله عشان مانعلّقش الكرون دقايق على تايم آوت ورا تايم آوت
+            $j['tries'] = (int) ($j['tries'] ?? 1) + 1;
+            if ($j['tries'] <= 3) { $keep[] = $j; }
+            else { error_log('[mutqan] chatwoot mirror dropped after 3 tries: ' . (string) ($j['phone'] ?? '')); }
+            $i++;
+            break;
+        }
+        $keep = array_merge($keep, array_slice($q, $i));
+        update_option(self::Q, $keep, false);
+        return ['sent' => $sent, 'left' => count($keep)];
     }
 
     /* ------------------------------------------------------------------ Chatwoot → our line */
