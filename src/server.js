@@ -18,6 +18,20 @@ const DATA = path.resolve(process.env.DATA_DIR || './data')
 const OLD = process.env.OLD_DIR || ''                 // the old gateway's data: its linked numbers are carried over once
 const PAIR_TOKEN = process.env.PAIR_TOKEN || ''
 const DAILY_CAP = Number(process.env.SEND_DAILY_CAP || 300)
+// «مركز الواتساب» الجديد على الموقع (أرقام Evolution): رسايل عملائه بتيجي هنا للدماغ، والرد بيرجع يتبعت من نفس الرقم هناك.
+const CENTER_URL = (process.env.CENTER_URL || '').replace(/\/$/, '')
+const CENTER_KEY = process.env.CENTER_KEY || ''
+const isCenter = (line) => /^mwc:\d+$/.test(String(line || ''))
+async function centerSend(row) {
+  const account = isCenter(row.line) ? Number(String(row.line).slice(4)) : 0   // 0 = رقم المدير في المركز
+  const r = await fetch(CENTER_URL + '/ext/send', { method: 'POST', headers: { 'content-type': 'application/json', 'x-mwc-key': CENTER_KEY },
+    body: JSON.stringify({ account, phone: row.phone, text: row.text, image: row.media || '', force: ['room', 'tech', 'agent'].includes(row.purpose) ? 1 : 0 }), signal: AbortSignal.timeout(45000) })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error('center ' + r.status + ' ' + (j.message || ''))
+  if (j.skipped) return { skipped: j.skipped }
+  if (j.ok === false) throw new Error(j.error || 'center send failed')
+  return { waId: 'mwc' + (j.id || '') }
+}
 const EXPIRE_MS = 6 * 3600000                         // a message nobody could send within six hours is dropped, not sent late
 
 const store = openStore(path.join(DATA, 'hub.db'))
@@ -88,7 +102,25 @@ async function pump() {
   try {
     for (const row of store.nextOut(30)) {
       if (Date.now() - row.at > EXPIRE_MS) { store.outDone(row.id, 'expired', 'فات عليها أكتر من 6 ساعات'); continue }
-      const lineId = pickLine({ line: row.line, phone: row.phone, purpose: row.purpose, brand: meta.get(row.id)?.brand })
+      let lineId = isCenter(row.line) ? row.line : pickLine({ line: row.line, phone: row.phone, purpose: row.purpose, brand: meta.get(row.id)?.brand })
+      // مفيش خط هنا متصل (الأرقام اتنقلت للمركز): رسايل الفريق والعملاء بتطلع من رقم المدير في المركز
+      if (!lineId && CENTER_URL && CENTER_KEY && row.purpose !== 'outreach') lineId = 'mwc:0'
+      if (isCenter(lineId)) {
+        if (!CENTER_URL || !CENTER_KEY || busy.has(lineId)) continue
+        busy.add(lineId)
+        centerSend({ ...row, line: lineId }).then((r) => {
+          store.outDone(row.id, r.skipped ? 'skipped' : 'sent', r.skipped || ''); meta.delete(row.id)
+          if (r.skipped) return
+          const pk = pkey(row.phone)
+          store.addMsg({ pk, line: lineId, dir: 'out', text: row.text, by: row.purpose || 'bot', status: 'sent', waId: r.waId })
+          const c = store.chat(pk)
+          store.touchChat(pk, { phone: row.phone, line: c?.line || lineId, lastAt: Date.now(), lastText: row.text.slice(0, 200), kind: c?.kind || (['room', 'tech', 'agent'].includes(row.purpose) ? 'team' : 'customer') })
+        }, (e) => {
+          if (row.tries >= 4) store.outDone(row.id, 'failed', e.message); else store.outRetry(row.id, e.message)
+          log('warn', 'center send ' + row.phone + ': ' + e.message)
+        }).finally(() => { busy.delete(lineId); setTimeout(pump, 300) })
+        continue
+      }
       if (!lineId || busy.has(lineId)) continue
       if (row.purpose === 'outreach') { if (!OR.due(lineId, outLast)) continue; outLast.set(lineId, { at: Date.now(), gap: OR.gapSec() }) }
       // The daily cap protects the line from a ban on mass sending to customers; the room and the technicians are ours.
@@ -309,6 +341,19 @@ const server = http.createServer(async (req, res) => {
       const r = await wp('ai_keys', { providers: b.providers || {} })
       store.set('wpAi', r); log('ai', 'مفاتيح الذكاء الاصطناعي وصلت من GitHub: ' + ((r && r.set) || []).join('، '))
       return json(res, 200, { set: r?.set || [], live: r?.live || [], claude: !!r?.claude })
+    }
+    // «مركز الواتساب» على الموقع: رسالة عميل (أو رد موظف) على رقم من أرقام المركز → الدماغ نفسه
+    if (route === 'POST /center/in') {
+      if (!CENTER_KEY || !safeEq(String(req.headers['x-mwc-key'] || ''), CENTER_KEY)) return json(res, 401, { error: 'bad key' })
+      const b = JSON.parse(await body(req) || '{}')
+      json(res, 200, { ok: true })
+      const line = 'mwc:' + Number(b.account || 0)
+      const pk = pkey(b.phone)
+      if (!pk) return
+      if (!b.fromMe) { const c0 = store.chat(pk); if (!c0 || c0.line !== line) store.touchChat(pk, { phone: intl(b.phone), line }) }
+      brain.inbound({ line, phone: String(b.phone), text: String(b.text || ''), kind: String(b.kind || 'text'), name: String(b.name || ''), fromMe: !!b.fromMe })
+        .catch((e) => log('error', 'center inbound: ' + (e?.message || e)))
+      return
     }
     // Chatwoot calls here when an agent answers in the app.
     if (route === 'POST /cw/hook') {
