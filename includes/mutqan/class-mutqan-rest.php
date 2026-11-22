@@ -660,7 +660,9 @@ final class Mutqan_Rest {
                 $mine = (isset($t['user']) && $t['user'] === $p['id'])
                     || (isset($t['role']) && $t['role'] === ($p['role'] ?? '#'))
                     || (!empty($t['admins']) && Mutqan_Policy::has_power($p, 'read'));
-                if ($mine) { $out[] = ['id' => $m['id'], 'title' => $m['title'] ?? '', 'body' => $m['body'] ?? '', 'url' => $m['url'] ?? '', 'sound' => $m['sound'] ?? null, 'priority' => $m['priority'] ?? 'normal', 'event' => $m['event'] ?? null, 'at' => $m['createdAt']]; }
+                if ($mine) { $out[] = ['id' => $m['id'], 'title' => $m['title'] ?? '', 'body' => $m['body'] ?? '', 'url' => $m['url'] ?? '', 'sound' => $m['sound'] ?? null, 'priority' => $m['priority'] ?? 'normal', 'event' => $m['event'] ?? null, 'at' => $m['createdAt'],
+                    // what the phone says out loud for it (Mutqan_Voice)
+                    'voice' => class_exists('Mutqan_Voice') ? Mutqan_Voice::key((string) ($m['event'] ?? ''), (string) ($m['title'] ?? ''), (string) ($m['body'] ?? '')) : null]; }
             }
             return ['items' => $out, 'now' => Mutqan_Store::iso(Mutqan_Store::now())];
         }
