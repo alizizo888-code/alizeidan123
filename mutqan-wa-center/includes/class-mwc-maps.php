@@ -205,10 +205,19 @@ class MWC_Maps {
         global $wpdb;
         $r = self::call('GET', '/api/v1/jobs/' . rawurlencode($j['ext_id']), null, 20);
         $b = $r['body'] ?? [];
-        $st = strtolower((string) ($b['status'] ?? ($b['Status'] ?? '')));
+        // بعض إصدارات الأداة بترد ملفوفة: {"data":{...}} — من غير السطر ده الحالة بتطلع فاضية والشغلانة
+        // تفضل «شغالة» للأبد وهي خلصت من زمان (اتشاف 2026-11-23: الأداة لقت 9 أماكن والمركز فضل مستني).
+        if (isset($b['data']) && is_array($b['data'])) { $b = $b['data']; }
+        $st = strtolower((string) ($b['status'] ?? ($b['Status'] ?? ($b['state'] ?? ''))));
         if ($r['code'] === 404) { $wpdb->update(MWC_Store::t('jobs'), ['status' => 'failed', 'error' => 'الشغلانة مش موجودة على أداة السحب'], ['id' => $j['id']]); return; }
         if (in_array($st, ['failed', 'error'], true)) { $wpdb->update(MWC_Store::t('jobs'), ['status' => 'failed', 'error' => 'أداة السحب فشلت', 'finished' => time()], ['id' => $j['id']]); return; }
-        if (!in_array($st, ['ok', 'done', 'completed', 'finished'], true)) return;
+        if (!in_array($st, ['ok', 'done', 'completed', 'finished', 'success'], true)) {
+            // حالة مش معروفة: نسجّلها في الشغلانة نفسها بدل ما نبلعها — عشان تبان في الشاشة ونعرف نصلحها
+            $seen = $st !== '' ? $st : ('رد ' . $r['code'] . ': ' . mb_substr(preg_replace('/\s+/', ' ', (string) ($r['raw'] ?? '')), 0, 90));
+            if ((string) $j['error'] !== 'حالة الأداة: ' . $seen) { $wpdb->update(MWC_Store::t('jobs'), ['error' => mb_substr('حالة الأداة: ' . $seen, 0, 250)], ['id' => $j['id']]); }
+            return;
+        }
+        $wpdb->update(MWC_Store::t('jobs'), ['error' => ''], ['id' => $j['id']]);
         $csv = self::call('GET', '/api/v1/jobs/' . rawurlencode($j['ext_id']) . '/download', null, 120);
         if ($csv['code'] !== 200) return;
         $rows = self::parse_csv((string) $csv['raw'], $j);
