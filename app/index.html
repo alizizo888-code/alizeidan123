@@ -2019,10 +2019,11 @@ async function loadPlan() {
       <span class="chip ${p.on ? 'on' : ''}">${p.on ? 'شغّال' : 'مقفول'}</span><span class="grow"></span>
       <button class="btn ghost" id="plRun">▶️ شغّل دلوقتي</button>
       <button class="btn ${p.on ? 'danger' : ''}" id="plTog">${p.on ? 'إيقاف' : 'تشغيل'}</button></div>
-    <p class="muted" style="font-size:12.5px;margin:8px 0">بيلم أرقام ${esc((p.trades || []).join('، '))} في ${esc((p.cities || []).join(' و'))} — حي ورا حي كل يوم، عشان خرائط جوجل بترجع عدد محدود للبحث الواحد. التغطية الكاملة ${p.total} بحث، بتخلص في حوالي <b>${p.cycle_days}</b> يوم وبعدين تلف من الأول تلقط الجديد.</p>
+    <p class="muted" style="font-size:12.5px;margin:8px 0">بيلم أرقام ${esc((p.trades || []).join('، '))} في ${esc((p.cities || []).join(' و'))} — حي ورا حي كل يوم، عشان خرائط جوجل بترجع عدد محدود للبحث الواحد. التغطية الكاملة ${p.total} بحث، بتخلص في حوالي <b>${p.cycle_days}</b> يوم وبعدين تلف من الأول تلقط الجديد. البحث بيمشي واحد ورا التاني (${p.max_running || 2} بالكتير مع بعض) عشان الأداة على السيرفر بتفتح متصفح والمعالج واحد.</p>
     <div class="lstats">
       ${cities.map(([c, v]) => `<div class="stat" style="--c:var(--accent)"><b>${(v.new || 0).toLocaleString('ar-EG')}</b><span>${esc(c)} — جديد النهاردة</span></div>`).join('')}
       <div class="stat" style="--c:var(--blue)"><b>${(p.today.found_today || 0).toLocaleString('ar-EG')}</b><span>مكان اتفحص النهاردة</span></div>
+      <div class="stat" style="--c:var(--warn)"><b>${p.started_today || 0} / ${p.per_day}</b><span>بحث اتشغّل النهاردة</span></div>
       <div class="stat" style="--c:var(--muted)"><b>${p.cursor} / ${p.total}</b><span>مكان الدور في التغطية</span></div>
     </div>
     <div class="grid3">
