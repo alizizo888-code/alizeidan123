@@ -38,7 +38,9 @@ class MWC_Store {
             about TEXT NULL,
             notes TEXT NULL,
             tags VARCHAR(500) NOT NULL DEFAULT '',
-            source VARCHAR(200) NOT NULL DEFAULT '',
+            source VARCHAR(255) NOT NULL DEFAULT '',
+            source_url VARCHAR(500) NOT NULL DEFAULT '',
+            bot VARCHAR(8) NOT NULL DEFAULT 'default',
             extra LONGTEXT NULL,
             created INT UNSIGNED NOT NULL DEFAULT 0,
             updated INT UNSIGNED NOT NULL DEFAULT 0,
@@ -91,10 +93,106 @@ class MWC_Store {
         dbDelta("CREATE TABLE " . self::t('tokens') . " (
             token CHAR(64) NOT NULL,
             user_label VARCHAR(80) NOT NULL DEFAULT '',
+            user_id VARCHAR(40) NOT NULL DEFAULT 'owner',
             expires INT UNSIGNED NOT NULL,
             PRIMARY KEY (token)
         ) $c;");
 
+        dbDelta("CREATE TABLE " . self::t('leads') . " (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            phone VARCHAR(40) NOT NULL,
+            name VARCHAR(200) NOT NULL DEFAULT '',
+            country VARCHAR(60) NOT NULL DEFAULT '',
+            city VARCHAR(80) NOT NULL DEFAULT '',
+            category VARCHAR(160) NOT NULL DEFAULT '',
+            kind VARCHAR(16) NOT NULL DEFAULT '',
+            source VARCHAR(200) NOT NULL DEFAULT '',
+            tags VARCHAR(500) NOT NULL DEFAULT '',
+            status VARCHAR(16) NOT NULL DEFAULT 'new',
+            notes TEXT NULL,
+            extra LONGTEXT NULL,
+            sent_count INT NOT NULL DEFAULT 0,
+            last_sent INT UNSIGNED NOT NULL DEFAULT 0,
+            created INT UNSIGNED NOT NULL DEFAULT 0,
+            updated INT UNSIGNED NOT NULL DEFAULT 0,
+            PRIMARY KEY (id),
+            UNIQUE KEY phone (phone),
+            KEY status (status),
+            KEY city (city)
+        ) $c;");
+
+        dbDelta("CREATE TABLE " . self::t('logs') . " (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            ts INT UNSIGNED NOT NULL DEFAULT 0,
+            who VARCHAR(80) NOT NULL DEFAULT '',
+            type VARCHAR(30) NOT NULL DEFAULT '',
+            text TEXT NULL,
+            PRIMARY KEY (id),
+            KEY ts (ts)
+        ) $c;");
+
+        dbDelta("CREATE TABLE " . self::t('campaigns') . " (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            name VARCHAR(160) NOT NULL DEFAULT '',
+            status VARCHAR(16) NOT NULL DEFAULT 'draft',
+            data LONGTEXT NULL,
+            total INT NOT NULL DEFAULT 0,
+            sent INT NOT NULL DEFAULT 0,
+            failed INT NOT NULL DEFAULT 0,
+            replied INT NOT NULL DEFAULT 0,
+            created_by VARCHAR(80) NOT NULL DEFAULT '',
+            created INT UNSIGNED NOT NULL DEFAULT 0,
+            started INT UNSIGNED NOT NULL DEFAULT 0,
+            finished INT UNSIGNED NOT NULL DEFAULT 0,
+            PRIMARY KEY (id)
+        ) $c;");
+
+        dbDelta("CREATE TABLE " . self::t('items') . " (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            campaign_id BIGINT UNSIGNED NOT NULL,
+            lead_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            phone VARCHAR(40) NOT NULL,
+            name VARCHAR(200) NOT NULL DEFAULT '',
+            account_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            status VARCHAR(16) NOT NULL DEFAULT 'queued',
+            error VARCHAR(255) NOT NULL DEFAULT '',
+            sent_at INT UNSIGNED NOT NULL DEFAULT 0,
+            PRIMARY KEY (id),
+            UNIQUE KEY camp_phone (campaign_id, phone),
+            KEY camp_status (campaign_id, status),
+            KEY phone (phone)
+        ) $c;");
+
+        dbDelta("CREATE TABLE " . self::t('jobs') . " (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            ext_id VARCHAR(80) NOT NULL DEFAULT '',
+            keywords TEXT NULL,
+            city VARCHAR(80) NOT NULL DEFAULT '',
+            category VARCHAR(160) NOT NULL DEFAULT '',
+            tags VARCHAR(255) NOT NULL DEFAULT '',
+            depth INT NOT NULL DEFAULT 5,
+            status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            found INT NOT NULL DEFAULT 0,
+            imported INT NOT NULL DEFAULT 0,
+            error VARCHAR(255) NOT NULL DEFAULT '',
+            created_by VARCHAR(80) NOT NULL DEFAULT '',
+            created INT UNSIGNED NOT NULL DEFAULT 0,
+            finished INT UNSIGNED NOT NULL DEFAULT 0,
+            PRIMARY KEY (id)
+        ) $c;");
+
+        dbDelta("CREATE TABLE " . self::t('push') . " (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id VARCHAR(40) NOT NULL DEFAULT 'owner',
+            endpoint VARCHAR(600) NOT NULL,
+            p256dh VARCHAR(200) NOT NULL,
+            auth VARCHAR(80) NOT NULL,
+            created INT UNSIGNED NOT NULL DEFAULT 0,
+            PRIMARY KEY (id),
+            KEY user_id (user_id)
+        ) $c;");
+
+        if (!get_option('mwc_tick_key')) update_option('mwc_tick_key', wp_generate_password(32, false), false);
         if (!get_option('mwc_config')) update_option('mwc_config', self::default_config(), false);
         if (!get_option('mwc_webhook_secret')) update_option('mwc_webhook_secret', wp_generate_password(32, false), false);
         if (!get_option('mwc_meta_verify')) update_option('mwc_meta_verify', wp_generate_password(24, false), false);
@@ -193,7 +291,7 @@ class MWC_Store {
             'branch' => sanitize_text_field($d['branch'] ?? ''),
             'color' => sanitize_hex_color($d['color'] ?? '#00a884') ?: '#00a884',
             'config' => wp_json_encode($cfg),
-            'active' => empty($d['active']) ? 0 : 1,
+            'active' => array_key_exists('active', $d) ? (empty($d['active']) ? 0 : 1) : 1,
             'sort' => (int) ($d['sort'] ?? 0),
         ];
         if ($id && $old) { $wpdb->update(self::t('accounts'), $row, ['id' => $id]); return $id; }
@@ -214,12 +312,13 @@ class MWC_Store {
         $t = self::t('contacts');
         $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $t WHERE wa_id=%s", $wa_id), ARRAY_A);
         $now = self::now();
-        $allowed = ['name', 'push_name', 'avatar', 'about', 'notes', 'tags', 'source'];
+        $allowed = ['name', 'push_name', 'avatar', 'about', 'notes', 'tags', 'source', 'source_url', 'bot'];
         $upd = [];
         foreach ($allowed as $k) if (isset($fields[$k]) && $fields[$k] !== '' && $fields[$k] !== null) $upd[$k] = $fields[$k];
         if ($row) {
             // الاسم اللي انت كاتبه بنفسك ما يتغيرش من الواتساب
             if (isset($upd['name']) && !empty($fields['_auto']) && $row['name'] !== '') unset($upd['name']);
+            if (isset($upd['source']) && !empty($fields['_keep_source']) && $row['source'] !== '') { unset($upd['source']); unset($upd['source_url']); }
             if ($upd) { $upd['updated'] = $now; $wpdb->update($t, $upd, ['id' => $row['id']]); }
             return (int) $row['id'];
         }
@@ -245,7 +344,7 @@ class MWC_Store {
     static function chat($id) {
         global $wpdb;
         return $wpdb->get_row($wpdb->prepare(
-            "SELECT c.*, k.wa_id, k.name, k.push_name, k.avatar, k.about, k.notes, k.tags, k.source
+            "SELECT c.*, k.wa_id, k.name, k.push_name, k.avatar, k.about, k.notes, k.tags, k.source, k.source_url, k.bot
              FROM " . self::t('chats') . " c JOIN " . self::t('contacts') . " k ON k.id=c.contact_id WHERE c.id=%d", $id), ARRAY_A);
     }
 
@@ -253,6 +352,7 @@ class MWC_Store {
         global $wpdb;
         $w = ['1=1']; $p = [];
         if (!empty($args['account'])) { $w[] = 'c.account_id=%d'; $p[] = (int) $args['account']; }
+        if (isset($args['allowed']) && is_array($args['allowed'])) $w[] = $args['allowed'] ? 'c.account_id IN (' . implode(',', array_map('intval', $args['allowed'])) . ')' : '0=1';
         if (!empty($args['since'])) { $w[] = 'c.changed>=%d'; $p[] = (int) $args['since']; }
         if (empty($args['archived']) && empty($args['since'])) $w[] = 'c.archived=0';
         if (!empty($args['q'])) {
@@ -261,7 +361,7 @@ class MWC_Store {
             array_push($p, $like, $like, $like, $like);
         }
         $limit = min(500, max(1, (int) ($args['limit'] ?? 200)));
-        $sql = "SELECT c.*, k.wa_id, k.name, k.push_name, k.avatar, k.tags, k.source
+        $sql = "SELECT c.*, k.wa_id, k.name, k.push_name, k.avatar, k.tags, k.source, k.source_url, k.bot
                 FROM " . self::t('chats') . " c JOIN " . self::t('contacts') . " k ON k.id=c.contact_id
                 WHERE " . implode(' AND ', $w) . " ORDER BY c.pinned DESC, c.last_ts DESC LIMIT $limit";
         return $wpdb->get_results($p ? $wpdb->prepare($sql, $p) : $sql, ARRAY_A);
@@ -375,16 +475,26 @@ class MWC_Store {
     }
 
     /* ---------- tokens ---------- */
-    static function new_token($label) {
+    static function new_token($label, $user_id = 'owner') {
         global $wpdb;
         $tok = bin2hex(random_bytes(32));
-        $wpdb->insert(self::t('tokens'), ['token' => $tok, 'user_label' => mb_substr($label, 0, 80), 'expires' => time() + 30 * DAY_IN_SECONDS]);
+        $wpdb->insert(self::t('tokens'), ['token' => $tok, 'user_label' => mb_substr($label ?: 'staff', 0, 80), 'user_id' => $user_id, 'expires' => time() + 60 * DAY_IN_SECONDS]);
         return $tok;
     }
 
+    /** @return array|null ['label'=>..,'user_id'=>..] */
     static function check_token($tok) {
         global $wpdb;
         if (!$tok || !preg_match('/^[a-f0-9]{64}$/', $tok)) return null;
-        return $wpdb->get_var($wpdb->prepare("SELECT user_label FROM " . self::t('tokens') . " WHERE token=%s AND expires>%d", $tok, time()));
+        $r = $wpdb->get_row($wpdb->prepare("SELECT user_label, user_id FROM " . self::t('tokens') . " WHERE token=%s AND expires>%d", $tok, time()), ARRAY_A);
+        return $r ? ['label' => $r['user_label'], 'user_id' => $r['user_id'] ?: 'owner'] : null;
     }
+
+    static function log($type, $text, $who = '') {
+        global $wpdb;
+        $wpdb->insert(self::t('logs'), ['ts' => time(), 'who' => mb_substr($who ?: (class_exists('MWC_Users') ? MWC_Users::name() : ''), 0, 80), 'type' => $type, 'text' => mb_substr($text, 0, 2000)]);
+    }
+
+    /** يوم/ساعة بتوقيت السعودية */
+    static function riyadh($fmt, $ts = null) { return (new DateTime('@' . ($ts ?? time())))->setTimezone(new DateTimeZone('Asia/Riyadh'))->format($fmt); }
 }

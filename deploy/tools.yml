@@ -1,0 +1,36 @@
+services:
+  maps:
+    image: gosom/google-maps-scraper:latest
+    restart: always
+    command: ["-data-folder", "/gmapsdata", "-c", "2"]
+    volumes:
+      - gmaps:/gmapsdata
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=n8n_default
+      - traefik.http.routers.gmaps.rule=Host(`maps.vps.oxygen11.com`)
+      - traefik.http.routers.gmaps.entrypoints=web,websecure
+      - traefik.http.routers.gmaps.tls=true
+      - traefik.http.routers.gmaps.tls.certresolver=mytlschallenge
+      - traefik.http.routers.gmaps.middlewares=gmapsauth
+      - traefik.http.middlewares.gmapsauth.basicauth.users=${MAPS_HTPASSWD}
+      - traefik.http.services.gmaps.loadbalancer.server.port=8080
+    networks: [edge]
+    mem_limit: 1100m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "2" }
+  ticker:
+    image: curlimages/curl:latest
+    restart: always
+    entrypoint: ["sh", "-c", "while true; do echo \"$$(date '+%H:%M') $$(curl -s -m 55 \"$$TICK_URL\" | head -c 300)\"; sleep 60; done"]
+    environment:
+      - TICK_URL=${TICK_URL}
+    mem_limit: 32m
+    logging:
+      driver: json-file
+      options: { max-size: "2m", max-file: "2" }
+volumes:
+  gmaps: {}
+networks:
+  edge: { external: true, name: n8n_default }

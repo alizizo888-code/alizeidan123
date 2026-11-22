@@ -47,7 +47,7 @@ a{color:var(--blue)}
 #app{display:flex;height:100dvh;width:100%}
 #rail{width:72px;background:var(--panel2);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:6px;border-left:1px solid var(--line);overflow-y:auto;flex:none}
 .racc{position:relative;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;cursor:pointer;flex:none;transition:.15s}
-.racc .av{width:44px;height:44px;font-size:13px;border:2px solid transparent}
+.racc .av{width:44px;height:44px;font-size:13px;border:2px solid transparent;white-space:pre-line}
 .racc.on .av{border-color:var(--accent);box-shadow:0 0 0 2px var(--panel2)}
 .racc .dot{position:absolute;bottom:4px;left:4px;width:12px;height:12px;border-radius:50%;border:2px solid var(--panel2);background:#8696a0}
 .dot.open{background:#25d366}.dot.connecting,.dot.qr{background:var(--warn)}.dot.close,.dot.error,.dot.not_configured{background:var(--danger)}
@@ -63,7 +63,7 @@ a{color:var(--blue)}
 .search input{background:none;border:0;padding:8px}
 .filters{display:flex;gap:6px;padding:2px 12px 8px;overflow-x:auto;scrollbar-width:none}
 #list{flex:1;overflow-y:auto}
-.citem{display:flex;gap:12px;align-items:center;padding:0 14px;height:72px;cursor:pointer;position:relative}
+.citem{display:flex;gap:12px;align-items:center;padding:0 14px;min-height:72px;cursor:pointer;position:relative}
 .citem:hover{background:var(--panel2)}
 .citem.on{background:var(--panel3)}
 .citem .body{flex:1;min-width:0;border-bottom:1px solid var(--line);height:100%;display:flex;flex-direction:column;justify-content:center;gap:2px}
@@ -203,6 +203,45 @@ body.light .psec{border-bottom-color:var(--panel2)}
 .drop{position:absolute;inset:0;background:#00a88433;border:3px dashed var(--accent);z-index:10;display:grid;place-items:center;font-size:20px;color:#fff;pointer-events:none}
 .demo-ribbon{position:fixed;bottom:76px;left:8px;opacity:.85;pointer-events:none;background:var(--warn);color:#111;font-size:12px;font-weight:700;padding:3px 10px;border-radius:10px;z-index:90}
 
+/* ===== v1.1 views ===== */
+#view{position:fixed;inset:0 72px 0 0;background:var(--panel);z-index:15;display:flex;flex-direction:column;overflow:hidden}
+.vhead{min-height:60px;background:var(--panel2);display:flex;align-items:center;gap:8px;padding:8px 16px;flex:none;flex-wrap:wrap}
+.vhead h2{margin:0;font-size:18px;font-weight:600}
+.vbody{flex:1;overflow:auto;padding:16px}
+.lstats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.stat{background:var(--panel2);border-radius:10px;padding:10px 16px;min-width:96px;display:flex;flex-direction:column;align-items:flex-start;border-top:3px solid var(--c)}
+.stat b{font-size:22px}.stat span{color:var(--muted);font-size:12.5px}
+.lfilters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.lfilters input,.lfilters select{width:auto;min-width:130px}
+.lbulk{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:rgba(0,168,132,.12);border-radius:10px;padding:8px 12px;margin-bottom:10px}
+.lbulk select,.lbulk input{width:auto}
+.tblwrap{overflow:auto;border-radius:10px;border:1px solid var(--line)}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{position:sticky;top:0;background:var(--panel2);text-align:right;padding:9px 10px;font-weight:600;white-space:nowrap;z-index:1}
+.tbl td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:middle}
+.tbl tbody tr:hover{background:var(--panel2);cursor:pointer}
+.tbl input[type=checkbox]{width:auto}
+.ph{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.nowrap{white-space:nowrap}
+.ibtn.sm{width:30px;height:30px;display:inline-grid}
+.ibtn.sm .ic{width:18px}
+.pager{display:flex;align-items:center;gap:10px;padding:10px 0}
+.btn[disabled]{opacity:.4;pointer-events:none}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.csec{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+.csec h4{margin:0 0 10px}
+.camp .bar{height:8px;background:var(--panel3);border-radius:4px;overflow:hidden;margin:10px 0}
+.camp .bar i{display:block;height:100%;background:var(--accent)}
+.logrow{display:flex;gap:10px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--line);font-size:13.5px}
+.srcbox{background:rgba(83,189,235,.12);border-right:4px solid var(--blue);border-radius:8px;padding:10px 12px;text-align:right;width:100%}
+.botsw{display:flex;gap:4px;background:var(--panel2);border-radius:20px;padding:3px}
+.botsw button{flex:1;padding:7px 10px;border-radius:16px;font-size:13px;color:var(--muted)}
+.botsw button.on{background:var(--accent);color:#111b21;font-weight:600}
+.botsw button.on.off{background:var(--danger);color:#fff}
+.pushbar{position:fixed;bottom:16px;right:50%;transform:translateX(50%);background:var(--panel2);box-shadow:var(--shadow);border-radius:12px;padding:10px 14px;display:flex;gap:10px;align-items:center;z-index:70;max-width:calc(100% - 24px);flex-wrap:wrap}
+.backv{display:none}
+@media (max-width:760px){#view{inset:64px 0 0 0}.grid3{grid-template-columns:1fr}.backv{display:grid}.lfilters input,.lfilters select{min-width:0;flex:1 1 45%}body[data-view]:not([data-view=chats]) #side{display:none}}
+
 /* ===== mobile / tablet ===== */
 @media (max-width:1100px){#prof{position:absolute;inset:0 auto 0 0;z-index:30;width:min(420px,100%);box-shadow:var(--shadow)}}
 @media (max-width:760px){
@@ -271,6 +310,7 @@ body.light .psec{border-bottom-color:var(--panel2)}
     </div>
   </main>
   <aside id="prof" class="hidden"></aside>
+  <section id="view" class="hidden"></section>
 </div>
 <input type="file" id="fMedia" accept="image/*,video/*" multiple hidden>
 <input type="file" id="fDoc" multiple hidden>
@@ -331,7 +371,7 @@ function fmtDay(ts) {
 function fmtListTime(ts) { if (!ts) return ''; const k = fmtDay(ts); return k === 'اليوم' ? fmtTime(ts) : (k.length > 12 ? new Date(ts*1000).toLocaleDateString('en-GB') : k); }
 function fmtDur(s) { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + pad(s % 60); }
 function fmtPhone(p) { p = String(p || ''); if (p.startsWith('lid:')) return 'رقم مخفي'; if (/^9665\d{8}$/.test(p)) return '+966 ' + p.slice(3, 5) + ' ' + p.slice(5, 8) + ' ' + p.slice(8); return '+' + p; }
-function localPhone(p) { p = String(p || ''); return /^9665\d{8}$/.test(p) ? '0' + p.slice(3) : p; }
+function localPhone(p) { p = String(p || ''); return /^966[15]\d{8}$/.test(p) ? '0' + p.slice(3) : p; }
 function nameOf(c) { return c.name || c.push_name || fmtPhone(c.wa_id); }
 const COLORS = ['#e17076','#7bc862','#e5ca77','#65aadd','#a695e7','#ee7aae','#6ec9cb','#faa774','#00a884'];
 function colorFor(s) { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) | 0; return COLORS[Math.abs(h) % COLORS.length]; }
@@ -423,6 +463,28 @@ const Real = {
   logout(id) { return this.req('POST', `/accounts/${id}/logout`, {}); },
   saveConfig(c) { return this.req('POST', '/config', c); },
   runAction(index, chat_id) { return this.req('POST', '/actions/run', {index, chat_id}); },
+  leads(q) { return this.req('GET', '/leads?' + new URLSearchParams(q)); },
+  facets() { return this.req('GET', '/leads/facets'); },
+  saveLead(d) { return this.req('POST', '/leads', d); },
+  importLeads(b) { return this.req('POST', '/leads/import', b); },
+  bulk(b) { return this.req('POST', '/leads/bulk', b); },
+  exportLeads(b) { return this.req('POST', '/leads/export', b); },
+  campaigns() { return this.req('GET', '/campaigns'); },
+  campaign(id) { return this.req('GET', '/campaigns/' + id); },
+  saveCampaign(c) { return this.req('POST', '/campaigns', c); },
+  campaignPreview(data) { return this.req('POST', '/campaigns/preview', {data}); },
+  campaignStatus(id, status) { return this.req('POST', `/campaigns/${id}/status`, {status}); },
+  mapsJobs() { return this.req('GET', '/maps/jobs'); },
+  mapsCreate(d) { return this.req('POST', '/maps/jobs', d); },
+  mapsCheck(id) { return this.req('POST', `/maps/jobs/${id}/check`, {}); },
+  mapsCfg() { return this.req('GET', '/maps/config'); },
+  saveMapsCfg(c) { return this.req('POST', '/maps/config', c); },
+  logs(t) { return this.req('GET', '/logs' + (t ? '?type=' + t : '')); },
+  users() { return this.req('GET', '/users'); },
+  saveUser(u) { return this.req('POST', '/users', u); },
+  deleteUser(id) { return this.req('DELETE', '/users/' + id); },
+  pushSubscribe(s) { return this.req('POST', '/push/subscribe', s); },
+  pushTest() { return this.req('POST', '/push/test', {}); },
   upload(file, onp) {
     return new Promise((res, rej) => {
       const fd = new FormData(); fd.append('file', file, file.name || 'file');
@@ -503,7 +565,10 @@ const Demo = (() => {
   }, 22000);
   const D = {
     async login() { return {token:'demo', name:'المالك'}; },
-    async bootstrap() { return {me:'المالك (تجريبي)', now: now(), accounts, config: JSON.parse(JSON.stringify(window.__DEMO_CFG)), chats: chats.map(chatOut)}; },
+    async bootstrap() { return {me:'المالك (تجريبي)', now: now(), accounts, config: JSON.parse(JSON.stringify(window.__DEMO_CFG)), chats: chats.map(chatOut), user: {id: 'owner', role: 'owner', perms: []},
+      roles: {admin: {name: 'مدير', perms: ['chat_view', 'chat_send', 'contacts_edit', 'leads', 'leads_export', 'leads_delete', 'maps', 'campaigns', 'logs', 'settings', 'accounts']}, supervisor: {name: 'مشرف عمليات', perms: ['chat_view', 'chat_send', 'contacts_edit', 'leads', 'logs']}, agent: {name: 'خدمة عملاء', perms: ['chat_view', 'chat_send', 'contacts_edit']}, marketer: {name: 'تسويق', perms: ['chat_view', 'leads', 'leads_export', 'maps', 'campaigns']}, viewer: {name: 'مشاهدة فقط', perms: ['chat_view']}},
+      perms: {chat_view: 'يشوف المحادثات', chat_send: 'يرد ويبعت', contacts_edit: 'يعدّل بيانات العملاء والرد الآلي', leads: 'قاعدة العملاء', leads_export: 'تصدير Excel', leads_delete: 'حذف عملاء', maps: 'سحب من الخرائط', campaigns: 'الحملات والإرسال الجماعي', logs: 'السجلات', settings: 'الإعدادات والردود', accounts: 'إدارة الأرقام'},
+      lead_statuses: {new: 'جديد', queued: 'في حملة', sent: 'اتبعتله', replied: 'رد', customer: 'عميل', blocked: 'ممنوع / طلب الإيقاف', invalid: 'مش على واتساب'}}; },
     async poll() { const out = {now: now(), chats:[], messages:[], accounts: accounts.map(a => ({id:a.id, status:a.status}))};
       changed.forEach(x => { out.chats.push(chatOut(x.c)); if (x.m) out.messages.push(Object.assign({}, x.m)); }); changed = []; return out; },
     async messages(id) { return (msgs[id] || []).map(m => Object.assign({}, m)); },
@@ -529,10 +594,45 @@ const Demo = (() => {
     async logout() { return {ok:true}; },
     async saveConfig(c) { window.__DEMO_CFG = c; return c; },
     async runAction() { return {ok:true}; },
+    ...DemoV11(accounts),
     async upload(file, onp) { for (let i = 1; i <= 5; i++) { await new Promise(r => setTimeout(r, 80)); onp && onp(i / 5); } return {url: URL.createObjectURL(file), mime: file.type, name: file.name, size: file.size}; },
   };
   return D;
 })();
+function DemoV11(accounts) {
+  const now = () => Math.floor(Date.now() / 1000);
+  const CITIES = ['مكة', 'مكة', 'مكة', 'جدة', 'جدة', 'الطائف'], CATS = ['مطعم', 'فندق', 'مستوصف', 'مدرسة أهلية', 'مخبز', 'شركة مقاولات', 'سوبرماركت', 'مغسلة'];
+  const NAMES = ['مطعم الريم', 'فندق برج الصفوة', 'مخبز الحرمين', 'مستوصف العزيزية', 'سوبرماركت البيان', 'مغسلة النخبة', 'مطاعم البيك', 'شركة الإتقان للمقاولات', 'فندق دار التوحيد', 'مدارس المنارات', 'كافيه أمواج', 'مطبخ أم فهد'];
+  let id = 1; const leads = [];
+  for (let i = 0; i < 64; i++) { const mob = i % 7 !== 3; const ph = mob ? '9665' + String(50000000 + i * 7919).slice(0, 8) : '96612' + String(5400000 + i * 31).slice(0, 7);
+    leads.push({id: id++, phone: ph, name: NAMES[i % NAMES.length] + (i >= 12 ? ' ' + (i + 1) : ''), country: 'السعودية', city: CITIES[i % 6], category: CATS[i % 8], kind: mob ? 'mobile' : 'landline',
+      source: i < 30 ? 'خرائط جوجل: مطاعم العزيزية مكة' : i < 50 ? 'ملف: عملاء 2025' : 'إضافة يدوية', tags: i < 30 ? 'خرائط,مطاعم' : 'قديم', status: ['new', 'new', 'new', 'sent', 'replied', 'customer', 'new', 'blocked'][i % 8], notes: '', extra: {address: 'حي العزيزية', rating: '4.' + (i % 9)}, sent_count: i % 3, last_sent: i % 3 ? now() - i * 3600 : 0}); }
+  const camps = [{id: 1, name: 'عرض غسيل المكيفات — مطاعم مكة', status: 'running', data: {accounts: [5], texts: ['{أهلاً|مرحبا} {name} 👋 عرض غسيل المكيفات من {brand}…'], attachments: [{type: 'voice', name: 'ريكورد', duration: 18}], window_start: 13, window_end: 20, daily_cap: 150, delay_min: 45, delay_max: 120, filter: {tag: 'مطاعم'}}, total: 120, sent: 74, failed: 3, replied: 11, queued: 43, created_by: 'المالك', created: now() - 86400}];
+  const jobs = [{id: 1, keywords: 'مطاعم العزيزية مكة', city: 'مكة', status: 'done', found: 86, imported: 30, created: now() - 7200, created_by: 'المالك', error: ''}];
+  const logs = [{ts: now() - 7000, who: 'النظام', type: 'maps', text: 'خلص السحب «مطاعم العزيزية مكة»: لقى 86 مكان، منهم 30 رقم جديد'}, {ts: now() - 5000, who: 'المالك', type: 'campaign', text: 'تشغيل الحملة «عرض غسيل المكيفات — مطاعم مكة»'}, {ts: now() - 3000, who: 'النظام', type: 'optout', text: 'العميل 966551234567 طلب إيقاف الرسايل — اتمنع من الحملات'}];
+  const users = [{id: 'u1', name: 'أحمد — خدمة العملاء', role: 'agent', perms: ['chat_view', 'chat_send', 'contacts_edit'], accounts: [2, 3], active: 1}, {id: 'u2', name: 'سارة — تسويق', role: 'marketer', perms: ['chat_view', 'leads', 'leads_export', 'maps', 'campaigns'], accounts: [5], active: 1}];
+  const match = (l, f) => (!f.status || l.status === f.status) && (!f.city || l.city === f.city) && (!f.country || l.country === f.country) && (!f.kind || l.kind === f.kind) && (!f.category || l.category === f.category) && (!f.tag || (',' + l.tags + ',').includes(',' + f.tag + ',')) && (!f.source || l.source.includes(f.source)) && (!f.q || (l.name + l.phone + l.category).includes(f.q)) && (!f.ids || f.ids.includes(l.id));
+  const facet = k => { const m = {}; leads.forEach(l => { if (l[k]) m[l[k]] = (m[l[k]] || 0) + 1; }); return Object.entries(m).map(([v, n]) => ({v, n})).sort((a, b) => b.n - a.n); };
+  return {
+    async leads(q) { const f = Object.fromEntries(Object.entries(q).filter(([k]) => !['page', 'per'].includes(k))); const all = leads.filter(l => match(l, f)); const p = +q.page || 1, per = +q.per || 100; return {total: all.length, rows: all.slice((p - 1) * per, p * per)}; },
+    async facets() { const t = {}; leads.forEach(l => l.tags.split(',').filter(Boolean).forEach(x => t[x] = (t[x] || 0) + 1)); return {status: facet('status'), city: facet('city'), country: facet('country'), kind: facet('kind'), category: facet('category'), tags: Object.entries(t).map(([v, n]) => ({v, n})), total: leads.length}; },
+    async saveLead(d) { if (d.id) { Object.assign(leads.find(l => l.id === d.id), d); return d; } leads.unshift(Object.assign({id: id++, kind: 'mobile', country: 'السعودية', extra: {}, sent_count: 0, last_sent: 0}, d, {phone: String(d.phone).replace(/\D/g, '').replace(/^05/, '9665')})); return {new: 1}; },
+    async importLeads(b) { let n = 0; b.rows.forEach(r => { const ph = String(r.phone).replace(/\D/g, '').replace(/^05/, '9665'); if (ph.length < 9) return; if (!leads.find(l => l.phone === ph)) { n++; leads.unshift({id: id++, phone: ph, name: r.name || '', city: r.city || b.city || '', country: 'السعودية', category: r.category || '', kind: /^9665/.test(ph) ? 'mobile' : 'landline', source: b.source, tags: b.tags || '', status: 'new', extra: {}, sent_count: 0, last_sent: 0}); } }); logs.unshift({ts: now(), who: 'المالك', type: 'import', text: `استيراد ${b.rows.length} صف: جديد ${n}`}); return {new: n, updated: b.rows.length - n, invalid: 0, duplicate_in_file: 0}; },
+    async bulk(b) { const sel = leads.filter(l => b.ids.includes(l.id)); sel.forEach(l => { if (b.action === 'status') l.status = b.value; if (b.action === 'tag') l.tags = [l.tags, b.value].filter(Boolean).join(','); if (b.action === 'city') l.city = b.value; }); if (b.action === 'delete') sel.forEach(l => leads.splice(leads.indexOf(l), 1)); return {count: sel.length}; },
+    async exportLeads(b) { const f = b.ids ? {ids: b.ids} : b.filter; return {rows: leads.filter(l => match(l, f))}; },
+    async campaigns() { const c = camps[0]; if (c.status === 'running' && c.queued > 0) { c.sent++; c.queued--; if (Math.random() < .2) c.replied++; } return JSON.parse(JSON.stringify(camps)); },
+    async campaign(i) { const c = camps.find(x => x.id === i); return Object.assign({}, c, {items: leads.slice(0, 25).map((l, k) => ({phone: l.phone, name: l.name, account_id: c.data.accounts[0], status: k < 18 ? (k % 6 === 2 ? 'replied' : 'sent') : 'queued', sent_at: k < 18 ? now() - k * 300 : 0, error: ''}))}); },
+    async saveCampaign(c) { if (c.id) { Object.assign(camps.find(x => x.id === c.id), c); return c; } const n = Object.assign({id: camps.length + 1, status: 'draft', total: 0, sent: 0, failed: 0, replied: 0, queued: 0, created_by: 'المالك', created: now()}, c); camps.unshift(n); return n; },
+    async campaignPreview(d) { const f = d.filter || {}; const av = leads.filter(l => match(l, f) && !['blocked', 'invalid'].includes(l.status) && (!d.only_mobile || l.kind === 'mobile')).length; const n = d.limit ? Math.min(av, d.limit) : av; const pd = Math.max(1, (d.accounts || []).length) * (d.daily_cap || 150); return {available: av, will_send: n, per_day: pd, days: Math.ceil(n / pd) || 0, accounts: Math.max(1, (d.accounts || []).length)}; },
+    async campaignStatus(i, st) { const c = camps.find(x => x.id === i); if (st === 'running' && c.status === 'draft') { c.total = c.queued = 40; } c.status = st; return c; },
+    async mapsJobs() { return {jobs: jobs.slice(), status: {ok: true}}; },
+    async mapsCreate(d) { const j = {id: jobs.length + 1, keywords: d.keywords, city: d.city, status: 'working', found: 0, imported: 0, created: now(), created_by: 'المالك', error: ''}; jobs.unshift(j); setTimeout(() => { j.status = 'done'; j.found = 42; j.imported = 17; }, 8000); return j; },
+    async mapsCheck() { return {}; }, async mapsCfg() { return {base_url: 'https://maps.vps.oxygen11.com', user: 'mwc', pass: '••••x1'}; }, async saveMapsCfg(c) { return c; },
+    async logs(t) { return logs.filter(l => !t || l.type === t); },
+    async users() { return users; }, async saveUser(u) { if (u.id) Object.assign(users.find(x => x.id === u.id), u); else users.push(Object.assign(u, {id: 'u' + (users.length + 1)})); return u; }, async deleteUser(i) { users.splice(users.findIndex(x => x.id === i), 1); },
+    async pushSubscribe() { return {ok: true}; }, async pushTest() { return {devices: 0, delivered: 0}; },
+  };
+}
 window.__DEMO_CFG = {
   quick_replies:[{key:'ترحيب', text:'مرحبا بكم في {brand} 🌬️ معاك خدمة العملاء، كيف نقدر نخدمك؟ (غسيل مكيفات، تركيب، صيانة، غرف تبريد، سباكة، نجارة، كهرباء)'},
     {key:'موقع', text:'فضلاً أرسل لنا الموقع (لوكيشن) عشان نرتب لك أقرب فني 📍'}, {key:'موعد', text:'تمام يا {name}، موعدك {date}. الفني بيتواصل معك قبل الوصول بإذن الله.'}, {key:'شكر', text:'شكراً لتواصلك مع {brand} 🙏 نسعد بخدمتك دائماً.'}],
@@ -563,12 +663,16 @@ async function boot() {
   if (!DEMO && !Real.tok) return showLogin();
   let b; try { b = await API.bootstrap(); } catch (e) { return showLogin(e.message); }
   S.me = b.me; S.accounts = b.accounts; S.config = b.config; S.since = b.now;
+  S.user = b.user || null; S.vapid = b.vapid || ''; S.roles = b.roles || {}; S.permsList = b.perms || {}; S.leadStatuses = b.lead_statuses || {};
   S.chats.clear(); b.chats.forEach(c => S.chats.set(c.id, c));
   if (localStorage.getItem('mwc_theme') === 'light') document.body.classList.add('light');
   $('#meav').textContent = initials(S.me) === '👤' ? 'م' : initials(S.me);
   renderRail(); renderFilters(); renderList(); updateTitle();
+  if (!can('chat_view')) { const v = VIEWS.find(x => can(x[3])); if (v) setView(v[0]); }
   const want = new URLSearchParams(location.search).get('chat'); if (want && S.chats.has(+want)) openChat(+want);
-  pollLoop();
+  if (!can('settings') && !can('accounts') && !can('users')) $('#btnSettings').classList.add('hidden');
+  if (!can('chat_send')) $('#composer').classList.add('hidden');
+  pollLoop(); setupPWA();
 }
 
 let pollTimer = null, polling = false;
@@ -616,10 +720,13 @@ function renderRail() {
   $('#rail').innerHTML = item(0, 'كل الأرقام', `<div class="av" style="background:var(--panel3);color:var(--accent2);font-size:20px">∑</div>`)
     + '<div class="rsep"></div>'
     + accs.map(a => item(a.id, `${a.label} • ${localPhone(a.phone)} • ${a.provider === 'meta' ? 'Meta الرسمي' : 'QR سيرفر'}`,
-        `<div class="av" style="background:${esc(a.color)}">${esc((a.label || '').slice(0, 3))}</div>`, `<span class="dot ${esc(a.status)}"></span>`)).join('')
+        `<div class="av" style="background:${esc(a.color)};font-size:11px;line-height:1.1;text-align:center;padding:2px">${esc((a.label || '').split(/\s+/).slice(0, 2).map(w => w.slice(0, 5)).join('\n'))}</div>`, `<span class="dot ${esc(a.status)}"></span>`)).join('')
     + `<div class="rsep"></div><div class="racc" data-addacc="1"><div class="av" style="background:var(--panel3);color:var(--muted);font-size:24px">+</div><span class="tip">إضافة رقم</span></div>`;
   $$('#rail [data-acc]').forEach(e => e.onclick = () => { S.curAcc = +e.dataset.acc; renderRail(); renderList(); renderAccHead(); });
   $('#rail [data-addacc]').onclick = () => openSettings('accounts', 'new');
+  if (!can('accounts')) $('#rail [data-addacc]').remove();
+  $$('#rail [data-acc]').forEach(e => e.addEventListener('click', () => { if (S.view !== 'chats') setView('chats'); }));
+  renderViewsRail();
   renderAccHead();
 }
 function renderAccHead() {
@@ -662,7 +769,8 @@ function renderList() {
       <div class="t2">${tick}<span class="pv ell">${esc(c.preview || '')}</span>
         ${(c.labels || []).slice(0, 2).map(l => `<span class="tag" style="background:${esc(lbl[l] || '#667')}">${esc(l)}</span>`).join('')}
         ${!S.curAcc ? `<span class="tag" style="background:${esc(a.color)}">${esc(a.label)}</span>` : ''}
-        ${c.pinned ? '📌' : ''}${c.unread ? `<span class="bdg">${c.unread}</span>` : ''}</div></div></div>`;
+        ${c.bot === 'off' ? '<span title="الرد الآلي ممنوع للعميل ده">🚫🤖</span>' : c.bot === 'on' ? '<span title="الرد الآلي مفعّل دايمًا">🤖</span>' : ''}${c.pinned ? '📌' : ''}${c.unread ? `<span class="bdg">${c.unread}</span>` : ''}</div>
+      ${c.source ? `<div class="muted ell" style="font-size:11.5px">📍 ${esc(c.source)}</div>` : ''}</div></div>`;
   }).join('');
   $$('#list .citem').forEach(e => { e.onclick = () => openChat(+e.dataset.id); e.oncontextmenu = ev => { ev.preventDefault(); chatMenu(+e.dataset.id, ev); }; longPress(e, ev => chatMenu(+e.dataset.id, ev)); });
 }
@@ -1147,9 +1255,14 @@ async function openProfile(refresh) {
         <button class="pact" id="pa-vcf">${ICON.dl}حفظ جهة اتصال</button>
       </div>
     </div>
+    <div class="psec"><h4>جه منين؟</h4><div class="srcbox">${k.source ? `<b>📍 ${esc(k.source)}</b>` : '<span class="muted">مش معروف لسه</span>'}${k.source_url ? `<div style="margin-top:4px"><a href="${esc(k.source_url)}" target="_blank" dir="ltr" style="word-break:break-all">${esc(k.source_url)}</a></div>` : ''}
+        ${d.first_msg ? `<div class="muted" style="font-size:12.5px;margin-top:6px">أول رسالة (${fmtDate(+d.first_msg.ts)}): «${esc(String(d.first_msg.body).slice(0, 160))}»</div>` : ''}
+        ${d.lead ? `<div class="muted" style="font-size:12.5px;margin-top:6px">في قاعدة العملاء: ${esc((S.leadStatuses || {})[d.lead.status] || d.lead.status)} • ${esc(d.lead.city)} • ${esc(d.lead.category)} • اتبعتله ${d.lead.sent_count} مرة</div>` : ''}</div>
+      <h4 style="margin-top:14px">الرد الآلي للعميل ده</h4><div class="botsw" id="pbot">${[['default', 'زي إعداد الرقم (' + (d.account_bot === 'off' ? 'مقفول' : 'مفعّل') + ')'], ['on', '🤖 مفعّل دايمًا'], ['off', '🚫 ممنوع']].map(([v, t]) => `<button data-bot="${v}" class="${(k.bot || 'default') === v ? 'on' + (v === 'off' ? ' off' : '') : ''}">${t}</button>`).join('')}</div>
+      <p class="muted" style="font-size:12px;margin:6px 0 0">«ممنوع» = البوت ما يردش عليه خالص (قريب، زميل، عميل مهم بترد عليه بنفسك).</p></div>
     <div class="psec"><h4>النبذة</h4><div>${esc(k.about || (d.provider === 'meta' ? 'Meta الرسمي ما بيعرضش النبذة ولا الصورة — بتظهر لو نفس العميل كلّم رقم من أرقام QR' : '—'))}</div></div>
     <div class="psec"><h4>بيانات للفريق</h4>
-      <div class="fld"><label>جه منين (الموقع / المقال / الإعلان)</label><input id="psrc" value="${esc(k.source || '')}" placeholder="مثلاً: oxygen11.com — غسيل مكيفات"></div>
+      <div class="fld"><label>جه منين (الموقع / المقال / الإعلان) — بيتحدد تلقائي ولك تعدّله</label><input id="psrc" value="${esc(k.source || '')}" placeholder="مثلاً: oxygen11.com — غسيل مكيفات"></div>
       <div class="fld"><label>تاجات</label><input id="ptags" value="${esc(k.tags || '')}" placeholder="مطعم، 4 مكيفات، العزيزية"></div>
       <div class="fld"><label>ملاحظات</label><textarea id="pnotes" rows="3" placeholder="أي حاجة تخص العميل">${esc(k.notes || '')}</textarea></div>
       <div class="fld"><label>التصنيف</label><div class="row" style="flex-wrap:wrap;gap:6px">${lbl.map(l => `<button class="chip ${(c.labels || []).includes(l.name) ? 'on' : ''}" data-lbl="${esc(l.name)}" style="${(c.labels || []).includes(l.name) ? `background:${esc(l.color)};color:#fff` : ''}">${esc(l.name)}</button>`).join('')}</div></div>
@@ -1179,6 +1292,7 @@ async function openProfile(refresh) {
   $$('[data-oc]', P).forEach(b => b.onclick = () => openChat(+b.dataset.oc));
   $$('[data-from]', P).forEach(b => b.onclick = async () => { const nc = await API.start(+b.dataset.from, k.wa_id, k.name); S.chats.set(nc.id, Object.assign(S.chats.get(nc.id) || {}, nc)); openChat(nc.id); });
   $$('[data-gm]', P).forEach(g => g.onclick = () => { const x = d.media.find(z => z.id === +g.dataset.gm); viewer(x.media_url, x.type, x.file_name); });
+  $$('[data-bot]', P).forEach(b => b.onclick = async () => { if (!can('contacts_edit')) return toast('مالكش صلاحية'); try { await API.updateContact(k.id, {bot: b.dataset.bot}); S.chats.forEach(x => { if (x.contact_id === k.id) x.bot = b.dataset.bot; }); renderList(); openProfile(); toast('اتحفظ ✅'); } catch (e) { toast(e.message); } });
   $('#parch').onclick = () => setChat(id, {archived: c.archived ? 0 : 1}).then(() => openProfile());
 }
 function contactText(c) { return [nameOf(c), 'الرقم: ' + localPhone(c.wa_id), '+' + c.wa_id, 'واتساب: https://wa.me/' + c.wa_id, c.source ? 'المصدر: ' + c.source : '', c.notes ? 'ملاحظات: ' + c.notes : ''].filter(Boolean).join('\n'); }
@@ -1251,10 +1365,12 @@ $('#btnNotif').onclick = e => {
 
 /* ---------------- Settings ---------------- */
 $('#btnSettings').onclick = () => openSettings('accounts');
+$('#btnSettings').classList.remove('hidden');
 function openSettings(tab = 'accounts', sub) {
   const m = modal('⚙️ إعدادات مركز الواتساب', `<div class="tabs" id="stabs" style="margin:-16px -18px 14px"></div><div id="sbody"></div>`, '', true);
-  const tabs = [['accounts', '📱 الأرقام'], ['quick', '⚡ الردود الجاهزة'], ['labels', '🏷️ التصنيفات'], ['actions', '🧩 الخدمات والأزرار'], ['vars', '🔤 المتغيرات والفريق']];
-  const go = t => { $('#stabs', m).innerHTML = tabs.map(([k, n]) => `<button class="${k === t ? 'on' : ''}" data-t="${k}">${n}</button>`).join(''); $$('#stabs button', m).forEach(b => b.onclick = () => go(b.dataset.t)); ({accounts: setAccounts, quick: setQuick, labels: setLabels, actions: setActions, vars: setVars})[t]($('#sbody', m), sub); sub = null; };
+  const tabs = [['accounts', '📱 الأرقام', 'accounts'], ['users', '👤 المستخدمين والصلاحيات', 'users'], ['quick', '⚡ الردود الجاهزة', 'settings'], ['labels', '🏷️ التصنيفات', 'settings'], ['actions', '🧩 الخدمات والأزرار', 'settings'], ['vars', '🔤 المتغيرات والفريق', 'settings'], ['maps', '🗺️ أداة الخرائط', 'settings'], ['app', '📲 التطبيق والإشعارات', '']].filter(x => !x[2] || can(x[2]));
+  if (!tabs.find(x => x[0] === tab)) tab = tabs[0][0];
+  const go = t => { $('#stabs', m).innerHTML = tabs.map(([k, n]) => `<button class="${k === t ? 'on' : ''}" data-t="${k}">${n}</button>`).join(''); $$('#stabs button', m).forEach(b => b.onclick = () => go(b.dataset.t)); ({accounts: setAccounts, users: setUsers, quick: setQuick, labels: setLabels, actions: setActions, vars: setVars, maps: setMapsCfg, app: setAppCfg})[t]($('#sbody', m), sub); sub = null; };
   go(tab);
 }
 function setAccounts(el, sub) {
@@ -1291,15 +1407,16 @@ function editAccount(el, a) {
       <div class="grid2" style="margin-top:8px"><div class="fld"><label>رابط السيرفر</label><input id="a_base" value="${esc(c.base_url || '')}" placeholder="https://wa.vps.oxygen11.com"></div>
       <div class="fld"><label>API Key</label><input id="a_key" value="${esc(c.apikey || '')}"></div>
       <div class="fld"><label>اسم الجلسة (instance)</label><input id="a_inst" value="${esc(c.instance || '')}" placeholder="sales1"></div></div></div>
-    <label class="row" style="margin:6px 0 14px"><input type="checkbox" id="a_read" style="width:auto" ${c.send_read ? 'checked' : ''}> لما أفتح المحادثة يظهر عند العميل إنها اتقرت (علامتين زرق)</label>
+    <label class="row" style="margin:6px 0 6px"><input type="checkbox" id="a_read" style="width:auto" ${c.send_read ? 'checked' : ''}> لما أفتح المحادثة يظهر عند العميل إنها اتقرت (علامتين زرق)</label>
+    <div class="fld" style="max-width:420px"><label>الرد الآلي (البوت) على الرقم ده</label><select id="a_bot"><option value="on" ${c.bot !== 'off' ? 'selected' : ''}>🤖 مفعّل — إلا العملاء الممنوعين</option><option value="off" ${c.bot === 'off' ? 'selected' : ''}>🚫 مقفول — إلا العملاء المفعّل لهم</option></select></div>
     <div class="row"><button class="btn" id="a_save">حفظ</button><button class="btn ghost" id="a_back">رجوع</button>${a.id ? `<span class="grow"></span>${a.provider !== 'meta' ? `<button class="btn ghost" id="a_out">فصل الواتساب</button>` : ''}<button class="btn danger" id="a_del">إيقاف الرقم</button>` : ''}</div>`;
   const sw = () => { const meta = $('#a_prov', el).value === 'meta'; $('#meta_f', el).classList.toggle('hidden', !meta); $('#evo_f', el).classList.toggle('hidden', meta); }; sw(); $('#a_prov', el).onchange = sw;
   $('#a_back', el).onclick = () => setAccounts(el);
   $('#a_save', el).onclick = async () => {
     const v = id => $('#' + id, el).value.trim();
     const d = {id: a.id, label: v('a_label') || 'رقم', phone: v('a_phone'), provider: v('a_prov'), role: v('a_role'), branch: v('a_branch'), color: v('a_color'), active: +v('a_active'),
-      config: v('a_prov') === 'meta' ? {phone_number_id: v('a_pnid'), token: v('a_token'), app_secret: v('a_secret'), api_version: v('a_ver') || 'v21.0', brand: v('a_brand'), send_read: $('#a_read', el).checked}
-        : {base_url: v('a_base'), apikey: v('a_key'), instance: v('a_inst') || ('mwc' + (a.id || Date.now() % 1000)), brand: v('a_brand'), send_read: $('#a_read', el).checked}};
+      config: v('a_prov') === 'meta' ? {phone_number_id: v('a_pnid'), token: v('a_token'), app_secret: v('a_secret'), api_version: v('a_ver') || 'v21.0', brand: v('a_brand'), send_read: $('#a_read', el).checked, bot: v('a_bot')}
+        : {base_url: v('a_base'), apikey: v('a_key'), instance: v('a_inst') || ('mwc' + (a.id || Date.now() % 1000)), brand: v('a_brand'), send_read: $('#a_read', el).checked, bot: v('a_bot')}};
     try { const r = await API.saveAccount(d); const i = S.accounts.findIndex(x => x.id == r.id); if (i >= 0) S.accounts[i] = Object.assign(S.accounts[i], r); else S.accounts.push(r); renderRail(); toast('اتحفظ ✅'); setAccounts(el); if (!a.id) connectAccount(r); } catch (e) { toast(e.message); }
   };
   if (a.id) {
@@ -1362,6 +1479,482 @@ document.addEventListener('keydown', e => {
 });
 window.addEventListener('popstate', () => { if (S.curChat && innerWidth <= 760) closeChat(); });
 document.addEventListener('click', () => { try { ac(); } catch (e) {} }, {once: true});
+
+/* ======================================================================
+   v1.1 — العملاء، الحملات، الخرائط، السجلات، المستخدمين، التطبيق والإشعارات
+   ====================================================================== */
+const can = p => !S.user || S.user.role === 'owner' || (S.user.perms || []).includes(p);
+const STATUS_COLORS = {new:'#53bdeb', queued:'#a695e7', sent:'#ffb02e', replied:'#25d366', customer:'#00a884', blocked:'#ea0038', invalid:'#8696a0'};
+const KIND = {mobile:'جوال', landline:'ثابت', unified:'موحّد', intl:'دولي', other:'غير معروف'};
+const fmtDate = ts => ts ? new Date(ts * 1000).toLocaleString('ar-SA-u-ca-gregory', {day:'numeric', month:'short', hour:'numeric', minute:'2-digit'}) : '—';
+const VIEWS = [['chats', '💬', 'المحادثات', 'chat_view'], ['leads', '👥', 'قاعدة العملاء', 'leads'], ['campaigns', '📣', 'الحملات والإرسال', 'campaigns'], ['maps', '🗺️', 'سحب من الخرائط', 'maps'], ['logs', '📜', 'السجلات', 'logs']];
+S.view = 'chats';
+
+function renderViewsRail() {
+  const box = document.createElement('div'); box.id = 'vrail'; box.style.cssText = 'display:flex;flex-direction:inherit;gap:6px;align-items:center;margin-top:auto';
+  box.innerHTML = '<div class="rsep"></div>' + VIEWS.filter(v => can(v[3])).map(v => `<div class="racc vbtn ${S.view === v[0] ? 'on' : ''}" data-view="${v[0]}"><div class="av" style="background:${S.view === v[0] ? 'rgba(0,168,132,.25)' : 'var(--panel3)'};font-size:20px">${v[1]}</div><span class="tip">${v[2]}</span></div>`).join('');
+  $('#rail').append(box);
+  $$('#vrail [data-view]').forEach(e => e.onclick = () => setView(e.dataset.view));
+}
+function setView(v) {
+  S.view = v; document.body.dataset.view = v;
+  $('#view').classList.toggle('hidden', v === 'chats');
+  if (v !== 'chats') { document.body.classList.remove('inchat'); ({leads: viewLeads, campaigns: viewCampaigns, maps: viewMaps, logs: viewLogs})[v](); }
+  renderRail();
+}
+function vhead(title, btns = '') { return `<div class="vhead"><button class="ibtn backv" onclick="setView('chats')">${ICON.back}</button><h2>${title}</h2><span class="grow"></span>${btns}</div>`; }
+
+/* ---------------- قاعدة العملاء ---------------- */
+const L = {f: {status: '', city: '', country: '', kind: '', tag: '', q: '', category: '', source: ''}, page: 1, per: 100, sel: new Set(), facets: null, data: null};
+async function viewLeads() {
+  const V = $('#view');
+  V.innerHTML = vhead('👥 قاعدة العملاء', `${can('leads') ? '<button class="btn ghost" id="lAdd">+ عميل</button><button class="btn ghost" id="lImp">⬆️ استيراد Excel</button>' : ''}${can('leads_export') ? '<button class="btn ghost" id="lExp">⬇️ تصدير Excel</button>' : ''}${can('campaigns') ? '<button class="btn" id="lCamp">📣 حملة للفلتر ده</button>' : ''}`)
+    + `<div class="vbody"><div class="lstats" id="lStats"></div><div class="lfilters" id="lF"></div><div class="lbulk hidden" id="lBulk"></div><div class="tblwrap"><table class="tbl" id="lT"></table></div><div class="pager" id="lP"></div></div>`;
+  $('#lAdd') && ($('#lAdd').onclick = () => editLead(null));
+  $('#lImp') && ($('#lImp').onclick = importDialog);
+  $('#lExp') && ($('#lExp').onclick = () => exportLeads());
+  $('#lCamp') && ($('#lCamp').onclick = () => campaignDialog(null, {filter: cleanF(L.f)}));
+  await loadFacets(); loadLeads();
+}
+function cleanF(f) { return Object.fromEntries(Object.entries(f).filter(([k, v]) => v !== '' && v != null)); }
+async function loadFacets() {
+  try { L.facets = await API.facets(); } catch (e) { L.facets = {status: [], city: [], country: [], kind: [], category: [], tags: [], total: 0}; }
+  const F = L.facets, st = S.leadStatuses || {};
+  const sel = (k, label, list, map = x => x) => `<select data-f="${k}"><option value="">${label}: الكل</option>${(list || []).map(o => `<option value="${esc(o.v)}" ${L.f[k] === o.v ? 'selected' : ''}>${esc(map(o.v))} (${o.n})</option>`).join('')}</select>`;
+  $('#lF').innerHTML = `<input id="lQ" placeholder="🔎 اسم، رقم، نشاط…" value="${esc(L.f.q)}">${sel('status', 'الحالة', F.status, v => st[v] || v)}${sel('city', 'المدينة', F.city)}${sel('country', 'الدولة', F.country)}${sel('kind', 'النوع', F.kind, v => KIND[v] || v)}${sel('category', 'النشاط', F.category)}${sel('tag', 'التاج', F.tags)}<button class="btn ghost" id="lReset">مسح الفلاتر</button>${L.f.source ? `<span class="chip on">المصدر: ${esc(L.f.source)}</span>` : ''}`;
+  $$('#lF select').forEach(s => s.onchange = () => { L.f[s.dataset.f] = s.value; L.page = 1; loadLeads(); });
+  let t; $('#lQ').oninput = e => { clearTimeout(t); t = setTimeout(() => { L.f.q = e.target.value; L.page = 1; loadLeads(); }, 300); };
+  $('#lReset').onclick = () => { Object.keys(L.f).forEach(k => L.f[k] = ''); L.page = 1; loadFacets(); loadLeads(); };
+  const by = k => Object.fromEntries((F.status || []).map(o => [o.v, o.n]));
+  const s = by();
+  $('#lStats').innerHTML = [['الكل', F.total, ''], ['جديد', s.new || 0, 'new'], ['اتبعتله', s.sent || 0, 'sent'], ['رد', s.replied || 0, 'replied'], ['عملاء', s.customer || 0, 'customer'], ['ممنوع', s.blocked || 0, 'blocked']]
+    .map(([n, v, k]) => `<button class="stat" data-st="${k}" style="--c:${STATUS_COLORS[k] || 'var(--accent)'}"><b>${(v || 0).toLocaleString('ar-EG')}</b><span>${n}</span></button>`).join('');
+  $$('#lStats .stat').forEach(b => b.onclick = () => { L.f.status = b.dataset.st; L.page = 1; loadFacets(); loadLeads(); });
+}
+async function loadLeads() {
+  $('#lT').innerHTML = '<tr><td class="empty">بيحمّل…</td></tr>';
+  try { L.data = await API.leads(Object.assign(cleanF(L.f), {page: L.page, per: L.per})); } catch (e) { $('#lT').innerHTML = `<tr><td class="empty">${esc(e.message)}</td></tr>`; return; }
+  const rows = L.data.rows, st = S.leadStatuses || {};
+  $('#lT').innerHTML = `<thead><tr><th><input type="checkbox" id="lAll"></th><th>الرقم</th><th>الاسم</th><th>الدولة</th><th>المدينة</th><th>النوع</th><th>النشاط</th><th>المصدر</th><th>الحالة</th><th>آخر إرسال</th><th></th></tr></thead><tbody>`
+    + (rows.length ? rows.map(r => `<tr data-id="${r.id}"><td><input type="checkbox" class="lchk" value="${r.id}" ${L.sel.has(r.id) ? 'checked' : ''}></td>
+      <td class="ph" dir="ltr">${esc(localPhone(r.phone))}</td><td>${esc(r.name || '—')}</td><td>${esc(r.country)}</td><td>${esc(r.city)}</td><td>${esc(KIND[r.kind] || r.kind)}</td>
+      <td class="ell" style="max-width:160px">${esc(r.category)}</td><td class="ell" style="max-width:180px" title="${esc(r.source)}">${esc(r.source)}</td>
+      <td><span class="tag" style="background:${STATUS_COLORS[r.status] || '#667'}">${esc(st[r.status] || r.status)}</span></td><td class="muted">${r.last_sent ? fmtDate(r.last_sent) : '—'}</td>
+      <td class="nowrap"><button class="ibtn sm" data-chat="${esc(r.phone)}" title="محادثة">💬</button><button class="ibtn sm" data-copy="${esc(localPhone(r.phone))}" title="نسخ الرقم">${ICON.copy}</button></td></tr>`).join('')
+      : '<tr><td colspan="11" class="empty">مفيش عملاء — استورد ملف Excel أو اسحب من الخرائط</td></tr>') + '</tbody>';
+  const pages = Math.max(1, Math.ceil(L.data.total / L.per));
+  $('#lP').innerHTML = `<span class="muted">${L.data.total.toLocaleString('ar-EG')} عميل</span><span class="grow"></span><button class="btn ghost" ${L.page <= 1 ? 'disabled' : ''} id="pPrev">السابق</button><span>${L.page} / ${pages}</span><button class="btn ghost" ${L.page >= pages ? 'disabled' : ''} id="pNext">التالي</button>`;
+  $('#pPrev').onclick = () => { L.page--; loadLeads(); }; $('#pNext').onclick = () => { L.page++; loadLeads(); };
+  $('#lAll').onchange = e => { $$('.lchk').forEach(c => { c.checked = e.target.checked; e.target.checked ? L.sel.add(+c.value) : L.sel.delete(+c.value); }); renderBulk(); };
+  $$('.lchk').forEach(c => c.onchange = () => { c.checked ? L.sel.add(+c.value) : L.sel.delete(+c.value); renderBulk(); });
+  $$('#lT tbody tr[data-id]').forEach(tr => tr.onclick = e => { if (e.target.closest('input,button')) return; editLead(rows.find(r => r.id === +tr.dataset.id)); });
+  $$('[data-copy]', $('#lT')).forEach(b => b.onclick = () => copy(b.dataset.copy));
+  $$('[data-chat]', $('#lT')).forEach(b => b.onclick = () => chatWithPhone(b.dataset.chat));
+  renderBulk();
+}
+function renderBulk() {
+  const b = $('#lBulk'); if (!L.sel.size) return b.classList.add('hidden');
+  b.classList.remove('hidden');
+  const st = S.leadStatuses || {};
+  b.innerHTML = `<b>${L.sel.size} محدد</b><select id="bSt"><option value="">تغيير الحالة…</option>${Object.entries(st).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+    <input id="bTag" placeholder="تاج" style="width:120px"><button class="btn ghost" id="bTagB">+ تاج</button><input id="bCity" placeholder="مدينة" style="width:110px"><button class="btn ghost" id="bCityB">تعيين</button>
+    ${can('leads_export') ? '<button class="btn ghost" id="bExp">⬇️ تصدير المحدد</button>' : ''}${can('campaigns') ? '<button class="btn" id="bCamp">📣 حملة للمحدد</button>' : ''}${can('leads_delete') ? '<button class="btn danger" id="bDel">حذف</button>' : ''}<button class="btn ghost" id="bClr">إلغاء التحديد</button>`;
+  const ids = () => [...L.sel];
+  const act = async (action, value) => { try { const r = await API.bulk({ids: ids(), action, value}); toast(`اتعدّل ${r.count} عميل ✅`); L.sel.clear(); loadFacets(); loadLeads(); } catch (e) { toast(e.message); } };
+  $('#bSt').onchange = e => e.target.value && act('status', e.target.value);
+  $('#bTagB').onclick = () => $('#bTag').value.trim() && act('tag', $('#bTag').value.trim());
+  $('#bCityB').onclick = () => $('#bCity').value.trim() && act('city', $('#bCity').value.trim());
+  $('#bDel') && ($('#bDel').onclick = () => { const m = modal('حذف عملاء', `<p>هتحذف ${L.sel.size} عميل من القاعدة نهائي؟ (المحادثات مش هتتمسح)</p>`, '<button class="btn danger" id="dY">حذف</button><button class="btn ghost" data-close>رجوع</button>'); $('#dY', m).onclick = () => { m.remove(); act('delete'); }; });
+  $('#bExp') && ($('#bExp').onclick = () => exportLeads(ids()));
+  $('#bCamp') && ($('#bCamp').onclick = () => campaignDialog(null, {ids: ids()}));
+  $('#bClr').onclick = () => { L.sel.clear(); loadLeads(); };
+}
+async function chatWithPhone(phone) {
+  const accs = S.accounts.filter(a => a.active);
+  if (!accs.length) return toast('ضيف رقم واتساب الأول');
+  const go = async id => { try { const c = await API.start(id, phone, ''); S.chats.set(c.id, Object.assign(S.chats.get(c.id) || {}, c)); setView('chats'); openChat(c.id); } catch (e) { toast(e.message); } };
+  if (accs.length === 1) return go(accs[0].id);
+  const m = modal('تكلّمه من أنهي رقم؟', accs.map(a => `<button class="svcbtn" data-a="${a.id}"><span class="tag" style="background:${esc(a.color)}">${esc(a.label)}</span><span class="grow">${esc(localPhone(a.phone))}</span><span class="muted">${esc(ROLES[a.role] || '')}</span></button>`).join(''));
+  $$('[data-a]', m).forEach(b => b.onclick = () => { m.remove(); go(+b.dataset.a); });
+}
+function editLead(r) {
+  const st = S.leadStatuses || {}; r = r || {id: 0, phone: '', name: '', city: '', country: '', category: '', tags: '', notes: '', status: 'new', source: 'إضافة يدوية', extra: {}};
+  const ex = r.extra || {};
+  const m = modal(r.id ? 'بيانات العميل' : 'عميل جديد', `<div class="grid2">
+    <div class="fld"><label>الرقم</label><input id="eP" dir="ltr" value="${esc(r.phone ? localPhone(r.phone) : '')}" ${r.id ? 'readonly' : ''}></div><div class="fld"><label>الاسم</label><input id="eN" value="${esc(r.name)}"></div>
+    <div class="fld"><label>المدينة</label><input id="eC" value="${esc(r.city)}" list="dlCity"></div><div class="fld"><label>الدولة</label><input id="eCo" value="${esc(r.country)}"></div>
+    <div class="fld"><label>النشاط / التصنيف</label><input id="eCat" value="${esc(r.category)}"></div><div class="fld"><label>الحالة</label><select id="eS">${Object.entries(st).map(([k, v]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+    <div class="fld"><label>تاجات (افصل بفاصلة)</label><input id="eT" value="${esc(r.tags)}"></div><div class="fld"><label>المصدر</label><input id="eSrc" value="${esc(r.source)}"></div></div>
+    <div class="fld"><label>ملاحظات</label><textarea id="eNo" rows="3">${esc(r.notes || '')}</textarea></div>
+    ${r.id ? `<div class="card muted" style="font-size:13px">النوع: ${esc(KIND[r.kind] || r.kind)} • اتبعتله ${r.sent_count} مرة • آخر إرسال: ${fmtDate(r.last_sent)}${ex.address ? '<br>📍 ' + esc(ex.address) : ''}${ex.rating ? ' • ⭐ ' + esc(ex.rating) : ''}${ex.maps ? ` • <a href="${esc(ex.maps)}" target="_blank">على الخرائط</a>` : ''}${ex.website ? ` • <a href="${esc(ex.website)}" target="_blank">الموقع</a>` : ''}</div>` : ''}
+    <datalist id="dlCity"><option>مكة</option><option>جدة</option><option>الطائف</option><option>المدينة</option><option>الرياض</option></datalist>`,
+    `<button class="btn" id="eSave">حفظ</button>${r.id ? '<button class="btn ghost" id="eChat">💬 محادثة</button><button class="btn ghost" id="eWa">نسخ رابط واتساب</button>' : ''}<button class="btn ghost" data-close>إغلاق</button>`);
+  $('#eSave', m).onclick = async () => {
+    const d = {id: r.id, phone: $('#eP', m).value, name: $('#eN', m).value, city: $('#eC', m).value, country: $('#eCo', m).value, category: $('#eCat', m).value, status: $('#eS', m).value, tags: $('#eT', m).value, source: $('#eSrc', m).value, notes: $('#eNo', m).value};
+    try { const res = await API.saveLead(d); if (!r.id && res.invalid) return toast('الرقم غلط'); m.remove(); toast('اتحفظ ✅'); loadFacets(); loadLeads(); } catch (e) { toast(e.message); }
+  };
+  $('#eChat', m) && ($('#eChat', m).onclick = () => { m.remove(); chatWithPhone(r.phone); });
+  $('#eWa', m) && ($('#eWa', m).onclick = () => copy('https://wa.me/' + r.phone));
+}
+
+/* ---------------- Excel: قراءة وكتابة من غير مكتبات ---------------- */
+const crcT = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = crcT[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files) {
+  const enc = new TextEncoder(); const parts = [], central = []; let off = 0;
+  files.forEach(([name, text]) => {
+    const n = enc.encode(name), d = typeof text === 'string' ? enc.encode(text) : text, crc = crc32(d);
+    const h = new DataView(new ArrayBuffer(30)); h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint32(14, crc, true); h.setUint32(18, d.length, true); h.setUint32(22, d.length, true); h.setUint16(26, n.length, true);
+    parts.push(new Uint8Array(h.buffer), n, d);
+    const c = new DataView(new ArrayBuffer(46)); c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint32(16, crc, true); c.setUint32(20, d.length, true); c.setUint32(24, d.length, true); c.setUint16(28, n.length, true); c.setUint32(42, off, true);
+    central.push(new Uint8Array(c.buffer), n); off += 30 + n.length + d.length;
+  });
+  const cl = central.reduce((s, x) => s + x.length, 0); const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cl, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...central, new Uint8Array(e.buffer)], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function xlsxBlob(sheetName, header, rows, widths) {
+  const x = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  const col = i => { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+  const cell = (v, r, c, st) => `<c r="${col(c)}${r}" t="inlineStr"${st ? ` s="${st}"` : ''}><is><t xml:space="preserve">${x(v)}</t></is></c>`;
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView rightToLeft="1" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${header.map((h, i) => `<col min="${i + 1}" max="${i + 1}" width="${(widths || [])[i] || 18}" customWidth="1"/>`).join('')}</cols><sheetData>`
+    + `<row r="1">${header.map((h, i) => cell(h, 1, i, 1)).join('')}</row>` + rows.map((r, ri) => `<row r="${ri + 2}">${r.map((v, i) => cell(v, ri + 2, i, 0)).join('')}</row>`).join('')
+    + `</sheetData><autoFilter ref="A1:${col(header.length - 1)}${rows.length + 1}"/></worksheet>`;
+  return zipStore([
+    ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+    ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${x(sheetName).slice(0, 31)}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${x(sheetName).slice(0, 31)}'!$A$1:$${col(header.length - 1)}$${rows.length + 1}</definedName></definedNames></workbook>`],
+    ['xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+    ['xl/styles.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Arial"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00A884"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf fontId="0" fillId="0" borderId="0"><alignment horizontal="right" vertical="center"/></xf><xf fontId="1" fillId="2" borderId="0" applyFont="1" applyFill="1"><alignment horizontal="center" vertical="center"/></xf></cellXfs></styleSheet>'],
+    ['xl/worksheets/sheet1.xml', sheet],
+  ]);
+}
+async function unzip(buf) {
+  const u8 = new Uint8Array(buf), dv = new DataView(buf); let e = u8.length - 22;
+  while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  if (e < 0) throw new Error('الملف مش Excel سليم');
+  const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true); const out = {};
+  for (let i = 0; i < n; i++) {
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), lo = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl)); p += 46 + nl + xl + cl;
+    out[name] = async () => {
+      const ds = lo + 30 + dv.getUint16(lo + 26, true) + dv.getUint16(lo + 28, true); const data = u8.subarray(ds, ds + csize);
+      if (method === 0) return new TextDecoder().decode(data);
+      const s = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return new TextDecoder().decode(await new Response(s).arrayBuffer());
+    };
+  }
+  return out;
+}
+async function readXlsx(buf) {
+  const z = await unzip(buf); const P = s => new DOMParser().parseFromString(s, 'application/xml');
+  const ss = z['xl/sharedStrings.xml'] ? [...P(await z['xl/sharedStrings.xml']()).getElementsByTagName('si')].map(si => [...si.getElementsByTagName('t')].map(t => t.textContent).join('')) : [];
+  const sheetName = Object.keys(z).filter(k => /^xl\/worksheets\/sheet\d+\.xml$/.test(k)).sort((a, b) => parseInt(a.match(/\d+/)) - parseInt(b.match(/\d+/)))[0];
+  if (!sheetName) throw new Error('مفيش شيت في الملف');
+  const doc = P(await z[sheetName]()); const rows = [];
+  const ci = r => { const m = r.match(/^[A-Z]+/)[0]; let n = 0; for (const ch of m) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
+  for (const row of doc.getElementsByTagName('row')) {
+    const arr = [];
+    for (const c of row.getElementsByTagName('c')) {
+      const t = c.getAttribute('t'), v = c.getElementsByTagName('v')[0]?.textContent ?? '';
+      let val = t === 's' ? (ss[+v] ?? '') : t === 'inlineStr' ? [...c.getElementsByTagName('t')].map(x => x.textContent).join('') : v;
+      if (!t && /^\d+(\.\d+)?E\+?\d+$/i.test(val)) val = Number(val).toFixed(0);
+      arr[ci(c.getAttribute('r') || 'A1')] = val;
+    }
+    rows.push(Array.from(arr, x => x ?? ''));
+  }
+  return rows;
+}
+function readCsv(text) {
+  text = text.replace(/^﻿/, ''); const first = text.split('\n')[0];
+  const d = [',', ';', '\t'].sort((a, b) => first.split(b).length - first.split(a).length)[0];
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+    else if (ch === '"') q = true; else if (ch === d) { row.push(f); f = ''; } else if (ch === '\n') { row.push(f.replace(/\r$/, '')); rows.push(row); row = []; f = ''; } else f += ch;
+  }
+  if (f !== '' || row.length) { row.push(f); rows.push(row); }
+  return rows.filter(r => r.some(x => String(x).trim() !== ''));
+}
+const FIELDS = [['phone', 'الرقم *', /phone|mobile|tel|whats|رقم|جوال|هاتف|موبايل|واتس/i], ['name', 'الاسم', /^(name|title|الاسم|اسم|العميل|النشاط التجاري)|business/i], ['city', 'المدينة', /city|المدينة|مدينة/i], ['country', 'الدولة', /country|الدولة|دولة|البلد/i],
+  ['category', 'النشاط / التصنيف', /categor|type|التصنيف|النشاط|الفئة|نوع/i], ['address', 'العنوان', /address|العنوان|الحي/i], ['tags', 'تاجات', /tag|تاج|وسوم/i], ['notes', 'ملاحظات', /note|ملاحظ/i], ['website', 'الموقع', /website|site|الموقع/i], ['maps', 'رابط الخرائط', /link|maps|خرائط/i]];
+function importDialog() {
+  const m = modal('⬆️ استيراد عملاء من Excel أو CSV', `<p class="muted" style="margin-top:0">اختار ملف <b>.xlsx</b> أو <b>.csv</b> (من الخرائط، أو أي شيت عندك). أول صف لازم يكون العناوين. المكرر بيتدمج تلقائي، والأرقام بتتظبط (05… ← 9665…).</p>
+    <input type="file" id="iF" accept=".xlsx,.csv,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"><div id="iMap"></div>`, '', true);
+  $('#iF', m).onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    let rows;
+    try { rows = /\.xlsx$/i.test(f.name) ? await readXlsx(await f.arrayBuffer()) : readCsv(await f.text()); } catch (er) { return toast('⚠️ ' + er.message); }
+    if (rows.length < 2) return toast('الملف فاضي');
+    const head = rows[0].map(h => String(h).trim()); const data = rows.slice(1);
+    const guess = {}; FIELDS.forEach(([k, , re]) => { const i = head.findIndex((h, j) => re.test(h) && !Object.values(guess).includes(j)); if (i >= 0) guess[k] = i; });
+    if (guess.phone == null) { const i = head.findIndex((h, j) => data.slice(0, 20).filter(r => /^[+\d\s()-]{8,}$/.test(String(r[j] || '').trim())).length > 10); if (i >= 0) guess.phone = i; }
+    $('#iMap', m).innerHTML = `<div class="card">📄 ${esc(f.name)} — <b>${data.length.toLocaleString('ar-EG')}</b> صف</div>
+      <h4 style="margin:10px 0 6px">ربط الأعمدة</h4><div class="grid3">${FIELDS.map(([k, n]) => `<div class="fld"><label>${n}</label><select data-k="${k}"><option value="">— مش موجود —</option>${head.map((h, i) => `<option value="${i}" ${guess[k] === i ? 'selected' : ''}>${esc(h || 'عمود ' + (i + 1))}</option>`).join('')}</select></div>`).join('')}</div>
+      <h4 style="margin:10px 0 6px">قيم افتراضية للكل</h4><div class="grid3"><div class="fld"><label>المصدر</label><input id="iSrc" value="${esc(f.name.replace(/\.\w+$/, ''))}"></div><div class="fld"><label>المدينة (لو مش في الملف)</label><input id="iCity" list="dlCity2" placeholder="مكة / جدة"><datalist id="dlCity2"><option>مكة</option><option>جدة</option></datalist></div><div class="fld"><label>تاجات</label><input id="iTags" placeholder="مطاعم، فنادق"></div></div>
+      <div class="tblwrap" style="max-height:200px"><table class="tbl"><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${data.slice(0, 5).map(r => `<tr>${head.map((h, i) => `<td>${esc(r[i] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <div id="iProg" class="muted" style="margin:8px 0"></div><button class="btn" id="iGo">استيراد ${data.length.toLocaleString('ar-EG')} صف</button>`;
+    $('#iGo', m).onclick = async () => {
+      const map = {}; $$('#iMap [data-k]', m).forEach(s => { if (s.value !== '') map[s.dataset.k] = +s.value; });
+      if (map.phone == null) return toast('حدد عمود الرقم');
+      const rowsOut = data.map(r => Object.fromEntries(Object.entries(map).map(([k, i]) => [k, String(r[i] ?? '').trim()])));
+      const tot = {new: 0, updated: 0, invalid: 0, duplicate_in_file: 0}; $('#iGo', m).disabled = true;
+      for (let i = 0; i < rowsOut.length; i += 1500) {
+        $('#iProg', m).textContent = `بيستورد… ${Math.min(i + 1500, rowsOut.length)} / ${rowsOut.length}`;
+        try { const r = await API.importLeads({rows: rowsOut.slice(i, i + 1500), source: $('#iSrc', m).value, city: $('#iCity', m).value, tags: $('#iTags', m).value}); Object.keys(tot).forEach(k => tot[k] += r[k] || 0); }
+        catch (er) { $('#iProg', m).textContent = '⚠️ ' + er.message; $('#iGo', m).disabled = false; return; }
+      }
+      $('#iProg', m).innerHTML = `✅ خلص: <b>${tot.new}</b> جديد، <b>${tot.updated}</b> اتحدّث، ${tot.invalid} رقم غلط، ${tot.duplicate_in_file} مكرر في الملف`;
+      toast('اتستورد ✅'); if (S.view === 'leads') { loadFacets(); loadLeads(); }
+    };
+  };
+}
+async function exportLeads(ids) {
+  toast('بيجهّز الملف…');
+  let res; try { res = await API.exportLeads(ids ? {ids} : {filter: cleanF(L.f)}); } catch (e) { return toast(e.message); }
+  const header = ['الرقم الدولي', 'الرقم المحلي', 'الاسم', 'الدولة', 'المدينة', 'نوع الرقم', 'النشاط', 'المصدر', 'الحالة', 'التاجات', 'عدد مرات الإرسال', 'آخر إرسال', 'العنوان', 'رابط الخرائط', 'رابط واتساب', 'ملاحظات'];
+  const rows = res.rows.map(r => ['+' + r.phone, localPhone(r.phone), r.name, r.country, r.city, r.kind_label || KIND[r.kind] || r.kind, r.category, r.source, r.status_label || r.status, r.tags, r.sent_count, r.last_sent ? new Date(r.last_sent * 1000).toLocaleDateString('en-GB') : '', (r.extra || {}).address || '', (r.extra || {}).maps || '', 'https://wa.me/' + r.phone, r.notes || '']);
+  const name = 'عملاء-' + (L.f.city || 'الكل') + '-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+  saveBlob(xlsxBlob('العملاء', header, rows, [18, 14, 26, 12, 12, 10, 22, 26, 14, 20, 10, 12, 30, 30, 26, 30]), name);
+  toast(`اتصدّر ${rows.length} عميل ✅`);
+}
+function saveBlob(blob, name) { const u = URL.createObjectURL(blob); download(u, name); setTimeout(() => URL.revokeObjectURL(u), 30000); }
+
+/* ---------------- الحملات ---------------- */
+const CST = {draft: ['مسودة', '#8696a0'], running: ['شغالة', '#25d366'], paused: ['متوقفة مؤقتًا', '#ffb02e'], done: ['خلصت', '#53bdeb'], stopped: ['انتهت', '#ea0038']};
+async function viewCampaigns() {
+  const V = $('#view');
+  V.innerHTML = vhead('📣 الحملات والإرسال الجماعي', '<button class="btn" id="cNew">+ حملة جديدة</button>') + '<div class="vbody"><div class="card muted" style="font-size:13px">⏰ الإرسال بيشتغل لوحده في نافذة الحملة (الافتراضي من 1 الضهر لـ 8 بالليل بتوقيت السعودية)، رسالة كل فترة عشوائية من كل رقم، ولحد الحد اليومي — عشان الأرقام ما تتحظرش. أي عميل يرد بـ«إلغاء» أو «إيقاف» بيتمنع تلقائي.</div><div id="cList"></div></div>';
+  $('#cNew').onclick = () => campaignDialog(null);
+  loadCampaigns();
+  clearInterval(S._cTimer); S._cTimer = setInterval(() => S.view === 'campaigns' && !document.hidden ? loadCampaigns(true) : null, 15000);
+}
+async function loadCampaigns(quiet) {
+  let list; try { list = await API.campaigns(); } catch (e) { if (!quiet) $('#cList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  if (!$('#cList')) return;
+  $('#cList').innerHTML = list.length ? list.map(c => {
+    const pct = c.total ? Math.round((c.sent + c.failed) / c.total * 100) : 0; const s = CST[c.status] || [c.status, '#888'];
+    return `<div class="card camp"><div class="row"><b class="grow" style="font-size:16px">${esc(c.name)}</b><span class="tag" style="background:${s[1]}">${s[0]}</span></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="row" style="flex-wrap:wrap;gap:14px;font-size:13px"><span>📨 اتبعت <b>${c.sent}</b> / ${c.total}</span><span>⏳ فاضل <b>${c.queued}</b></span><span style="color:var(--accent2)">💬 رد <b>${c.replied}</b></span><span style="color:var(--danger)">⚠️ فشل <b>${c.failed}</b></span>
+        <span class="muted">📱 ${c.data.accounts.map(id => esc(accById(id).label)).join('، ')}</span><span class="muted">⏰ ${c.data.window_start}:00–${c.data.window_end}:00 • ${c.data.daily_cap}/يوم/رقم</span><span class="muted">بواسطة ${esc(c.created_by)} • ${fmtDate(c.created)}</span></div>
+      <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">${c.status === 'draft' ? `<button class="btn" data-run="${c.id}">▶️ ابدأ الإرسال</button><button class="btn ghost" data-ed="${c.id}">تعديل</button>` : ''}
+        ${c.status === 'running' ? `<button class="btn ghost" data-pause="${c.id}">⏸️ إيقاف مؤقت</button>` : ''}${c.status === 'paused' ? `<button class="btn" data-run="${c.id}">▶️ استكمال</button>` : ''}
+        ${['running', 'paused'].includes(c.status) ? `<button class="btn ghost" data-stop="${c.id}">⏹️ إنهاء</button>` : ''}<button class="btn ghost" data-det="${c.id}">📋 التفاصيل والسجل</button><button class="btn ghost" data-dup="${c.id}">نسخ كحملة جديدة</button></div></div>`;
+  }).join('') : '<div class="empty">مفيش حملات لسه — اعمل أول حملة من «+ حملة جديدة»</div>';
+  const st = async (id, s) => { try { await API.campaignStatus(id, s); loadCampaigns(); } catch (e) { toast(e.message); } };
+  $$('[data-run]').forEach(b => b.onclick = () => st(+b.dataset.run, 'running'));
+  $$('[data-pause]').forEach(b => b.onclick = () => st(+b.dataset.pause, 'paused'));
+  $$('[data-stop]').forEach(b => b.onclick = () => { const m = modal('إنهاء الحملة', '<p>الباقيين مش هيتبعتلهم. متأكد؟</p>', '<button class="btn danger" id="sY">إنهاء</button><button class="btn ghost" data-close>رجوع</button>'); $('#sY', m).onclick = () => { m.remove(); st(+b.dataset.stop, 'stopped'); }; });
+  $$('[data-ed]').forEach(b => b.onclick = () => campaignDialog(list.find(c => c.id === +b.dataset.ed)));
+  $$('[data-dup]').forEach(b => { const c = list.find(x => x.id === +b.dataset.dup); b.onclick = () => campaignDialog(Object.assign({}, c, {id: 0, name: c.name + ' (2)', status: 'draft'})); });
+  $$('[data-det]').forEach(b => b.onclick = () => campaignDetail(+b.dataset.det));
+}
+async function campaignDetail(id) {
+  const m = modal('📋 تفاصيل الحملة', '<div class="empty">بيحمّل…</div>', '', true);
+  let c; try { c = await API.campaign(id); } catch (e) { return $('.mbody', m).innerHTML = esc(e.message); }
+  const IS = {queued: 'في الانتظار', sending: 'بيتبعت', sent: 'اتبعت ✓', failed: 'فشل', replied: 'رد 💬', skipped: 'اتشال'};
+  $('.mbody', m).innerHTML = `<h3 style="margin-top:0">${esc(c.name)}</h3><div class="card" style="white-space:pre-wrap;font-size:13.5px">${esc((c.data.texts || []).join('\n— — —\n') || (c.data.template ? 'قالب Meta: ' + c.data.template.name : ''))}${(c.data.attachments || []).length ? '\n📎 ' + c.data.attachments.map(a => ({voice: '🎤 ريكورد', image: '📷 صورة', video: '🎥 فيديو', document: '📄 ملف'}[a.type] || a.type)).join('، ') : ''}</div>
+    <div class="tblwrap" style="max-height:50dvh"><table class="tbl"><thead><tr><th>الرقم</th><th>الاسم</th><th>من رقم</th><th>الحالة</th><th>الوقت</th><th>ملاحظة</th></tr></thead><tbody>${c.items.map(i => `<tr><td dir="ltr" class="ph">${esc(localPhone(i.phone))}</td><td>${esc(i.name)}</td><td>${esc(accById(i.account_id).label)}</td><td>${esc(IS[i.status] || i.status)}</td><td class="muted">${i.sent_at ? fmtDate(+i.sent_at) : '—'}</td><td class="muted" style="font-size:12px">${esc(i.error)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+async function campaignDialog(c, preset = {}) {
+  c = c || {id: 0, name: '', data: {}};
+  const d = Object.assign({accounts: [], texts: [''], attachments: [], template: null, filter: {status: 'new'}, limit: 0, daily_cap: 150, delay_min: 45, delay_max: 120, window_start: 13, window_end: 20, avoid_days: 7, only_mobile: 1}, c.data);
+  if (preset.filter) d.filter = preset.filter; if (preset.ids) d.filter = {ids: preset.ids};
+  if (!L.facets) { try { L.facets = await API.facets(); } catch (e) { L.facets = {}; } }
+  const F = L.facets || {}, st = S.leadStatuses || {};
+  const opts = (list, cur, map = x => x) => (list || []).map(o => `<option value="${esc(o.v)}" ${cur === o.v ? 'selected' : ''}>${esc(map(o.v))} (${o.n})</option>`).join('');
+  const accs = S.accounts.filter(a => a.active);
+  const m = modal(c.id ? 'تعديل الحملة' : '📣 حملة جديدة', `
+    <div class="fld"><label>اسم الحملة</label><input id="cN" value="${esc(c.name)}" placeholder="مثلاً: عرض غسيل المكيفات — مطاعم مكة"></div>
+    <div class="csec"><h4>1) مين هيستلم؟</h4>${d.filter.ids ? `<div class="card">👥 ${d.filter.ids.length} عميل محدد من القاعدة</div>` : `<div class="grid3">
+      <div class="fld"><label>الحالة</label><select id="fS"><option value="">الكل</option>${Object.entries(st).filter(([k]) => !['blocked', 'invalid'].includes(k)).map(([k, v]) => `<option value="${k}" ${d.filter.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      <div class="fld"><label>المدينة</label><select id="fC"><option value="">الكل</option>${opts(F.city, d.filter.city)}</select></div>
+      <div class="fld"><label>التاج</label><select id="fT"><option value="">الكل</option>${opts(F.tags, d.filter.tag)}</select></div>
+      <div class="fld"><label>النشاط</label><select id="fCat"><option value="">الكل</option>${opts(F.category, d.filter.category)}</select></div>
+      <div class="fld"><label>الدولة</label><select id="fCo"><option value="">الكل</option>${opts(F.country, d.filter.country)}</select></div>
+      <div class="fld"><label>بحث</label><input id="fQ" value="${esc(d.filter.q || '')}" placeholder="كلمة في الاسم أو النشاط"></div></div>`}
+      <div class="grid3"><div class="fld"><label>العدد (الكمية) — 0 = الكل</label><input id="cLim" type="number" min="0" value="${d.limit}"></div>
+      <div class="fld"><label>ما تبعتش لحد اتبعتله من (يوم)</label><input id="cAv" type="number" min="0" value="${d.avoid_days}"></div>
+      <div class="fld"><label>&nbsp;</label><label class="row"><input type="checkbox" id="cMob" style="width:auto" ${d.only_mobile ? 'checked' : ''}> جوالات بس (من غير الثابت والموحّد)</label></div></div></div>
+    <div class="csec"><h4>2) من أنهي أرقام؟ (بيتوزّع عليهم بالتساوي)</h4><div class="row" style="flex-wrap:wrap;gap:6px">${accs.map(a => `<label class="chip ${d.accounts.includes(a.id) ? 'on' : ''}" style="cursor:pointer"><input type="checkbox" class="cAcc" value="${a.id}" ${d.accounts.includes(a.id) ? 'checked' : ''} style="width:auto;margin:0 0 0 4px">${esc(a.label)} <span class="muted" dir="ltr">${esc(localPhone(a.phone))}</span>${a.provider === 'meta' ? ' • Meta' : ''}</label>`).join('') || '<span class="muted">ضيف أرقام الأول</span>'}</div>
+      <div id="metaTpl" class="card hidden" style="margin-top:8px">⚠️ الرقم الرسمي (Meta) ما يبعتش حملات غير بقالب معتمد:<div class="grid3" style="margin-top:6px"><div class="fld"><label>اسم القالب</label><input id="tN" value="${esc(d.template?.name || '')}"></div><div class="fld"><label>اللغة</label><input id="tL" value="${esc(d.template?.lang || 'ar')}"></div><div class="fld"><label>المتغيرات (| بينهم)</label><input id="tP" value="${esc((d.template?.params || []).join(' | '))}" placeholder="{name}"></div></div></div></div>
+    <div class="csec"><h4>3) الرسالة</h4><p class="muted" style="font-size:12.5px;margin:0 0 6px">اكتب أكتر من صيغة (افصل بينهم بسطر فيه <b>---</b>) — كل عميل بياخد صيغة عشوائية. <code>{name}</code> = اسم العميل، <code>{brand}</code> = براند الرقم، و<code>{أهلاً|مرحبا|هلا}</code> = كلمة عشوائية.</p>
+      <textarea id="cTx" rows="6">${esc((d.texts || []).join('\n---\n'))}</textarea>
+      <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn ghost" id="aImg">📷 صورة/فيديو</button><button class="btn ghost" id="aDoc">📄 ملف</button><button class="btn ghost" id="aAud">🎵 ملف صوتي كريكورد</button><button class="btn ghost" id="aRec">🎤 سجّل ريكورد</button><span class="muted" id="aRecT"></span></div>
+      <div id="cAtt" class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px"></div></div>
+    <div class="csec"><h4>4) التوقيت والسرعة</h4><div class="grid3">
+      <div class="fld"><label>يبدأ الساعة</label><input id="wS" type="number" min="0" max="23" value="${d.window_start}"></div><div class="fld"><label>يقف الساعة</label><input id="wE" type="number" min="1" max="24" value="${d.window_end}"></div>
+      <div class="fld"><label>حد يومي لكل رقم</label><input id="dc" type="number" min="1" value="${d.daily_cap}"></div><div class="fld"><label>أقل فاصل (ثانية)</label><input id="dMin" type="number" min="10" value="${d.delay_min}"></div>
+      <div class="fld"><label>أكبر فاصل (ثانية)</label><input id="dMax" type="number" min="10" value="${d.delay_max}"></div></div>
+      <div class="card" id="cPrev">…</div></div>`,
+    `<button class="btn" id="cStart">▶️ حفظ وابدأ</button><button class="btn ghost" id="cSave">حفظ كمسودة</button><button class="btn ghost" data-close>إلغاء</button>`, true);
+  const att = [...(d.attachments || [])];
+  const drawAtt = () => { $('#cAtt', m).innerHTML = att.map((a, i) => `<span class="chip on">${({voice: '🎤', image: '📷', video: '🎥', document: '📄'}[a.type] || '📎')} ${esc(a.name || a.type)}${a.duration ? ' ' + fmtDur(a.duration) : ''} <button data-rm="${i}" style="margin-right:6px">✕</button></span>`).join(''); $$('[data-rm]', m).forEach(b => b.onclick = () => { att.splice(+b.dataset.rm, 1); drawAtt(); }); };
+  drawAtt();
+  const pick = (accept, type) => { const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.onchange = async () => { const f = i.files[0]; if (!f) return; toast('بيرفع…'); try { const up = await API.upload(f); att.push({type: type || (f.type.startsWith('video') ? 'video' : 'image'), url: up.url, mime: up.mime, name: up.name || f.name}); drawAtt(); } catch (e) { toast(e.message); } }; i.click(); };
+  $('#aImg', m).onclick = () => pick('image/*,video/*'); $('#aDoc', m).onclick = () => pick('*/*', 'document'); $('#aAud', m).onclick = () => pick('audio/*', 'voice');
+  let rec = null;
+  $('#aRec', m).onclick = async () => {
+    if (rec) { rec.stop(); return; }
+    try { const s = await navigator.mediaDevices.getUserMedia({audio: true}); const mime = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/mp4'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+      rec = new MediaRecorder(s, mime ? {mimeType: mime} : undefined); const ch = []; const t0 = Date.now(); rec.ondataavailable = e => ch.push(e.data);
+      const tm = setInterval(() => $('#aRecT', m).textContent = '🔴 ' + fmtDur((Date.now() - t0) / 1000) + ' — دوس تاني للإيقاف', 300); $('#aRec', m).textContent = '⏹️ إيقاف التسجيل';
+      rec.onstop = async () => { clearInterval(tm); s.getTracks().forEach(t => t.stop()); $('#aRec', m).textContent = '🎤 سجّل ريكورد'; $('#aRecT', m).textContent = ''; const dur = Math.round((Date.now() - t0) / 1000); rec = null;
+        let blob = new Blob(ch, {type: mime || 'audio/webm'}), ext = /ogg/.test(mime) ? 'ogg' : /mp4/.test(mime) ? 'm4a' : 'webm';
+        if (ext === 'webm') { try { const o = webmOpusToOgg(new Uint8Array(await blob.arrayBuffer())); if (o) { blob = new Blob([o], {type: 'audio/ogg'}); ext = 'ogg'; } } catch (e) {} }
+        try { const up = await API.upload(new File([blob], 'campaign-voice.' + ext, {type: ext === 'ogg' ? 'audio/ogg' : blob.type})); att.push({type: 'voice', url: up.url, mime: up.mime, name: 'ريكورد', duration: dur}); drawAtt(); } catch (e) { toast(e.message); } };
+      rec.start(250); } catch (e) { toast('اسمح بالمايك 🎤'); }
+  };
+  const collect = () => {
+    const v = id => $('#' + id, m) ? $('#' + id, m).value : '';
+    const filter = d.filter.ids ? {ids: d.filter.ids} : cleanF({status: v('fS'), city: v('fC'), tag: v('fT'), category: v('fCat'), country: v('fCo'), q: v('fQ')});
+    const accounts = $$('.cAcc', m).filter(x => x.checked).map(x => +x.value);
+    const tp = v('tP').split('|').map(s => s.trim()).filter(Boolean);
+    return {id: c.id, name: v('cN') || 'حملة ' + new Date().toLocaleDateString('ar-SA-u-ca-gregory'), data: {filter, accounts, limit: +v('cLim') || 0, avoid_days: +v('cAv') || 0, only_mobile: $('#cMob', m).checked ? 1 : 0,
+      texts: v('cTx').split(/\n\s*-{3,}\s*\n/).map(s => s.trim()).filter(Boolean), attachments: att, template: v('tN') ? {name: v('tN'), lang: v('tL') || 'ar', params: tp} : null,
+      window_start: +v('wS'), window_end: +v('wE'), daily_cap: +v('dc') || 100, delay_min: +v('dMin') || 45, delay_max: +v('dMax') || 120}};
+  };
+  let pt; const prev = () => { clearTimeout(pt); pt = setTimeout(async () => {
+    const x = collect(); $('#metaTpl', m).classList.toggle('hidden', !x.data.accounts.some(id => accById(id).provider === 'meta'));
+    $$('.cAcc', m).forEach(i => i.closest('.chip').classList.toggle('on', i.checked));
+    try { const p = await API.campaignPreview(x.data); $('#cPrev', m).innerHTML = `👥 متاح <b>${p.available.toLocaleString('ar-EG')}</b> عميل — هيتبعت لـ <b>${p.will_send.toLocaleString('ar-EG')}</b> • من ${p.accounts} رقم • حوالي <b>${p.per_day}</b> رسالة يوميًا • المدة ≈ <b>${p.days}</b> يوم`; } catch (e) { $('#cPrev', m).textContent = e.message; }
+  }, 350); };
+  m.addEventListener('input', prev); m.addEventListener('change', prev); prev();
+  const save = async start => {
+    const x = collect(); if (start && !x.data.accounts.length) return toast('اختار رقم للإرسال');
+    if (start && !x.data.texts.length && !x.data.attachments.length && !x.data.template) return toast('اكتب الرسالة');
+    try { const r = await API.saveCampaign(x); if (start) await API.campaignStatus(r.id, 'running'); m.remove(); toast(start ? 'الحملة اشتغلت ✅' : 'اتحفظت كمسودة'); if (S.view !== 'campaigns') setView('campaigns'); else loadCampaigns(); } catch (e) { toast('⚠️ ' + e.message, 4000); }
+  };
+  $('#cStart', m).onclick = () => save(true); $('#cSave', m).onclick = () => save(false);
+}
+
+/* ---------------- سحب من الخرائط ---------------- */
+async function viewMaps() {
+  const V = $('#view');
+  V.innerHTML = vhead('🗺️ سحب أرقام من خرائط جوجل', '<button class="btn ghost" id="mRef">⟳ تحديث</button>') + `<div class="vbody"><div id="mStat"></div>
+    <div class="card"><div class="grid3"><div class="fld" style="grid-column:span 2"><label>كلمات البحث (كل سطر بحث لوحده)</label><textarea id="mK" rows="4" placeholder="صيانة مكيفات مكة\nمطاعم العزيزية مكة\nفنادق جدة"></textarea></div>
+      <div><div class="fld"><label>المدينة (بتتسجل على الأرقام)</label><select id="mC"><option>مكة</option><option>جدة</option><option>الطائف</option><option value="">أخرى</option></select></div>
+      <div class="fld"><label>النشاط</label><input id="mCat" placeholder="مطاعم / فنادق / شركات"></div><div class="fld"><label>تاجات</label><input id="mT" placeholder="مثلاً: عملاء-تكييف"></div>
+      <div class="fld"><label>العمق (أكتر = نتايج أكتر ووقت أطول)</label><input id="mD" type="number" min="1" max="30" value="5"></div></div></div>
+      <button class="btn" id="mGo">🔎 ابدأ السحب</button> <span class="muted" style="font-size:12.5px">بتشتغل على سيرفرك بأداة مجانية مفتوحة المصدر — النتايج بتدخل «قاعدة العملاء» لوحدها لما تخلص.</span></div>
+    <h3>الشغلانات</h3><div class="tblwrap"><table class="tbl" id="mJ"></table></div></div>`;
+  $('#mGo').onclick = async () => { try { await API.mapsCreate({keywords: $('#mK').value, city: $('#mC').value, category: $('#mCat').value, tags: $('#mT').value, depth: +$('#mD').value}); toast('السحب بدأ ✅'); $('#mK').value = ''; loadJobs(); } catch (e) { toast('⚠️ ' + e.message, 5000); } };
+  $('#mRef').onclick = loadJobs;
+  loadJobs();
+  clearInterval(S._mTimer); S._mTimer = setInterval(() => S.view === 'maps' && !document.hidden ? loadJobs(true) : null, 20000);
+}
+async function loadJobs() {
+  let r; try { r = await API.mapsJobs(); } catch (e) { return $('#mJ') && ($('#mJ').innerHTML = `<tr><td>${esc(e.message)}</td></tr>`); }
+  if (!$('#mJ')) return;
+  $('#mStat').innerHTML = r.status.ok ? '<div class="card" style="color:var(--accent2)">✅ أداة السحب على السيرفر شغالة</div>' : `<div class="card" style="color:var(--warn)">⚠️ أداة السحب مش متوصلة (${esc(r.status.error || r.status.code)}) ${can('settings') ? '— ظبطها من ⚙️ الإعدادات ← الخرائط' : ''}</div>`;
+  const JS = {pending: 'في الانتظار', working: '⏳ شغال…', done: '✅ خلص', failed: '⚠️ فشل'};
+  $('#mJ').innerHTML = `<thead><tr><th>البحث</th><th>المدينة</th><th>الحالة</th><th>لقى</th><th>أرقام جديدة</th><th>بدأ</th><th>بواسطة</th><th></th></tr></thead><tbody>` + (r.jobs.length ? r.jobs.map(j => `<tr><td style="white-space:pre-line;max-width:260px">${esc(j.keywords)}</td><td>${esc(j.city)}</td><td>${JS[j.status] || esc(j.status)}${j.error ? `<div class="muted" style="font-size:11px">${esc(j.error)}</div>` : ''}</td><td>${j.found}</td><td><b>${j.imported}</b></td><td class="muted">${fmtDate(+j.created)}</td><td class="muted">${esc(j.created_by)}</td>
+    <td>${j.status === 'working' ? `<button class="btn ghost" data-chk="${j.id}">شيّك</button>` : j.status === 'done' ? `<button class="btn ghost" data-see="${esc(j.keywords.split('\n')[0])}">👥 الأرقام</button>` : ''}</td></tr>`).join('') : '<tr><td colspan="8" class="empty">مفيش شغلانات لسه</td></tr>') + '</tbody>';
+  $$('[data-chk]').forEach(b => b.onclick = async () => { await API.mapsCheck(+b.dataset.chk); loadJobs(); });
+  $$('[data-see]').forEach(b => b.onclick = () => { Object.keys(L.f).forEach(k => L.f[k] = ''); L.f.source = 'خرائط جوجل: ' + b.dataset.see; L.page = 1; setView('leads'); });
+}
+
+/* ---------------- السجلات ---------------- */
+async function viewLogs() {
+  const V = $('#view');
+  const T = {'': 'الكل', import: 'استيراد', export: 'تصدير', campaign: 'حملات', maps: 'خرائط', leads: 'عملاء', optout: 'طلبات إيقاف', users: 'مستخدمين', login: 'دخول'};
+  V.innerHTML = vhead('📜 السجلات') + `<div class="vbody"><div class="filters" style="padding:0 0 10px">${Object.entries(T).map(([k, v]) => `<button class="chip" data-lt="${k}">${v}</button>`).join('')}</div><div id="lgL"></div></div>`;
+  const load = async t => { $$('[data-lt]').forEach(b => b.classList.toggle('on', b.dataset.lt === t)); let r; try { r = await API.logs(t); } catch (e) { return $('#lgL').innerHTML = esc(e.message); }
+    $('#lgL').innerHTML = r.length ? r.map(x => `<div class="logrow"><span class="tag" style="background:var(--panel3);color:var(--text)">${esc(T[x.type] || x.type)}</span><span class="grow">${esc(x.text)}</span><span class="muted nowrap" style="font-size:12px">${esc(x.who)} • ${fmtDate(+x.ts)}</span></div>`).join('') : '<div class="empty">مفيش سجلات</div>'; };
+  $$('[data-lt]').forEach(b => b.onclick = () => load(b.dataset.lt)); load('');
+}
+
+/* ---------------- الإعدادات: المستخدمين، الخرائط، التطبيق ---------------- */
+function setUsers(el) {
+  el.innerHTML = '<div class="empty">بيحمّل…</div>';
+  API.users().then(list => {
+    const R = S.roles || {};
+    el.innerHTML = `<p class="muted" style="margin-top:0">كل موظف بيدخل برقمه السري الخاص، وبيشوف بس الأرقام والأقسام اللي تسمحله بيها. انت (المالك) بتدخل بالرقم السري الرئيسي من لوحة ووردبريس.</p>
+      ${list.map(u => `<div class="card row" style="opacity:${u.active ? 1 : .5}"><div class="av sm" style="background:${colorFor(u.name)}">${esc(initials(u.name))}</div><div class="grow"><b>${esc(u.name)}</b> <span class="tag" style="background:var(--panel3);color:var(--text)">${esc(R[u.role]?.name || u.role)}</span>${u.active ? '' : ' <span class="muted">متوقف</span>'}
+        <div class="muted" style="font-size:12.5px">الأرقام: ${u.accounts === 'all' ? 'كلها' : u.accounts.map(id => esc(accById(id).label)).join('، ') || '—'}</div></div><button class="btn ghost" data-eu="${esc(u.id)}">تعديل</button></div>`).join('')}
+      <button class="btn" id="uAdd">+ موظف جديد</button>`;
+    $$('[data-eu]', el).forEach(b => b.onclick = () => editUser(el, list.find(u => u.id === b.dataset.eu)));
+    $('#uAdd', el).onclick = () => editUser(el, null);
+  }).catch(e => el.innerHTML = `<div class="empty">${esc(e.message)}</div>`);
+}
+function editUser(el, u) {
+  const R = S.roles || {}, P = S.permsList || {};
+  u = u || {id: '', name: '', role: 'agent', perms: (R.agent || {}).perms || [], accounts: 'all', active: 1};
+  el.innerHTML = `<div class="grid2"><div class="fld"><label>الاسم</label><input id="uN" value="${esc(u.name)}"></div><div class="fld"><label>الرقم السري ${u.id ? '(سيبه فاضي لو مش هتغيّره)' : ''}</label><input id="uP" inputmode="numeric" placeholder="4 أرقام أو أكتر"></div>
+    <div class="fld"><label>الدور</label><select id="uR">${Object.entries(R).map(([k, v]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${v.name}</option>`).join('')}</select></div>
+    <div class="fld"><label>الحالة</label><select id="uA"><option value="1" ${u.active ? 'selected' : ''}>شغّال</option><option value="0" ${!u.active ? 'selected' : ''}>موقوف</option></select></div></div>
+    <h4>الصلاحيات</h4><div class="grid3" id="uPm">${Object.entries(P).filter(([k]) => k !== 'users').map(([k, v]) => `<label class="row"><input type="checkbox" value="${k}" style="width:auto" ${u.perms.includes(k) ? 'checked' : ''}> ${v}</label>`).join('')}</div>
+    <h4>الأرقام اللي يشوفها</h4><label class="row"><input type="checkbox" id="uAll" style="width:auto" ${u.accounts === 'all' ? 'checked' : ''}> كل الأرقام (حتى اللي هتتضاف بعدين)</label>
+    <div class="row" id="uAcc" style="flex-wrap:wrap;gap:6px;margin:8px 0">${S.accounts.map(a => `<label class="chip"><input type="checkbox" value="${a.id}" style="width:auto;margin-left:4px" ${u.accounts !== 'all' && u.accounts.includes(a.id) ? 'checked' : ''}>${esc(a.label)}</label>`).join('')}</div>
+    <div class="row"><button class="btn" id="uS">حفظ</button><button class="btn ghost" id="uB">رجوع</button>${u.id ? '<span class="grow"></span><button class="btn danger" id="uD">حذف</button>' : ''}</div>`;
+  const tog = () => $('#uAcc', el).style.opacity = $('#uAll', el).checked ? .4 : 1; tog(); $('#uAll', el).onchange = tog;
+  $('#uR', el).onchange = e => { const ps = (R[e.target.value] || {}).perms || []; $$('#uPm input', el).forEach(i => i.checked = ps.includes(i.value)); };
+  $('#uB', el).onclick = () => setUsers(el);
+  $('#uS', el).onclick = async () => {
+    const d = {id: u.id, name: $('#uN', el).value, pin: $('#uP', el).value, role: $('#uR', el).value, active: +$('#uA', el).value,
+      perms: $$('#uPm input', el).filter(i => i.checked).map(i => i.value), accounts: $('#uAll', el).checked ? 'all' : $$('#uAcc input', el).filter(i => i.checked).map(i => +i.value)};
+    try { await API.saveUser(d); toast('اتحفظ ✅'); setUsers(el); } catch (e) { toast('⚠️ ' + e.message, 4000); }
+  };
+  $('#uD', el) && ($('#uD', el).onclick = async () => { await API.deleteUser(u.id); toast('اتحذف'); setUsers(el); });
+}
+function setMapsCfg(el) {
+  el.innerHTML = '<div class="empty">بيحمّل…</div>';
+  API.mapsCfg().then(c => {
+    el.innerHTML = `<p class="muted" style="margin-top:0">أداة السحب (Google Maps Scraper — مجانية ومفتوحة المصدر) شغالة على سيرفرك. هنا رابطها وبيانات الدخول بتاعتها.</p>
+      <div class="grid3"><div class="fld"><label>رابط الأداة</label><input id="gU" dir="ltr" value="${esc(c.base_url)}" placeholder="https://maps.vps.oxygen11.com"></div><div class="fld"><label>اسم المستخدم</label><input id="gN" dir="ltr" value="${esc(c.user)}"></div><div class="fld"><label>كلمة السر</label><input id="gP" dir="ltr" value="${esc(c.pass)}"></div></div>
+      <button class="btn" id="gS">حفظ</button>`;
+    $('#gS', el).onclick = async () => { try { await API.saveMapsCfg({base_url: $('#gU', el).value, user: $('#gN', el).value, pass: $('#gP', el).value}); toast('اتحفظ ✅'); } catch (e) { toast(e.message); } };
+  }).catch(e => el.innerHTML = esc(e.message));
+}
+function setAppCfg(el) {
+  const sw = 'serviceWorker' in navigator, push = 'PushManager' in window, ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  el.innerHTML = `<div class="card"><b>📲 تثبيت التطبيق</b><p class="muted" style="margin:6px 0">بيتثبت على الشاشة الرئيسية زي أي تطبيق، يفتح لوحده من غير متصفح، وبيرن بالإشعارات حتى وهو مقفول.</p>
+      ${standalone ? '<div style="color:var(--accent2)">✅ انت فاتح التطبيق المتثبت</div>' : S.installEvt ? '<button class="btn" id="apI">تثبيت التطبيق الآن</button>' : ios ? '<div>على الآيفون: من Safari دوس زرار <b>المشاركة</b> ⬆️ ← <b>إضافة إلى الشاشة الرئيسية</b>، وبعدين افتحه من الأيقونة وفعّل الإشعارات من هنا.</div>' : '<div>على أندرويد: من قايمة كروم ⋮ ← <b>تثبيت التطبيق</b> (أو «إضافة إلى الشاشة الرئيسية»).</div>'}</div>
+    <div class="card"><b>🔔 إشعارات الجهاز ده</b><p class="muted" style="margin:6px 0">${!sw || !push ? 'المتصفح ده مش بيدعم الإشعارات وهو مقفول' + (ios && !standalone ? ' — ثبّت التطبيق الأول على الشاشة الرئيسية' : '') : 'كل رسالة جديدة على أرقامك هتوصلك إشعار بصوت واهتزاز، حتى لو التطبيق مقفول.'}</p>
+      <div id="apSt" class="muted"></div>${sw && push ? '<button class="btn" id="apP">تفعيل الإشعارات</button> <button class="btn ghost" id="apT">إرسال إشعار تجربة</button>' : ''}</div>
+    <div class="card"><b>🔊 الصوت</b><p class="muted" style="margin:6px 0">صوت الإشعار وانت فاتح التطبيق.</p><button class="btn ghost" id="apS">${S.sound ? '🔔 شغّال — دوس للإيقاف' : '🔕 مقفول — دوس للتشغيل'}</button> <button class="btn ghost" onclick="SND.incoming()">▶️ تجربة</button></div>`;
+  $('#apI', el) && ($('#apI', el).onclick = async () => { S.installEvt.prompt(); await S.installEvt.userChoice; S.installEvt = null; setAppCfg(el); });
+  $('#apS', el).onclick = () => { S.sound = !S.sound; localStorage.setItem('mwc_sound', S.sound ? '1' : '0'); setAppCfg(el); };
+  const showSt = async () => { let reg = null; try { reg = await navigator.serviceWorker?.getRegistration?.(); } catch (e) {} const sub = reg && await reg.pushManager.getSubscription(); $('#apSt', el) && ($('#apSt', el).innerHTML = sub ? '✅ الإشعارات مفعّلة على الجهاز ده' : (Notification.permission === 'denied' ? '⛔ الإشعارات مقفولة من إعدادات المتصفح — افتحها من إعدادات الموقع' : 'لسه مش مفعّلة')); };
+  if (sw && push) { showSt(); $('#apP', el).onclick = async () => { const ok = await enablePush(true); showSt(); toast(ok ? 'الإشعارات اتفعّلت ✅' : 'ما اتفعّلتش'); }; $('#apT', el).onclick = async () => { try { const r = await API.pushTest(); toast(r.devices ? `اتبعت لـ ${r.delivered}/${r.devices} جهاز` : 'فعّل الإشعارات الأول'); } catch (e) { toast(e.message); } }; }
+}
+
+/* ---------------- PWA: Service Worker + Push ---------------- */
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; });
+function b64uToU8(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); const r = atob(s + '='.repeat((4 - s.length % 4) % 4)); return Uint8Array.from(r, c => c.charCodeAt(0)); }
+async function setupPWA() {
+  if (DEMO || !('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.register('sw.js', {scope: './'});
+    navigator.serviceWorker.addEventListener('message', ev => {
+      if (ev.data?.type === 'open') { const m = String(ev.data.url).match(/chat=(\d+)/); if (m) { setView('chats'); openChat(+m[1]); } }
+      if (ev.data?.type === 'push') pollLoop();
+    });
+    if (Notification.permission === 'granted') enablePush(false);
+    else if (Notification.permission === 'default' && !localStorage.getItem('mwc_push_asked')) setTimeout(() => {
+      const b = document.createElement('div'); b.className = 'pushbar';
+      b.innerHTML = '🔔 فعّل الإشعارات عشان الرسايل ترن حتى والتطبيق مقفول <button class="btn" id="pbY">تفعيل</button><button class="btn ghost" id="pbN">بعدين</button>';
+      document.body.append(b); $('#pbY').onclick = async () => { b.remove(); localStorage.setItem('mwc_push_asked', '1'); toast((await enablePush(true)) ? 'الإشعارات اتفعّلت ✅' : 'ما اتفعّلتش'); };
+      $('#pbN').onclick = () => { b.remove(); localStorage.setItem('mwc_push_asked', '1'); };
+    }, 2500);
+    return reg;
+  } catch (e) { console.warn('sw', e); }
+}
+async function enablePush(ask) {
+  try {
+    if (!S.vapid || !('PushManager' in window)) return false;
+    if (ask && Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') return false;
+    if (Notification.permission !== 'granted') return false;
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) { const k = sub.options && sub.options.applicationServerKey; if (k && btoa(String.fromCharCode(...new Uint8Array(k))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') !== S.vapid) { await sub.unsubscribe(); sub = null; } }
+    if (!sub) sub = await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64uToU8(S.vapid)});
+    await API.pushSubscribe(sub.toJSON()); S.notif = true; localStorage.setItem('mwc_notif', '1');
+    return true;
+  } catch (e) { console.warn('push', e); return false; }
+}
 
 boot();
 </script>

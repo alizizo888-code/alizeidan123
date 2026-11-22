@@ -39,14 +39,31 @@ class MWC_Rest {
 
     /* ---------------- auth ---------------- */
     static function auth(WP_REST_Request $req) {
-        if (current_user_can('manage_options')) return true;
         $tok = $req->get_header('x_mwc_token') ?: $req->get_param('token');
         $who = MWC_Store::check_token($tok);
-        if ($who === null) return new WP_Error('mwc_auth', 'سجّل دخول بالرقم السري', ['status' => 401]);
-        $GLOBALS['mwc_user'] = $who;
+        if ($who === null) {
+            if (current_user_can('manage_options')) { $GLOBALS['mwc_user_obj'] = MWC_Users::owner(); return true; }
+            return new WP_Error('mwc_auth', 'سجّل دخول بالرقم السري', ['status' => 401]);
+        }
+        $u = MWC_Users::get($who['user_id']);
+        if (!$u || (isset($u['active']) && !$u['active'])) return new WP_Error('mwc_auth', 'الحساب ده اتوقف — كلّم المالك', ['status' => 401]);
+        $GLOBALS['mwc_user_obj'] = $u;
+        $GLOBALS['mwc_user'] = $u['name'];
         return true;
     }
-    static function who() { return $GLOBALS['mwc_user'] ?? (wp_get_current_user()->display_name ?: 'المالك'); }
+    static function who() { return MWC_Users::name() ?: 'المالك'; }
+
+    /** فحص صلاحية — بيرجع WP_Error لو مش مسموح */
+    static function deny($perm, $account_id = null) {
+        if (!MWC_Users::can($perm)) return new WP_Error('mwc_perm', 'مالكش صلاحية: ' . (MWC_Users::PERMS[$perm] ?? $perm), ['status' => 403]);
+        if ($account_id !== null && !MWC_Users::can_account($account_id)) return new WP_Error('mwc_perm', 'الرقم ده مش ضمن أرقامك', ['status' => 403]);
+        return null;
+    }
+    static function chat_guard($chat_id, $perm = 'chat_view') {
+        $chat = MWC_Store::chat((int) $chat_id);
+        if (!$chat) return new WP_Error('nf', 'المحادثة غير موجودة', ['status' => 404]);
+        return self::deny($perm, $chat['account_id']) ?: $chat;
+    }
 
     static function login(WP_REST_Request $req) {
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'x';
@@ -56,16 +73,24 @@ class MWC_Rest {
         $hash = get_option('mwc_pin_hash');
         if (!$hash) return new WP_Error('mwc_nopin', 'لسه ما اتحددش رقم سري — حدّده من لوحة ووردبريس ← مركز الواتساب', ['status' => 400]);
         $pin = (string) $req->get_param('pin');
-        if (!wp_check_password($pin, $hash)) {
+        $u = MWC_Users::login($pin);
+        if (!$u) {
             set_transient($k, $fails + 1, 15 * MINUTE_IN_SECONDS);
             return new WP_Error('mwc_bad', 'الرقم السري غلط', ['status' => 401]);
         }
         delete_transient($k);
-        $name = sanitize_text_field($req->get_param('name') ?: 'الإدارة');
-        return ['token' => MWC_Store::new_token($name), 'name' => $name];
+        $name = $u['role'] === 'owner' ? (sanitize_text_field($req->get_param('name') ?: '') ?: 'المالك') : $u['name'];
+        $GLOBALS['mwc_user_obj'] = $u;
+        MWC_Store::log('login', 'دخول ' . $name, $name);
+        return ['token' => MWC_Store::new_token($name, $u['id']), 'name' => $name];
     }
 
-    static function me() { return ['name' => self::who()]; }
+    static function me() { return self::me_out(); }
+    static function me_out() {
+        $u = MWC_Users::current();
+        return ['id' => $u['id'], 'name' => self::who(), 'role' => $u['role'], 'perms' => MWC_Users::is_owner() ? array_keys(MWC_Users::PERMS) : array_values((array) $u['perms']),
+                'accounts' => MWC_Users::allowed_accounts()];
+    }
 
     /* ---------------- shaping ---------------- */
     static function chat_out($c) {
@@ -75,7 +100,7 @@ class MWC_Rest {
             'avatar' => $c['avatar'] ?: '', 'preview' => $c['preview'], 'last_ts' => (int) $c['last_ts'], 'last_in_ts' => (int) $c['last_in_ts'],
             'unread' => (int) $c['unread'], 'pinned' => (int) $c['pinned'], 'archived' => (int) $c['archived'],
             'labels' => $c['labels'] ? explode(',', $c['labels']) : [], 'assigned' => $c['assigned'], 'status' => $c['status'],
-            'tags' => $c['tags'] ?? '', 'source' => $c['source'] ?? '',
+            'tags' => $c['tags'] ?? '', 'source' => $c['source'] ?? '', 'source_url' => $c['source_url'] ?? '', 'bot' => $c['bot'] ?? 'default',
         ];
     }
     static function msg_out($m) {
@@ -88,35 +113,58 @@ class MWC_Rest {
     }
 
     /* ---------------- reading ---------------- */
+    static function my_accounts() {
+        $al = MWC_Users::allowed_accounts();
+        $list = array_values(array_filter(MWC_Store::accounts(), function ($a) use ($al) { return $al === null || in_array($a['id'], $al, true); }));
+        if (!MWC_Users::can('accounts')) foreach ($list as &$a) $a['config'] = array_intersect_key($a['config'], ['brand' => 1, 'bot' => 1]);
+        return $list;
+    }
+
     static function bootstrap() {
-        return ['me' => self::who(), 'now' => time(), 'accounts' => MWC_Store::accounts(), 'config' => MWC_Store::config(),
-                'chats' => array_map([__CLASS__, 'chat_out'], MWC_Store::chats(['limit' => 300]))];
+        $chats = MWC_Users::can('chat_view') ? array_map([__CLASS__, 'chat_out'], MWC_Store::chats(['limit' => 400, 'allowed' => MWC_Users::allowed_accounts()])) : [];
+        return ['me' => self::who(), 'user' => self::me_out(), 'now' => time(), 'accounts' => self::my_accounts(), 'config' => MWC_Store::config(),
+                'chats' => $chats, 'vapid' => MWC_Push::public_key(), 'roles' => MWC_Users::ROLES, 'perms' => MWC_Users::PERMS,
+                'lead_statuses' => MWC_Leads::STATUSES];
     }
 
     static function poll(WP_REST_Request $req) {
         $since = max(0, (int) $req->get_param('since') - 2);
         $acc = (int) $req->get_param('account');
+        $al = MWC_Users::allowed_accounts();
+        // نبض احتياطي للحملات والخرائط لو السيرفر ما نبضش من دقيقة ونص
+        if (time() - (int) get_option('mwc_last_tick') > 90) {
+            update_option('mwc_last_tick', time(), false);
+            wp_remote_get(add_query_arg('k', get_option('mwc_tick_key'), rest_url(MWC_NS . '/tick')), ['blocking' => false, 'timeout' => 0.5, 'sslverify' => false]);
+        }
+        if (!MWC_Users::can('chat_view')) return ['now' => time(), 'chats' => [], 'messages' => [], 'accounts' => []];
+        $msgs = array_map([__CLASS__, 'msg_out'], MWC_Store::messages_since($since, $acc));
+        if ($al !== null) {
+            $okChats = [];
+            foreach (MWC_Store::chats(['since' => 0, 'allowed' => $al, 'limit' => 500, 'archived' => 1]) as $c) $okChats[(int) $c['id']] = 1;
+            $msgs = array_values(array_filter($msgs, function ($m) use ($okChats) { return isset($okChats[$m['chat_id']]); }));
+        }
         return [
             'now' => time(),
-            'chats' => array_map([__CLASS__, 'chat_out'], MWC_Store::chats(['since' => $since, 'account' => $acc, 'limit' => 200])),
-            'messages' => array_map([__CLASS__, 'msg_out'], MWC_Store::messages_since($since, $acc)),
-            'accounts' => array_map(function ($a) { return ['id' => $a['id'], 'status' => $a['status']]; }, MWC_Store::accounts()),
+            'chats' => array_map([__CLASS__, 'chat_out'], MWC_Store::chats(['since' => $since, 'account' => $acc, 'limit' => 200, 'allowed' => $al])),
+            'messages' => $msgs,
+            'accounts' => array_map(function ($a) { return ['id' => $a['id'], 'status' => $a['status']]; }, self::my_accounts()),
         ];
     }
 
     static function chats(WP_REST_Request $req) {
+        if ($e = self::deny('chat_view')) return $e;
         return array_map([__CLASS__, 'chat_out'], MWC_Store::chats([
             'account' => (int) $req->get_param('account'), 'q' => sanitize_text_field((string) $req->get_param('q')),
-            'archived' => (int) $req->get_param('archived'), 'limit' => 300]));
+            'archived' => (int) $req->get_param('archived'), 'limit' => 300, 'allowed' => MWC_Users::allowed_accounts()]));
     }
 
     static function messages(WP_REST_Request $req) {
+        $g = self::chat_guard($req['id']); if (is_wp_error($g)) return $g;
         return array_map([__CLASS__, 'msg_out'], MWC_Store::messages((int) $req['id'], (int) $req->get_param('before')));
     }
 
     static function profile(WP_REST_Request $req) {
-        $chat = MWC_Store::chat((int) $req['id']);
-        if (!$chat) return new WP_Error('nf', 'غير موجود', ['status' => 404]);
+        $chat = self::chat_guard($req['id']); if (is_wp_error($chat)) return $chat;
         $acc = MWC_Store::account($chat['account_id']);
         $fresh = (int) $req->get_param('refresh');
         if ($acc && ($fresh || !$chat['avatar'])) {
@@ -128,7 +176,11 @@ class MWC_Rest {
         return [
             'chat' => self::chat_out($chat),
             'contact' => ['id' => (int) $chat['contact_id'], 'wa_id' => $chat['wa_id'], 'name' => $chat['name'], 'push_name' => $chat['push_name'],
-                'avatar' => $chat['avatar'], 'about' => $chat['about'], 'notes' => $chat['notes'], 'tags' => $chat['tags'], 'source' => $chat['source']],
+                'avatar' => $chat['avatar'], 'about' => $chat['about'], 'notes' => $chat['notes'], 'tags' => $chat['tags'], 'source' => $chat['source'],
+                'source_url' => $chat['source_url'] ?? '', 'bot' => $chat['bot'] ?? 'default'],
+            'lead' => MWC_Users::can('leads') ? MWC_Leads::by_phone($chat['wa_id']) : null,
+            'first_msg' => $wpdb->get_row($wpdb->prepare("SELECT body, ts FROM " . MWC_Store::t('messages') . " WHERE chat_id=%d AND direction='in' AND type='text' ORDER BY id ASC LIMIT 1", $chat['id']), ARRAY_A),
+            'account_bot' => $acc['config']['bot'] ?? 'on',
             'media' => MWC_Store::media($chat['id']),
             'other_chats' => $others,
             'window_open' => (time() - (int) $chat['last_in_ts']) < DAY_IN_SECONDS,
@@ -138,6 +190,7 @@ class MWC_Rest {
 
     /* ---------------- writing ---------------- */
     static function chat_update(WP_REST_Request $req) {
+        $g = self::chat_guard($req['id']); if (is_wp_error($g)) return $g;
         $f = [];
         foreach (['pinned', 'archived', 'unread'] as $k) if ($req->has_param($k)) $f[$k] = (int) $req->get_param($k);
         foreach (['assigned', 'status'] as $k) if ($req->has_param($k)) $f[$k] = sanitize_text_field($req->get_param($k));
@@ -148,7 +201,10 @@ class MWC_Rest {
 
     static function contact_update(WP_REST_Request $req) {
         global $wpdb;
+        if ($e = self::deny('contacts_edit')) return $e;
         $f = [];
+        if ($req->has_param('bot') && in_array($req->get_param('bot'), ['default', 'on', 'off'], true)) $f['bot'] = $req->get_param('bot');
+        if ($req->has_param('source_url')) $f['source_url'] = esc_url_raw($req->get_param('source_url'));
         foreach (['name', 'tags', 'source'] as $k) if ($req->has_param($k)) $f[$k] = sanitize_text_field($req->get_param($k));
         if ($req->has_param('notes')) $f['notes'] = sanitize_textarea_field($req->get_param('notes'));
         if ($f) { $f['updated'] = time(); $wpdb->update(MWC_Store::t('contacts'), $f, ['id' => (int) $req['id']]); }
@@ -158,8 +214,7 @@ class MWC_Rest {
 
     static function read(WP_REST_Request $req) {
         global $wpdb;
-        $chat = MWC_Store::chat((int) $req['id']);
-        if (!$chat) return new WP_Error('nf', 'غير موجود', ['status' => 404]);
+        $chat = self::chat_guard($req['id']); if (is_wp_error($chat)) return $chat;
         if ((int) $chat['unread'] > 0) {
             $ids = $wpdb->get_col($wpdb->prepare("SELECT ext_id FROM " . MWC_Store::t('messages') . " WHERE chat_id=%d AND direction='in' AND ext_id<>'' ORDER BY id DESC LIMIT %d", $chat['id'], max(1, (int) $chat['unread'])));
             $acc = MWC_Store::account($chat['account_id']);
@@ -199,19 +254,23 @@ class MWC_Rest {
         return self::msg_out($row);
     }
 
-    static function send(WP_REST_Request $req) { return self::do_send((int) $req['id'], $req->get_json_params() ?: $req->get_params()); }
+    static function send(WP_REST_Request $req) {
+        $g = self::chat_guard($req['id'], 'chat_send'); if (is_wp_error($g)) return $g;
+        return self::do_send((int) $req['id'], $req->get_json_params() ?: $req->get_params()); }
 
     static function retry(WP_REST_Request $req) {
         global $wpdb;
         $m = $wpdb->get_row($wpdb->prepare("SELECT * FROM " . MWC_Store::t('messages') . " WHERE id=%d AND direction='out'", (int) $req['id']), ARRAY_A);
         if (!$m) return new WP_Error('nf', 'غير موجودة', ['status' => 404]);
+        $g = self::chat_guard($m['chat_id'], 'chat_send'); if (is_wp_error($g)) return $g;
         $wpdb->delete(MWC_Store::t('messages'), ['id' => $m['id']]);
         return self::do_send($m['chat_id'], $m);
     }
 
     static function start(WP_REST_Request $req) {
+        if ($e = self::deny('chat_view', (int) $req->get_param('account_id'))) return $e;
         $acc = MWC_Store::account((int) $req->get_param('account_id'));
-        $phone = MWC_Store::norm_phone($req->get_param('phone'));
+        $phone = MWC_Leads::norm($req->get_param('phone')) ?: MWC_Store::norm_phone($req->get_param('phone'));
         if (!$acc || strlen($phone) < 8) return new WP_Error('bad', 'اختار الرقم واكتب رقم العميل صح', ['status' => 400]);
         $cid = MWC_Store::contact_upsert($phone, ['name' => sanitize_text_field($req->get_param('name') ?: '')]);
         $chat_id = MWC_Store::chat_get_or_create($acc['id'], $cid);
@@ -231,9 +290,10 @@ class MWC_Rest {
     }
 
     /* ---------------- accounts & config ---------------- */
-    static function accounts() { return MWC_Store::accounts(); }
+    static function accounts() { return self::my_accounts(); }
 
     static function account_save(WP_REST_Request $req) {
+        if ($e = self::deny('accounts')) return $e;
         $id = MWC_Store::save_account($req->get_json_params() ?: []);
         foreach (MWC_Store::accounts() as $a) if ($a['id'] === $id) return $a;
         return ['id' => $id];
@@ -241,11 +301,13 @@ class MWC_Rest {
 
     static function account_delete(WP_REST_Request $req) {
         global $wpdb;
+        if ($e = self::deny('accounts')) return $e;
         $wpdb->update(MWC_Store::t('accounts'), ['active' => 0], ['id' => (int) $req['id']]); // تعطيل فقط — المحادثات ما تتمسحش
         return ['ok' => true];
     }
 
     static function account_connect(WP_REST_Request $req) {
+        if ($e = self::deny('accounts')) return $e;
         $acc = MWC_Store::account((int) $req['id']);
         if (!$acc) return new WP_Error('nf', 'غير موجود', ['status' => 404]);
         try { $r = MWC_Provider::make($acc)->connect(); } catch (\Throwable $e) { $r = ['ok' => false, 'error' => $e->getMessage()]; }
@@ -254,6 +316,7 @@ class MWC_Rest {
     }
 
     static function account_logout(WP_REST_Request $req) {
+        if ($e = self::deny('accounts')) return $e;
         $acc = MWC_Store::account((int) $req['id']);
         if ($acc && $acc['provider'] === 'evolution') { (new MWC_Evolution($acc))->logout(); MWC_Store::set_account_status($acc['id'], 'close'); }
         return ['ok' => true];
@@ -262,6 +325,7 @@ class MWC_Rest {
     static function config_get() { return MWC_Store::config(); }
 
     static function config_save(WP_REST_Request $req) {
+        if (!MWC_Users::can('settings') && !MWC_Users::can('chat_send')) return self::deny('settings');
         $in = $req->get_json_params() ?: [];
         $cur = MWC_Store::config();
         $clean = function ($v) use (&$clean) {
@@ -278,6 +342,7 @@ class MWC_Rest {
         $i = (int) $req->get_param('index');
         $a = $cfg['actions'][$i] ?? null;
         $chat = MWC_Store::chat((int) $req->get_param('chat_id'));
+        if ($chat && ($e = self::deny('chat_send', $chat['account_id']))) return $e;
         if (!$a || !$chat) return new WP_Error('bad', 'الزر أو المحادثة غير موجودة', ['status' => 400]);
         $data = ['action' => $a['label'], 'chat' => self::chat_out($chat), 'account' => MWC_Store::account($chat['account_id'])['label'] ?? '',
                  'phone' => $chat['wa_id'], 'name' => $chat['name'] ?: $chat['push_name'], 'by' => self::who()];
@@ -320,8 +385,33 @@ class MWC_Rest {
         }
         $id = MWC_Store::add_message($m);
         MWC_Store::touch_chat($chat_id, self::preview_of($m), $m['ts'], !$from_me);
-        if (!$from_me) do_action('mwc_incoming', $m + ['id' => $id], MWC_Store::chat($chat_id), $acc);
+        if (!$from_me) {
+            $contact = MWC_Store::contact($cid);
+            // جه منين؟ من كود المقالة/الرابط في الرسالة، أو من قاعدة العملاء (خرائط/حملة)
+            if ($contact && $contact['source'] === '') {
+                $src = MWC_Leads::detect_source($m['body'] ?? '');
+                if (!$src && ($lead = MWC_Leads::by_phone($contact['wa_id']))) $src = ['source' => $lead['source'], 'source_url' => $lead['extra']['maps'] ?? ''];
+                if (!$src) $src = ['source' => 'واتساب مباشر — ' . ($acc['label'] ?? ''), 'source_url' => ''];
+                MWC_Store::contact_upsert($contact['wa_id'], $src);
+            }
+            if ($m['type'] === 'text' || $m['type'] === 'template') MWC_Leads::on_incoming($contact['wa_id'] ?? '', $m['body'] ?? '');
+            $chat = MWC_Store::chat($chat_id);
+            do_action('mwc_incoming', $m + ['id' => $id], $chat, $acc);
+            if (self::bot_allowed($chat, $acc)) do_action('mwc_bot_incoming', $m + ['id' => $id], $chat, $acc);
+            try {
+                MWC_Push::notify_account($acc['id'], ['title' => ($chat['name'] ?: ($chat['push_name'] ?: '+' . $chat['wa_id'])) . ' • ' . ($acc['label'] ?? ''),
+                    'body' => mb_substr(self::preview_of($m), 0, 140), 'tag' => 'c' . $chat_id, 'url' => home_url('/wa-center/?chat=' . $chat_id), 'icon' => $chat['avatar'] ?: MWC_URL . 'app/icon-192.png', 'badge' => MWC_URL . 'app/icon-192.png']);
+            } catch (\Throwable $e) {}
+        }
         return $id;
+    }
+
+    /** الرد الآلي: لكل عميل (مفعّل/ممنوع/افتراضي) ولكل رقم (مفعّل/مقفول) */
+    static function bot_allowed($chat, $acc) {
+        $b = $chat['bot'] ?? 'default';
+        if ($b === 'off') return false;
+        if ($b === 'on') return true;
+        return ($acc['config']['bot'] ?? 'on') !== 'off';
     }
 
     /* ---------------- Meta webhook ---------------- */
