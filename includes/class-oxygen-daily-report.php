@@ -119,10 +119,14 @@ class Oxygen_Daily_Report {
         $kw = (string) get_post_meta($id, '_oxy_seo_kw', true);
         if ($kw === '') { $kw = (string) get_post_meta($id, 'rank_math_focus_keyword', true); }
         $desc = (string) get_post_meta($id, '_oxy_seo_desc', true);
+        if ($desc === '') { $desc = (string) get_post_meta($id, 'rank_math_description', true); }
         if ($desc === '') { $desc = (string) $p->post_excerpt; }
         // The front end wraps every engine article with links to the main site (see Oxygen_SEO_Engine::filter_content): score what a visitor/crawler gets.
         $main = class_exists('Oxygen_Domain_Guard') ? Oxygen_Domain_Guard::main_url() : '';
-        $html = $p->post_content . ($main ? '<a href="' . $main . '">.</a>' : '');
+        // score what the reader gets: the engine adds the FAQ / related links on display
+        $body = $p->post_content;
+        if (class_exists('Oxygen_SEO_Engine') && method_exists('Oxygen_SEO_Engine', 'filter_content')) { try { $GLOBALS['post'] = $p; setup_postdata($p); $body = (string) Oxygen_SEO_Engine::filter_content($body); wp_reset_postdata(); } catch (Throwable $e) { $body = $p->post_content; } }
+        $html = $body . ($main ? '<a href="' . $main . '">.</a>' : '');
         list($s, $f) = self::score_html($p->post_title, $html, $kw, $p->post_name, $desc, home_url('/'));
         return $memo[$id] = [$s, $f, $kw];
     }
@@ -149,7 +153,7 @@ class Oxygen_Daily_Report {
             $ts = (int) ($r['ts'] ?? 0);
             if ($ts < $a || $ts > $b || empty($r['id']) || !isset(self::$labels[$r['a'] ?? ''])) { continue; }
             list($s, $f, $kw) = self::post_score((int) $r['id']);
-            $rows[] = ['id' => (int) $r['id'], 'a' => $r['a'], 'ts' => $ts, 't' => (string) ($r['t'] ?? ''), 'l' => (string) ($r['l'] ?? ''), 'kw' => $kw, 's' => $s, 'f' => $f];
+            $rows[] = ['id' => (int) $r['id'], 'a' => $r['a'], 'ts' => $ts, 't' => (string) ($r['t'] ?? ''), 'l' => (function ($r) { $id = (int) ($r['id'] ?? 0); if ($id && get_post_status($id) === 'publish') { return (string) get_permalink($id); } return $id ? '' : (string) ($r['l'] ?? ''); })($r), 'kw' => $kw, 's' => $s, 'f' => $f];
         }
         usort($rows, function ($x, $y) { return $x['ts'] <=> $y['ts']; });
         return self::summarize($day, $rows);
@@ -264,7 +268,7 @@ class Oxygen_Daily_Report {
         $i = 0;
         foreach ($rep['rows'] as $r) {
             $i++;
-            $h .= '<tr><td>' . $i . '</td><td>' . esc_html(self::$labels[$r['a']] ?? $r['a']) . '</td><td>' . esc_html($r['kw']) . '</td><td>' . self::grade_icon($r['s']) . ' ' . (int) $r['s'] . '</td><td>' . esc_html(self::$st_labels[$r['st'] ?? 'live'] ?? '') . '</td><td>' . (($r['st'] ?? 'live') === 'live' || ($r['st'] ?? '') === 'noindex' ? '<a href="' . esc_url($r['l']) . '">' . esc_html($r['t']) . '</a>' : esc_html($r['t'])) . '</td></tr>';
+            $h .= '<tr><td>' . $i . '</td><td>' . esc_html(self::$labels[$r['a']] ?? $r['a']) . '</td><td>' . esc_html($r['kw']) . '</td><td>' . self::grade_icon($r['s']) . ' ' . (int) $r['s'] . '</td><td>' . esc_html(self::$st_labels[$r['st'] ?? 'live'] ?? '') . '</td><td>' . ((($r['st'] ?? 'live') === 'live' || ($r['st'] ?? '') === 'noindex') && $r['l'] !== '' ? '<a href="' . esc_url($r['l']) . '">' . esc_html($r['t']) . '</a>' : esc_html($r['t'])) . '</td></tr>';
         }
         return $h . '</table></div>';
     }
