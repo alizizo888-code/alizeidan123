@@ -381,7 +381,9 @@ class MWC_Rest {
             $pend = $wpdb->get_var($wpdb->prepare("SELECT id FROM " . MWC_Store::t('messages') . " WHERE chat_id=%d AND direction='out' AND ext_id='' AND type=%s AND ts>%d ORDER BY id DESC LIMIT 1",
                 $chat_id, $m['type'], time() - 90));
             if ($pend) { MWC_Store::update_message($pend, ['ext_id' => $m['ext_id']]); return (int) $pend; }
-            $m['sender'] = 'من الموبايل';
+            // Owner asked for the «من الموبايل» tag to stop showing on these messages (2026-11-22) — the UI already
+            // hides the sender line entirely when it's empty (app/index.html: `if (m.dir === 'out' && first && m.sender)`).
+            $m['sender'] = '';
         }
         $id = MWC_Store::add_message($m);
         MWC_Store::touch_chat($chat_id, self::preview_of($m), $m['ts'], !$from_me);
