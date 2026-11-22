@@ -70,7 +70,7 @@ class MWC_Maps {
         return [
             'on' => (int) $p['on'], 'per_day' => (int) $p['per_day'], 'hour' => (int) $p['hour'], 'depth' => (int) $p['depth'],
             'cursor' => (int) $p['cursor'], 'total' => $n, 'last_run' => $p['last_run'],
-            'started_today' => (int) ($p['day'] === current_time('Y-m-d') ? $p['started_today'] : 0), 'max_running' => self::MAX_RUNNING,
+            'started_today' => (int) ($p['day'] === MWC_Store::riyadh('Y-m-d') ? $p['started_today'] : 0), 'max_running' => self::MAX_RUNNING,
             'cycle_days' => (int) ceil($n / max(1, $p['per_day'])),
             'next' => $next, 'today' => self::today_stats(),
             'trades' => self::TRADES, 'cities' => array_keys(self::AREAS),
@@ -80,7 +80,7 @@ class MWC_Maps {
     /** كام رقم جديد دخل النهاردة، لكل مدينة — ده «الأوردر اليومي» اللي بيزيد كل يوم */
     static function today_stats() {
         global $wpdb;
-        $start = strtotime(current_time('Y-m-d') . ' 00:00:00') - (int) (get_option('gmt_offset') * HOUR_IN_SECONDS);
+        $start = (int) (new DateTime(MWC_Store::riyadh('Y-m-d') . ' 00:00:00', new DateTimeZone('Asia/Riyadh')))->format('U');
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT city, COUNT(*) jobs, COALESCE(SUM(found),0) found, COALESCE(SUM(imported),0) imported
              FROM " . MWC_Store::t('jobs') . " WHERE finished>=%d AND status='done' GROUP BY city", $start), ARRAY_A);
@@ -105,10 +105,12 @@ class MWC_Maps {
         $p = self::plan();
         if (empty($p['on'])) return false;
 
-        $today = current_time('Y-m-d');
+        // بتوقيت الرياض زي الحملات بالظبط — توقيت الموقع نفسه UTC، فـ«3 الفجر» كانت بتطلع 6 الصبح عند صاحب
+        // الشغل. الميعاد اللي بيكتبه لازم يكون الميعاد اللي بيحصل فعلًا عنده.
+        $today = MWC_Store::riyadh('Y-m-d');
         if ($p['day'] !== $today) { $p['day'] = $today; $p['started_today'] = 0; update_option('mwc_maps_plan', $p, false); }
         if ((int) $p['started_today'] >= (int) $p['per_day']) return false;
-        if ((int) current_time('H') < (int) $p['hour']) return false;
+        if ((int) MWC_Store::riyadh('G') < (int) $p['hour']) return false;
 
         // مزدحم؟ نستنى النبضة الجاية
         $running = (int) $wpdb->get_var("SELECT COUNT(*) FROM " . MWC_Store::t('jobs') . " WHERE status IN ('working','pending')");
