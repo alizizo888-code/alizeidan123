@@ -242,6 +242,14 @@ body.light .psec{border-bottom-color:var(--panel2)}
 .backv{display:none}
 @media (max-width:760px){#view{inset:64px 0 0 0}.grid3{grid-template-columns:1fr}.backv{display:grid}.lfilters input,.lfilters select{min-width:0;flex:1 1 45%}body[data-view]:not([data-view=chats]) #side{display:none}}
 
+/* v1.2 */
+.accgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.acard{cursor:pointer;margin:0}.acard:hover{filter:brightness(1.12)}
+.cgrid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px}
+.wrow{display:flex;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.wrow:hover{background:var(--panel3)}
+@media (max-width:900px){.cgrid{grid-template-columns:1fr}}
+
 /* ===== mobile / tablet ===== */
 @media (max-width:1100px){#prof{position:absolute;inset:0 auto 0 0;z-index:30;width:min(420px,100%);box-shadow:var(--shadow)}}
 @media (max-width:760px){
@@ -485,6 +493,13 @@ const Real = {
   deleteUser(id) { return this.req('DELETE', '/users/' + id); },
   pushSubscribe(s) { return this.req('POST', '/push/subscribe', s); },
   pushTest() { return this.req('POST', '/push/test', {}); },
+  dashboard() { return this.req('GET', '/dashboard'); },
+  routing() { return this.req('GET', '/routing'); },
+  routingSave(r) { return this.req('POST', '/routing', r); },
+  transfer(b) { return this.req('POST', '/transfer', b); },
+  hubSave(on) { return this.req('POST', '/hub', {on: on ? 1 : 0}); },
+  metaInfo() { return this.req('GET', '/meta/info'); },
+  templates(acc) { return this.req('GET', `/accounts/${acc}/templates`); },
   upload(file, onp) {
     return new Promise((res, rej) => {
       const fd = new FormData(); fd.append('file', file, file.name || 'file');
@@ -631,6 +646,13 @@ function DemoV11(accounts) {
     async logs(t) { return logs.filter(l => !t || l.type === t); },
     async users() { return users; }, async saveUser(u) { if (u.id) Object.assign(users.find(x => x.id === u.id), u); else users.push(Object.assign(u, {id: 'u' + (users.length + 1)})); return u; }, async deleteUser(i) { users.splice(users.findIndex(x => x.id === i), 1); },
     async pushSubscribe() { return {ok: true}; }, async pushTest() { return {devices: 0, delivered: 0}; },
+    async dashboard() { return {accounts: accounts.map((a, i) => ({id: a.id, label: a.label, phone: a.phone, role: a.role, branch: a.branch, color: a.color, status: a.status, provider: a.provider, unread: [2, 1, 0, 0, 1][i] || 0, waiting: [1, 2, 0, 1, 0][i] || 0, in_today: [14, 31, 22, 9, 6][i] || 0, out_today: [12, 28, 25, 8, 74][i] || 0, new_today: [2, 5, 3, 1, 0][i] || 0})),
+      waiting: [{id: 1, account_id: 2, last_in_ts: now() - 540, preview: 'ممكن تشوفونه بعد؟', assigned: '', unread: 2, name: '', push_name: 'أبو فهد', wa_id: '966551234567', source: 'oxygen11.com — غسيل مكيفات'}, {id: 3, account_id: 3, last_in_ts: now() - 1900, preview: 'كم سعر تركيب مكيف شباك؟', assigned: 'أحمد — خدمة العملاء', unread: 1, name: '', push_name: 'نوره', wa_id: '966567778899', source: 'Blogger — صيانة ثلاجات'}],
+      staff: [{name: 'أحمد — خدمة العملاء', chats: 7, waiting: 1}, {name: 'العمليات', chats: 4, waiting: 0}], bot_today: 23, hub: {on: true}}; },
+    async routing() { return {technicians: [{name: 'مصطفى طلبة', phone: '966551110000', branch: 'مكة', skill: 'تكييف'}, {name: 'محمد سعيد', phone: '966552220000', branch: 'جدة', skill: 'غرف تبريد'}], auto: {2: ['أحمد — خدمة العملاء']}, manager_account: 1, room_phone: '966536554731', hub: {on: 1, linked: true}, staff: ['المالك', 'أحمد — خدمة العملاء', 'سارة — تسويق', 'العمليات']}; },
+    async routingSave(r) { return Object.assign(await this.routing(), r); }, async transfer(b) { return {ok: true, msg: 'اتحوّل (تجربة)'}; }, async hubSave() { return {on: 1}; },
+    async metaInfo() { return {callback: 'https://oxygen11.com/wp-json/mwc/v1/webhook/meta', verify_token: 'xxxxxxxx'}; },
+    async templates() { return [{name: 'offer_wash', lang: 'ar', status: 'APPROVED', category: 'MARKETING', body: 'أهلاً {{1}} 👋 عرض غسيل المكيفات {{2}}', params: 2}, {name: 'order_followup', lang: 'ar', status: 'APPROVED', category: 'UTILITY', body: 'طلبك رقم {{1}} في الطريق', params: 1}]; },
   };
 }
 window.__DEMO_CFG = {
@@ -672,7 +694,7 @@ async function boot() {
   const want = new URLSearchParams(location.search).get('chat'); if (want && S.chats.has(+want)) openChat(+want);
   if (!can('settings') && !can('accounts') && !can('users')) $('#btnSettings').classList.add('hidden');
   if (!can('chat_send')) $('#composer').classList.add('hidden');
-  pollLoop(); setupPWA();
+  pollLoop(); if (!nativeBridge()) setupPWA();
 }
 
 let pollTimer = null, polling = false;
@@ -798,7 +820,7 @@ function chatMenu(id, ev) {
     [c.unread ? '✓ تعليم كمقروءة' : '● تعليم كغير مقروءة', () => { API.updateChat(id, {unread: c.unread ? 0 : 1}); c.unread = c.unread ? 0 : 1; renderList(); renderRail(); updateTitle(); }],
     [c.pinned ? '📌 إلغاء التثبيت' : '📌 تثبيت', () => setChat(id, {pinned: c.pinned ? 0 : 1})],
     [c.archived ? '📤 إخراج من الأرشيف' : '🗄️ أرشفة', () => setChat(id, {archived: c.archived ? 0 : 1})],
-    ['👤 إسناد لي', () => setChat(id, {assigned: S.me})], null, ...labels, null,
+    ['👤 إسناد لي', () => setChat(id, {assigned: S.me})], can('chat_send') ? ['🔀 تحويل (موظف / فني / عمليات / رقم تاني)', () => transferDialog(id)] : null, null, ...labels, null,
     ['📋 نسخ الرقم', () => copy(localPhone(c.wa_id))],
     ['🔗 مشاركة جهة الاتصال', () => shareContact(c)],
   ], ev);
@@ -833,10 +855,11 @@ function renderChatHead() {
   $('#chead').innerHTML = `<button class="ibtn backbtn" id="backb">${ICON.back}</button>${avatar(c, 'sm')}
     <div class="grow"><div class="ell" style="font-size:16px">${esc(nameOf(c))}</div>
       <div class="muted ell" style="font-size:12.5px">${esc(fmtPhone(c.wa_id))} • عبر <span class="tag" style="background:${esc(a.color)}">${esc(a.label)} ${esc(localPhone(a.phone))}</span>${c.assigned ? ' • مسند: ' + esc(c.assigned) : ''}</div></div>
-    <button class="ibtn" id="hCall" title="اتصال">${ICON.phone}</button>
+    ${can('chat_send') ? '<button class="ibtn" id="hTr" title="تحويل">🔀</button>' : ''}<button class="ibtn" id="hCall" title="اتصال">${ICON.phone}</button>
     <button class="ibtn" id="hMenu" title="المزيد">${ICON.dots}</button>`;
   $('#backb').onclick = e => { e.stopPropagation(); closeChat(); };
   $('#hCall').onclick = e => { e.stopPropagation(); location.href = 'tel:+' + c.wa_id; };
+  $('#hTr') && ($('#hTr').onclick = e => { e.stopPropagation(); transferDialog(c.id); });
   $('#hMenu').onclick = e => { e.stopPropagation(); chatMenu(c.id, e); };
   $('#chead').onclick = () => openProfile();
 }
@@ -1129,6 +1152,11 @@ function checkWindow() {
     const m = modal('إرسال قالب Meta', `<div class="fld"><label>اسم القالب (زي ما هو في WhatsApp Manager)</label><input id="tn" value="${esc(localStorage.getItem('mwc_tpl') || 'hello_world')}"></div>
       <div class="grid2"><div class="fld"><label>اللغة</label><input id="tl" value="${esc(localStorage.getItem('mwc_tpl_lang') || 'ar')}"></div><div class="fld"><label>المتغيرات {{1}} {{2}} (افصل بـ | )</label><input id="tp" placeholder="أبو فهد | اليوم العصر"></div></div>
       <p class="muted" style="font-size:12px">رسايل القوالب بتتحاسب من Meta حسب نوعها (تسويق/خدمة/مصادقة).</p>`, `<button class="btn" id="ts">إرسال</button><button class="btn ghost" data-close>إلغاء</button>`);
+    API.templates(c.account_id).then(list => { if (!list || !list.length) return; const f = document.createElement('div'); f.className = 'fld';
+      f.innerHTML = `<label>القوالب المعتمدة على الرقم</label><select id="tsel"><option value="">— اختار —</option>${list.filter(t => t.status === 'APPROVED').map((t, i) => `<option value="${i}">${esc(t.name)} (${esc(t.lang)}) — ${esc(t.body.slice(0, 60))}</option>`).join('')}</select>`;
+      $('.mbody', m).prepend(f); const ok = list.filter(t => t.status === 'APPROVED');
+      $('#tsel', m).onchange = e => { const t = ok[+e.target.value]; if (!t) return; $('#tn', m).value = t.name; $('#tl', m).value = t.lang; $('#tp', m).placeholder = Array.from({length: t.params}, (_, i) => 'متغير ' + (i + 1)).join(' | ') || 'مفيش متغيرات'; if (t.params) $('#tp', m).value = [nameOf(c)].concat(Array(Math.max(0, t.params - 1)).fill('')).join(' | '); };
+    }).catch(() => {});
     $('#ts', m).onclick = () => { const n = $('#tn', m).value.trim(), l = $('#tl', m).value.trim(), pr = $('#tp', m).value.split('|').map(s => s.trim()).filter(Boolean);
       localStorage.setItem('mwc_tpl', n); localStorage.setItem('mwc_tpl_lang', l); m.remove(); sendPayload({type: 'template', body: 'قالب: ' + n + (pr.length ? ' (' + pr.join('، ') + ')' : ''), template: {name: n, lang: l, params: pr}}); };
   };
@@ -1368,9 +1396,9 @@ $('#btnSettings').onclick = () => openSettings('accounts');
 $('#btnSettings').classList.remove('hidden');
 function openSettings(tab = 'accounts', sub) {
   const m = modal('⚙️ إعدادات مركز الواتساب', `<div class="tabs" id="stabs" style="margin:-16px -18px 14px"></div><div id="sbody"></div>`, '', true);
-  const tabs = [['accounts', '📱 الأرقام', 'accounts'], ['users', '👤 المستخدمين والصلاحيات', 'users'], ['quick', '⚡ الردود الجاهزة', 'settings'], ['labels', '🏷️ التصنيفات', 'settings'], ['actions', '🧩 الخدمات والأزرار', 'settings'], ['vars', '🔤 المتغيرات والفريق', 'settings'], ['maps', '🗺️ أداة الخرائط', 'settings'], ['app', '📲 التطبيق والإشعارات', '']].filter(x => !x[2] || can(x[2]));
+  const tabs = [['accounts', '📱 الأرقام', 'accounts'], ['users', '👤 المستخدمين والصلاحيات', 'users'], ['routing', '🔀 التوجيه والفنيين والبوت', 'settings'], ['quick', '⚡ الردود الجاهزة', 'settings'], ['labels', '🏷️ التصنيفات', 'settings'], ['actions', '🧩 الخدمات والأزرار', 'settings'], ['vars', '🔤 المتغيرات والفريق', 'settings'], ['maps', '🗺️ أداة الخرائط', 'settings'], ['app', '📲 التطبيق والإشعارات', '']].filter(x => !x[2] || can(x[2]));
   if (!tabs.find(x => x[0] === tab)) tab = tabs[0][0];
-  const go = t => { $('#stabs', m).innerHTML = tabs.map(([k, n]) => `<button class="${k === t ? 'on' : ''}" data-t="${k}">${n}</button>`).join(''); $$('#stabs button', m).forEach(b => b.onclick = () => go(b.dataset.t)); ({accounts: setAccounts, users: setUsers, quick: setQuick, labels: setLabels, actions: setActions, vars: setVars, maps: setMapsCfg, app: setAppCfg})[t]($('#sbody', m), sub); sub = null; };
+  const go = t => { $('#stabs', m).innerHTML = tabs.map(([k, n]) => `<button class="${k === t ? 'on' : ''}" data-t="${k}">${n}</button>`).join(''); $$('#stabs button', m).forEach(b => b.onclick = () => go(b.dataset.t)); ({accounts: setAccounts, users: setUsers, routing: setRouting, quick: setQuick, labels: setLabels, actions: setActions, vars: setVars, maps: setMapsCfg, app: setAppCfg})[t]($('#sbody', m), sub); sub = null; };
   go(tab);
 }
 function setAccounts(el, sub) {
@@ -1402,7 +1430,9 @@ function editAccount(el, a) {
       <div class="grid2" style="margin-top:8px"><div class="fld"><label>Phone Number ID</label><input id="a_pnid" value="${esc(c.phone_number_id || '')}"></div>
       <div class="fld"><label>Access Token (دائم — System User)</label><input id="a_token" value="${esc(c.token || '')}"></div>
       <div class="fld"><label>App Secret (لتأمين الـwebhook — اختياري)</label><input id="a_secret" value="${esc(c.app_secret || '')}"></div>
-      <div class="fld"><label>إصدار الـAPI</label><input id="a_ver" value="${esc(c.api_version || 'v21.0')}"></div></div></div>
+      <div class="fld"><label>إصدار الـAPI</label><input id="a_ver" value="${esc(c.api_version || 'v21.0')}"></div>
+      <div class="fld"><label>WhatsApp Business Account ID (لقايمة القوالب)</label><input id="a_waba" value="${esc(c.waba_id || '')}"></div></div>
+      <div class="muted" id="metaHelp" style="font-size:12.5px;line-height:1.8"></div></div>
     <div class="card" id="evo_f"><b>بيانات السيرفر (Evolution API)</b>
       <div class="grid2" style="margin-top:8px"><div class="fld"><label>رابط السيرفر</label><input id="a_base" value="${esc(c.base_url || '')}" placeholder="https://wa.vps.oxygen11.com"></div>
       <div class="fld"><label>API Key</label><input id="a_key" value="${esc(c.apikey || '')}"></div>
@@ -1410,12 +1440,13 @@ function editAccount(el, a) {
     <label class="row" style="margin:6px 0 6px"><input type="checkbox" id="a_read" style="width:auto" ${c.send_read ? 'checked' : ''}> لما أفتح المحادثة يظهر عند العميل إنها اتقرت (علامتين زرق)</label>
     <div class="fld" style="max-width:420px"><label>الرد الآلي (البوت) على الرقم ده</label><select id="a_bot"><option value="on" ${c.bot !== 'off' ? 'selected' : ''}>🤖 مفعّل — إلا العملاء الممنوعين</option><option value="off" ${c.bot === 'off' ? 'selected' : ''}>🚫 مقفول — إلا العملاء المفعّل لهم</option></select></div>
     <div class="row"><button class="btn" id="a_save">حفظ</button><button class="btn ghost" id="a_back">رجوع</button>${a.id ? `<span class="grow"></span>${a.provider !== 'meta' ? `<button class="btn ghost" id="a_out">فصل الواتساب</button>` : ''}<button class="btn danger" id="a_del">إيقاف الرقم</button>` : ''}</div>`;
+  API.metaInfo().then(i => { const h = $('#metaHelp', el); if (h) h.innerHTML = `في Meta: <b>WhatsApp ← Configuration ← Webhook</b> حط:<br>Callback URL: <code dir="ltr" style="user-select:all">${esc(i.callback)}</code><br>Verify token: <code dir="ltr" style="user-select:all">${esc(i.verify_token)}</code><br>واشترك في <b>messages</b>. والتوكن الدائم من <b>Business Settings ← System users</b> بصلاحية whatsapp_business_messaging.`; }).catch(() => {});
   const sw = () => { const meta = $('#a_prov', el).value === 'meta'; $('#meta_f', el).classList.toggle('hidden', !meta); $('#evo_f', el).classList.toggle('hidden', meta); }; sw(); $('#a_prov', el).onchange = sw;
   $('#a_back', el).onclick = () => setAccounts(el);
   $('#a_save', el).onclick = async () => {
     const v = id => $('#' + id, el).value.trim();
     const d = {id: a.id, label: v('a_label') || 'رقم', phone: v('a_phone'), provider: v('a_prov'), role: v('a_role'), branch: v('a_branch'), color: v('a_color'), active: +v('a_active'),
-      config: v('a_prov') === 'meta' ? {phone_number_id: v('a_pnid'), token: v('a_token'), app_secret: v('a_secret'), api_version: v('a_ver') || 'v21.0', brand: v('a_brand'), send_read: $('#a_read', el).checked, bot: v('a_bot')}
+      config: v('a_prov') === 'meta' ? {phone_number_id: v('a_pnid'), token: v('a_token'), app_secret: v('a_secret'), api_version: v('a_ver') || 'v21.0', waba_id: v('a_waba'), brand: v('a_brand'), send_read: $('#a_read', el).checked, bot: v('a_bot')}
         : {base_url: v('a_base'), apikey: v('a_key'), instance: v('a_inst') || ('mwc' + (a.id || Date.now() % 1000)), brand: v('a_brand'), send_read: $('#a_read', el).checked, bot: v('a_bot')}};
     try { const r = await API.saveAccount(d); const i = S.accounts.findIndex(x => x.id == r.id); if (i >= 0) S.accounts[i] = Object.assign(S.accounts[i], r); else S.accounts.push(r); renderRail(); toast('اتحفظ ✅'); setAccounts(el); if (!a.id) connectAccount(r); } catch (e) { toast(e.message); }
   };
@@ -1499,10 +1530,10 @@ function renderViewsRail() {
 function setView(v) {
   S.view = v; document.body.dataset.view = v;
   $('#view').classList.toggle('hidden', v === 'chats');
-  if (v !== 'chats') { document.body.classList.remove('inchat'); ({leads: viewLeads, campaigns: viewCampaigns, maps: viewMaps, logs: viewLogs})[v](); }
+  if (v !== 'chats') { document.body.classList.remove('inchat'); ({center: viewCenter, leads: viewLeads, campaigns: viewCampaigns, maps: viewMaps, logs: viewLogs})[v](); }
   renderRail();
 }
-function vhead(title, btns = '') { return `<div class="vhead"><button class="ibtn backv" onclick="setView('chats')">${ICON.back}</button><h2>${title}</h2><span class="grow"></span>${btns}</div>`; }
+function vhead(title, btns = '') { return `<div class="vhead"><button class="ibtn backv" onclick="setView('chats')">${ICON.back}</button><h2>${title}</h2><span class="grow"></span>${btns}${can('settings') || can('accounts') || can('users') ? `<button class="ibtn vset" onclick="openSettings('accounts')" title="الإعدادات">⚙️</button>` : ''}</div>`; }
 
 /* ---------------- قاعدة العملاء ---------------- */
 const L = {f: {status: '', city: '', country: '', kind: '', tag: '', q: '', category: '', source: ''}, page: 1, per: 100, sel: new Set(), facets: null, data: null};
@@ -1912,6 +1943,8 @@ function setAppCfg(el) {
   const sw = 'serviceWorker' in navigator, push = 'PushManager' in window, ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   el.innerHTML = `<div class="card"><b>📲 تثبيت التطبيق</b><p class="muted" style="margin:6px 0">بيتثبت على الشاشة الرئيسية زي أي تطبيق، يفتح لوحده من غير متصفح، وبيرن بالإشعارات حتى وهو مقفول.</p>
       ${standalone ? '<div style="color:var(--accent2)">✅ انت فاتح التطبيق المتثبت</div>' : S.installEvt ? '<button class="btn" id="apI">تثبيت التطبيق الآن</button>' : ios ? '<div>على الآيفون: من Safari دوس زرار <b>المشاركة</b> ⬆️ ← <b>إضافة إلى الشاشة الرئيسية</b>، وبعدين افتحه من الأيقونة وفعّل الإشعارات من هنا.</div>' : '<div>على أندرويد: من قايمة كروم ⋮ ← <b>تثبيت التطبيق</b> (أو «إضافة إلى الشاشة الرئيسية»).</div>'}</div>
+    <div class="card"><b>🤖 تطبيق أندرويد (APK)</b><p class="muted" style="margin:6px 0">تطبيق حقيقي بيرن ويصحّي الشاشة مع كل رسالة حتى والموبايل مقفول — نزّله وثبّته (لو أندرويد سأل: «السماح من المصدر ده»)، وبعدين ادخل برقمك السري وسيبه مفتوح مرة.</p>
+      ${window.Capacitor ? '<div style="color:var(--accent2)">✅ انت فاتح تطبيق الأندرويد</div>' : `<a class="btn" href="${APK_URL}" target="_blank" rel="noopener">⬇️ تنزيل التطبيق</a> <button class="btn ghost" onclick="copy(APK_URL)">نسخ الرابط</button>`}</div>
     <div class="card"><b>🔔 إشعارات الجهاز ده</b><p class="muted" style="margin:6px 0">${!sw || !push ? 'المتصفح ده مش بيدعم الإشعارات وهو مقفول' + (ios && !standalone ? ' — ثبّت التطبيق الأول على الشاشة الرئيسية' : '') : 'كل رسالة جديدة على أرقامك هتوصلك إشعار بصوت واهتزاز، حتى لو التطبيق مقفول.'}</p>
       <div id="apSt" class="muted"></div>${sw && push ? '<button class="btn" id="apP">تفعيل الإشعارات</button> <button class="btn ghost" id="apT">إرسال إشعار تجربة</button>' : ''}</div>
     <div class="card"><b>🔊 الصوت</b><p class="muted" style="margin:6px 0">صوت الإشعار وانت فاتح التطبيق.</p><button class="btn ghost" id="apS">${S.sound ? '🔔 شغّال — دوس للإيقاف' : '🔕 مقفول — دوس للتشغيل'}</button> <button class="btn ghost" onclick="SND.incoming()">▶️ تجربة</button></div>`;
@@ -1954,6 +1987,113 @@ async function enablePush(ask) {
     await API.pushSubscribe(sub.toJSON()); S.notif = true; localStorage.setItem('mwc_notif', '1');
     return true;
   } catch (e) { console.warn('push', e); return false; }
+}
+
+/* ======================================================================
+   v1.2 — مركز المدير والتوجيه، البوت الذكي، قوالب Meta، تطبيق الأندرويد
+   ====================================================================== */
+VIEWS.splice(1, 0, ['center', '🎯', 'مركز المدير', 'chat_view']);
+const APK_URL = 'https://github.com/alizizo888-code/alizeidan123/releases/download/apps-latest/oxygen-wacenter.apk';
+const ago = ts => { const s = Math.max(0, Math.floor(Date.now() / 1000 - ts)); return s < 60 ? 'دلوقتي' : s < 3600 ? Math.floor(s / 60) + ' د' : s < 86400 ? Math.floor(s / 3600) + ' س' : Math.floor(s / 86400) + ' يوم'; };
+
+async function viewCenter() {
+  const V = $('#view');
+  V.innerHTML = vhead('🎯 مركز المدير — متابعة كل الأرقام', `<label class="chip" id="botChip" style="cursor:pointer">🤖 البوت…</label><button class="btn ghost" id="cRef">⟳</button>`) + '<div class="vbody" id="cBody"><div class="empty">بيحمّل…</div></div>';
+  $('#cRef').onclick = loadCenter;
+  loadCenter();
+  clearInterval(S._dTimer); S._dTimer = setInterval(() => S.view === 'center' && !document.hidden ? loadCenter() : null, 20000);
+}
+async function loadCenter() {
+  let d, rt; try { [d, rt] = await Promise.all([API.dashboard(), API.routing()]); } catch (e) { return $('#cBody') && ($('#cBody').innerHTML = `<div class="empty">${esc(e.message)}</div>`); }
+  if (!$('#cBody')) return;
+  S.routing = rt;
+  const bc = $('#botChip');
+  bc.className = 'chip ' + (rt.hub.on && rt.hub.linked ? 'on' : '');
+  bc.innerHTML = !rt.hub.linked ? '🤖 البوت مش متوصل' : rt.hub.on ? `🤖 البوت شغال — رد على ${d.bot_today} النهارده` : '🤖 البوت متوقف';
+  bc.onclick = async () => { if (!rt.hub.linked || !can('settings')) return; try { await API.hubSave(!rt.hub.on); loadCenter(); } catch (e) { toast(e.message); } };
+  const RL = {manager: 'المدير', sales: 'مبيعات', outreach: 'تسويق', support: 'دعم', branch: 'فرع'};
+  const tot = k => d.accounts.reduce((s, a) => s + a[k], 0);
+  $('#cBody').innerHTML = `<div class="lstats">${[['مستني رد', tot('waiting'), '#ea0038'], ['مش مقروء', tot('unread'), '#ffb02e'], ['رسايل جاية النهارده', tot('in_today'), '#53bdeb'], ['ردود النهارده', tot('out_today'), '#25d366'], ['عملاء جداد النهارده', tot('new_today'), '#a695e7']]
+      .map(([n, v, c]) => `<div class="stat" style="--c:${c}"><b>${v.toLocaleString('ar-EG')}</b><span>${n}</span></div>`).join('')}</div>
+    <h3 style="margin:6px 0 10px">📱 الأرقام</h3><div class="accgrid">${d.accounts.map(a => `<div class="card acard" data-open="${a.id}" style="border-top:4px solid ${esc(a.color)}">
+      <div class="row"><b class="grow">${esc(a.label)}</b><span class="dot ${esc(a.status)}" style="position:static;display:inline-block;width:10px;height:10px;border-radius:50%;border:0"></span></div>
+      <div class="muted" style="font-size:12.5px" dir="ltr">${esc(localPhone(a.phone))}</div><div class="muted" style="font-size:12px">${esc(RL[a.role] || a.role)}${a.branch ? ' • ' + esc(a.branch) : ''} • ${a.provider === 'meta' ? 'Meta' : 'QR'}${a.status !== 'open' ? ' • <span style="color:var(--warn)">مش متصل</span>' : ''}</div>
+      <div class="row" style="gap:10px;margin-top:8px;font-size:13px;flex-wrap:wrap"><span style="color:${a.waiting ? 'var(--danger)' : 'var(--muted)'}">⏳ ${a.waiting} مستني</span><span>📩 ${a.in_today}</span><span>📤 ${a.out_today}</span><span>🆕 ${a.new_today}</span></div></div>`).join('')}</div>
+    <div class="cgrid"><div><h3 style="margin:14px 0 10px">⏳ محتاج رد (الأقدم الأول)</h3><div class="card" style="padding:0">${d.waiting.length ? d.waiting.map(w => { const a = accById(w.account_id); const late = Date.now() / 1000 - w.last_in_ts > 600;
+        return `<div class="wrow" data-chat="${w.id}"><span class="tag" style="background:${esc(a.color)}">${esc(a.label)}</span><div class="grow" style="min-width:0"><b>${esc(w.name || w.push_name || localPhone(w.wa_id))}</b><div class="muted ell" style="font-size:12.5px">${esc(w.preview)}</div>${w.source ? `<div class="muted ell" style="font-size:11.5px">📍 ${esc(w.source)}</div>` : ''}</div>
+          <div style="text-align:left"><div style="color:${late ? 'var(--danger)' : 'var(--warn)'};font-weight:600">${ago(+w.last_in_ts)}</div><div class="muted" style="font-size:11.5px">${w.assigned ? '👤 ' + esc(w.assigned) : 'مالوش مسؤول'}</div></div>
+          <button class="btn ghost" data-tr="${w.id}" style="padding:6px 10px">🔀</button></div>`; }).join('') : '<div class="empty">🎉 مفيش حد مستني رد</div>'}</div></div>
+      <div><h3 style="margin:14px 0 10px">👥 ضغط الشغل</h3><div class="card">${d.staff.length ? d.staff.map(s => `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="grow">${esc(s.name)}</span><span class="muted">${s.chats} محادثة</span><span style="color:${+s.waiting ? 'var(--danger)' : 'var(--muted)'};margin-right:10px">${s.waiting} مستني</span></div>`).join('') : '<div class="muted">مفيش محادثات متوزعة — فعّل التوزيع التلقائي من ⚙️ ← التوجيه</div>'}</div>
+      <h3 style="margin:14px 0 10px">🛠️ الفنيين</h3><div class="card">${(rt.technicians || []).length ? rt.technicians.map(t => `<div class="row" style="padding:5px 0"><span class="grow">${esc(t.name)}</span><span class="muted" dir="ltr">${esc(localPhone(t.phone))}</span><span class="muted" style="margin-right:8px">${esc(t.branch)}</span></div>`).join('') : '<div class="muted">ضيف الفنيين من ⚙️ ← التوجيه والفنيين</div>'}</div></div></div>`;
+  $$('[data-open]', $('#cBody')).forEach(e => e.onclick = () => { S.curAcc = +e.dataset.open; setView('chats'); renderList(); });
+  $$('.wrow', $('#cBody')).forEach(e => e.onclick = ev => { if (ev.target.closest('[data-tr]')) return; setView('chats'); openChat(+e.dataset.chat); });
+  $$('[data-tr]', $('#cBody')).forEach(b => b.onclick = () => transferDialog(+b.dataset.tr));
+}
+
+/* ---------------- تحويل محادثة ---------------- */
+async function transferDialog(chatId) {
+  const c = S.chats.get(chatId) || {id: chatId};
+  let rt = S.routing; if (!rt) { try { rt = S.routing = await API.routing(); } catch (e) { rt = {technicians: [], staff: []}; } }
+  const accs = S.accounts.filter(a => a.active && a.id != c.account_id);
+  const m = modal('🔀 تحويل ' + esc(nameOf(c)), `<div class="tabs" id="trT" style="margin:-16px -18px 14px"><button data-k="staff" class="on">👤 لموظف</button><button data-k="tech">🛠️ لفني</button><button data-k="room">📥 لغرفة العمليات</button><button data-k="account">📱 لرقم تاني</button></div><div id="trB"></div>
+    <div class="fld" id="trNoteW"><label>ملاحظة (بتتبعت مع كارت العميل)</label><textarea id="trN" rows="2" placeholder="مثلاً: 4 مكيفات سبليت — بعد العصر"></textarea></div>`, '<button class="btn" id="trGo">تحويل</button><button class="btn ghost" data-close>إلغاء</button>');
+  let k = 'staff';
+  const draw = () => {
+    $$('#trT button', m).forEach(b => b.classList.toggle('on', b.dataset.k === k));
+    $('#trB', m).innerHTML = k === 'staff' ? `<div class="row" style="flex-wrap:wrap;gap:6px">${(rt.staff || []).map((s, i) => `<label class="chip"><input type="radio" name="trs" value="${esc(s)}" style="width:auto;margin-left:4px" ${c.assigned === s ? 'checked' : ''}>${esc(s)}</label>`).join('')}</div>`
+      : k === 'tech' ? ((rt.technicians || []).length ? `<div>${rt.technicians.map((t, i) => `<label class="svcbtn"><input type="radio" name="trt" value="${i}" style="width:auto"><span class="grow">${esc(t.name)} <span class="muted">${esc(t.branch)} ${esc(t.skill)}</span></span><span class="muted" dir="ltr">${esc(localPhone(t.phone))}</span></label>`).join('')}</div><p class="muted" style="font-size:12.5px">بيتبعتله كارت العميل (الاسم، الرقم، اللوكيشن، المصدر، آخر كلامه) من رقم المدير.</p>` : '<div class="empty">ضيف الفنيين الأول من ⚙️ ← التوجيه والفنيين</div>')
+      : k === 'room' ? `<p>كارت العميل هيتبعت لغرفة العمليات <b dir="ltr">${esc(localPhone(rt.room_phone || ''))}</b> من رقم المدير.</p>`
+      : `<div>${accs.map(a => `<label class="svcbtn"><input type="radio" name="tra" value="${a.id}" style="width:auto"><span class="tag" style="background:${esc(a.color)}">${esc(a.label)}</span><span class="grow muted" dir="ltr">${esc(localPhone(a.phone))}</span></label>`).join('')}</div><div class="fld"><label>رسالة تعريف للعميل من الرقم الجديد (اختياري)</label><input id="trI" placeholder="معاك {brand} — كمّل معانا هنا 🌷"></div>`;
+    $('#trNoteW', m).classList.toggle('hidden', k === 'account');
+  };
+  $$('#trT button', m).forEach(b => b.onclick = () => { k = b.dataset.k; draw(); }); draw();
+  $('#trGo', m).onclick = async () => {
+    const b = {chat_id: chatId, to: k, note: $('#trN', m).value};
+    if (k === 'staff') { b.staff = $('input[name=trs]:checked', m)?.value; if (!b.staff) return toast('اختار الموظف'); }
+    if (k === 'tech') { const r = $('input[name=trt]:checked', m); if (!r) return toast('اختار الفني'); b.tech = +r.value; }
+    if (k === 'account') { const r = $('input[name=tra]:checked', m); if (!r) return toast('اختار الرقم'); b.account = +r.value; b.intro = fillVars($('#trI', m).value, Object.assign({}, c, {account_id: +r.value})); }
+    try { const r = await API.transfer(b); m.remove(); toast('✅ ' + (r.msg || 'اتحوّل'));
+      if (k === 'staff' && S.chats.get(chatId)) { S.chats.get(chatId).assigned = b.staff; renderList(); if (S.curChat === chatId) renderChatHead(); }
+      if (r.chat) { S.chats.set(r.chat.id, Object.assign(S.chats.get(r.chat.id) || {}, r.chat)); setView('chats'); openChat(r.chat.id); }
+      if (S.view === 'center') loadCenter();
+    } catch (e) { toast('⚠️ ' + e.message, 4000); }
+  };
+}
+
+/* ---------------- إعدادات التوجيه والفنيين والبوت ---------------- */
+function setRouting(el) {
+  el.innerHTML = '<div class="empty">بيحمّل…</div>';
+  API.routing().then(rt => {
+    S.routing = rt;
+    const techs = (rt.technicians || []).slice();
+    el.innerHTML = `<div class="card"><b>🤖 البوت الذكي على أرقام المركز</b><p class="muted" style="margin:6px 0">نفس المساعد الذكي (الأسعار، الترحيب، المواعيد، دقيقتين للموظف يرد الأول). العملاء «الممنوعين» ما بيردش عليهم، ولكل رقم تقدر تقفله من إعداد الرقم.</p>
+        ${rt.hub.linked ? `<button class="btn ${rt.hub.on ? 'danger' : ''}" id="rBot">${rt.hub.on ? '⏸️ إيقاف البوت' : '▶️ تشغيل البوت'}</button>` : '<span style="color:var(--warn)">البوت لسه مش متوصل بالسيرفر</span>'}</div>
+      <div class="card"><b>📥 رقم المدير وغرفة العمليات</b><div class="grid3" style="margin-top:8px"><div class="fld"><label>رقم المدير (بيبعت منه للفنيين والعمليات)</label><select id="rMgr"><option value="0">تلقائي (أول رقم مدير متصل)</option>${S.accounts.map(a => `<option value="${a.id}" ${rt.manager_account == a.id ? 'selected' : ''}>${esc(a.label)} — ${esc(localPhone(a.phone))}</option>`).join('')}</select></div>
+        <div class="fld"><label>رقم غرفة العمليات</label><input id="rRoom" dir="ltr" value="${esc(localPhone(rt.room_phone || ''))}"></div></div></div>
+      <div class="card"><b>🔄 التوزيع التلقائي</b><p class="muted" style="margin:6px 0">أي عميل جديد على الرقم بيتوزع بالدور على الموظفين اللي تختارهم.</p>${S.accounts.filter(a => a.active).map(a => `<div class="row" style="flex-wrap:wrap;gap:6px;padding:6px 0;border-bottom:1px solid var(--line)"><span class="tag" style="background:${esc(a.color)};min-width:90px;text-align:center">${esc(a.label)}</span>${(rt.staff || []).map(s => `<label class="chip"><input type="checkbox" class="rAuto" data-acc="${a.id}" value="${esc(s)}" style="width:auto;margin-left:4px" ${((rt.auto || {})[a.id] || []).includes(s) ? 'checked' : ''}>${esc(s)}</label>`).join('')}</div>`).join('')}</div>
+      <div class="card"><b>🛠️ الفنيين</b> <span class="muted" style="font-size:12.5px">(اللي بيتحوّلهم كروت العملاء على واتساب)</span><div id="rT" style="margin-top:8px"></div><button class="btn ghost" id="rTA">+ فني</button></div>
+      <button class="btn" id="rS">حفظ</button>`;
+    const drawT = () => { $('#rT', el).innerHTML = techs.map((t, i) => `<div class="lrow"><input value="${esc(t.name)}" data-i="${i}" data-k="name" placeholder="الاسم"><input value="${esc(t.phone ? localPhone(t.phone) : '')}" data-i="${i}" data-k="phone" dir="ltr" placeholder="05xxxxxxxx"><input value="${esc(t.branch)}" data-i="${i}" data-k="branch" placeholder="الفرع/المدينة"><input value="${esc(t.skill)}" data-i="${i}" data-k="skill" placeholder="التخصص"><button class="ibtn" data-rm="${i}" style="color:var(--danger)">${ICON.close}</button></div>`).join('') || '<div class="muted">مفيش فنيين لسه</div>';
+      $$('#rT input', el).forEach(x => x.oninput = () => techs[+x.dataset.i][x.dataset.k] = x.value); $$('#rT [data-rm]', el).forEach(b => b.onclick = () => { techs.splice(+b.dataset.rm, 1); drawT(); }); };
+    drawT(); $('#rTA', el).onclick = () => { techs.push({name: '', phone: '', branch: '', skill: ''}); drawT(); };
+    $('#rBot', el) && ($('#rBot', el).onclick = async () => { try { await API.hubSave(!rt.hub.on); toast(rt.hub.on ? 'البوت اتوقف' : 'البوت اشتغل ✅'); setRouting(el); } catch (e) { toast(e.message); } });
+    $('#rS', el).onclick = async () => {
+      const auto = {}; $$('.rAuto', el).forEach(c => { if (c.checked) (auto[c.dataset.acc] = auto[c.dataset.acc] || []).push(c.value); });
+      try { S.routing = await API.routingSave({technicians: techs, auto, manager_account: +$('#rMgr', el).value, room_phone: $('#rRoom', el).value}); toast('اتحفظ ✅'); setRouting(el); } catch (e) { toast(e.message); }
+    };
+  }).catch(e => el.innerHTML = `<div class="empty">${esc(e.message)}</div>`);
+}
+
+/* ---------------- تطبيق الأندرويد (Capacitor) ---------------- */
+function nativeBridge() {
+  const N = window.Capacitor?.Plugins?.MqNative;
+  if (!N || DEMO) return false;
+  try {
+    N.configure({endpoint: window.MWC_API, token: Real.tok, role: 'wa', alerts: true, readWhatsApp: false});
+    N.takeLaunchUrl?.().then(r => { const m = String(r?.url || '').match(/chat=(\d+)/); if (m) { setView('chats'); openChat(+m[1]); } }).catch(() => {});
+    N.addListener?.('open', d => { const m = String(d?.url || '').match(/chat=(\d+)/); if (m) { setView('chats'); openChat(+m[1]); } });
+  } catch (e) { console.warn('native', e); }
+  return true;
 }
 
 boot();
