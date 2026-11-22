@@ -31,7 +31,7 @@ final class Mutqan_Invoice {
             'branch' => 'mkk',
             'template' => ['normal' => 'classic', 'tax' => 'official'],
             'logo' => '', 'stamp' => '', 'signature' => '',   // empty logo/stamp = the bundled ones; no signature until he uploads one
-            'signer' => '', 'signDefault' => false,
+            'signer' => '', 'signDefault' => false, 'qrZatca' => true, 'qrDetails' => true,
             'note' => 'أي فاتورة لا تحمل ختم المؤسسة تعتبر لاغية',
             'items' => [
                 ['code' => '101', 'name' => 'غسيل مكيف سبليت', 'unit' => 'عدد', 'price' => 0, 'cat' => 'غسيل'],
@@ -92,6 +92,8 @@ final class Mutqan_Invoice {
         foreach (['logo', 'stamp', 'signature'] as $k) { if (isset($in[$k])) { $u = esc_url_raw((string) $in[$k]); $c[$k] = $u; } }
         if (isset($in['signer'])) { $c['signer'] = self::s($in['signer'], 80); }
         if (isset($in['signDefault'])) { $c['signDefault'] = (bool) $in['signDefault']; }
+        // which QR codes print: the authority's (ZATCA) and/or the details page — each can be hidden
+        foreach (['qrZatca', 'qrDetails'] as $k) { if (isset($in[$k])) { $c[$k] = (bool) $in[$k]; } }
         if (isset($in['items']) && is_array($in['items'])) {
             $seen = []; $items = [];
             foreach ($in['items'] as $it) {
@@ -335,8 +337,9 @@ final class Mutqan_Invoice {
     public static function get($id) {
         $r = Mutqan_Store::get_raw(self::COLL, (string) $id);
         if (!$r) { throw new Mutqan_Error('not_found', 'الفاتورة مش موجودة.', 404); }
-        if (!empty($r['qr'])) { $r['qr'] = self::fresh_qr($r); }
-        return $r + ['id' => (string) $id, 'viewUrl' => self::view_url((string) $id)];
+        $c = self::cfg();
+        if (!empty($r['qr'])) { $r['qr'] = $c['qrZatca'] === false ? '' : self::fresh_qr($r); }
+        return $r + ['id' => (string) $id, 'viewUrl' => $c['qrDetails'] === false ? '' : self::view_url((string) $id)];
     }
 
     public static function lst($in) {
