@@ -532,6 +532,9 @@ const Real = {
   mapsJobs() { return this.req('GET', '/maps/jobs'); },
   mapsCreate(d) { return this.req('POST', '/maps/jobs', d); },
   mapsCheck(id) { return this.req('POST', `/maps/jobs/${id}/check`, {}); },
+  mapsPlan() { return this.req('GET', '/maps/plan'); },
+  saveMapsPlan(p) { return this.req('POST', '/maps/plan', p); },
+  mapsRunNow() { return this.req('POST', '/maps/run', {}); },
   mapsCfg() { return this.req('GET', '/maps/config'); },
   saveMapsCfg(c) { return this.req('POST', '/maps/config', c); },
   logs(t) { return this.req('GET', '/logs' + (t ? '?type=' + t : '')); },
@@ -689,7 +692,10 @@ function DemoV11(accounts) {
     async campaignStatus(i, st) { const c = camps.find(x => x.id === i); if (st === 'running' && c.status === 'draft') { c.total = c.queued = 40; } c.status = st; return c; },
     async mapsJobs() { return {jobs: jobs.slice(), status: {ok: true}}; },
     async mapsCreate(d) { const j = {id: jobs.length + 1, keywords: d.keywords, city: d.city, status: 'working', found: 0, imported: 0, created: now(), created_by: 'المالك', error: ''}; jobs.unshift(j); setTimeout(() => { j.status = 'done'; j.found = 42; j.imported = 17; }, 8000); return j; },
-    async mapsCheck() { return {}; }, async mapsCfg() { return {base_url: 'https://maps.vps.oxygen11.com', user: 'mwc', pass: '••••x1'}; }, async saveMapsCfg(c) { return c; },
+    async mapsCheck() { return {}; },
+    async mapsPlan() { return window.__DEMO_PLAN || (window.__DEMO_PLAN = {on:1, per_day:6, hour:3, depth:5, cursor:12, total:144, cycle_days:24, last_run:'', next:['صيانة مكيفات — العزيزية مكة','غسيل مكيفات — العزيزية مكة','تركيب مكيفات — العزيزية مكة','صيانة غرف تبريد وتجميد — العزيزية مكة','صيانة مكيفات — الشوقية مكة','غسيل مكيفات — الشوقية مكة'], today:{new_today:37, found_today:112, jobs_today:4, by_city:{'مكة':{new:21,found:64,jobs:2},'جدة':{new:16,found:48,jobs:2}}}, trades:['صيانة مكيفات','غسيل مكيفات','تركيب مكيفات','صيانة غرف تبريد وتجميد'], cities:['مكة','جدة']}); },
+    async saveMapsPlan(p) { Object.assign(window.__DEMO_PLAN, p); return window.__DEMO_PLAN; },
+    async mapsRunNow() { return window.__DEMO_PLAN; }, async mapsCfg() { return {base_url: 'https://maps.vps.oxygen11.com', user: 'mwc', pass: '••••x1'}; }, async saveMapsCfg(c) { return c; },
     async logs(t) { return logs.filter(l => !t || l.type === t); },
     async users() { return users; }, async saveUser(u) { if (u.id) Object.assign(users.find(x => x.id === u.id), u); else users.push(Object.assign(u, {id: 'u' + (users.length + 1)})); return u; }, async deleteUser(i) { users.splice(users.findIndex(x => x.id === i), 1); },
     async pushSubscribe() { return {ok: true}; }, async pushTest() { return {devices: 0, delivered: 0}; },
@@ -1662,11 +1668,13 @@ function vhead(title, btns = '') { return `<div class="vhead"><button class="ibt
 const L = {f: {status: '', city: '', country: '', kind: '', tag: '', q: '', category: '', source: ''}, page: 1, per: 100, sel: new Set(), facets: null, data: null};
 async function viewLeads() {
   const V = $('#view');
-  V.innerHTML = vhead('👥 قاعدة العملاء', `${can('leads') ? '<button class="btn ghost" id="lAdd">+ عميل</button><button class="btn ghost" id="lImp">⬆️ استيراد Excel</button>' : ''}${can('leads_export') ? '<button class="btn ghost" id="lExp">⬇️ تصدير Excel</button>' : ''}${can('campaigns') ? '<button class="btn" id="lCamp">📣 حملة للفلتر ده</button>' : ''}`)
+  V.innerHTML = vhead('👥 قاعدة العملاء', `${can('leads') ? '<button class="btn ghost" id="lAdd">+ عميل</button><button class="btn ghost" id="lImp">⬆️ استيراد Excel</button>' : ''}${can('leads_export') ? '<button class="btn ghost" id="lExpM">⬇️ Excel مكة</button><button class="btn ghost" id="lExpJ">⬇️ Excel جدة</button><button class="btn ghost" id="lExp">⬇️ تصدير المعروض</button>' : ''}${can('campaigns') ? '<button class="btn" id="lCamp">📣 حملة للفلتر ده</button>' : ''}`)
     + `<div class="vbody"><div class="lstats" id="lStats"></div><div class="lfilters" id="lF"></div><div class="lbulk hidden" id="lBulk"></div><div class="tblwrap"><table class="tbl" id="lT"></table></div><div class="pager" id="lP"></div></div>`;
   $('#lAdd') && ($('#lAdd').onclick = () => editLead(null));
   $('#lImp') && ($('#lImp').onclick = importDialog);
   $('#lExp') && ($('#lExp').onclick = () => exportLeads());
+  $('#lExpM') && ($('#lExpM').onclick = () => exportLeads(null, {city: 'مكة'}));
+  $('#lExpJ') && ($('#lExpJ').onclick = () => exportLeads(null, {city: 'جدة'}));
   $('#lCamp') && ($('#lCamp').onclick = () => campaignDialog(null, {filter: cleanF(L.f)}));
   await loadFacets(); loadLeads();
 }
@@ -1864,12 +1872,12 @@ function importDialog() {
     };
   };
 }
-async function exportLeads(ids) {
+async function exportLeads(ids, filt) {
   toast('بيجهّز الملف…');
-  let res; try { res = await API.exportLeads(ids ? {ids} : {filter: cleanF(L.f)}); } catch (e) { return toast(e.message); }
+  let res; try { res = await API.exportLeads(ids ? {ids} : {filter: filt || cleanF(L.f)}); } catch (e) { return toast(e.message); }
   const header = ['الرقم الدولي', 'الرقم المحلي', 'الاسم', 'الدولة', 'المدينة', 'نوع الرقم', 'النشاط', 'المصدر', 'الحالة', 'التاجات', 'عدد مرات الإرسال', 'آخر إرسال', 'العنوان', 'رابط الخرائط', 'رابط واتساب', 'ملاحظات'];
   const rows = res.rows.map(r => ['+' + r.phone, localPhone(r.phone), r.name, r.country, r.city, r.kind_label || KIND[r.kind] || r.kind, r.category, r.source, r.status_label || r.status, r.tags, r.sent_count, r.last_sent ? new Date(r.last_sent * 1000).toLocaleDateString('en-GB') : '', (r.extra || {}).address || '', (r.extra || {}).maps || '', 'https://wa.me/' + r.phone, r.notes || '']);
-  const name = 'عملاء-' + (L.f.city || 'الكل') + '-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+  const name = 'عملاء-' + ((filt && filt.city) || L.f.city || 'الكل') + '-' + new Date().toISOString().slice(0, 10) + '.xlsx';
   saveBlob(xlsxBlob('العملاء', header, rows, [18, 14, 26, 12, 12, 10, 22, 26, 14, 20, 10, 12, 30, 30, 26, 30]), name);
   toast(`اتصدّر ${rows.length} عميل ✅`);
 }
@@ -1988,6 +1996,7 @@ async function campaignDialog(c, preset = {}) {
 async function viewMaps() {
   const V = $('#view');
   V.innerHTML = vhead('🗺️ سحب أرقام من خرائط جوجل', '<button class="btn ghost" id="mRef">⟳ تحديث</button>') + `<div class="vbody"><div id="mStat"></div>
+    <div id="mPlan"></div>
     <div class="card"><div class="grid3"><div class="fld" style="grid-column:span 2"><label>كلمات البحث (كل سطر بحث لوحده)</label><textarea id="mK" rows="4" placeholder="صيانة مكيفات مكة\nمطاعم العزيزية مكة\nفنادق جدة"></textarea></div>
       <div><div class="fld"><label>المدينة (بتتسجل على الأرقام)</label><select id="mC"><option>مكة</option><option>جدة</option><option>الطائف</option><option value="">أخرى</option></select></div>
       <div class="fld"><label>النشاط</label><input id="mCat" placeholder="مطاعم / فنادق / شركات"></div><div class="fld"><label>تاجات</label><input id="mT" placeholder="مثلاً: عملاء-تكييف"></div>
@@ -1995,9 +2004,39 @@ async function viewMaps() {
       <button class="btn" id="mGo">🔎 ابدأ السحب</button> <span class="muted" style="font-size:12.5px">بتشتغل على سيرفرك بأداة مجانية مفتوحة المصدر — النتايج بتدخل «قاعدة العملاء» لوحدها لما تخلص.</span></div>
     <h3>الشغلانات</h3><div class="tblwrap"><table class="tbl" id="mJ"></table></div></div>`;
   $('#mGo').onclick = async () => { try { await API.mapsCreate({keywords: $('#mK').value, city: $('#mC').value, category: $('#mCat').value, tags: $('#mT').value, depth: +$('#mD').value}); toast('السحب بدأ ✅'); $('#mK').value = ''; loadJobs(); } catch (e) { toast('⚠️ ' + e.message, 5000); } };
-  $('#mRef').onclick = loadJobs;
+  $('#mRef').onclick = () => { loadJobs(); loadPlan(); };
+  loadPlan();
   loadJobs();
   clearInterval(S._mTimer); S._mTimer = setInterval(() => S.view === 'maps' && !document.hidden ? loadJobs(true) : null, 20000);
+}
+/* ---------------- الجدول اليومي لسحب الخرائط ---------------- */
+async function loadPlan() {
+  const box = $('#mPlan'); if (!box) return;
+  let p; try { p = await API.mapsPlan(); } catch (e) { box.innerHTML = `<div class="card muted">الجدول اليومي: ${esc(e.message)}</div>`; return; }
+  const cities = Object.entries(p.today.by_city || {});
+  box.innerHTML = `<div class="card">
+    <div class="row" style="flex-wrap:wrap;gap:10px"><b style="font-size:16px">📅 السحب اليومي التلقائي</b>
+      <span class="chip ${p.on ? 'on' : ''}">${p.on ? 'شغّال' : 'مقفول'}</span><span class="grow"></span>
+      <button class="btn ghost" id="plRun">▶️ شغّل دلوقتي</button>
+      <button class="btn ${p.on ? 'danger' : ''}" id="plTog">${p.on ? 'إيقاف' : 'تشغيل'}</button></div>
+    <p class="muted" style="font-size:12.5px;margin:8px 0">بيلم أرقام ${esc((p.trades || []).join('، '))} في ${esc((p.cities || []).join(' و'))} — حي ورا حي كل يوم، عشان خرائط جوجل بترجع عدد محدود للبحث الواحد. التغطية الكاملة ${p.total} بحث، بتخلص في حوالي <b>${p.cycle_days}</b> يوم وبعدين تلف من الأول تلقط الجديد.</p>
+    <div class="lstats">
+      ${cities.map(([c, v]) => `<div class="stat" style="--c:var(--accent)"><b>${(v.new || 0).toLocaleString('ar-EG')}</b><span>${esc(c)} — جديد النهاردة</span></div>`).join('')}
+      <div class="stat" style="--c:var(--blue)"><b>${(p.today.found_today || 0).toLocaleString('ar-EG')}</b><span>مكان اتفحص النهاردة</span></div>
+      <div class="stat" style="--c:var(--muted)"><b>${p.cursor} / ${p.total}</b><span>مكان الدور في التغطية</span></div>
+    </div>
+    <div class="grid3">
+      <div class="fld"><label>كام بحث كل يوم</label><input id="plN" type="number" min="1" max="30" value="${p.per_day}"></div>
+      <div class="fld"><label>يبدأ الساعة (بتوقيت السعودية)</label><input id="plH" type="number" min="0" max="23" value="${p.hour}"></div>
+      <div class="fld"><label>العمق لكل بحث</label><input id="plD" type="number" min="1" max="30" value="${p.depth}"></div>
+    </div>
+    <div class="muted" style="font-size:12.5px">الجاي في الدور: ${(p.next || []).map(x => '<span class="chip">' + esc(x) + '</span>').join(' ')}</div>
+    <p style="margin:10px 0 0"><button class="btn ghost" id="plSave">حفظ الإعدادات</button>
+      <span class="muted" style="font-size:12px">${p.last_run ? 'آخر تشغيل: ' + esc(p.last_run) : 'لسه ما اشتغلش'}</span></p></div>`;
+  const save = async d => { try { await API.saveMapsPlan(d); toast('اتحفظ ✅'); loadPlan(); } catch (e) { toast('⚠️ ' + e.message, 4000); } };
+  $('#plTog', box).onclick = () => save({on: p.on ? 0 : 1});
+  $('#plSave', box).onclick = () => save({per_day: +$('#plN', box).value, hour: +$('#plH', box).value, depth: +$('#plD', box).value});
+  $('#plRun', box).onclick = async () => { try { toast('بيشغّل بحث النهاردة…'); await API.mapsRunNow(); loadPlan(); loadJobs(); } catch (e) { toast('⚠️ ' + e.message, 4000); } };
 }
 async function loadJobs() {
   let r; try { r = await API.mapsJobs(); } catch (e) { return $('#mJ') && ($('#mJ').innerHTML = `<tr><td>${esc(e.message)}</td></tr>`); }

@@ -6,6 +6,126 @@ if (!defined('ABSPATH')) exit;
  * الموقع بيبعت الكلمات للسيرفر، ولما الشغلانة تخلص النتايج بتدخل قاعدة العملاء تلقائي.
  */
 class MWC_Maps {
+    /** المجالات اللي بنلم أرقامها (صاحب الشغل حددها: 2026-11-22) */
+    const TRADES = ['صيانة مكيفات', 'غسيل مكيفات', 'تركيب مكيفات', 'صيانة غرف تبريد وتجميد'];
+
+    /**
+     * أحياء مكة وجدة. السحب بيمشي على (مجال × حي) واحدة ورا التانية بدل ما يسأل «صيانة مكيفات مكة» مرة واحدة —
+     * خرائط جوجل بترجع عدد محدود للبحث الواحد، فالبحث على مستوى الحي هو اللي بيوصل لكل المحلات فعلاً.
+     */
+    const AREAS = [
+        'مكة' => ['العزيزية', 'الشوقية', 'النسيم', 'الششة', 'العوالي', 'الكعكية', 'بطحاء قريش', 'الزاهر', 'المسفلة',
+                  'الخالدية', 'الرصيفة', 'النوارية', 'الشرائع', 'المعابدة', 'ولي العهد', 'التنعيم', 'الهجرة', 'جرهم'],
+        'جدة' => ['السلامة', 'الصفا', 'المروة', 'النزهة', 'الربوة', 'الروضة', 'الحمراء', 'البوادي', 'الفيصلية',
+                  'النعيم', 'الشاطئ', 'أبحر الشمالية', 'أبحر الجنوبية', 'الزهراء', 'السامر', 'مشرفة', 'بريمان', 'الجامعة'],
+    ];
+
+    /**
+     * كل التباديل (مجال × حي × مدينة) بالترتيب اللي الجدول اليومي بيمشي عليه.
+     * المدن بتتبادل واحدة ورا واحدة مقصود: لو مشينا مكة كلها الأول، جدة ما كانتش هتبدأ غير بعد 12 يوم —
+     * وهو عايز الملفين يكبروا مع بعض كل يوم.
+     */
+    static function plan_list() {
+        $cities = array_keys(self::AREAS);
+        $cols = [];
+        foreach ($cities as $city) {
+            $col = [];
+            foreach (self::AREAS[$city] as $area) {
+                foreach (self::TRADES as $trade) { $col[] = ['city' => $city, 'area' => $area, 'trade' => $trade]; }
+            }
+            $cols[] = $col;
+        }
+        $out = []; $max = max(array_map('count', $cols));
+        for ($i = 0; $i < $max; $i++) {
+            foreach ($cols as $col) { if (isset($col[$i])) $out[] = $col[$i]; }
+        }
+        return $out;
+    }
+
+    static function plan() {
+        $p = get_option('mwc_maps_plan');
+        return array_merge(['on' => 0, 'per_day' => 6, 'hour' => 3, 'depth' => 5, 'cursor' => 0, 'last_run' => ''], is_array($p) ? $p : []);
+    }
+    static function save_plan($in) {
+        $p = self::plan();
+        if (isset($in['on']))      $p['on'] = empty($in['on']) ? 0 : 1;
+        if (isset($in['per_day'])) $p['per_day'] = max(1, min(30, (int) $in['per_day']));
+        if (isset($in['hour']))    $p['hour'] = max(0, min(23, (int) $in['hour']));
+        if (isset($in['depth']))   $p['depth'] = max(1, min(30, (int) $in['depth']));
+        if (isset($in['cursor']))  $p['cursor'] = max(0, (int) $in['cursor']);
+        update_option('mwc_maps_plan', $p, false);
+        return self::plan_out();
+    }
+
+    /** الحالة اللي بتتعرض في الشاشة: فين واقفين في التغطية، وإيه اللي جاي النهاردة */
+    static function plan_out() {
+        $p = self::plan();
+        $all = self::plan_list(); $n = count($all);
+        $next = [];
+        for ($i = 0; $i < $p['per_day'] && $i < $n; $i++) {
+            $c = $all[($p['cursor'] + $i) % $n];
+            $next[] = $c['trade'] . ' — ' . $c['area'] . ' ' . $c['city'];
+        }
+        return [
+            'on' => (int) $p['on'], 'per_day' => (int) $p['per_day'], 'hour' => (int) $p['hour'], 'depth' => (int) $p['depth'],
+            'cursor' => (int) $p['cursor'], 'total' => $n, 'last_run' => $p['last_run'],
+            'cycle_days' => (int) ceil($n / max(1, $p['per_day'])),
+            'next' => $next, 'today' => self::today_stats(),
+            'trades' => self::TRADES, 'cities' => array_keys(self::AREAS),
+        ];
+    }
+
+    /** كام رقم جديد دخل النهاردة، لكل مدينة — ده «الأوردر اليومي» اللي بيزيد كل يوم */
+    static function today_stats() {
+        global $wpdb;
+        $start = strtotime(current_time('Y-m-d') . ' 00:00:00') - (int) (get_option('gmt_offset') * HOUR_IN_SECONDS);
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT city, COUNT(*) jobs, COALESCE(SUM(found),0) found, COALESCE(SUM(imported),0) imported
+             FROM " . MWC_Store::t('jobs') . " WHERE finished>=%d AND status='done' GROUP BY city", $start), ARRAY_A);
+        $out = ['new_today' => 0, 'found_today' => 0, 'jobs_today' => 0, 'by_city' => []];
+        foreach ($rows as $r) {
+            $out['by_city'][$r['city'] ?: '—'] = ['new' => (int) $r['imported'], 'found' => (int) $r['found'], 'jobs' => (int) $r['jobs']];
+            $out['new_today'] += (int) $r['imported']; $out['found_today'] += (int) $r['found']; $out['jobs_today'] += (int) $r['jobs'];
+        }
+        foreach (array_keys(self::AREAS) as $c) if (!isset($out['by_city'][$c])) $out['by_city'][$c] = ['new' => 0, 'found' => 0, 'jobs' => 0];
+        return $out;
+    }
+
+    /**
+     * بيتنادى مع نبضة الدقيقة: لو النهاردة لسه ما اتسحبش وجه ميعاده، يبعت شغلانات اليوم ويحرّك الدور.
+     * التقسيم على أيام مقصود: أداة السحب بتاخد وقت طويل للشغلانة، وضرب الخرائط بعدد كبير مرة واحدة بيفشل.
+     */
+    static function run_daily() {
+        $p = self::plan();
+        if (empty($p['on'])) return false;
+        $today = current_time('Y-m-d');
+        if ($p['last_run'] === $today) return false;
+        if ((int) current_time('H') < (int) $p['hour']) return false;
+
+        $all = self::plan_list(); $n = count($all);
+        if (!$n) return false;
+        $done = 0; $started = [];
+        for ($i = 0; $i < (int) $p['per_day']; $i++) {
+            $c = $all[($p['cursor'] + $i) % $n];
+            $r = self::create([
+                'keywords' => $c['trade'] . ' ' . $c['area'] . ' ' . $c['city'],
+                'city' => $c['city'], 'category' => $c['trade'],
+                'tags' => 'خرائط,يومي,' . $c['area'], 'depth' => $p['depth'],
+            ]);
+            if (is_wp_error($r)) { MWC_Store::log('maps', 'الجدول اليومي: فشل «' . $c['trade'] . ' ' . $c['area'] . '» — ' . $r->get_error_message(), 'النظام'); break; }
+            $done++; $started[] = $c['trade'] . ' — ' . $c['area'];
+        }
+        if (!$done) return false;
+        $p['cursor'] = ($p['cursor'] + $done) % $n;
+        $p['last_run'] = $today;
+        update_option('mwc_maps_plan', $p, false);
+
+        $y = self::today_stats();
+        MWC_Store::log('maps', sprintf('الجدول اليومي شغّل %d بحث: %s. إجمالي اللي دخل النهاردة: %d رقم جديد.',
+            $done, implode('، ', $started), $y['new_today']), 'النظام');
+        return true;
+    }
+
     static function cfg() {
         $c = get_option('mwc_maps'); $c = is_array($c) ? $c : [];
         return array_merge(['base_url' => '', 'user' => '', 'pass' => ''], $c);
@@ -67,6 +187,9 @@ class MWC_Maps {
         global $wpdb;
         $jobs = $wpdb->get_results("SELECT * FROM " . MWC_Store::t('jobs') . " WHERE status='working' ORDER BY id LIMIT 5", ARRAY_A);
         foreach ($jobs as $j) self::check($j);
+        // الجدول اليومي بيركب على نفس النبضة دي بدل كرون لوحده: النبضة جاية من ticker السيرفر ومن ووردبريس
+        // الاتنين، فلو واحد فيهم وقف الجدول بيفضل ماشي.
+        if (count($jobs) < 3) self::run_daily();
     }
 
     static function check($j) {

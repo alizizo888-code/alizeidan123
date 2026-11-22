@@ -23,6 +23,9 @@ class MWC_Rest2 {
         $r('/maps/jobs', 'GET', 'maps_jobs', $auth);
         $r('/maps/jobs', 'POST', 'maps_create', $auth);
         $r('/maps/jobs/(?P<id>\d+)/check', 'POST', 'maps_check', $auth);
+        $r('/maps/plan', 'GET', 'maps_plan', $auth);
+        $r('/maps/plan', 'POST', 'maps_plan_save', $auth);
+        $r('/maps/run', 'POST', 'maps_run_now', $auth);
         $r('/maps/config', 'GET', 'maps_cfg', $auth);
         $r('/maps/config', 'POST', 'maps_cfg_save', $auth);
         $r('/logs', 'GET', 'logs', $auth);
@@ -118,6 +121,15 @@ class MWC_Rest2 {
         $j = $wpdb->get_row($wpdb->prepare("SELECT * FROM " . MWC_Store::t('jobs') . " WHERE id=%d", (int) $q['id']), ARRAY_A);
         if ($j && $j['status'] === 'working') MWC_Maps::check($j);
         return $wpdb->get_row($wpdb->prepare("SELECT * FROM " . MWC_Store::t('jobs') . " WHERE id=%d", (int) $q['id']), ARRAY_A);
+    }
+    static function maps_plan() { if ($e = self::deny('maps')) return $e; return MWC_Maps::plan_out(); }
+    static function maps_plan_save(WP_REST_Request $q) { if ($e = self::deny('maps')) return $e; return MWC_Maps::save_plan($q->get_json_params() ?: []); }
+    /** «شغّل دلوقتي»: بيصفّر تاريخ آخر تشغيل عشان النبضة الجاية تبعت شغلانات النهاردة من غير استنى الميعاد */
+    static function maps_run_now() {
+        if ($e = self::deny('maps')) return $e;
+        $p = MWC_Maps::plan(); $p['last_run'] = ''; $p['on'] = 1; update_option('mwc_maps_plan', $p, false);
+        MWC_Maps::run_daily();
+        return MWC_Maps::plan_out();
     }
     static function maps_cfg() { if ($e = self::deny('maps')) return $e; return MWC_Maps::public_cfg(); }
     static function maps_cfg_save(WP_REST_Request $q) { if ($e = self::deny('settings')) return $e; return MWC_Maps::save_cfg($q->get_json_params() ?: []); }
