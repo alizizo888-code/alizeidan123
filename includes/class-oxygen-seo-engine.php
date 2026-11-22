@@ -585,6 +585,20 @@ class Oxygen_SEO_Engine {
         }
         return false;
     }
+    /** The address carries the keyword (Arabic, like the title) + 4 characters so two sites never share it. */
+    public static function kw_slug($item) {
+        $kw = trim((string) ($item['kw'] ?? ''));
+        if ($kw === '') { return (string) $item['key']; }
+        $s = sanitize_title(mb_substr($kw, 0, 60));
+        return ($s !== '' ? $s : (string) $item['key']) . '-' . substr(md5((string) $item['key'] . home_url()), 0, 4);
+    }
+    /** A sub-heading with the exact keyword right after the opening paragraph, when the template has none. */
+    public static function kw_heading($html, $kw) {
+        if ($kw === '' || preg_match('#<h[23][^>]*>[^<]*' . preg_quote($kw, '#') . '#u', (string) $html)) { return $html; }
+        $h = '<h2>' . esc_html($kw) . ': كل ما تحتاج معرفته</h2>';
+        $pos = mb_strpos((string) $html, '</p>');
+        return $pos === false ? $h . $html : mb_substr($html, 0, $pos + 4) . $h . mb_substr($html, $pos + 4);
+    }
     public static function publish_item($item, $kind, $force_status, $map) {
         $s = self::settings();
         $ctx = self::ctx($item, $map);
@@ -593,8 +607,9 @@ class Oxygen_SEO_Engine {
         $g = class_exists('Oxygen_Uniq') ? Oxygen_Uniq::gate($item, $b) : null;
         if ($g) { $b['html'] = $g['html']; if ($g['status']) { $force_status = $g['status']; } }
         $author = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID']);
+        $b['html'] = self::kw_heading($b['html'], (string) $item['kw']);
         $id = wp_insert_post([
-            'post_type' => 'post', 'post_status' => $force_status ?: $s['status'], 'post_title' => $item['title'], 'post_name' => $item['key'],
+            'post_type' => 'post', 'post_status' => $force_status ?: $s['status'], 'post_title' => $item['title'], 'post_name' => self::kw_slug($item),
             'post_content' => $b['html'], 'post_excerpt' => $b['desc'], 'post_author' => $author ? (int) $author[0] : 1,
         ], true);
         if (is_wp_error($id) || !$id) { return false; }
