@@ -136,7 +136,7 @@ class MWC_Rest {
             update_option('mwc_last_tick', time(), false);
             wp_remote_get(add_query_arg('k', get_option('mwc_tick_key'), rest_url(MWC_NS . '/tick')), ['blocking' => false, 'timeout' => 0.5, 'sslverify' => false]);
         }
-        if (!MWC_Users::can('chat_view')) return ['now' => time(), 'chats' => [], 'messages' => [], 'accounts' => []];
+        if (!MWC_Users::can('chat_view')) return ['now' => time(), 'ver' => MWC_VERSION, 'chats' => [], 'messages' => [], 'accounts' => []];
         $msgs = array_map([__CLASS__, 'msg_out'], MWC_Store::messages_since($since, $acc));
         if ($al !== null) {
             $okChats = [];
@@ -145,6 +145,8 @@ class MWC_Rest {
         }
         return [
             'now' => time(),
+            // نسخة الإضافة الحالية — التطبيق بيقارنها باللي اتحمّل معاه ويحدّث نفسه لوحده لو اختلفت (1.3)
+            'ver' => MWC_VERSION,
             'chats' => array_map([__CLASS__, 'chat_out'], MWC_Store::chats(['since' => $since, 'account' => $acc, 'limit' => 200, 'allowed' => $al])),
             'messages' => $msgs,
             'accounts' => array_map(function ($a) { return ['id' => $a['id'], 'status' => $a['status']]; }, self::my_accounts()),

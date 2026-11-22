@@ -363,6 +363,7 @@ const S = {
   me:'', accounts:[], config:{}, chats:new Map(), msgs:new Map(), curAcc:0, curChat:null, filter:'all', q:'',
   since:0, replyTo:null, profile:null, loadingOlder:false, newBelow:0,
   sound: localStorage.getItem('mwc_sound') !== '0', notif: localStorage.getItem('mwc_notif') === '1',
+  ring: localStorage.getItem('mwc_ring') === '1',
 };
 
 /* ---------------- utils ---------------- */
@@ -414,26 +415,59 @@ async function share(data) {
 function download(url, name) { const a = document.createElement('a'); a.href = url; a.download = name || ''; a.target = '_blank'; document.body.append(a); a.click(); a.remove(); }
 
 /* ---------------- sound & notifications (صوت الواتساب) ---------------- */
-let AC = null;
-function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); return AC; }
-function tone(freqs, dur = .09, gap = .07, vol = .22) {
+let AC = null, FB = null;
+function ac() {
   try {
-    const c = ac(); let t = c.currentTime + .01;
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume().catch(() => {});
+    return AC;
+  } catch (e) { return null; }
+}
+// المتصفح بيسيب الـAudioContext «مقفول» لحد أول لمسة من المستخدم، وبيرجع يقفله لوحده بعد ساعات على الموبايل —
+// فبنفتحه على أي تفاعل وكل مرة التطبيق يرجع للواجهة، عشان الصوت ما يسكتش من غير ما حد ياخد باله (1.3).
+function unlockAudio() { const c = ac(); if (c && c.state === 'suspended') c.resume().catch(() => {}); }
+['pointerdown', 'touchstart', 'keydown'].forEach(ev => document.addEventListener(ev, unlockAudio, {passive: true}));
+/** نغمة WAV جاهزة جوه الصفحة — خطة بديلة لو الـWebAudio مش راضي يشتغل (بيحصل على آيفون): لازم يرن في كل الحالات */
+function fallback() {
+  if (FB) return FB;
+  const sr = 22050, n = Math.floor(sr * .5), b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const t = i / sr, f = t < .14 ? 1046 : t < .3 ? 1318 : 0, env = f ? Math.min(1, (t < .14 ? .14 - t : .3 - t) * 22) * .55 : 0;
+    v.setInt16(44 + i * 2, Math.sin(2 * Math.PI * f * t) * env * 12000, true);
+  }
+  FB = new Audio(URL.createObjectURL(new Blob([b], {type: 'audio/wav'}))); FB.preload = 'auto';
+  return FB;
+}
+function tone(freqs, dur = .09, gap = .07, vol = .22) {
+  const c = ac();
+  if (!c || c.state !== 'running') { try { const a = fallback(); a.currentTime = 0; a.volume = Math.min(1, vol * 3); a.play().catch(() => {}); } catch (e) {} return; }
+  try {
+    let t = c.currentTime + .01;
     freqs.forEach(f => { const o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.02, t + dur);
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(.001, t + dur + .08);
       o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + .1); t += gap; });
   } catch (e) {}
 }
-const SND = { incoming: () => tone([1046, 1318], .08, .085, .25), inchat: () => tone([880], .05, 0, .12), sent: () => tone([1568], .03, 0, .06) };
+const SND = { incoming: () => tone([1046, 1318, 1046], .085, .09, .3), inchat: () => tone([880], .05, 0, .12), sent: () => tone([1568], .03, 0, .06) };
+/* تكرار النغمة كل 20 ثانية لحد ما حد يفتح الرسالة — للأرقام اللي محدش قاعد عليها طول الوقت (1.3، اختياري) */
+let ringTimer = null;
+function startRing() { if (ringTimer || !S.ring) return; ringTimer = setInterval(() => { if (!unreadTotal()) return stopRing(); if (S.sound) SND.incoming(); if (navigator.vibrate) navigator.vibrate([90, 50, 90]); }, 20000); }
+function stopRing() { clearInterval(ringTimer); ringTimer = null; }
 function notify(chat, m) {
-  if (S.sound) (document.hidden || S.curChat !== chat.id ? SND.incoming : SND.inchat)();
-  if (navigator.vibrate && document.hidden) navigator.vibrate([120, 60, 120]);
-  if (S.notif && 'Notification' in window && Notification.permission === 'granted' && (document.hidden || S.curChat !== chat.id)) {
+  const away = document.hidden || S.curChat !== chat.id;
+  if (S.sound) (away ? SND.incoming : SND.inchat)();
+  if (navigator.vibrate && away) navigator.vibrate(document.hidden ? [120, 60, 120] : [60]);
+  if (away) startRing();
+  if (S.notif && 'Notification' in window && Notification.permission === 'granted' && away) {
     try { const n = new Notification(nameOf(chat) + ' • ' + accById(chat.account_id).label, {body: previewOf(m), icon: chat.avatar || undefined, tag: 'mwc' + chat.id, renotify: true});
       n.onclick = () => { window.focus(); openChat(chat.id); n.close(); }; } catch (e) {}
   }
 }
-function updateTitle() { const u = [...S.chats.values()].reduce((s, c) => s + (c.unread ? 1 : 0), 0); document.title = (u ? `(${u}) ` : '') + 'مركز الواتساب'; }
+function unreadTotal() { let u = 0; S.chats.forEach(c => { if (c.unread && !c.archived) u++; }); return u; }
+function updateTitle() { const u = unreadTotal(); document.title = (u ? `(${u}) ` : '') + 'مركز الواتساب'; }
 function previewOf(m) {
   const map = {image:'📷 صورة', video:'🎥 فيديو', audio:'🎵 ملف صوتي', voice:'🎤 رسالة صوتية', sticker:'🏷️ ملصق', location:'📍 موقع', contact:'👤 جهة اتصال'};
   if (m.type === 'text' || m.type === 'template') return m.body; if (m.type === 'document') return '📄 ' + (m.file_name || 'ملف');
@@ -697,27 +731,100 @@ async function boot() {
   pollLoop(); if (!nativeBridge()) setupPWA();
 }
 
-let pollTimer = null, polling = false;
+let pollTimer = null, polling = false, pollFails = 0, lastSeen = Date.now();
+/* رسمة واحدة في الفريم الواحد: قبل كده كل رسالة جاية كانت تعيد بناء القايمة والشريط من الأول (وكل الأزرار معاهم)،
+   ولما الرسايل تجي ورا بعض ده كان يتقل الجهاز. دلوقتي كل الطلبات بتتجمع وتتنفذ مرة واحدة (1.3 — أسرع). */
+let paintReq = 0, paintWhat = {};
+function paint(...what) {
+  what.forEach(w => paintWhat[w] = 1);
+  if (paintReq) return;
+  // requestAnimationFrame مابيشتغلش والتطبيق في الخلفية — وده بالظبط الوقت اللي عايزين فيه عدّاد
+  // غير المقروء يتحدث في عنوان التاب. فلو مخفي بننفذ على طول بدل ما نستنى فريم مش جاي.
+  if (document.hidden) return void flushPaint();
+  paintReq = requestAnimationFrame(flushPaint);
+}
+function flushPaint() {
+  paintReq = 0; const w = paintWhat; paintWhat = {};
+  // أي غلطة في سطر واحد ما تقفلش التطبيق كله
+  try { if (w.list) renderList(); } catch (e) { console.warn('list', e); }
+  try { if (w.rail) renderRail(); } catch (e) { console.warn('rail', e); }
+  try { if (w.title) updateTitle(); } catch (e) {}
+}
+/** بصمة الشريط الجانبي: حالة كل رقم + عدد غير المقروء عنده — لو ما اتغيرتش مفيش داعي نعيد بناء الشريط */
+function railSig() {
+  const u = {}; S.chats.forEach(c => { if (c.unread && !c.archived) u[c.account_id] = (u[c.account_id] || 0) + 1; });
+  return S.accounts.map(a => `${a.id}:${a.status}:${u[a.id] || 0}`).join('|');
+}
 async function pollLoop() {
   clearTimeout(pollTimer);
   if (!polling) {
     polling = true;
+    const sig = railSig();
     try {
       const r = await API.poll(S.since);
       S.since = r.now;
-      (r.accounts || []).forEach(x => { const a = S.accounts.find(a => a.id == x.id); if (a && a.status !== x.status) { a.status = x.status; renderRail(); } });
+      if (pollFails) { pollFails = 0; setOffline(false); }
+      checkVersion(r.ver);
+      (r.accounts || []).forEach(x => { const a = S.accounts.find(a => a.id == x.id); if (a) a.status = x.status; });
       const notifyQueue = [];
       r.chats.forEach(c => { S.chats.set(c.id, Object.assign(S.chats.get(c.id) || {}, c)); });
       r.messages.forEach(m => { const isNew = mergeMsg(m); if (isNew && m.dir === 'in') notifyQueue.push(m); });
-      if (r.chats.length || r.messages.length) { renderList(); renderRail(); updateTitle(); }
+      if (r.chats.length || r.messages.length) { lastSeen = Date.now(); paint('list', 'title'); }
+      if (railSig() !== sig) paint('rail');
       notifyQueue.forEach(m => { const c = S.chats.get(m.chat_id); if (c) notify(c, m); });
       if (S.curChat && notifyQueue.some(m => m.chat_id === S.curChat) && !document.hidden) markRead(S.curChat);
-    } catch (e) { console.warn(e); }
+    } catch (e) {
+      // النت قطع أو السيرفر زحمة: منضربوش كل 3 ثواني ونزوّد الحمل — الفاصل بيكبر لحد 30 ثانية
+      // وبنوضّح للمستخدم إن مفيش اتصال بدل ما يفضل شايف قايمة واقفة ومش عارف إنها بايتة (1.3).
+      pollFails++; if (pollFails >= 2) setOffline(true);
+      console.warn('poll', (e && e.message) || e);
+    }
     polling = false;
   }
-  pollTimer = setTimeout(pollLoop, document.hidden ? 12000 : 3000);
+  pollTimer = setTimeout(pollLoop, nextPoll());
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollLoop(); if (S.curChat) markRead(S.curChat); } });
+function nextPoll() {
+  if (pollFails) return Math.min(30000, 3000 * Math.pow(2, pollFails - 1));
+  if (document.hidden) return 15000;
+  return Date.now() - lastSeen < 180000 ? 3000 : 6000;   // هدوء 3 دقايق ← نص السرعة، والرسايل لسه بتوصل في ثواني
+}
+function setOffline(on) {
+  const old = $('#offbar');
+  if (!on) { old && old.remove(); return; }
+  if (old) return;
+  const b = document.createElement('div'); b.id = 'offbar'; b.className = 'pushbar';
+  b.style.background = 'var(--warn)'; b.style.color = '#111';
+  b.innerHTML = '📴 مفيش اتصال بالسيرفر — بيحاول لوحده تاني… <button class="btn ghost" id="offnow">جرّب حالاً</button>';
+  document.body.append(b);
+  $('#offnow').onclick = () => { pollFails = 0; setOffline(false); pollLoop(); };
+}
+window.addEventListener('online', () => { pollFails = 0; setOffline(false); pollLoop(); });
+window.addEventListener('offline', () => setOffline(true));
+
+/* تحديث أوتوماتيك: التطبيق المتثبّت على الموبايل بيفضل مفتوح أيام من غير ما يتقفل، فبعد أي نشر بيفضل شغّال
+   بكود قديم لحد ما حد يقفله ويفتحه. أول ما /poll يرجّع نسخة مختلفة عن اللي اتحمّلت، بنجدد الـservice worker
+   ونعيد التحميل — بس في أول لحظة آمنة: مش وسط كتابة رسالة، ولا تسجيل صوتي، ولا نافذة مفتوحة (1.3). */
+let newVer = '';
+function checkVersion(v) {
+  if (!v || !window.MWC_VER || v === window.MWC_VER || v === newVer) return;
+  newVer = v;
+  try { navigator.serviceWorker && navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {}); } catch (e) {}
+  askReload();
+}
+function midWork() {
+  return !!$('.modal') || !!$('#viewer') || !$('#rec').classList.contains('hidden') || (($('#tbox') || {}).value || '').trim() !== '';
+}
+function askReload() {
+  if (!newVer) return;
+  if (midWork()) return void setTimeout(askReload, 15000);
+  const b = document.createElement('div'); b.className = 'pushbar';
+  b.innerHTML = `🔄 نزل تحديث جديد (${esc(newVer)}) — بيفتح لوحده خلال <b id="vsec">5</b> ثانية <button class="btn" id="vnow">حدّث الآن</button><button class="btn ghost" id="vno">بعدين</button>`;
+  document.body.append(b);
+  let s = 5; const t = setInterval(() => { if (--s <= 0) { clearInterval(t); location.reload(); } const e = $('#vsec'); if (e) e.textContent = Math.max(0, s); }, 1000);
+  $('#vnow').onclick = () => { clearInterval(t); location.reload(); };
+  $('#vno').onclick = () => { clearInterval(t); b.remove(); setTimeout(askReload, 1800000); };
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { unlockAudio(); pollLoop(); if (S.curChat) markRead(S.curChat); } });
 
 function mergeMsg(m) {
   const arr = S.msgs.get(m.chat_id);
@@ -847,7 +954,7 @@ async function openChat(id) {
   if (innerWidth > 760) $('#tbox').focus();
 }
 function closeChat() { saveDraft(); S.curChat = null; document.body.classList.remove('inchat'); $('#chat').classList.add('hidden'); $('#welcome').classList.remove('hidden'); $('#prof').classList.add('hidden'); renderList(); }
-function markRead(id) { const c = S.chats.get(id); if (c && c.unread) { c.unread = 0; renderList(); renderRail(); updateTitle(); API.read(id).catch(() => {}); } }
+function markRead(id) { const c = S.chats.get(id); if (c && c.unread) { c.unread = 0; renderList(); renderRail(); updateTitle(); API.read(id).catch(() => {}); } if (!unreadTotal()) stopRing(); }
 function saveDraft() { if (!S.curChat) return; const d = JSON.parse(localStorage.getItem('mwc_drafts') || '{}'); const v = $('#tbox').value; if (v) d[S.curChat] = v; else delete d[S.curChat]; localStorage.setItem('mwc_drafts', JSON.stringify(d)); }
 
 function renderChatHead() {
@@ -1384,7 +1491,8 @@ $('#btnNotif').onclick = e => {
   e.stopPropagation();
   menu([
     [(S.sound ? '🔔 صوت الإشعار: شغّال' : '🔕 صوت الإشعار: مقفول'), () => { S.sound = !S.sound; localStorage.setItem('mwc_sound', S.sound ? '1' : '0'); if (S.sound) SND.incoming(); toast(S.sound ? 'الصوت اتفعل' : 'الصوت اتقفل'); }],
-    ['▶️ تجربة الصوت', () => SND.incoming()],
+    ['▶️ تجربة الصوت', () => { unlockAudio(); SND.incoming(); }],
+    [(S.ring ? '🔁 تكرار النغمة لحد ما ترد: شغّال' : '🔁 تكرار النغمة لحد ما ترد: مقفول'), () => { S.ring = !S.ring; localStorage.setItem('mwc_ring', S.ring ? '1' : '0'); if (!S.ring) stopRing(); else if (unreadTotal()) startRing(); toast(S.ring ? 'هيفضل يرن كل 20 ثانية لحد ما تفتح الرسالة' : 'النغمة هتجي مرة واحدة'); }],
     [(S.notif ? '✓ إشعارات الجهاز: شغالة' : '📲 تفعيل إشعارات الجهاز'), async () => { if (!('Notification' in window)) return toast('المتصفح مش بيدعم الإشعارات'); const p = await Notification.requestPermission(); S.notif = p === 'granted' ? !S.notif || true : false; localStorage.setItem('mwc_notif', S.notif ? '1' : '0'); toast(S.notif ? 'الإشعارات اتفعلت ✅' : 'لازم تسمح بالإشعارات من المتصفح'); }],
     [document.body.classList.contains('light') ? '🌙 الوضع الليلي' : '☀️ الوضع النهاري', () => { document.body.classList.toggle('light'); localStorage.setItem('mwc_theme', document.body.classList.contains('light') ? 'light' : 'dark'); }],
     DEMO ? null : ['🚪 خروج', () => { localStorage.removeItem('mwc_token'); location.reload(); }],
@@ -1947,9 +2055,18 @@ function setAppCfg(el) {
       ${window.Capacitor ? '<div style="color:var(--accent2)">✅ انت فاتح تطبيق الأندرويد</div>' : `<a class="btn" href="${APK_URL}" target="_blank" rel="noopener">⬇️ تنزيل التطبيق</a> <button class="btn ghost" onclick="copy(APK_URL)">نسخ الرابط</button>`}</div>
     <div class="card"><b>🔔 إشعارات الجهاز ده</b><p class="muted" style="margin:6px 0">${!sw || !push ? 'المتصفح ده مش بيدعم الإشعارات وهو مقفول' + (ios && !standalone ? ' — ثبّت التطبيق الأول على الشاشة الرئيسية' : '') : 'كل رسالة جديدة على أرقامك هتوصلك إشعار بصوت واهتزاز، حتى لو التطبيق مقفول.'}</p>
       <div id="apSt" class="muted"></div>${sw && push ? '<button class="btn" id="apP">تفعيل الإشعارات</button> <button class="btn ghost" id="apT">إرسال إشعار تجربة</button>' : ''}</div>
-    <div class="card"><b>🔊 الصوت</b><p class="muted" style="margin:6px 0">صوت الإشعار وانت فاتح التطبيق.</p><button class="btn ghost" id="apS">${S.sound ? '🔔 شغّال — دوس للإيقاف' : '🔕 مقفول — دوس للتشغيل'}</button> <button class="btn ghost" onclick="SND.incoming()">▶️ تجربة</button></div>`;
+    <div class="card"><b>🔊 الصوت</b><p class="muted" style="margin:6px 0">صوت الإشعار وانت فاتح التطبيق. لو الصوت مش طالع على الآيفون، دوس «تجربة» مرة واحدة وهو بيفضل شغّال بعدها.</p>
+      <button class="btn ghost" id="apS">${S.sound ? '🔔 شغّال — دوس للإيقاف' : '🔕 مقفول — دوس للتشغيل'}</button>
+      <button class="btn ghost" id="apR">${S.ring ? '🔁 بيكرر لحد ما ترد — دوس للإيقاف' : '🔁 مرة واحدة — دوس للتكرار'}</button>
+      <button class="btn ghost" id="apSnd">▶️ تجربة</button></div>
+    <div class="card"><b>🔄 النسخة والتحديث</b><p class="muted" style="margin:6px 0">التطبيق بيحدّث نفسه لوحده: أول ما ننشر نسخة جديدة بيحسّها ويفتح عليها لوحده من غير ما تقفله وتفتحه.</p>
+      <div class="muted">النسخة الحالية: <b dir="ltr">${esc(window.MWC_VER || '—')}</b>${newVer ? ` — فيه تحديث جاهز (${esc(newVer)})` : ''}</div>
+      <p style="margin:8px 0 0"><button class="btn ghost" id="apU">تحديث الآن</button></p></div>`;
   $('#apI', el) && ($('#apI', el).onclick = async () => { S.installEvt.prompt(); await S.installEvt.userChoice; S.installEvt = null; setAppCfg(el); });
   $('#apS', el).onclick = () => { S.sound = !S.sound; localStorage.setItem('mwc_sound', S.sound ? '1' : '0'); setAppCfg(el); };
+  $('#apR', el).onclick = () => { S.ring = !S.ring; localStorage.setItem('mwc_ring', S.ring ? '1' : '0'); if (!S.ring) stopRing(); setAppCfg(el); };
+  $('#apSnd', el).onclick = () => { unlockAudio(); SND.incoming(); };
+  $('#apU', el).onclick = async () => { try { const r = await navigator.serviceWorker?.getRegistration?.(); r && await r.update(); } catch (e) {} location.reload(); };
   const showSt = async () => { let reg = null; try { reg = await navigator.serviceWorker?.getRegistration?.(); } catch (e) {} const sub = reg && await reg.pushManager.getSubscription(); $('#apSt', el) && ($('#apSt', el).innerHTML = sub ? '✅ الإشعارات مفعّلة على الجهاز ده' : (Notification.permission === 'denied' ? '⛔ الإشعارات مقفولة من إعدادات المتصفح — افتحها من إعدادات الموقع' : 'لسه مش مفعّلة')); };
   if (sw && push) { showSt(); $('#apP', el).onclick = async () => { const ok = await enablePush(true); showSt(); toast(ok ? 'الإشعارات اتفعّلت ✅' : 'ما اتفعّلتش'); }; $('#apT', el).onclick = async () => { try { const r = await API.pushTest(); toast(r.devices ? `اتبعت لـ ${r.delivered}/${r.devices} جهاز` : 'فعّل الإشعارات الأول'); } catch (e) { toast(e.message); } }; }
 }
