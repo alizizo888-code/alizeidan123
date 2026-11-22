@@ -425,7 +425,10 @@ function ac() {
 }
 // المتصفح بيسيب الـAudioContext «مقفول» لحد أول لمسة من المستخدم، وبيرجع يقفله لوحده بعد ساعات على الموبايل —
 // فبنفتحه على أي تفاعل وكل مرة التطبيق يرجع للواجهة، عشان الصوت ما يسكتش من غير ما حد ياخد باله (1.3).
-function unlockAudio() { const c = ac(); if (c && c.state === 'suspended') c.resume().catch(() => {}); }
+let touched = false;
+function unlockAudio() { touched = true; const c = ac(); if (c && c.state === 'suspended') c.resume().catch(() => {}); }
+/** المتصفح بيرفض الاهتزاز قبل أول لمسة ويكتب خطأ في الكونسول كل مرة — فمنناديهوش غير بعد ما حد يلمس (1.3) */
+function buzz(pattern) { if (touched && navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) {} } }
 ['pointerdown', 'touchstart', 'keydown'].forEach(ev => document.addEventListener(ev, unlockAudio, {passive: true}));
 /** نغمة WAV جاهزة جوه الصفحة — خطة بديلة لو الـWebAudio مش راضي يشتغل (بيحصل على آيفون): لازم يرن في كل الحالات */
 function fallback() {
@@ -454,12 +457,12 @@ function tone(freqs, dur = .09, gap = .07, vol = .22) {
 const SND = { incoming: () => tone([1046, 1318, 1046], .085, .09, .3), inchat: () => tone([880], .05, 0, .12), sent: () => tone([1568], .03, 0, .06) };
 /* تكرار النغمة كل 20 ثانية لحد ما حد يفتح الرسالة — للأرقام اللي محدش قاعد عليها طول الوقت (1.3، اختياري) */
 let ringTimer = null;
-function startRing() { if (ringTimer || !S.ring) return; ringTimer = setInterval(() => { if (!unreadTotal()) return stopRing(); if (S.sound) SND.incoming(); if (navigator.vibrate) navigator.vibrate([90, 50, 90]); }, 20000); }
+function startRing() { if (ringTimer || !S.ring) return; ringTimer = setInterval(() => { if (!unreadTotal()) return stopRing(); if (S.sound) SND.incoming(); buzz([90, 50, 90]); }, 20000); }
 function stopRing() { clearInterval(ringTimer); ringTimer = null; }
 function notify(chat, m) {
   const away = document.hidden || S.curChat !== chat.id;
   if (S.sound) (away ? SND.incoming : SND.inchat)();
-  if (navigator.vibrate && away) navigator.vibrate(document.hidden ? [120, 60, 120] : [60]);
+  if (away) buzz(document.hidden ? [120, 60, 120] : [60]);
   if (away) startRing();
   if (S.notif && 'Notification' in window && Notification.permission === 'granted' && away) {
     try { const n = new Notification(nameOf(chat) + ' • ' + accById(chat.account_id).label, {body: previewOf(m), icon: chat.avatar || undefined, tag: 'mwc' + chat.id, renotify: true});
