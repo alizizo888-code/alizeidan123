@@ -188,6 +188,12 @@ final class Mutqan_Shop {
             if (!empty($d['orderId']) && Mutqan_Store::peek_doc('orders', $d['orderId'])) {
                 try { Mutqan_Store::update('orders', $d['orderId'], ['paymentStatus' => 'paid', 'paymentMethod' => $patch['paidMethod'] ?: 'pay_link', 'paidAt' => $patch['paidAt']], $sys); } catch (Throwable $e) { error_log('[mutqan] pay_mark order: ' . $e->getMessage()); }
             }
+            // «تم الدفع من العميل كذا عن طريق كذا» — said out loud to the team (owner, 2026-11-22); every name comes from the data
+            $o = !empty($d['orderId']) ? Mutqan_Store::peek_doc('orders', $d['orderId']) : null;
+            $who = trim((string) (($o['clientName'] ?? '') ?: ($d['claim']['name'] ?? '') ?: ($d['name'] ?? '')));
+            try { Mutqan_Rest::admin_alert('💳 تم الدفع' . ($who !== '' ? ' من العميل ' . $who : ''),
+                trim(($o ? 'طلب رقم ' . (($o['number'] ?? '') ?: substr((string) $d['orderId'], -5)) . '، ' : '') . 'مبلغ ' . $d['amount'] . ' ر.س، عن طريق ' . ($patch['paidMethod'] ?: 'رابط الدفع') . (!empty($d['claim']['ref']) ? '، رقم العملية ' . $d['claim']['ref'] : '')),
+                '/staff/pay-links', 'paid', 'normal', $d['orderId'] ?: null); } catch (Throwable $e) { /* optional */ }
             return ['ok' => true];
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
