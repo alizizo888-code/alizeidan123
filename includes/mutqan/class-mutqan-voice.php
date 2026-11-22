@@ -85,6 +85,47 @@ final class Mutqan_Voice {
         return (string) preg_replace('/^[\s،.:]+|[\s،.:]+$/u', '', (string) preg_replace('/\s{2,}/u', ' ', $s));   // not trim(): it cuts Arabic letters byte by byte
     }
 
+    /** «من الفني فلان» / «من العميل فلان» (has ordered before) / «من عميل جديد» — for whoever calls the hotline, from the data. */
+    public static function caller($phone, $name = '') {
+        $k = substr(preg_replace('/\D/', '', (string) $phone), -9);
+        $name = trim((string) $name);
+        if (strlen($k) === 9) {
+            try {
+                if (class_exists('Mutqan_Hub')) {
+                    $w = Mutqan_Hub::who($phone);
+                    if (($w['kind'] ?? '') === 'tech') { return 'من الفني ' . ($w['name'] ?? ''); }
+                    if (($w['kind'] ?? '') === 'staff') { return 'من ' . ($w['name'] ?? 'الإدارة'); }
+                }
+                $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
+                foreach (Mutqan_Store::select('orders', [], ['limit' => 1500, 'order' => 'desc'], $sys) as $o) {
+                    if (!empty($o['clientPhone']) && substr(preg_replace('/\D/', '', (string) $o['clientPhone']), -9) === $k) {
+                        $n = trim((string) ($o['clientName'] ?? '')) ?: $name;
+                        return $n !== '' ? 'من العميل ' . $n : 'من عميل قديم';
+                    }
+                }
+            } catch (Throwable $e) { /* unknown caller */ }
+        }
+        return $name !== '' ? 'من عميل جديد اسمه ' . $name : 'من عميل جديد';
+    }
+
+    /**
+     * Said out loud: names only, no numbers (owner, 2026-11-22: «اسماء فقط بدون ارقام») — no phone numbers, no order
+     * numbers, no amounts, codes or distances; the screen still shows them all.
+     */
+    public static function no_numbers($s) {
+        $s = (string) $s;
+        $s = preg_replace('/(طلب|الطلب)\s*(رقم\s*)?#?\s*[\d٠-٩]+/u', 'الطلب', $s);
+        $s = preg_replace('/(?:مبلغ|بمبلغ|المبلغ)?\s*[\d٠-٩][\d٠-٩,.\s]*\s*(ريال|ر\.س|SAR)/u', '', $s);
+        $s = preg_replace('/(على\s*بُ?عد|المسافة)\s*[\d٠-٩.,]+\s*(كم|متر|km|m)?/u', 'قريب', $s);
+        $s = preg_replace('/(رقم العملية|مرجع|الجوال|جوال|رقم|كود)\s*:?\s*[A-Za-z0-9٠-٩+\-\s]{3,}/u', '', $s);
+        $s = preg_replace('/\b[A-Za-z]*\d[A-Za-z0-9\-]*\b/u', '', $s);
+        $s = preg_replace('/[\d٠-٩]+/u', '', $s);
+        $s = preg_replace('/\s*،\s*/u', '، ', $s);
+        $s = preg_replace('/(،\s*){2,}/u', '، ', $s);
+        $s = preg_replace('/\s{2,}/u', ' ', $s);
+        return (string) preg_replace('/^[\s،.:]+|[\s،.:]+$/u', '', $s);
+    }
+
     /**
      * The whole sentence for one alert: the urgency word, what happened (its title — or the kind's own sentence when the
      * title says nothing), then the details (its body), at most ~35 words.
@@ -92,7 +133,7 @@ final class Mutqan_Voice {
     public static function sentence($m) {
         $tier = self::tier($m);
         $key = self::key((string) ($m['event'] ?? ''), (string) ($m['title'] ?? ''), (string) ($m['body'] ?? ''));
-        $title = self::clean($m['title'] ?? ''); $body = self::clean($m['body'] ?? '');
+        $title = self::no_numbers(self::clean($m['title'] ?? '')); $body = self::no_numbers(self::clean($m['body'] ?? ''));
         if (mb_strlen($title) < 6 || preg_match('/^(تنبيه|إشعار|اشعار|تنبيه جديد)$/u', $title)) { $title = preg_replace('/^(انتباه|تنبيه)،\s*/u', '', self::KEYS[$key] ?? self::KEYS['alert']); }
         $t = self::TIERS[$tier]['open'] . $title . ($body !== '' && mb_strpos($title, $body) === false ? '. ' . $body : '');
         $w = preg_split('/\s+/u', $t) ?: [];

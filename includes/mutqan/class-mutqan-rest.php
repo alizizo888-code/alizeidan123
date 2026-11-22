@@ -447,7 +447,9 @@ final class Mutqan_Rest {
             $cb = !empty($doc['callback']);
             if (($doc['status'] ?? '') !== 'ringing' && !$cb) { return; }
             $bits = array_filter([!empty($doc['name']) ? 'الاسم: ' . $doc['name'] : '', !empty($doc['phone']) ? 'الجوال: ' . $doc['phone'] : '', $cb ? 'لم يكن أحد متصلًا — يطلب أن نعاود الاتصال به' : '']);
-            self::admin_alert($cb ? '📞 طلب معاودة اتصال (الخط الساخن)' : '📞 مكالمة واردة على الخط الساخن', implode("\n", $bits) ?: 'عميل يتصل بالخط الساخن', '#/staff/operations?tab=calls', 'hotline_call', 'high');
+            // who is calling, by name (owner, 2026-11-22): «من الفني فلان» / «من العميل فلان» (called before) / «من عميل جديد»
+            $who = class_exists('Mutqan_Voice') ? Mutqan_Voice::caller((string) ($doc['phone'] ?? ''), (string) ($doc['name'] ?? '')) : '';
+            self::admin_alert(($cb ? '📞 طلب معاودة اتصال' : '📞 مكالمة على الخط الساخن') . ($who !== '' ? ' ' . $who : ''), implode("\n", $bits) ?: 'عميل يتصل بالخط الساخن', '#/staff/operations?tab=calls', 'hotline_call', 'high');
         }
     }
 
