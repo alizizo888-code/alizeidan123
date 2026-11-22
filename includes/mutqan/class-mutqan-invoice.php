@@ -137,11 +137,20 @@ final class Mutqan_Invoice {
 
     /** ZATCA simplified-invoice QR (phase 1): TLV of seller, VAT number, time, total with VAT, VAT — in base64. */
     public static function zatca_qr($seller, $vatNo, $isoTime, $total, $vat) {
+        // the authority's reader wants UTC as 2026-01-31T09:30:00Z (not +00:00), lengths in bytes, each field under 256 bytes
+        $ts = strtotime((string) $isoTime); $time = gmdate('Y-m-d\\TH:i:s\\Z', $ts ?: time());
+        $seller = trim((string) $seller); if (strlen($seller) > 255) { $seller = mb_strcut($seller, 0, 255, 'UTF-8'); }
         $tlv = '';
-        foreach ([1 => $seller, 2 => $vatNo, 3 => $isoTime, 4 => number_format((float) $total, 2, '.', ''), 5 => number_format((float) $vat, 2, '.', '')] as $tag => $val) {
+        foreach ([1 => $seller, 2 => preg_replace('/\\D/', '', (string) $vatNo), 3 => $time, 4 => number_format(abs((float) $total), 2, '.', ''), 5 => number_format(abs((float) $vat), 2, '.', '')] as $tag => $val) {
             $val = (string) $val; $tlv .= chr($tag) . chr(strlen($val)) . $val;
         }
         return base64_encode($tlv);
+    }
+
+    /** The ZATCA QR as it should be now (also repairs invoices issued before the time-format fix). */
+    private static function fresh_qr($r) {
+        if (empty($r['qr']) || empty($r['company'])) { return $r['qr'] ?? ''; }
+        return self::zatca_qr($r['company']['nameAr'] ?? '', $r['company']['vatNo'] ?? '', $r['at'] ?? '', $r['totals']['net'] ?? 0, $r['totals']['vat'] ?? 0);
     }
 
     /** More issuing companies: each its own name, VAT number, CR, stamp, signature and numbers. */
@@ -186,15 +195,30 @@ final class Mutqan_Invoice {
      * exactly the five fields the authority's reader expects.
      */
     public static function view_url($id) {
-        $sig = substr(hash_hmac('sha256', 'inv|' . $id, hash('sha256', (defined('AUTH_KEY') ? AUTH_KEY : 'mq') . '|inv')), 0, 20);
-        return rest_url('mutqan/v1/inv/' . rawurlencode((string) $id)) . '?s=' . $sig;
+        $id = (string) $id; $h = self::hex_id($id);
+        // short link (fewer QR squares, bigger ones, reads with any camera): /?mqi=<22-char id><12-char signature>
+        if ($h !== '') { return home_url('/') . '?mqi=' . rtrim(strtr(base64_encode(hex2bin($h)), '+/', '-_'), '=') . substr(self::sig($id), 0, 12); }
+        return rest_url('mutqan/v1/inv/' . rawurlencode($id)) . '?s=' . substr(self::sig($id), 0, 20);
+    }
+
+    private static function sig($id) { return hash_hmac('sha256', 'inv|' . $id, hash('sha256', (defined('AUTH_KEY') ? AUTH_KEY : 'mq') . '|inv')); }
+    private static function hex_id($id) { $h = strtolower(str_replace('-', '', (string) $id)); return preg_match('/^[0-9a-f]{32}$/', $h) && strlen((string) $id) === 36 ? $h : ''; }
+
+    /** A link's signature: 12 chars (short link) or 20 (links printed before the short form). */
+    public static function check($id, $s) { $s = (string) $s; return in_array(strlen($s), [12, 20], true) && hash_equals(substr(self::sig((string) $id), 0, strlen($s)), $s); }
+
+    /** /?mqi=… back to the invoice id and its signature. */
+    public static function parse_short($q) {
+        $q = (string) $q; if (!preg_match('/^([A-Za-z0-9_-]{22})([0-9a-f]{12})$/', $q, $m)) { return null; }
+        $h = bin2hex((string) base64_decode(strtr($m[1], '-_', '+/') . '==')); if (strlen($h) !== 32) { return null; }
+        return [substr($h, 0, 8) . '-' . substr($h, 8, 4) . '-' . substr($h, 12, 4) . '-' . substr($h, 16, 4) . '-' . substr($h, 20), $m[2]];
     }
 
     public static function serve_view($id, $s) {
         $id = (string) $id;
-        $ok = hash_equals(substr(hash_hmac('sha256', 'inv|' . $id, hash('sha256', (defined('AUTH_KEY') ? AUTH_KEY : 'mq') . '|inv')), 0, 20), (string) $s);
+        $ok = self::check($id, $s);
         $r = $ok ? Mutqan_Store::get_raw(self::COLL, $id) : null;
-        nocache_headers(); header('Content-Type: text/html; charset=utf-8'); header('X-Robots-Tag: noindex, nofollow'); header('Referrer-Policy: no-referrer');
+        nocache_headers(); header('X-LiteSpeed-Cache-Control: no-cache'); header('Content-Type: text/html; charset=utf-8'); header('X-Robots-Tag: noindex, nofollow'); header('Referrer-Policy: no-referrer');
         if (!$r) { status_header(404); echo '<!doctype html><meta charset="utf-8"><body dir="rtl" style="font-family:Tahoma;padding:40px;text-align:center"><h2>⚠️ الفاتورة غير موجودة أو الرابط غير صحيح</h2></body>'; exit; }
         $e = function ($v) { return esc_html((string) $v); }; $m = function ($n) { return number_format((float) $n, 2); };
         $co = (array) ($r['company'] ?? []); $cl = (array) ($r['client'] ?? []); $T = (array) ($r['totals'] ?? []);
@@ -218,6 +242,11 @@ final class Mutqan_Invoice {
     }
 
     public static function boot() {
+        add_action('init', function () {
+            if (empty($_GET['mqi']) || is_admin()) { return; }
+            $p = self::parse_short(wp_unslash($_GET['mqi']));
+            if ($p) { self::serve_view($p[0], $p[1]); }
+        }, 1);
         add_action('rest_api_init', function () {
             register_rest_route('mutqan/v1', '/inv/(?P<id>[A-Za-z0-9\-]+)', ['methods' => 'GET', 'permission_callback' => '__return_true',
                 'callback' => function ($req) { self::serve_view($req['id'], $req->get_param('s')); }]);
@@ -306,6 +335,7 @@ final class Mutqan_Invoice {
     public static function get($id) {
         $r = Mutqan_Store::get_raw(self::COLL, (string) $id);
         if (!$r) { throw new Mutqan_Error('not_found', 'الفاتورة مش موجودة.', 404); }
+        if (!empty($r['qr'])) { $r['qr'] = self::fresh_qr($r); }
         return $r + ['id' => (string) $id, 'viewUrl' => self::view_url((string) $id)];
     }
 
