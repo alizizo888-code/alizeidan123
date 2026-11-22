@@ -30,7 +30,7 @@ final class Mutqan_Lines {
     const SEED = [
         ['phone' => '966549247636', 'role' => 'manager',  'label' => 'المدير', 'status' => 'pending', 'note' => 'الرقم الموحد على Meta — يتفعل كمدير بعد ربطه'],
         ['phone' => '966549423050', 'role' => 'sales',    'label' => 'مبيعات ١', 'status' => 'active', 'channels' => ['sites', 'articles', 'blogger'], 'note' => 'رقم المواقع الأساسي'],
-        ['phone' => '966536554731', 'role' => 'sales',    'label' => 'مبيعات ٢ (الطوارئ)', 'status' => 'active', 'channels' => ['sites', 'emergency'], 'note' => 'واتساب أعمال على موبايل المالك + رقم الطوارئ'],
+        ['phone' => '966536554731', 'role' => 'sales',    'label' => 'مبيعات ٢ (الطوارئ)', 'status' => 'active', 'channels' => ['sites', 'emergency'], 'note' => 'واتساب أعمال على موبايل المالك + رقم الطوارئ', 'center' => true],
         ['phone' => '966549665320', 'role' => 'sales',    'label' => 'مبيعات ٣', 'status' => 'active', 'channels' => ['ads', 'maps', 'haraj', 'articles', 'blogger']],
         ['phone' => '966549715646', 'role' => 'sales',    'label' => 'مبيعات ٤', 'status' => 'active', 'channels' => ['ads', 'maps', 'haraj', 'articles', 'blogger']],
         ['phone' => '966546619205', 'role' => 'outreach', 'label' => 'استقطاب ١', 'status' => 'active'],
@@ -76,7 +76,7 @@ final class Mutqan_Lines {
         foreach (array_merge(self::SEED, $extra) as $r) {
             $raw = preg_replace('/\D+/', '', (string) $r['phone']);
             $e = is_array($edits[$raw] ?? null) ? $edits[$raw] : [];
-            $r = array_merge(['channels' => [], 'note' => '', 'status' => 'active', 'label' => ''], $r, $e);
+            $r = array_merge(['channels' => [], 'note' => '', 'status' => 'active', 'label' => '', 'center' => false], $r, $e);
             $n = self::norm($raw);
             if ($n === '') { $r['status'] = 'invalid'; }
             if (!isset(self::ROLES[$r['role']])) { $r['role'] = 'reserve'; }
@@ -135,10 +135,15 @@ final class Mutqan_Lines {
         return $L ? "## أرقامنا (كلها أرقام الشركة — أي رسالة منها من الفريق مش من عميل)\n" . implode("\n", $L) . "\n" : '';
     }
 
-    /** What the VPS WhatsApp hub needs: the role of each of our numbers, and the manager once it is active. */
+    /**
+     * What the VPS WhatsApp hub needs: the role of each of our numbers, and the manager once it is active.
+     * A number with `center: true` lives on the new WhatsApp Center (Evolution), not on this hub's own Baileys
+     * lines: the hub logs it out and forgets it (so it never holds a second live session on the same phone —
+     * the cause of «في انتظار هذه الرسالة») and never offers it a QR to re-link.
+     */
     public static function hub_config() {
         $roles = [];
-        foreach (self::all() as $r) { if ($r['status'] !== 'invalid' && $r['role'] !== 'reserve') { $roles[self::key($r['phone'])] = ['role' => $r['role'], 'label' => $r['label'], 'active' => $r['status'] === 'active', 'status' => $r['status'], 'local' => $r['local']]; } }
+        foreach (self::all() as $r) { if ($r['status'] !== 'invalid' && $r['role'] !== 'reserve') { $roles[self::key($r['phone'])] = ['role' => $r['role'], 'label' => $r['label'], 'active' => $r['status'] === 'active', 'status' => $r['status'], 'local' => $r['local'], 'center' => !empty($r['center'])]; } }
         $m = self::manager();
         return ['ourNumbers' => $roles, 'managerPhone' => $m ? $m['phone'] : '', 'offSections' => self::off_sections()];
     }
@@ -158,6 +163,7 @@ final class Mutqan_Lines {
             if (isset($p['label'])) { $e['label'] = mb_substr(trim((string) $p['label']), 0, 40); }
             if (isset($p['note'])) { $e['note'] = mb_substr(trim((string) $p['note']), 0, 160); }
             if (isset($p['channels']) && is_array($p['channels'])) { $e['channels'] = array_values(array_intersect(array_map('strval', $p['channels']), ['sites', 'articles', 'blogger', 'ads', 'maps', 'haraj', 'emergency'])); }
+            if (isset($p['center'])) { $e['center'] = (bool) $p['center']; }
             if (isset($p['fix'])) { $f = self::norm($p['fix']); if ($f !== '') { $e = []; $o['extra'][] = ['phone' => $f, 'role' => (string) ($p['role'] ?? 'reserve'), 'label' => 'مصحَّح', 'status' => 'pending']; $e['status'] = 'invalid'; } }
             $o['edits'][$raw] = $e;
         }
