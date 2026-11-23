@@ -38,7 +38,7 @@ export const DEFAULTS = {
 export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now = () => Date.now(), log = () => {}, later = (fn, ms) => setTimeout(fn, ms), cancel = (h) => clearTimeout(h) }) {
   // «الفني الفني علي»: a technician whose name already starts with «الفني» is named once.
   const send = (phone, text, o) => rawSend(phone, String(text).replace(/(الفن[يى])\s+(?=الفن[يى]\s)/g, ''), o)
-  const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; const wc = store.get('wpConfig', {}) || {}; if (!c.testPhone) c.testPhone = wc.testCustomer || ''; if (Number.isFinite(wc.hoursFrom)) c.hoursFrom = wc.hoursFrom; if (Number.isFinite(wc.hoursTo)) c.hoursTo = wc.hoursTo; if (Array.isArray(wc.washVideos) && wc.washVideos.length) c.washVideos = wc.washVideos; if (/1️⃣ طلب خدمة|نقدّم خدمات صيانة وإصلاح جميع أنواع المكيفات/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome
+  const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; const wc = store.get('wpConfig', {}) || {}; if (!c.testPhone) c.testPhone = wc.testCustomer || ''; if (Number.isFinite(wc.hoursFrom)) c.hoursFrom = wc.hoursFrom; if (Number.isFinite(wc.hoursTo)) c.hoursTo = wc.hoursTo; if (Array.isArray(wc.washVideos)) c.washVideos = wc.washVideos; if (/1️⃣ طلب خدمة|نقدّم خدمات صيانة وإصلاح جميع أنواع المكيفات/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome
     // The desk's numbers (Mutqan_Lines): the manager becomes the room once the owner marked it active.
     if (wc.managerPhone) c.roomPhone = wc.managerPhone
     c.ourNumbers = wc.ourNumbers || {}
@@ -559,7 +559,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if ((P.lines || []).length > 1) L.push(...P.lines.map((x) => '• ' + x))
     L.push('الإجمالي: *' + P.total + ' ر.س* — غسيل كامل داخلي وخارجي بالمضخة + ضمان ✅')
     // His wash only: the video of the type he asked for (owner, 2026-11-21).
-    const vids = (cfg().washVideos || M.WASH_VIDEOS)
+    const vids = (cfg().washVideos || [])
     const v = (m.items.split ? vids.find((x) => /سبليت/.test(x.label)) : null) || (m.items.window ? vids.find((x) => /شباك/.test(x.label)) : null)
     if (v && !m.videoSent) { L.push('🎥 شوف طريقة الغسيل عندنا: ' + v.url); m.videoSent = 1; saveFlow(c.pk, m) }
     // no «عايز سعر أحسن» (owner, 2026-11-23): an open question about the price — the bargaining starts only when he says so
@@ -659,7 +659,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
           saveFlow(c.pk, { step: 'table' })
           return say(phone, line, (t?.text || C.prices) + '\n\n1️⃣ احجز غسيل\n2️⃣ أسعار الإصلاح (الفريون والقطع)' + M.FOOT)
         }
-        if (k === 5) { saveFlow(c.pk, { step: 'table' }); return say(phone, line, '🎥 *طريقة الغسيل عندنا*\n' + (C.washVideos || M.WASH_VIDEOS).map((v) => '▶️ ' + v.label + ':\n' + v.url).join('\n') + '\n\n1️⃣ احجز غسيل' + M.FOOT) }
+        if (k === 5) { saveFlow(c.pk, { step: 'table' }); const vs = C.washVideos || []; return say(phone, line, (vs.length ? '🎥 *طريقة الغسيل عندنا*\n' + vs.map((v) => '▶️ ' + v.label + ':\n' + v.url).join('\n') : '🧼 *طريقة الغسيل عندنا*: غسيل كامل داخلي وخارجي بالمضخة، وتنظيف الفلاتر والصينية، + ضمان ✅') + '\n\n1️⃣ احجز غسيل' + M.FOOT) }
         if (k === 6) {
           let o = null; try { o = await wp('order', { phone: T.intl(phone), open: true }) } catch {}
           if (!o) return home('مفيش طلب مفتوح على رقمك دلوقتي 🌷')
