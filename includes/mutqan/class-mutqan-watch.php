@@ -61,6 +61,7 @@ final class Mutqan_Watch {
         $cfg = $cfg ?? self::cfg();
         $st = (string) ($o['status'] ?? 'new');
         if (!in_array($st, self::ACTIVE, true)) { return []; }
+        if (class_exists('Mutqan_Schedule') && Mutqan_Schedule::held($o)) { return []; }   // filed for its day: nothing is late yet
         $out = [];
         $age = ($now - self::ts($o['createdAt'] ?? '')) / 60;
         if (empty($o['customerConfirmed']) && $age >= $cfg['unconfirmed'] && $age < 2 * 1440) {

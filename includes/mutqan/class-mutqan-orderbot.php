@@ -180,15 +180,22 @@ final class Mutqan_OrderBot {
         if (get_transient($key)) { return 'already'; }
         if (empty($o['technicianId']) || !in_array((string) ($o['status'] ?? ''), ['assigned', 'accepted', 'en_route', 'nearby'], true)) { return false; }
         set_transient($key, time(), self::ASK_EVERY);
-        self::tell_tech($o, 'العميل بيسأل: فاضل لك قد إيه وتوصل؟ اختار المدة من الأزرار تحت عشان توصله على طول.', 'eta_ask');
+        self::tell_tech($o, "العميل بيسأل: فاضل لك قد إيه وتوصل؟ رد برقم:\n1️⃣ أنا في الطريق\n2️⃣ قدامي وقت — اكتب الدقايق (مثال: *2 15*)\n3️⃣ لسه في شغل تاني ما خلصتش", 'eta_ask');
         return 'asked';
+    }
+
+    /** Operations only (owner, 2026-11-23): complaints and «he's late» are theirs — the owner hears the bigger things. */
+    private static function ops_alert($o, $title, $body, $event) {
+        foreach (['operations', 'supervisor'] as $role) {
+            try { Mutqan_Store::insert('_push', ['target' => ['role' => $role], 'title' => mb_substr($title . ' #' . Mutqan_Store::num($o), 0, 120), 'body' => mb_substr($body, 0, 300), 'url' => '#/staff/order/' . $o['id'], 'sound' => 'bell', 'priority' => 'high', 'event' => $event, 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 3 * 86400)], self::sys(), false); } catch (Throwable $e) { /* never block */ }
+        }
     }
 
     private static function alert($o, $title, $body, $event = 'order_bot') {
         if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert($title . ' #' . Mutqan_Store::num($o), $body, '#/staff/order/' . $o['id'], $event, 'high', $o['id']); }
     }
 
-    /** A complaint about the technician: the owner and operations at once (high), written on the order, never to him. */
+    /** A complaint about the technician: operations at once (high), written on the order, never to him (owner, 2026-11-23). */
     public static function complaint($o, $text) {
         $k = 'mq_ob_complaint_' . md5((string) $o['id'] . '|' . mb_substr((string) $text, 0, 80));
         if (!get_transient($k)) {
@@ -196,11 +203,10 @@ final class Mutqan_OrderBot {
             self::insert_msg($o['id'], 'ops', 'complaint', mb_substr((string) $text, 0, 400));
             $who = ($o['technicianName'] ?? 'الفني');
             $body = ($o['clientName'] ?? 'العميل') . ' بيشتكي من ' . $who . ': «' . mb_substr((string) $text, 0, 220) . '»';
-            self::alert($o, '🚨 شكوى من العميل على الفني', $body, 'order_complaint');
-            try { Mutqan_Store::insert('_push', ['target' => ['role' => 'owner'], 'title' => '🚨 شكوى على ' . $who . ' — طلب #' . Mutqan_Store::num($o), 'body' => mb_substr($body, 0, 300), 'url' => '#/staff/order/' . $o['id'], 'sound' => 'bell', 'priority' => 'high', 'event' => 'order_complaint', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 3 * 86400)], self::sys(), false); } catch (Throwable $e) { /* never block */ }
+            self::ops_alert($o, '🚨 شكوى من العميل على الفني', $body, 'order_complaint');
             try { Mutqan_Store::update('orders', (string) $o['id'], ['complaint' => ['at' => gmdate('c'), 'text' => mb_substr((string) $text, 0, 400), 'about' => 'technician']], self::sys()); } catch (Throwable $e) { /* never block */ }
         }
-        return ['حقك علينا 🙏 آسفين جدًا على اللي حصل', 'سجلت شكوتك وبلّغت الإدارة والمالك فورًا — ومحدش غيرهم هيشوفها', 'مسؤول هيكلمك هنا حالًا، ولو حابب نبعتلك فني تاني بلّغنا'];
+        return ['حقك علينا 🙏 آسفين جدًا على اللي حصل', 'سجلت شكوتك وبلّغت الإدارة فورًا', 'مسؤول هيكلمك هنا حالًا، ولو حابب نبعتلك فني تاني بلّغنا'];
     }
 
     /** Does what the message asks. Returns the notes the reply is written from. */
@@ -218,7 +224,7 @@ final class Mutqan_OrderBot {
         $once = function ($what) use ($o) { $k = 'mq_ob_' . $what . '_' . md5((string) $o['id']); if (get_transient($k)) { return false; } set_transient($k, 1, self::ASK_EVERY); return true; };
         switch ($intent) {
             case 'urgent':
-                if ($once('urgent')) { self::alert($o, '🔔 العميل يستعجل', ($o['clientName'] ?? 'العميل') . ': ' . mb_substr($text, 0, 160), 'order_nudge'); $did[] = 'بلّغت غرفة العمليات إنك مستعجل'; }
+                if ($once('urgent')) { self::ops_alert($o, '🔔 العميل يستعجل', ($o['clientName'] ?? 'العميل') . ': ' . mb_substr($text, 0, 160), 'order_nudge'); $did[] = 'بلّغت غرفة العمليات إنك مستعجل'; }
                 $a = self::ask_eta($o); if ($a) { $did[] = $a === 'asked' ? 'سألت الفني دلوقتي فاضل له قد إيه' : 'الفني اتسأل من شوية ومستنيين رده'; }
                 break;
             case 'where':
