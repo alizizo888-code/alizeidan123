@@ -329,7 +329,15 @@ final class Mutqan_Hub {
         if (!$tech) { return '❌ مالقيتش فني اسمه «' . $name . '». اكتب *الفنيين* تشوف الأسماء.'; }
         $tid = (string) ($tech['userId'] ?? ($tech['id'] ?? ''));
         $tn = (string) ($tech['displayName'] ?? ($tech['name'] ?? 'فني'));
-        Mutqan_Store::update('orders', (string) $order['id'], ['technicianId' => $tid, 'technicianName' => $tn, 'status' => 'assigned', 'assignedAt' => gmdate('c'), 'dispatchedBy' => 'whatsapp'], self::sys());
+        // written down like any other hand-over: the order's history, its path and its log say who took it and from whom
+        // (live test 2026-11-23: «وجّه 1018 لمصطفى» moved the order but its page still said «فني الموقع»)
+        $at = gmdate('c'); $was = (string) ($order['technicianName'] ?? '');
+        Mutqan_Store::update('orders', (string) $order['id'], ['technicianId' => $tid, 'technicianName' => $tn, 'status' => 'assigned', 'assignedAt' => $at, 'dispatchedBy' => 'whatsapp',
+            'dispatch' => !empty($tech['isSite']) ? 'site' : 'tech', 'handler' => 'technician',
+            'statusHistory' => array_merge((array) ($order['statusHistory'] ?? []), [['status' => 'assigned', 'at' => $at, 'by' => 'room', 'note' => 'من غرفة العمليات على واتساب' . ($was !== '' && $was !== $tn ? ' (كان مع ' . $was . ')' : '')]]),
+            'transferLog' => array_merge((array) ($order['transferLog'] ?? []), [['from' => 'operations', 'to' => 'technician', 'at' => $at, 'by' => 'room', 'note' => $tn]]),
+            'route' => array_merge((array) ($order['route'] ?? []), [['at' => $at, 'kind' => 'assign', 'text' => 'اتوجّه لـ ' . $tn . ' من غرفة العمليات', 'by' => 'غرفة العمليات']]),
+        ], self::sys());
         return '✅ طلب ' . self::num($order) . ' اتوجّه لـ *' . $tn . '*' . (trim((string) ($tech['phone'] ?? '')) !== '' ? ' واتبعتله على الواتساب.' : ' (ما لوش رقم واتساب — بلّغه بنفسك).');
     }
 
