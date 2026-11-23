@@ -26,7 +26,8 @@ const SL = { new: 'جديد', assigned: 'مُسند', accepted: 'قَبِل ال
 const view = (o) => ({ url: 'https://x.test/o/' + o.id, ...o, statusLabel: SL[o.status] || o.status, facts: { stepLabel: SL[o.status] }, statusText: '📋 طلب #' + o.number + ' — ' + (SL[o.status] || o.status), techPhone: o.techId ? TECH : '', jobCard: '*🔧 طلب جديد ليك*\n📋 رقم الطلب: *' + o.number + '*\nرد بكلمة: *قبلت*' })
 let brain
 const SITE = { on: false }
-const PAY = { on: false }   // the payment question before the rating (owner, 2026-11-23)   // the site's shared brain (cancel / answer ops) — switched on for section X
+const PAY = { on: false }
+const RATE1 = { on: false }   // the one-message rating (owner, 2026-11-24)   // the payment question before the rating (owner, 2026-11-23)   // the site's shared brain (cancel / answer ops) — switched on for section X
 const events = []
 function emit(type, o, extra = {}) { events.push({ type, order: view(o), ...extra }) }
 async function flush() { while (events.length) await brain.onEvent(events.shift()) }
@@ -43,6 +44,8 @@ const wp = async (op, b) => {
   if (op === 'reopen') { const o = orders[b.id]; Object.assign(o, b.patch, { status: 'new', techId: null, techName: null }); return view(o) }
   if (op === 'approve') { const o = orders[b.id]; Object.assign(o, { techId: 't1', techName: 'الفني علي', status: 'assigned' }); emit('order.assigned', o); return { text: '✅ اتسند للفني علي' } }
   if (op === 'eta_ask') return { result: 'asked' }
+  if (op === 'rate_menu') return RATE1.on ? (b.id === 'oskip' ? { skip: true } : { text: '🌟 *رأيك يهمنا* — رأيك بيساعدنا نرتقي\n🧼 النظافة: 1 · 2' }) : null
+  if (op === 'rate_set') { if (!RATE1.on) return null; const pros = (b.picks || []).filter((x) => x % 2).map(String); const cons = (b.picks || []).filter((x) => !(x % 2)).map(String); return { stars: b.all || !cons.length ? 5 : pros.length ? 3 : 1, pros: b.all ? ['كله'] : pros, cons: b.all ? [] : cons } }
   if (op === 'pay_menu') return PAY.on ? { text: '💳 حابب تدفع إزاي؟\n1️⃣ كاش للفني\n2️⃣ تحويل بنكي\n3️⃣ بوابة الدفع الآمنة' } : null
   if (op === 'pay_pick') return b.method === 'transfer' ? { text: '🏦 اختار البنك اللي هتحوّل عليه:\n1️⃣ مصرف الراجحي', purpose: 'reply', banks: 1 } : { text: 'ok ' + b.method, purpose: b.method === 'cash' ? 'reply' : 'paylink' }
   if (op === 'pay_bank') return { messages: [{ text: '🏦 *مصرف الراجحي*\nاسم الحساب: أكسجين', image: '' }, { text: 'SA0000001111', image: '' }, { text: 'بعد التحويل ابعت هنا *صورة الإيصال*', image: '' }] }
@@ -125,10 +128,12 @@ m = await say(CUST, 'عايز أغسل مكيف شباك واحد'); await sleep
 t('a new service while an order is open → a new booking (price), not relayed to the technician', /طلب جديد/.test(to(m, CUST)) && /ر\.س/.test(to(m, CUST)) && !to(m, TECH), JSON.stringify(m))
 await say(CUST, '0')
 // «فاضل لك قد إيه؟» answered by a number (owner, 2026-11-23)
+m = await say(TECH, 'مشغول', 'الفني')
+t('technician «مشغول» → the customer hears he is finishing another job', /لسه بيخلّص شغل قبلك/.test(to(m, CUST)) && /بلّغت العميل/.test(to(m, TECH)), JSON.stringify(m))
+m = await say(TECH, '15', 'الفني')
+t('technician «15» → the customer hears 15 minutes', /15 دقيقة/.test(to(m, CUST)) && /هتوصل خلال 15/.test(to(m, TECH)), JSON.stringify(m))
 m = await say(TECH, '3', 'الفني')
-t('technician «3» → the customer hears he is finishing another job', /لسه بيخلّص شغل قبلك/.test(to(m, CUST)) && /بلّغت العميل/.test(to(m, TECH)), JSON.stringify(m))
-m = await say(TECH, '2 15', 'الفني')
-t('technician «2 15» → the customer hears 15 minutes', /15 دقيقة/.test(to(m, CUST)) && /هتوصل خلال 15/.test(to(m, TECH)), JSON.stringify(m))
+t('technician «3» (owner, 2026-11-24: the job by numbers) → on the way', orders.o1.status === 'en_route', orders.o1.status)
 await say(TECH, 'وصلت', 'الفني')
 m = await say(TECH, 'العميل مش موجود والباب مقفول', 'الفني')
 t('technician problem → room alerted at once', /الفني علي — طلب #1002/.test(to(m, ROOM)) && /بلّغت غرفة العمليات/.test(to(m, TECH)), JSON.stringify(m))
@@ -150,6 +155,14 @@ orders.o1.rating = null; orders.o1.customerRating = null; store.touchChat(T.pkey
 m = await say(CUST, '5 ممتاز تسلموا')
 t('rating saved and sent to the room', orders.o1.customerRating === 5 && /تقييم العميل لطلب #1002: 5\/5/.test(to(m, ROOM)), JSON.stringify(m))
 t('5 stars → the Google review link follows the thanks (idea 16, only when switched on)', /قيّمنا على خرائط جوجل: https:\/\/g\.page/.test(to(m, CUST)), to(m, CUST))
+// the one-message rating (owner, 2026-11-24)
+RATE1.on = true
+orders.or1 = { id: 'or1', number: 1501, status: 'in_progress', techId: 't1', techName: 'الفني علي', clientPhone: '0533333311', clientName: 'سالم', service: 'غسيل مكيف', customerConfirmed: true }
+emit('order.status', { ...orders.or1, status: 'completed' }, { was: 'in_progress' }); orders.or1.status = 'completed'; await sleep(); m = take()
+t('one rating: good/bad numbers per point, «رأيك بيساعدنا», no word of it reaching the technician', /رأيك يهمنا/.test(to(m, '0533333311')) && /رأيك بيساعدنا/.test(to(m, '0533333311')) && !/للفني نفسه|يفرّح/.test(to(m, '0533333311')), JSON.stringify(m))
+m = await say('0533333311', '1 4')
+t('…«1 4» → the room and the technician get the pros and cons, he is thanked', /👍 1/.test(to(m, ROOM)) && /👎 4/.test(to(m, ROOM)) && /تقييم العميل لطلب #1501/.test(to(m, TECH)) && /شكرًا على صراحتك|شكرًا على رأيك/.test(to(m, '0533333311')), JSON.stringify(m))
+RATE1.on = false
 m = await say('966500009999', 'السلام عليكم، جاي بترشيح من صاحبي — كود الترشيح R1A2B3C')
 t('a referral code in a message is passed to the site (idea 20)', calls.some((c) => c.startsWith('referral:')), calls.slice(-3))
 

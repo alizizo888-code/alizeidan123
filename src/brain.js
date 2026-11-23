@@ -134,7 +134,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const head = '📤 طلب #' + T.num(o) + ' اتسند للفني ' + (o.techName || '')
     if (!o.techPhone || o.techIsSite) {
       const why = o.techIsSite ? '«فني الموقع» حساب عام' : 'الفني ده ما لوش رقم واتساب في ملفه'
-      toRoom('⚠️ *راجع وابعت بنفسك* — ' + why + '\n' + head + '\n\n' + String(o.jobCard || '').replace(/\n*رد بكلمة:[\s\S]*$/, '') + '\n\nوزّعه على فني: *وجّه ' + T.num(o) + ' لمحمود*', 'as-' + o.id + '-' + o.techId)
+      toRoom('⚠️ *راجع وابعت بنفسك* — ' + why + '\n' + head + '\n\n' + String(o.jobCard || '').replace(/\n*رد (?:بكلمة|برقم):[\s\S]*$/, '') + '\n\nوزّعه على فني: *وجّه ' + T.num(o) + ' لمحمود*', 'as-' + o.id + '-' + o.techId)
       return
     }
     toTech(o, o.jobCard || ('*🔧 طلب جديد ليك* #' + T.num(o)), 'card-' + o.id + '-' + o.techId)
@@ -153,7 +153,16 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     // choices, not a free text (owner, 2026-11-23)
     return '🎉 تم إنجاز طلبك، شكرًا لثقتك' + (o.site ? ' في *' + o.site + '*' : '') + '.\nإيه رأيك في الخدمة والفني' + (tech ? ' ' + tech : '') + '؟ اختار رقم 👇\n5️⃣ راضي جدًا ⭐⭐⭐⭐⭐\n4️⃣ راضي ⭐⭐⭐⭐\n3️⃣ تمام ⭐⭐⭐\n2️⃣ مش راضي ⭐⭐\n1️⃣ سيء ⭐\nرأيك بيوصل للمدير مباشرة.'
   }
-  function askRate(o, phone) { setStage(phone, o.id, 'rate'); toCustomer(o, rateText(o), 'rate-' + o.id) }
+  // ONE rating (owner, 2026-11-24): a good and a bad number for each point, in one message — not asked of a customer who
+  // complained, chased the technician twice, or was marked difficult (the site decides: op «rate_menu»)
+  function askRate(o, phone) {
+    wp('rate_menu', { id: o.id }).catch(() => null).then((rm) => {
+      const head = '🎉 تم إنجاز طلبك، شكرًا لثقتك' + (o.site ? ' في *' + o.site + '*' : '') + '.'
+      if (rm && rm.skip) { dropStage(phone); toCustomer(o, head + '\nفي خدمتك دايمًا 🌷', 'rate-' + o.id); return }
+      setStage(phone, o.id, 'rate')
+      toCustomer(o, rm && rm.text ? head + '\n\n' + rm.text : rateText(o), 'rate-' + o.id)
+    })
+  }
 
   /** His answer to «حابب تدفع إزاي؟»: recorded on the site, what he needs now, then the rating. */
   async function payStage(o, text, phone) {
@@ -1201,6 +1210,30 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
 
   async function rateStage(o, text, phone) {
     const r = o.rating || {}
+    // the one-message rating: «1 3 5 7» (a good or a bad number per point) or «ممتاز»
+    if (!r.stars) {
+      const nt = T.norm(text)
+      const all = /(ممتاز|كله تمام|كله ممتاز|💯)/.test(nt) || (text.match(/⭐/g) || []).length >= 5
+      const picks = [...new Set((nt.match(/[1-8]/g) || []).map(Number))]
+      if (all || picks.length) {
+        let rs = null
+        try { rs = await wp('rate_set', { id: o.id, picks, all, comment: /[؀-ۿa-zA-Z]{3,}/.test(text.replace(/ممتاز|كله تمام|كله ممتاز/g, '')) ? text.slice(0, 300) : '' }) } catch (e) { log('warn', 'rate_set: ' + e.message) }
+        if (rs && rs.stars) {
+          const n = T.num(o)
+          const pc = (rs.pros || []).length ? '\n👍 ' + rs.pros.join('، ') : ''
+          const cc = (rs.cons || []).length ? '\n👎 ' + rs.cons.join('، ') : ''
+          let line = '⭐'.repeat(rs.stars) + ' *تقييم العميل لطلب #' + n + ': ' + rs.stars + '/5*\n👤 ' + (o.clientName || o.clientPhone) + (o.techName ? '\n👷 الفني: ' + o.techName : '') + pc + cc
+          if (rs.stars <= 3) { line = '⚠️ *عميل مش راضي*\n' + line + '\n\nكلّمه: *رد ' + n + ' نص الرسالة*'; wp('alert', { id: o.id, title: '⚠️ تقييم منخفض', body: rs.stars + '/5 ' + (rs.cons || []).join('، ') }).catch(() => {}) }
+          toRoom(line, 'rate-' + o.id)
+          // the technician knows where he stands (the customer is not told it reaches him)
+          toTech(o, '📋 تقييم العميل لطلب #' + n + ': *' + rs.stars + '/5*' + pc + cc, 'rate-t-' + o.id)
+          let more = ''
+          if (rs.stars >= 4) { try { const g = await wp('after_rating', { id: o.id, stars: rs.stars }); more = g && g.text ? '\n\n' + g.text : '' } catch {} }
+          dropStage(phone)
+          return (rs.stars >= 4 ? 'شكرًا على رأيك 🌷 بيساعدنا نرتقي ونطوّر من نفسنا.' : 'شكرًا على صراحتك 🙏 رأيك وصل للإدارة، وهنتواصل معاك نعرف إزاي نخدمك أحسن.') + more
+        }
+      }
+    }
     let stars = null
     const si = (text.match(/⭐|★/g) || []).length
     if (si >= 1 && si <= 5) stars = si
@@ -1324,27 +1357,36 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       toRoom('📣 *الفني ' + tn + '*' + (o ? ' — طلب #' + T.num(o) : '') + '\n💬 «' + ops[1].slice(0, 400) + '»' + (o ? '\n👤 ' + (o.clientName || '—') + ' — ' + (o.clientPhone || '') : '') + '\n\nرد عليه: *رد ' + (o ? T.num(o) : '') + ' نص الرسالة*', 'tops-' + T.norm(ops[1]).slice(0, 30))
       return '✅ وصلت للعمليات — هيردوا عليك هنا.'
     }
-    // «فاضل لك قد إيه؟» answered by a number (owner, 2026-11-23): 1 on my way · 2 + minutes · 3 still on another job
+    // The job by numbers (owner, 2026-11-24): 1 accepted · 2 declines · 3 on the way · 4 arrived · 5 started · 6 done —
+    // «4 1020» when he has more than one job. «فاضل قد إيه؟» is answered by the minutes («15»), or «مشغول».
     if (jobs.length) {
+      const nm = lead.match(/^([1-6١-٦])(?:\s*[-#:،,]?\s*(\d{3,}))?$/)
+      if (nm) {
+        const d = Number(String(nm[1]).replace(/[١-٦]/, (x) => '١٢٣٤٥٦'.indexOf(x) + 1))
+        if (jobs.length > 1 && !nm[2]) return 'عندك ' + jobs.length + ' طلبات مفتوحة — ابعت الرقم ومعاه رقم الطلب، مثال: *' + d + ' ' + T.num(jobs[0]) + '*\n' + jobs.slice(0, 6).map((o) => '• ' + T.num(o) + ' — ' + (o.service || 'صيانة')).join('\n')
+        const o = (nm[2] && jobs.find((x) => T.num(x).includes(nm[2]))) || jobs[0]
+        if (d === 2) {
+          await wp('patch', { id: o.id, patch: { status: 'new', technicianId: null, technicianName: null, handler: 'operations' }, step: { kind: 'tech_decline', text: (tn || 'الفني') + ' اعتذر عن الطلب', by: w.name } }).catch(() => {})
+          toRoom('🙅 *الفني ' + (tn || '') + ' اعتذر* عن طلب #' + T.num(o) + ' — رجع للعمليات\nوزّعه: *وجّه ' + T.num(o) + ' لـ…*', 'decl-' + o.id + '-' + T.pkey(phone))
+          return '✅ اتسجل اعتذارك عن طلب ' + T.num(o) + ' ورجع للعمليات.'
+        }
+        const st = { 1: 'accepted', 3: 'en_route', 4: 'arrived', 5: 'in_progress', 6: 'completed' }[d]
+        await wp('patch', { id: o.id, patch: { status: st }, step: { kind: st, text: T.SAID[st], by: w.name } })
+        return T.SAID[st] + ' — طلب ' + T.num(o) + (st === 'completed' ? '\nلو فيه قطع غيار أو ملاحظة، ابعتها دلوقتي وهتتسجل على الطلب.' : '')
+      }
       const o = jobs.find((x) => ['assigned', 'accepted', 'en_route', 'nearby'].includes(x.status)) || null
       const tn2 = tn || 'الفني'
-      if (o && /^[1١]$/.test(lead)) {
-        if (['assigned', 'accepted'].includes(o.status)) await wp('patch', { id: o.id, patch: { status: 'en_route' }, step: { kind: 'en_route', text: T.SAID.en_route, by: w.name } }).catch(() => {})
-        else toCustomer(o, '🚗 الفني ' + tn2 + ' في الطريق ليك دلوقتي.', 'eta1-' + o.id + '-' + Math.floor(now() / 600000))
-        return '✅ بلّغت العميل إنك في الطريق — طلب ' + T.num(o)
-      }
-      if (o && /^[2٢]$/.test(lead)) return 'اكتب الدقايق بعد الرقم، مثال: *2 15*'
-      const mm = lead.match(/^(?:[2٢]\s*[-:،,]?\s*)?(\d{1,3})\s*(?:د|دق|دقيقه|دقيقة|دقايق|دقائق|min)?$/)
-      if (o && mm && Number(mm[1]) >= 5 && Number(mm[1]) <= 240) {
+      const mm = lead.match(/^(\d{1,3})\s*(?:د|دق|دقيقه|دقيقة|دقايق|دقائق|min)?$/)
+      if (o && mm && Number(mm[1]) >= 7 && Number(mm[1]) <= 240) {
         const n2 = Number(mm[1])
         wp('patch', { id: o.id, patch: { techEta: { minutes: n2, at: new Date(now()).toISOString() } }, step: { kind: 'eta', text: 'الفني: هيوصل خلال ' + n2 + ' دقيقة', by: w.name } }).catch(() => {})
         toCustomer(o, '🚗 الفني ' + tn2 + ' قال إنه هيوصلك خلال حوالي *' + n2 + ' دقيقة*.', 'eta-' + o.id + '-' + n2)
         return '✅ بلّغت العميل: هتوصل خلال ' + n2 + ' دقيقة — طلب ' + T.num(o)
       }
-      if (o && /^[3٣]$/.test(lead)) {
+      if (o && /^(مشغول|لسه في شغل|لسه بشتغل|عندي شغل)/.test(T.norm(lead))) {
         toCustomer(o, 'الفني ' + tn2 + ' لسه بيخلّص شغل قبلك، وهيتحرك ليك أول ما يخلص 🌷 وهنبلّغك أول ما يتحرك.', 'eta3-' + o.id + '-' + Math.floor(now() / 1800000))
         toRoom('⏳ الفني ' + tn2 + ' لسه في شغل تاني — طلب #' + T.num(o) + ' مستني', 'eta3r-' + o.id + '-' + Math.floor(now() / 1800000))
-        return '✅ بلّغت العميل إنك لسه بتخلّص شغل — اكتب *1* أول ما تتحرك.'
+        return '✅ بلّغت العميل إنك لسه بتخلّص شغل — ابعت *3* أول ما تتحرك.'
       }
     }
     const step = T.stepOf(text)
@@ -1361,7 +1403,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       if (!jobs.length && !/^(مساعدة|طلباتي|الاوامر|الأوامر)$/.test(text.trim())) return null   // a colleague chatting
       const L = ['*أهلًا ' + (w.name || '') + '*']
       if (jobs.length) { L.push('طلباتك المفتوحة:'); for (const o of jobs.slice(0, 6)) L.push('📋 ' + T.num(o) + ' — ' + (o.service || 'صيانة') + ' — _' + (o.statusLabel || o.status) + '_') } else L.push('مفيش طلبات مفتوحة عندك دلوقتي.')
-      L.push('', 'اكتب: *قبلت* · *في الطريق* · *قربت* · *وصلت* · *بدأت العمل* · *تم*')
+      L.push('', 'رد برقم: *1* قبلت · *2* أعتذر · *3* في الطريق · *4* وصلت · *5* بدأت الشغل · *6* خلصت', 'وللسؤال: *#* سؤالك · وللعمليات: *\** كلامك')
       return L.join('\n')
     }
     if (!jobs.length) return 'مفيش طلب مفتوح عندك دلوقتي. استنى الإسناد من غرفة العمليات.'
