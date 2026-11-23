@@ -109,6 +109,7 @@ class MWC_Rest {
             'body' => $m['body'] ?? '', 'media_url' => $m['media_url'], 'mime' => $m['mime'], 'file_name' => $m['file_name'],
             'duration' => (int) $m['duration'], 'status' => $m['status'], 'error' => $m['error'], 'sender' => $m['sender'],
             'ts' => (int) $m['ts'], 'ext_id' => $m['ext_id'], 'reply_to' => $m['reply_to'],
+            'deleted_at' => (int) ($m['deleted_at'] ?? 0), 'edits' => json_decode((string) ($m['edits'] ?? ''), true) ?: [],
         ];
     }
 
@@ -494,12 +495,32 @@ class MWC_Rest {
             $map = ['SERVER_ACK' => 'sent', 'DELIVERY_ACK' => 'delivered', 'READ' => 'read', 'PLAYED' => 'read', 'ERROR' => 'failed'];
             foreach ($list as $u) {
                 $id = $u['keyId'] ?? ($u['key']['id'] ?? ($u['messageId'] ?? ''));
+                $um = $u['update']['message'] ?? ($u['message'] ?? null);
+                if ($id && is_array($um)) {
+                    if (isset($um['editedMessage']['message']['protocolMessage']['editedMessage'])) $um = $um['editedMessage']['message']['protocolMessage']['editedMessage'];
+                    elseif (isset($um['protocolMessage']['editedMessage'])) $um = $um['protocolMessage']['editedMessage'];
+                    $txt = $um['conversation'] ?? ($um['extendedTextMessage']['text'] ?? '');
+                    if ($txt !== '') MWC_Store::mark_edited($id, $txt);
+                }
+                if ($id && (($u['update']['messageStubType'] ?? '') === 1 || strtoupper((string) ($u['status'] ?? '')) === 'DELETED')) MWC_Store::mark_deleted($id);
                 $st = $map[strtoupper($u['status'] ?? ($u['update']['status'] ?? ''))] ?? '';
                 if ($id && $st) MWC_Store::status_by_ext($id, $st);
             }
             return ['ok' => true];
         }
 
+        if ($event === 'messages.delete') {
+            foreach ((isset($data[0]) ? $data : [$data]) as $u) { $id = $u['id'] ?? ($u['key']['id'] ?? ($u['keyId'] ?? '')); if ($id) MWC_Store::mark_deleted($id); }
+            return ['ok' => true];
+        }
+        if ($event === 'messages.edited' || $event === 'messages.edit') {
+            foreach ((isset($data[0]) ? $data : [$data]) as $u) {
+                $id = $u['key']['id'] ?? ($u['keyId'] ?? ''); $mm = $u['message'] ?? [];
+                $txt = $mm['conversation'] ?? ($mm['extendedTextMessage']['text'] ?? ($mm['protocolMessage']['editedMessage']['conversation'] ?? ($mm['protocolMessage']['editedMessage']['extendedTextMessage']['text'] ?? '')));
+                if ($id && $txt !== '') MWC_Store::mark_edited($id, $txt);
+            }
+            return ['ok' => true];
+        }
         if ($event === 'messages.upsert' || $event === 'send.message') {
             $list = isset($data[0]) ? $data : (isset($data['messages']) ? $data['messages'] : [$data]);
             foreach ($list as $d) self::evo_message($acc, $d, $p);
@@ -531,6 +552,20 @@ class MWC_Rest {
         $msg = $d['message'] ?? [];
         if (isset($msg['ephemeralMessage']['message'])) $msg = $msg['ephemeralMessage']['message'];
         if (isset($msg['viewOnceMessageV2']['message'])) $msg = $msg['viewOnceMessageV2']['message'];
+        if (isset($msg['editedMessage']['message']['protocolMessage'])) $msg = $msg['editedMessage']['message'];
+        if (isset($msg['protocolMessage'])) {
+            $pm = $msg['protocolMessage']; $target = $pm['key']['id'] ?? '';
+            $type = $pm['type'] ?? '';
+            $when = (int) ($d['messageTimestamp'] ?? time());
+            if ($target !== '' && ($type === 'REVOKE' || $type === 0 || $type === '0')) { MWC_Store::mark_deleted($target, $when); return; }
+            if ($target !== '' && isset($pm['editedMessage'])) {
+                $em = $pm['editedMessage'];
+                $txt = $em['conversation'] ?? ($em['extendedTextMessage']['text'] ?? ($em['imageMessage']['caption'] ?? ($em['videoMessage']['caption'] ?? '')));
+                MWC_Store::mark_edited($target, $txt, $when);
+                return;
+            }
+            return;
+        }
         if (isset($msg['protocolMessage']) || isset($msg['reactionMessage']) || isset($msg['senderKeyDistributionMessage']) && count($msg) === 1) return;
         $m = ['type' => 'text', 'body' => '', 'media_url' => '', 'mime' => '', 'file_name' => '', 'duration' => 0,
               'ext_id' => $key['id'] ?? '', 'ts' => (int) ($d['messageTimestamp'] ?? time()),

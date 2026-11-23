@@ -84,6 +84,8 @@ class MWC_Store {
             sender VARCHAR(80) NOT NULL DEFAULT '',
             ts INT UNSIGNED NOT NULL DEFAULT 0,
             changed INT UNSIGNED NOT NULL DEFAULT 0,
+            deleted_at INT UNSIGNED NOT NULL DEFAULT 0,
+            edits LONGTEXT NULL,
             PRIMARY KEY (id),
             KEY chat_ts (chat_id, ts),
             KEY ext_id (ext_id),
@@ -404,6 +406,28 @@ class MWC_Store {
         global $wpdb;
         $fields['changed'] = self::now();
         $wpdb->update(self::t('messages'), $fields, ['id' => (int) $id]);
+    }
+
+    /**
+     * رسالة اتمسحت أو اتعدّلت عند صاحبها (صاحب الشغل 2026-11-24): عندنا ما بتتمسحش. بتفضل ظاهرة ومكتوب جنبها
+     * «🗑️ اتمسحت الساعة كذا»، والمعدّلة بيتسجل نصها القديم والجديد ووقت كل تعديل.
+     */
+    static function mark_deleted($ext_id, $ts = 0) {
+        global $wpdb; $t = self::t('messages');
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, deleted_at FROM $t WHERE ext_id=%s", (string) $ext_id), ARRAY_A);
+        if (!$row || (int) $row['deleted_at']) return false;
+        self::update_message($row['id'], ['deleted_at' => $ts ?: time()]);
+        return true;
+    }
+    static function mark_edited($ext_id, $new_body, $ts = 0) {
+        global $wpdb; $t = self::t('messages');
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, body, edits FROM $t WHERE ext_id=%s", (string) $ext_id), ARRAY_A);
+        $new_body = (string) $new_body;
+        if (!$row || $new_body === '' || $new_body === (string) $row['body']) return false;
+        $h = json_decode((string) ($row['edits'] ?? ''), true); $h = is_array($h) ? $h : [];
+        $h[] = ['at' => $ts ?: time(), 'old' => (string) $row['body']];
+        self::update_message($row['id'], ['body' => $new_body, 'edits' => wp_json_encode(array_slice($h, -20), JSON_UNESCAPED_UNICODE)]);
+        return true;
     }
 
     /** تحديث حالة الرسالة (وصلت/اتقرت) — الحالة ما ترجعش لورا */
