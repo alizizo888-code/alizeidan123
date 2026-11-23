@@ -42,6 +42,9 @@ final class Mutqan_Wallet {
         $w = self::settings($techId);
         $sp = (float) ($w['sharePct'] ?? 0); if ($sp <= 0 || $sp > 100) { $sp = (float) $share; }
         $cs = 0; foreach ([(float) ($w['cashSharePct'] ?? 0), (float) $cashShare] as $v) { if ($v > 0 && $v <= 100) { $cs = $v; break; } } if (!$cs) { $cs = $sp; }
+        // «نظام راتب» (2026-11-24): no share; the cash he collects is all the company's; pay/bonus/penalty are payroll
+        $salary = ($w['mode'] ?? '') === 'salary';
+        if ($salary) { $sp = 0.0; $cs = 0.0; }
         $b = 0.0;
         foreach ((array) $orders as $o) {
             if (($o['technicianId'] ?? null) !== $techId || !in_array($o['status'] ?? '', ['completed', 'closed'], true) || !empty($o['inhouse']) || ($o['dispatch'] ?? '') === 'site' || !empty($o['noCommission'])) { continue; }
@@ -54,7 +57,7 @@ final class Mutqan_Wallet {
         foreach (self::$s as $s) {
             if (($s['techId'] ?? null) !== $techId) { continue; }
             $n = (float) ($s['amount'] ?? 0); $k = (string) ($s['kind'] ?? (($s['dir'] ?? '') === 'out' ? 'out' : 'in'));
-            if ($k === 'in') { $b -= $n; } elseif ($k === 'out' || $k === 'penalty') { $b += $n; } elseif ($k === 'bonus' || $k === 'adjust') { $b -= $n; }
+            if ($k === 'in') { $b -= $n; } elseif ($salary) { continue; } elseif ($k === 'out' || $k === 'penalty') { $b += $n; } elseif ($k === 'bonus' || $k === 'adjust') { $b -= $n; }
         }
         return $b;
     }
