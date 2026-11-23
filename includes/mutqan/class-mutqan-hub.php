@@ -469,17 +469,19 @@ final class Mutqan_Hub {
         }
         $fromUs = $brand !== '' || preg_match('/(من موقع|من موقعكم|شفت اعلان|شفت إعلان|بخصوص:|من جوجل|من قوقل|من التيك|من تيك توك|سناب|انستا|حولني|حوّلني|كلمني|من طرف)/u', $text);
         if ($brand === '') { $brand = $lineBrand; }
+        $known = $brand !== '';
         $site = class_exists('Mutqan_Customers') ? Mutqan_Customers::business($brand !== '' ? $brand : 'oxygen') : 'أكسجين';
         $src = class_exists('Mutqan_WA_Central') ? Mutqan_WA_Central::source($text) : [];
         // The code itself («#oxygen/a26») stays as the customer sent it; here it becomes the article (title, link, WordPress/Blogger).
         $art = null; $code = '';
         if (class_exists('Mutqan_Source')) {
             $cs = Mutqan_Source::codes($text);
-            if ($cs) { $code = Mutqan_Source::code_of($cs[0]['brand'], $cs[0]['kind'], $cs[0]['id']); $art = Mutqan_Source::lookup($cs[0]); if ($brand === '') { $brand = $cs[0]['brand']; $site = class_exists('Mutqan_Customers') ? Mutqan_Customers::business($brand) : $site; } }
+            if ($cs) { $known = true; $code = Mutqan_Source::code_of($cs[0]['brand'], $cs[0]['kind'], $cs[0]['id']); $art = Mutqan_Source::lookup($cs[0]); if ($brand === '') { $brand = $cs[0]['brand']; $site = class_exists('Mutqan_Customers') ? Mutqan_Customers::business($brand) : $site; } }
         }
         $title = (string) ($src['title'] ?? '') ?: (string) ($art['title'] ?? '');
         $p = class_exists('Mutqan_Customers') ? Mutqan_Customers::profile($phone) : null;
-        return ['brand' => $brand, 'site' => $site, 'fromUs' => (bool) $fromUs, 'source' => $title,
+        // the site he came through is known (a code, an article, the line's own brand) — else the welcome stays general
+        return ['brand' => $brand, 'site' => $site, 'known' => $known || $title !== '', 'fromUs' => (bool) $fromUs, 'source' => $title,
             'code' => $code, 'sourceUrl' => (string) ($art['url'] ?? ''), 'platform' => (string) ($art['platform'] ?? ''), 'domain' => (string) ($art['domain'] ?? ''),
             'kind' => (string) ($p['kind'] ?? 'new'), 'name' => (string) ($p['name'] ?? ''), 'orders' => (int) ($p['orders'] ?? 0),
             'lastService' => mb_substr((string) ($p['lastService'] ?? ''), 0, 60), 'lastDays' => !empty($p['lastAt']) ? max(1, (int) floor((time() - (int) $p['lastAt']) / 86400)) : 0,

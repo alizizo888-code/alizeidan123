@@ -38,6 +38,8 @@ final class Mutqan_Dispatch {
     public static function on_created($doc) {
         try {
             if (!is_array($doc) || empty($doc['id'])) { return $doc; }
+            // for a later day: filed in «جدول المهام», dispatched on its day from 7 am (Mutqan_Schedule)
+            if (class_exists('Mutqan_Schedule')) { $s = Mutqan_Schedule::file_if_later($doc); if ($s) { return $s; } }
             if (!self::is_auto()) { return $doc; }
             if (!empty($doc['technicianId']) || !empty($doc['inhouse'])) { return $doc; }
             if (!in_array((string) ($doc['status'] ?? 'new'), ['new', ''], true)) { return $doc; }
