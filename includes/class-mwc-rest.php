@@ -565,7 +565,7 @@ class MWC_Rest {
         global $wpdb;
         // نفس الاتجاه بس: رسالة من رقم في المركز لرقم تاني في المركز ليها نفس الـid على الجهتين — كانت الواردة بتتشال
         // على إنها مكررة، فالرسايل بين رقمين من أرقامنا (والاختبارات) ما كانتش بتظهر ولا بتوصل للبوت (2026-11-23)
-        if ($m['ext_id'] && $wpdb->get_var($wpdb->prepare("SELECT id FROM " . MWC_Store::t('messages') . " WHERE ext_id=%s AND direction=%s", $m['ext_id'], $from_me ? 'out' : 'in'))) return;
+        if ($m['ext_id'] && $wpdb->get_var($wpdb->prepare("SELECT id FROM " . MWC_Store::t('messages') . " WHERE ext_id=%s AND dir=%s", $m['ext_id'], $from_me ? 'out' : 'in'))) return;
         self::ingest($acc, $jid, $from_me ? '' : ($d['pushName'] ?? ''), $m, $from_me);
     }
 }
