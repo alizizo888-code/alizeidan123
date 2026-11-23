@@ -42,6 +42,7 @@ const wp = async (op, b) => {
   if (op === 'reopen') { const o = orders[b.id]; Object.assign(o, b.patch, { status: 'new', techId: null, techName: null }); return view(o) }
   if (op === 'approve') { const o = orders[b.id]; Object.assign(o, { techId: 't1', techName: 'الفني علي', status: 'assigned' }); emit('order.assigned', o); return { text: '✅ اتسند للفني علي' } }
   if (op === 'eta_ask') return { result: 'asked' }
+  if (op === 'tech_ask') return { reply: 'جرّب تغيّر الكاباستور (سؤال: ' + b.text + ')' }
   if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; if (b.confirmed) o.customerConfirmed = true; o.acQuote = b.acQuote; o.spec = b.spec; o.mode = b.mode; o.acType = b.acType; o.desc = b.desc; emit('order.created', o); return { ...view(o), details: ['🛠 الخدمة: ' + b.service + ' [' + b.mode + '/' + (b.acType || '-') + ']', '📅 الموعد: ' + b.time] } }
   if (op === 'claim') { const o = b.seal ? Object.values(orders).find((x) => b.seal.startsWith(x.seal || '#')) : byNum(b.number); if (!o || o.claimCode !== b.code) return null; const first = !o.customerConfirmed; Object.assign(o, { clientPhone: b.phone, customerConfirmed: true }); return { first, card: first ? '🔔 *طلب جديد — رعد السماء*\nرقم الطلب: #' + o.number : '', ...view(o) } }
   if (op === 'report') return { text: '📋 تقرير' }
@@ -189,6 +190,11 @@ t('a full request: welcome and the price at once, no waiting', /مرحبًا ب�
 await brain.inbound({ line: 'l1', phone: NEW.replace(/9$/, '8'), text: 'أهلا بيك يا فندم، في أي حي؟', fromMe: true })
 m = await say(NEW.replace(/9$/, '8'), 'العزيزية'); await sleep(450); m = m.concat(take())
 t('…a person took over: the bot keeps out', !to(m, NEW.replace(/9$/, '8')), JSON.stringify(m))
+// the technician's two doors (owner, 2026-11-23): «#» → the assistant, «*» → operations
+m = await say(TECH, '# الكمبروسر بيفصل بعد دقيقة', 'الفني')
+t('technician «# سؤال» → the assistant answers him', /🤖/.test(to(m, TECH)) && /الكمبروسر بيفصل/.test(to(m, TECH)), JSON.stringify(m))
+m = await say(TECH, '* العميل مش موجود والباب مقفول', 'الفني')
+t('technician «* كلام» → operations hear it, he is told', /وصلت للعمليات/.test(to(m, TECH)) && /الباب مقفول/.test(to(m, ROOM)), JSON.stringify(m))
 m = await say(TECH, 'صباح الخير يا جماعة', 'الفني')
 t('a colleague saying hello gets no bot reply', !to(m, TECH), JSON.stringify(m))
 

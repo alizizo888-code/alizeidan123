@@ -266,7 +266,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (w.kind !== 'customer' && !(testing && !T.roomCommand(text) && !/^عميل\s/.test(text))) {
       // A colleague: no welcome, no small talk — only his work words (a technician's step, the room's commands).
       store.touchChat(pk, { kind: w.kind })
-      const reply = w.kind === 'tech' ? await technician(w, text) : await room(w, text)
+      const reply = w.kind === 'tech' ? await technician({ ...w, phone }, text) : await room(w, text)
       if (reply) say(phone, line, reply)
       return
     }
@@ -1182,6 +1182,25 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
 
   async function technician(w, text) {
     const jobs = w.jobs || []
+    const tn = String(w.name || '').replace(/^الفن[يى]\s+/, '')
+    // The technician's two doors (owner, 2026-11-23): «#سؤال» → the AI assistant answers him; «*كلام» → operations.
+    const lead = String(text || '').trim()
+    const ask = lead.match(/^(?:[#＃]\s*(?:مساعد|المساعد)?|مساعد\s*[:：])\s*([\s\S]*)$/)
+    if (ask) {
+      const q = ask[1].trim()
+      if (!q) return 'اكتب سؤالك بعد # — مثال: *# الكمبروسر بيفصل بعد دقيقة، أعمل إيه؟*'
+      const o = jobs[0]
+      let a = null
+      try { a = await wp('tech_ask', { phone: T.intl(w.phone || ''), name: tn, text: q, job: o ? (T.num(o) + ' — ' + (o.service || '') + ' — ' + (o.statusLabel || o.status || '')) : '' }) } catch (e) { log('warn', 'tech_ask: ' + e.message) }
+      return '🤖 ' + ((a && a.reply) || 'المساعد مش متاح دلوقتي 🙏 ابعت للعمليات بكتابة * في أول الرسالة.')
+    }
+    const ops = lead.match(/^[*＊٭]\s*([\s\S]+)$/)
+    if (ops) {
+      const o = jobs[0]
+      if (o) await wp('step', { id: o.id, kind: 'note', text: w.name + ' للعمليات: ' + ops[1].slice(0, 300) }).catch(() => {})
+      toRoom('📣 *الفني ' + tn + '*' + (o ? ' — طلب #' + T.num(o) : '') + '\n💬 «' + ops[1].slice(0, 400) + '»' + (o ? '\n👤 ' + (o.clientName || '—') + ' — ' + (o.clientPhone || '') : '') + '\n\nرد عليه: *رد ' + (o ? T.num(o) : '') + ' نص الرسالة*', 'tops-' + T.norm(ops[1]).slice(0, 30))
+      return '✅ وصلت للعمليات — هيردوا عليك هنا.'
+    }
     const step = T.stepOf(text)
     if (!step) {
       if (text && jobs.length) {
