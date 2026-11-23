@@ -1,1 +1,0 @@
-import{d as n,r as s,aM as t,aP as o,aL as i}from"./main-DrREmnOE.js";function p(){const{data:a}=n("pricing",{limit:100});return s.useMemo(()=>{const e=(a||[]).find(r=>(r.serviceId||r.id)==="contact_numbers")||{};return{wa:String(t.wa||e.whatsapp||i).replace(/\D/g,""),phone:String(t.phone||e.phone||o).replace(/[^\d+]/g,"")}},[a])}export{p as u};
