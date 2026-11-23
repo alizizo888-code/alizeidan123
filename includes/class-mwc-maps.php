@@ -128,6 +128,27 @@ class MWC_Maps {
         return $n;
     }
 
+    /** الأداة نفسها: أي شغلانة عليها مش مستنياها حاجة عندنا (قديمة/اتقفلت) بتتمسح — عشان ما تحجزش الدور قدام الجديدة. */
+    static function clean_tool() {
+        global $wpdb;
+        if ((int) get_transient('mwc_maps_clean')) return 0;
+        set_transient('mwc_maps_clean', 1, 600);
+        $r = self::call('GET', '/api/v1/jobs', null, 15);
+        if ($r['code'] !== 200 || !is_array($r['body'])) return 0;
+        $list = isset($r['body']['data']) && is_array($r['body']['data']) ? $r['body']['data'] : $r['body'];
+        $live = array_flip(array_filter($wpdb->get_col("SELECT ext_id FROM " . MWC_Store::t('jobs') . " WHERE status IN ('working','pending')")));
+        $n = 0;
+        foreach ($list as $j) {
+            $id = (string) ($j['id'] ?? ($j['ID'] ?? ''));
+            $st = strtolower((string) ($j['status'] ?? ($j['Status'] ?? '')));
+            if ($id === '' || isset($live[$id]) || !in_array($st, ['pending', 'working'], true)) continue;
+            self::call('DELETE', '/api/v1/jobs/' . rawurlencode($id), null, 10);
+            $n++;
+        }
+        if ($n) MWC_Store::log('maps', 'مسحت ' . $n . ' شغلانة قديمة من أداة السحب', 'النظام');
+        return $n;
+    }
+
     static function run_daily() {
         global $wpdb;
         $p = self::plan();
@@ -227,6 +248,8 @@ class MWC_Maps {
         $jobs = $wpdb->get_results("SELECT * FROM " . MWC_Store::t('jobs') . " WHERE status='working' ORDER BY id LIMIT 5", ARRAY_A);
         foreach ($jobs as $j) self::check($j);
         self::expire_stuck();
+        self::clean_tool();
+        MWC_Leads::backfill_whatsapp();
         // الجدول اليومي بيركب على نفس النبضة دي بدل كرون لوحده: النبضة جاية من ticker السيرفر ومن ووردبريس
         // الاتنين، فلو واحد فيهم وقف الجدول بيفضل ماشي. وهي بتتحكم في الزحمة بنفسها.
         self::run_daily();
