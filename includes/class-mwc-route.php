@@ -44,9 +44,18 @@ class MWC_Route {
         $h = self::hub();
         if (empty($h['key']) || !hash_equals((string) $h['key'], (string) ($q->get_header('x_mwc_key') ?: $q->get_param('k')))) return new WP_Error('forbidden', 'bad key', ['status' => 403]);
         $b = $q->get_json_params() ?: [];
-        $acc = MWC_Store::account((int) ($b['account'] ?? 0));
-        if (!$acc) return new WP_Error('acc', 'unknown account', ['status' => 404]);
         $phone = MWC_Leads::norm($b['phone'] ?? '') ?: MWC_Store::norm_phone($b['phone'] ?? '');
+        // account 0 = «the manager's number» (the hub has no line of its own any more): the manager account, or the first
+        // open one. It never writes to itself: a message for the number of the account picked goes out from another one
+        // (live test 2026-11-23: every team alert to the operations room failed with «unknown account»).
+        $acc = (int) ($b['account'] ?? 0) ? MWC_Store::account((int) $b['account']) : self::manager_account();
+        $tail = substr(preg_replace('/\D/', '', (string) $phone), -9);
+        if ($acc && $tail !== '' && substr(preg_replace('/\D/', '', (string) $acc['phone']), -9) === $tail) {
+            $alt = null;
+            foreach (MWC_Store::accounts(true) as $a) if ($a['active'] && $a['status'] === 'open' && $a['role'] !== 'outreach' && (int) $a['id'] !== (int) $acc['id'] && substr(preg_replace('/\D/', '', (string) $a['phone']), -9) !== $tail) { $alt = $a; break; }
+            if ($alt) $acc = $alt;
+        }
+        if (!$acc) return new WP_Error('acc', 'unknown account', ['status' => 404]);
         $cid = MWC_Store::contact_upsert($phone, []);
         $chat_id = MWC_Store::chat_get_or_create($acc['id'], $cid);
         $chat = MWC_Store::chat($chat_id);
