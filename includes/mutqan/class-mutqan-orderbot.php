@@ -77,7 +77,7 @@ final class Mutqan_OrderBot {
             'id' => (string) ($o['id'] ?? ''), 'short' => '#' . ((string) ($o['number'] ?? '') !== '' ? (string) $o['number'] : substr((string) ($o['id'] ?? ''), -5)),
             'service' => class_exists('Mutqan_Rest') ? Mutqan_Rest::spec_label($o['specialtyId'] ?? '') : (string) ($o['specialtyId'] ?? ''),
             'status' => $st, 'cancelled' => $st === 'cancelled', 'step' => $i, 'stepLabel' => $st === 'cancelled' ? 'ملغي' : self::STEPS[$i],
-            'tech' => (string) ($o['technicianName'] ?? ''), 'hasTech' => !empty($o['technicianId']),
+            'tech' => (string) ($o['technicianName'] ?? ''), 'hasTech' => !empty($o['technicianId']), 'techPhone' => !empty($o['technicianId']) ? self::tech_phone($o) : '',
             'appointment' => null, 'eta' => null, 'distanceKm' => null, 'posAgoMin' => null, 'techMap' => null,
             'price' => class_exists('Mutqan_Sales') ? (int) Mutqan_Sales::amount($o) : 0,
             'paid' => ($o['paymentStatus'] ?? '') === 'paid', 'warranty' => self::warranty($o), 'url' => self::order_url($o['id'] ?? ''),
@@ -122,6 +122,8 @@ final class Mutqan_OrderBot {
         // a complaint about the technician (live test 2026-11-23: «الفني اتعامل معايا بقلة ذوق» went TO the technician as a
         // «request»). First, so no other word wins; it goes to the owner and operations, never to him.
         'complaint' => ['اشتكي', 'اشتكى', 'شكوي', 'شكوه', 'قله ذوق', 'قليل الذوق', 'مش محترم', 'مو محترم', 'غير محترم', 'وقح', 'قليل الادب', 'قله ادب', 'علي صوته', 'زعق', 'صرخ', 'اتخانق', 'اتعارك', 'تعارك', 'خناقه', 'شتم', 'سبني', 'غلط فيا', 'غلط في', 'اهانني', 'ضربني', 'سرق', 'حرامي', 'بلطجي', 'نصاب', 'خرب', 'بوظ', 'كسر', 'اسوا فني', 'فني سيء', 'تعامل سيء', 'معاملته', 'اسلوبه'],
+        // «هات رقم الفني» (owner, 2026-11-23): he gets the number, not a speech
+        'phone' => ['رقم الفني', 'رقم فني', 'رقمه', 'رقم تليفونه', 'رقم تلفونه', 'رقم جواله', 'رقم موبايله', 'نمره الفني', 'نمرته', 'تليفون الفني', 'تلفون الفني', 'جوال الفني', 'موبايل الفني', 'اكلم الفني', 'اكلمه', 'اتصل بالفني', 'اتصل عليه', 'اكلم الفنى'],
         'human' => ['موظف', 'انسان', 'بشري', 'مسؤول', 'كلمني حد', 'اكلم حد', 'خدمه العملاء'],
         'cancel' => ['الغاء', 'الغي', 'كنسل', 'مش عايز الطلب', 'ما ابغى الطلب'],
         'postpone' => ['اجل', 'تاجيل', 'اغير الموعد', 'غير الموعد', 'موعد ثاني', 'ميعاد تاني', 'يوم ثاني', 'يوم تاني', 'مش فاضي', 'مو فاضي', 'ما ني فاضي', 'بعدين تعال'],
@@ -238,6 +240,13 @@ final class Mutqan_OrderBot {
                 if (!empty($o['technicianId'])) { self::tell_tech($o, '📌 طلب من العميل: «' . mb_substr($text, 0, 300) . '»'); $did[] = 'وصلت طلبك للفني ' . ($o['technicianName'] ?? ''); }
                 else { self::alert($o, '📌 طلب من العميل', mb_substr($text, 0, 300)); $did[] = 'سجلت طلبك وهيوصل للفني أول ما يتسند'; }
                 break;
+            case 'phone':
+                if (!empty($o['technicianId'])) {
+                    $ph = self::tech_phone($o);
+                    if ($ph === '') { self::tell_tech($o, '📞 العميل عايز يكلمك — كلّمه على ' . (string) ($o['clientPhone'] ?? '')); $did[] = 'asked_tech_to_call'; }
+                    else { $did[] = 'gave_phone'; }
+                }
+                break;
             case 'human':
                 if ($once('human')) { self::alert($o, '🙋 العميل يطلب موظف', mb_substr($text, 0, 200)); $did[] = 'بلّغت موظف خدمة العملاء وهيرد عليك هنا'; }
                 break;
@@ -250,6 +259,22 @@ final class Mutqan_OrderBot {
     public static function template($intent, $f, $did) {
         $L = [];
         if ($intent === 'complaint') { return implode("\n", array_map(function ($d) { return $d . '.'; }, $did)); }
+        // (owner, 2026-11-23) the customer hears a person's answer — «حاضر، هشوف وأرد عليك» — never the list of what the
+        // system did behind him (asked the technician, told the room); the news follows when the technician answers
+        if ($intent === 'phone') {
+            if (!$f['hasTech']) { return 'طلبك لسه بيتوزع على أقرب فني 🌷 أول ما يتسند هبعتلك اسمه ورقمه.'; }
+            $ph = $f['techPhone'] ?? '';
+            return $ph !== '' ? '📞 رقم الفني ' . $f['tech'] . ': ' . $ph . "\nتقدر تكلمه مباشرة 🌷" : 'حاضر 🌷 بلّغت الفني ' . $f['tech'] . ' يكلمك دلوقتي.';
+        }
+        if (($intent === 'urgent' || $intent === 'where') && !$f['cancelled']) {
+            if ($f['eta']) { return 'الفني ' . $f['tech'] . ' قال إنه هيوصل خلال حوالي ' . $f['eta']['minutes'] . ' دقيقة 🚗'; }
+            if (!$f['hasTech']) { return 'حاضر 🌷 طلبك بيتوزع دلوقتي على أقرب فني، وهبلّغك أول ما يتسند.'; }
+            // his live place is a real answer: where he is, and the link to follow him (and the news on the time follows)
+            if (!empty($f['techMap'])) { return 'الفني ' . $f['tech'] . ($f['distanceKm'] !== null ? ' على بعد حوالي ' . $f['distanceKm'] . ' كم منك' : '') . ' 🚗' . "\n📍 مكانه الآن: " . $f['techMap'] . ($f['id'] !== '' ? "\n🗺️ تابعه لحظة بلحظة: " . $f['url'] : '') . "\nوسألته فاضل له قد إيه، وهرد عليك بخبر."; }
+            return 'تمام حاضر 🌷 هشوف الفني ' . $f['tech'] . ' فين دلوقتي.' . "\n" . (in_array('الفني اتسأل من شوية ومستنيين رده', $did, true) ? 'الفني اتسأل من شوية ومستنيين رده — هبلّغك أول ما يرد.' : 'وهرد عليك بخبر حالًا.');
+        }
+        if ($intent === 'request' && $f['hasTech']) { return 'تمام 🌷 وصلت كلامك للفني ' . $f['tech'] . '.'; }
+        if (in_array($intent, ['postpone', 'cancel', 'human'], true) && $did) { return implode("\n", array_map(function ($d) { return $d . '.'; }, $did)); }
         if ($f['cancelled']) { $L[] = 'طلبك ' . $f['short'] . ' ملغي حاليًا. لو حابب نرجّعه أو نفتح طلب جديد قول لي.'; }
         elseif ($intent === 'where' || $intent === 'urgent') {
             if ($f['eta']) { $L[] = 'الفني ' . $f['tech'] . ' قال إنه يوصل خلال حوالي ' . $f['eta']['minutes'] . ' دقيقة 🚗'; }

@@ -47,6 +47,62 @@ final class Mutqan_PayChoice {
             . "\n\nالرسالة دي بتتمسح لوحدها بعد يومين — لو احتجتها تاني اكتب *طرق الدفع*.";
     }
 
+    /* ---------------------------------------------------------------- the WhatsApp menu before the rating (owner, 2026-11-23)
+     * When the job is done the customer is asked first how he pays: 1 cash to the technician · 2 bank transfer (the
+     * company's accounts: الراجحي، الأهلي، بنك الرياض، STC، برق… whatever the owner saved in «طرق الدفع») · 3 the secure
+     * payment gateway (the order's page: card, and the online accounts like PayPal). Then the thanks and the rating. */
+
+    public static function menu($o) {
+        $amt = self::amount($o);
+        $tech = (string) ($o['technicianName'] ?? '');
+        return '✅ ' . ($tech !== '' ? 'الفني ' . $tech . ' خلّص الشغل' : 'الشغل خلص') . ($amt > 0 ? ' — المبلغ *' . self::money($amt) . ' ر.س*' : '') . ".\n"
+            . "💳 حابب تدفع إزاي؟\n1️⃣ كاش للفني\n2️⃣ تحويل بنكي\n3️⃣ بوابة الدفع الآمنة (فيزا / مدى / حسابات أونلاين)";
+    }
+
+    private static function money($v) { return rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.'); }
+
+    /** The company's transfer accounts, as saved in «طرق الدفع» (payment_methods), else the quote's banks. */
+    public static function accounts_text() {
+        $L = [];
+        try {
+            foreach (Mutqan_Store::select('payment_methods', [], ['limit' => 100], self::sys()) as $m) {
+                if (!empty($m['deleted']) || (isset($m['enabled']) && !$m['enabled'])) { continue; }
+                if (!in_array((string) ($m['type'] ?? ''), ['bank_transfer', 'wallet_app'], true)) { continue; }
+                $parts = array_filter([
+                    !empty($m['iban']) ? 'آيبان: ' . preg_replace('/\s+/', '', (string) $m['iban']) : '',
+                    !empty($m['accountNumber']) ? 'رقم الحساب: ' . $m['accountNumber'] : '',
+                    !empty($m['walletPhone']) ? 'جوال المحفظة: ' . $m['walletPhone'] : '',
+                    !empty($m['accountHolder']) ? 'باسم: ' . $m['accountHolder'] : '',
+                ]);
+                if (!$parts) { continue; }
+                $L[] = '🏦 *' . ((string) ($m['bankName'] ?? '') ?: (string) ($m['name'] ?? 'حساب')) . "*\n" . implode("\n", $parts);
+            }
+        } catch (Throwable $e) { /* fall back below */ }
+        if (!$L && class_exists('Mutqan_Quote')) {
+            try { $c = Mutqan_Quote::company(); foreach ((array) ($c['banks'] ?? []) as $b) { if (!empty($b['iban'])) { $L[] = '🏦 *' . $b['bank'] . "*\nآيبان: " . $b['iban'] . (!empty($c['nameAr']) ? "\nباسم: " . $c['nameAr'] : ''); } } } catch (Throwable $e) { /* none */ }
+        }
+        return implode("\n\n", $L);
+    }
+
+    /** His answer to the menu: recorded on the order, the room and the technician told, and what he needs now. */
+    public static function pick($o, $method) {
+        $map = ['cash' => 'cash', 'transfer' => 'transfer', 'online' => 'online'];
+        if (!isset($map[$method]) || empty($o['id'])) { return null; }
+        $choice = ['method' => $method, 'label' => self::METHODS[$method], 'account' => '', 'at' => gmdate('c'), 'via' => 'whatsapp'];
+        Mutqan_Store::update('orders', (string) $o['id'], ['paymentChoice' => $choice], self::sys());
+        $n = (string) ($o['number'] ?? substr((string) $o['id'], -5));
+        if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert('💳 العميل اختار طريقة الدفع #' . $n, $choice['label'] . ' · ' . ((string) ($o['clientName'] ?? '') ?: (string) ($o['clientPhone'] ?? '')), '#/staff/order/' . $o['id'], 'order_pay_choice', 'normal', $o['id']); }
+        if (!empty($o['technicianId'])) { Mutqan_Store::insert('_push', ['target' => ['user' => (string) $o['technicianId']], 'title' => '💳 العميل هيدفع: ' . $choice['label'] . ' — #' . $n, 'body' => 'طلب #' . $n, 'url' => '#/staff/order/' . $o['id'], 'sound' => 'chime', 'priority' => 'normal', 'event' => 'order_pay_choice', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 2 * 86400)], self::sys()); }
+        $amt = self::amount($o); $tech = (string) ($o['technicianName'] ?? 'الفني');
+        if ($method === 'cash') { return ['text' => 'تمام ✅ ادفع' . ($amt > 0 ? ' *' . self::money($amt) . ' ر.س*' : '') . ' كاش للفني ' . $tech . '.', 'purpose' => 'reply']; }
+        if ($method === 'transfer') {
+            $acc = self::accounts_text();
+            return ['text' => ($acc !== '' ? "تمام ✅ دي حساباتنا للتحويل" . ($amt > 0 ? ' — المبلغ *' . self::money($amt) . ' ر.س*' : '') . ":\n\n" . $acc : 'تمام ✅ موظف هيبعتلك حسابات التحويل حالًا.') . "\n\nبعد التحويل ابعت صورة الإيصال هنا 🌷\nالرسالة دي بتتمسح لوحدها بعد يومين — لو احتجتها تاني اكتب *طرق الدفع*.", 'purpose' => 'paylink'];
+        }
+        Mutqan_Store::update('orders', (string) $o['id'], ['paylinkSentAt' => gmdate('c')], self::sys());
+        return ['text' => "🔒 *بوابة الدفع الآمنة* — طلب #" . $n . ($amt > 0 ? ' — *' . self::money($amt) . ' ر.س*' : '') . "\nادفع بالفيزا / مدى أو بحساباتك الأونلاين من هنا 👇\n" . self::link($o + ['payToken' => self::token($o)]) . "\n\nالرسالة دي بتتمسح لوحدها بعد يومين — لو احتجتها تاني اكتب *طرق الدفع*.", 'purpose' => 'paylink'];
+    }
+
     /** Sends it now (the hub marks it to be deleted for everyone later). True when handed over. */
     public static function send($o) {
         $phone = (string) ($o['clientPhone'] ?? '');

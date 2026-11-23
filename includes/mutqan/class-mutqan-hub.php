@@ -198,6 +198,18 @@ final class Mutqan_Hub {
             case 'after_rating': { if (!class_exists('Mutqan_Growth')) { return ['text' => '']; } $o = self::need($in); return ['text' => Mutqan_Growth::after_rating($o, (int) ($in['stars'] ?? 0))]; }
             case 'referral': { return ['code' => class_exists('Mutqan_Growth') ? Mutqan_Growth::note_referral((string) ($in['phone'] ?? ''), (string) ($in['text'] ?? '')) : null]; }
             // «طرق الدفع» asked again on WhatsApp: the message with the link for his latest unpaid order, or null (the usual answer then).
+            // the payment menu before the rating (owner, 2026-11-23): what to ask, and his answer
+            case 'pay_menu': {
+                if (!class_exists('Mutqan_PayChoice')) { return null; }
+                $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
+                if (!$o || Mutqan_PayChoice::is_paid($o) || get_option('mutqan_paylink_off')) { return null; }
+                return ['text' => Mutqan_PayChoice::menu($o + ['id' => (string) $in['id']])];
+            }
+            case 'pay_pick': {
+                if (!class_exists('Mutqan_PayChoice')) { return null; }
+                $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
+                return $o ? Mutqan_PayChoice::pick($o + ['id' => (string) $in['id']], (string) ($in['method'] ?? '')) : null;
+            }
             case 'paylink': {
                 if (!class_exists('Mutqan_PayChoice')) { return null; }
                 $o = Mutqan_PayChoice::for_phone((string) ($in['phone'] ?? ''));
@@ -284,6 +296,23 @@ final class Mutqan_Hub {
             case 'outreach_batch': return class_exists('Mutqan_Outreach') ? Mutqan_Outreach::batch((array) ($in['lines'] ?? [])) : ['items' => []];
             case 'outreach_optout': return class_exists('Mutqan_Outreach') ? Mutqan_Outreach::optout((string) ($in['phone'] ?? '')) : ['ok' => false];
             case 'outreach_reply': return class_exists('Mutqan_Outreach') ? Mutqan_Outreach::replied((string) ($in['phone'] ?? '')) : ['ok' => false];
+            // «#سؤال» from a technician on WhatsApp (owner, 2026-11-23): the AI answers him like a senior colleague — prices
+            // from the house sheet, technical know-how, his open job. Never a customer's private data beyond his own job.
+            case 'tech_ask': {
+                $q = trim((string) ($in['text'] ?? ''));
+                if ($q === '') { return ['reply' => 'اكتب سؤالك بعد # 🙏']; }
+                $job = trim((string) ($in['job'] ?? ''));
+                $kit = class_exists('Mutqan_Kit') ? Mutqan_Kit::prompt() : '';
+                $sheet = class_exists('Mutqan_AI') ? Mutqan_AI::price_sheet() : '';
+                $prompt = "انت مساعد فني خبير في شركة صيانة مكيفات وتبريد في السعودية، بترد على فني من الفريق على واتساب.\n"
+                    . "رد بالعامية المصرية في سطور قصيرة عملية (خطوات أو أرقام)، من غير مقدمات. لو سؤال سعر رد من جدول الأسعار بس. لو مش متأكد قول كده واقترح يكلم العمليات بكتابة * في أول الرسالة.\n\n"
+                    . ($sheet !== '' ? "## جدول الأسعار\n" . $sheet . "\n\n" : '') . ($kit !== '' ? $kit . "\n\n" : '')
+                    . ($job !== '' ? "## طلبه المفتوح\n" . mb_substr($job, 0, 400) . "\n\n" : '')
+                    . "## سؤال الفني " . mb_substr((string) ($in['name'] ?? ''), 0, 40) . "\n" . mb_substr($q, 0, 800);
+                try { $r = Mutqan_AI::run($prompt, ['tier' => 'low', 'temperature' => 0.3, 'budget' => 10], self::sys()); $txt = trim((string) ($r['text'] ?? '')); }
+                catch (Throwable $e) { $txt = ''; }
+                return ['reply' => $txt !== '' ? mb_substr($txt, 0, 1500) : 'المساعد الذكي مش متاح دلوقتي 🙏 ابعت سؤالك للعمليات بكتابة * في أول الرسالة.'];
+            }
             case 'answer': { if (!class_exists('Mutqan_Concierge')) { return ['reply' => null]; } $a = Mutqan_Concierge::answer((string) ($in['text'] ?? ''), ['channel' => 'wa', 'phone' => (string) ($in['phone'] ?? ''), 'verified' => true, 'brand' => (string) ($in['brand'] ?? '')]); return $a ?: ['reply' => null]; }
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
