@@ -117,7 +117,13 @@ t('«رجعه» reopens with the discount', orders.o1.status === 'new' && orders
 
 // ===== D. a problem on site, then done and rated =====
 transcript.push('\n### د) مشكلة عند العميل، وبعدين التنفيذ والتقييم')
-m = await say(ROOM, 'اعتمد 1002', 'الغرفة'); await say(TECH, 'قبلت', 'الفني'); await say(TECH, 'وصلت', 'الفني')
+m = await say(ROOM, 'اعتمد 1002', 'الغرفة'); await say(TECH, 'قبلت', 'الفني')
+// «فاضل لك قد إيه؟» answered by a number (owner, 2026-11-23)
+m = await say(TECH, '3', 'الفني')
+t('technician «3» → the customer hears he is finishing another job', /لسه بيخلّص شغل قبلك/.test(to(m, CUST)) && /بلّغت العميل/.test(to(m, TECH)), JSON.stringify(m))
+m = await say(TECH, '2 15', 'الفني')
+t('technician «2 15» → the customer hears 15 minutes', /15 دقيقة/.test(to(m, CUST)) && /هتوصل خلال 15/.test(to(m, TECH)), JSON.stringify(m))
+await say(TECH, 'وصلت', 'الفني')
 m = await say(TECH, 'العميل مش موجود والباب مقفول', 'الفني')
 t('technician problem → room alerted at once', /الفني علي — طلب #1002/.test(to(m, ROOM)) && /بلّغت غرفة العمليات/.test(to(m, TECH)), JSON.stringify(m))
 PAY.on = true
@@ -139,8 +145,7 @@ t('a referral code in a message is passed to the site (idea 20)', calls.some((c)
 // ===== E. a stranger writes: welcome, a person, an order from the chat =====
 transcript.push('\n### هـ) عميل جديد بيكلم الخط: ترحيب، موظف، وطلب من الشات')
 m = await say(NEW, 'السلام عليكم')
-t('a bare greeting: the company\'s welcome and «what do you need?» — no AC details dumped', /مرحبًا بكم في \*رعد السماء\*/.test(to(m, NEW)) && /إيش الخدمة اللي تحتاجها/.test(to(m, NEW)) && !/غسيل كامل|المضخة|سبليت/.test(to(m, NEW)), to(m, NEW))
-t('…and the sections right after it (AC, cold rooms, plumbing, electricity, carpentry, cameras)', /1️⃣ المكيفات/.test(to(m, NEW)) && /2️⃣ غرف التبريد/.test(to(m, NEW)) && /3️⃣ السباكة/.test(to(m, NEW)) && /6️⃣ الكاميرات والدش/.test(to(m, NEW)) && /9️⃣ كلّم موظف/.test(to(m, NEW)), to(m, NEW))
+t('a bare greeting: a short welcome in the name of his site and ONE open question — no list, no AC details (owner, 2026-11-23)', /\*رعد السماء\*/.test(to(m, NEW)) && /(أقدر أساعدك|محتاج إيه|أخدمك)/.test(to(m, NEW)) && !/1️⃣|غسيل كامل|المضخة|سبليت/.test(to(m, NEW)), to(m, NEW))
 m = await say(NEW, '1')
 t('«1» (AC) → the AC services only: wash, repair, install…', /1️⃣ غسيل مكيفات/.test(to(m, NEW)) && /3️⃣ تركيب/.test(to(m, NEW)), to(m, NEW))
 m = await say(NEW, '4')
@@ -357,7 +362,7 @@ t('isGreeting: «السلام عليكم» yes, «السلام عليكم عند
 // stopped services (owner, 2026-11-21): hidden from the sections, and asking for one gets a person
 store.set('wpConfig', { offSections: [5, 6] })
 const OFF = '966500000077'
-m = await say(OFF, 'السلام عليكم')
+m = await say(OFF, 'السلام عليكم'); m = await say(OFF, '0')
 t('a stopped service disappears from the sections (numbers stay: 7 is still «other»)', /4️⃣ الكهرباء/.test(to(m, OFF)) && !/5️⃣ النجارة/.test(to(m, OFF)) && !/6️⃣ الكاميرات/.test(to(m, OFF)) && /7️⃣ خدمات تانية/.test(to(m, OFF)), to(m, OFF))
 m = await say(OFF, '5')
 t('…picking it anyway → «stopped for now», and a person is called', /متوقفة عندنا مؤقتًا/.test(to(m, OFF)) && /عميل محتاج موظف/.test(to(m, '0511111111') + to(m, ROOM)), JSON.stringify(m))

@@ -359,8 +359,24 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   }
 
   /** «مرحبًا بكم في …» — the company he came through, what we do, and a welcome back for an old customer. */
+  // (owner, 2026-11-23) a short welcome in the name of the site he came through — or a general one when that is not known —
+  // and one open question. No list of sections: the service is asked for, then taken one step at a time.
+  const WELCOMES = [
+    'مرحبًا بكم في *{site}* 🌷\nأقدر أساعدك إزاي؟',
+    'أهلًا بيك في *{site}* 🌷\nتحت أمرك — محتاج إيه النهارده؟',
+    'السلام عليكم ومرحبًا بيك في *{site}* 🌷\nقولّي أقدر أخدمك في إيه؟',
+    'أهلًا وسهلًا بيك في *{site}* 🌷\nإزاي أقدر أساعدك؟',
+  ]
+  const OPEN_WELCOMES = ['أهلًا وسهلًا 🌷 وعليكم السلام\nأقدر أساعدك إزاي؟', 'أهلًا بيك 🌷\nتحت أمرك — محتاج إيه؟', 'مرحبًا بيك 🌷\nقولّي أقدر أخدمك في إيه؟']
+  const pickOne = (L) => L[Math.floor(now() / 1000) % L.length]
   function welcome(g) {
     const C = cfg()
+    if (!C.welcome || C.welcome === DEFAULTS.welcome) {
+      let t = g.known === false ? pickOne(OPEN_WELCOMES) : pickOne(WELCOMES).replace(/\{site\}/g, g.site || C.siteName)
+      if (g.known !== false && g.source) t += '\nشايفين إنك جاي من «' + g.source + '» — نقدر نساعدك فيها على طول.'
+      if (!isOpen()) t += '\n\n' + C.afterHours.replace(/\{phone\}/g, C.emergencyPhone)
+      return t
+    }
     const back = ['returning', 'vip'].includes(g.kind)
     const last = back && g.lastService ? '\nآخر مرة نفذنالك «' + g.lastService + '»' + (g.lastDays ? ' من ' + g.lastDays + ' يوم' : '') + (g.warrantyLeft ? '، وضمانها لسه ساري ' + g.warrantyLeft + ' يوم 🛡' : '') + '.' : ''
     let t = (back ? C.welcomeBack : C.welcome).replace(/\{site\}/g, g.site || C.siteName).replace(/\{name\}/g, g.name ? ' يا ' + g.name : '')
@@ -401,7 +417,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (topic) L.push('1️⃣ نفس الخدمة تاني', '2️⃣ خدمة جديدة', '3️⃣ متابعة طلب', '4️⃣ كلّم موظف')
     if (!isOpen()) L.push('', cfg().afterHours.replace(/\{phone\}/g, cfg().emergencyPhone))
     saveFlow(c.pk, topic ? { step: 'back', again: topic } : { step: 'main' })
-    return say(phone, line, L.join('\n') + (topic ? '' : '\n\n' + M.sectionsText(cfg().offSections)))
+    return say(phone, line, L.join('\n'))
   }
 
   /** The site's confirm button sent this from his own WhatsApp: the order is his, confirmed, and on its way. */
@@ -1274,6 +1290,29 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       if (o) await wp('step', { id: o.id, kind: 'note', text: w.name + ' للعمليات: ' + ops[1].slice(0, 300) }).catch(() => {})
       toRoom('📣 *الفني ' + tn + '*' + (o ? ' — طلب #' + T.num(o) : '') + '\n💬 «' + ops[1].slice(0, 400) + '»' + (o ? '\n👤 ' + (o.clientName || '—') + ' — ' + (o.clientPhone || '') : '') + '\n\nرد عليه: *رد ' + (o ? T.num(o) : '') + ' نص الرسالة*', 'tops-' + T.norm(ops[1]).slice(0, 30))
       return '✅ وصلت للعمليات — هيردوا عليك هنا.'
+    }
+    // «فاضل لك قد إيه؟» answered by a number (owner, 2026-11-23): 1 on my way · 2 + minutes · 3 still on another job
+    if (jobs.length) {
+      const o = jobs.find((x) => ['assigned', 'accepted', 'en_route', 'nearby'].includes(x.status)) || null
+      const tn2 = tn || 'الفني'
+      if (o && /^[1١]$/.test(lead)) {
+        if (['assigned', 'accepted'].includes(o.status)) await wp('patch', { id: o.id, patch: { status: 'en_route' }, step: { kind: 'en_route', text: T.SAID.en_route, by: w.name } }).catch(() => {})
+        else toCustomer(o, '🚗 الفني ' + tn2 + ' في الطريق ليك دلوقتي.', 'eta1-' + o.id + '-' + Math.floor(now() / 600000))
+        return '✅ بلّغت العميل إنك في الطريق — طلب ' + T.num(o)
+      }
+      if (o && /^[2٢]$/.test(lead)) return 'اكتب الدقايق بعد الرقم، مثال: *2 15*'
+      const mm = lead.match(/^(?:[2٢]\s*[-:،,]?\s*)?(\d{1,3})\s*(?:د|دق|دقيقه|دقيقة|دقايق|دقائق|min)?$/)
+      if (o && mm && Number(mm[1]) >= 5 && Number(mm[1]) <= 240) {
+        const n2 = Number(mm[1])
+        wp('patch', { id: o.id, patch: { techEta: { minutes: n2, at: new Date(now()).toISOString() } }, step: { kind: 'eta', text: 'الفني: هيوصل خلال ' + n2 + ' دقيقة', by: w.name } }).catch(() => {})
+        toCustomer(o, '🚗 الفني ' + tn2 + ' قال إنه هيوصلك خلال حوالي *' + n2 + ' دقيقة*.', 'eta-' + o.id + '-' + n2)
+        return '✅ بلّغت العميل: هتوصل خلال ' + n2 + ' دقيقة — طلب ' + T.num(o)
+      }
+      if (o && /^[3٣]$/.test(lead)) {
+        toCustomer(o, 'الفني ' + tn2 + ' لسه بيخلّص شغل قبلك، وهيتحرك ليك أول ما يخلص 🌷 وهنبلّغك أول ما يتحرك.', 'eta3-' + o.id + '-' + Math.floor(now() / 1800000))
+        toRoom('⏳ الفني ' + tn2 + ' لسه في شغل تاني — طلب #' + T.num(o) + ' مستني', 'eta3r-' + o.id + '-' + Math.floor(now() / 1800000))
+        return '✅ بلّغت العميل إنك لسه بتخلّص شغل — اكتب *1* أول ما تتحرك.'
+      }
     }
     const step = T.stepOf(text)
     if (!step) {
