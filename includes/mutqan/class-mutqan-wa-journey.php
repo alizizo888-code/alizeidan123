@@ -477,6 +477,8 @@ final class Mutqan_WA_Journey {
                         }
                         if (!$sent) { self::tell_customer($doc, $ask . "\n\n⭐⭐⭐⭐⭐ ممتاز · ⭐⭐⭐⭐ جيد جدًا · ⭐⭐⭐ كويس · ⭐⭐ مش راضي · ⭐ سيء"); }
                     }
+                    // «طرق الدفع» (owner, 2026-11-23 — idea 25): unpaid → the payment-methods link, deleted for everyone in two days
+                    if (class_exists('Mutqan_PayChoice')) { Mutqan_PayChoice::on_completed($doc); }
                     return true;
                 case 'cancelled':
                     $byCustomer = is_array($p) && class_exists('Mutqan_Policy') && !Mutqan_Policy::is_staff($p);
