@@ -157,7 +157,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
 
   /** His answer to «حابب تدفع إزاي؟»: recorded on the site, what he needs now, then the rating. */
   async function payStage(o, text, phone) {
-    const n = T.norm(text).trim()
+    const n = T.norm(String(text).split('\n')[0]).trim()   // held messages come joined: his first answer counts
     const m = /^(1|١)$|كاش|نقد|cash|للفني/.test(n) ? 'cash' : /^(2|٢)$|تحويل|بنك|ايبان|حساب|راجحي|اهلي|stc|برق|رياض/.test(n) ? 'transfer' : /^(3|٣)$|بوابه|فيزا|مدي|اونلاين|بطاقه|كارت|ماستر|باي ?بال|paypal|ابل باي/.test(n) ? 'online' : null
     if (!m) {
       const k = 'payask:' + o.id
@@ -181,6 +181,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
 
   /** The bank he picked: its details (the IBAN alone, to copy), the QR when saved, then «send the receipt», then the rating. */
   async function payBankStage(o, text, phone) {
+    text = String(text).split('\n')[0]
     const n = Number((T.norm(text).match(/^\s*([0-9]{1,2})\s*$/) || [])[1] || 0)
     const max = Number(store.get('paybanks:' + o.id) || 0)
     if (!n || n > max) {
@@ -496,7 +497,10 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
         if (reply !== null) { if (reply) toCustomer({ ...o, waLine: line }, reply); return }
         return reception(store.chat(c.pk), line, phone, t, name)
       }
-      if (humanActive(c, 10 * 60000)) return holdThen(c.pk, text, C.humanFirstSec * 1000, go)
+      // the bot's own question asked AFTER the person spoke (how he pays, a rating…): his answer is to the bot — no wait
+      // (live test 2026-11-24: «2» to «حابب تدفع إزاي؟» sat on hold two minutes because a person wrote before the question)
+      const askedAfter = (c.stageAt || 0) > (c.humanAt || 0) && ['pay', 'paybank', 'rate', 'traits', 'confirm'].includes(j.s)
+      if (humanActive(c, 10 * 60000) && !askedAfter) return holdThen(c.pk, text, C.humanFirstSec * 1000, go)
       return go(text)
     }
     if (c.botOff && c.botOff > now()) return notifyHuman(c, text, false)
