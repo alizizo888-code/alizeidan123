@@ -234,6 +234,7 @@ final class Mutqan_Fieldops {
         if (!self::is_tech($p)) { throw new Mutqan_Error('forbidden', 'للفنيين.', 403); }
         $o = Mutqan_Store::get_raw('orders', (string) ($in['orderId'] ?? ''));
         if (!$o) { throw new Mutqan_Error('not_found', 'الطلب مش موجود.', 404); }
+        $o['id'] = (string) $in['orderId'];   // get_raw() carries no id (the invoice request updated «no order» and nobody heard it — 2026-11-24)
         $me = self::me($p);
         $st = (string) ($o['status'] ?? '');
         if (!in_array($st, ['new', 'pending', 'forced', 'assigned'], true)) { throw new Mutqan_Error('bad_state', 'الطلب اتاخد أو اتقفل.', 409); }
@@ -268,6 +269,7 @@ final class Mutqan_Fieldops {
     private static function decline($in, $p) {
         $o = Mutqan_Store::get_raw('orders', (string) ($in['orderId'] ?? ''));
         if (!$o) { throw new Mutqan_Error('not_found', 'الطلب مش موجود.', 404); }
+        $o['id'] = (string) $in['orderId'];   // get_raw() carries no id (the invoice request updated «no order» and nobody heard it — 2026-11-24)
         $me = self::me($p);
         if (($o['technicianId'] ?? '') !== $me) { throw new Mutqan_Error('forbidden', 'الطلب مش مسند لك.', 403); }
         if (!in_array((string) ($o['status'] ?? ''), ['assigned', 'accepted', 'en_route'], true)) { throw new Mutqan_Error('bad_state', 'بعد الوصول استخدم «تعذّر الإصلاح».', 409); }
@@ -327,6 +329,7 @@ final class Mutqan_Fieldops {
     private static function invoice($in, $p) {
         $o = Mutqan_Store::get_raw('orders', (string) ($in['orderId'] ?? ''));
         if (!$o) { throw new Mutqan_Error('not_found', 'الطلب مش موجود.', 404); }
+        $o['id'] = (string) $in['orderId'];   // get_raw() carries no id (the invoice request updated «no order» and nobody heard it — 2026-11-24)
         if (self::is_tech($p) && ($o['technicianId'] ?? '') !== self::me($p)) { throw new Mutqan_Error('forbidden', 'الطلب مش مسند لك.', 403); }
         Mutqan_Store::update('orders', $o['id'], ['invoiceRequest' => ['by' => self::me($p), 'byName' => self::name($p), 'at' => gmdate('c'), 'note' => mb_substr((string) ($in['note'] ?? ''), 0, 200)]], self::sys());
         Mutqan_Rest::admin_alert('🧾 فني بيطلب إصدار فاتورة', self::name($p) . ' — الطلب #' . Mutqan_Store::num($o) . (!empty($in['note']) ? ': ' . mb_substr((string) $in['note'], 0, 120) : ''), '#/staff/order/' . $o['id'], 'invoice_request', 'high', (string) $o['id']);
