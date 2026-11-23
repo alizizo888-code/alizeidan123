@@ -475,7 +475,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (fm && !humanActive(c, 10 * 60000) && !(c.botOff && c.botOff > now())) {
       const js = stageOf(phone)?.s
       const digit = M.isMenu(text) || /^\d$/.test(T.norm(text).trim())
-      if (fm.step !== 'home' || (digit && !['pay', 'paybank', 'rate', 'winback', 'winback_time', 'confirm'].includes(js))) return flow(c, line, phone, text, name, fm)
+      if (fm.step !== 'home' || (digit && !['pay', 'paybank', 'rate', 'traits', 'winback', 'winback_time', 'confirm'].includes(js))) return flow(c, line, phone, text, name, fm)
     }
     const j = stageOf(phone)
     if (j && j.o) {
@@ -1055,6 +1055,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (stage === 'pay') return payStage(o, text, phone)
     if (stage === 'paybank') return payBankStage(o, text, phone)
     if (stage === 'rate') return rateStage(o, text, phone)
+    if (stage === 'traits') return traitsStage(o, text, phone)
     if (stage === 'winback' || stage === 'winback_time') return winbackStage(o, text, phone, stage)
     return liveStage(o, text, phone)
   }
@@ -1173,6 +1174,19 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     return L.join('\n')
   }
 
+  /** «1 4 6» — what he liked about the technician: on the order, to the technician and operations, and a warm thanks. */
+  async function traitsStage(o, text, phone) {
+    const picks = [...new Set((T.norm(text).match(/[1-8١-٨]/g) || []).map((d) => Number(String(d).replace(/[١-٨]/, (x) => '١٢٣٤٥٦٧٨'.indexOf(x) + 1))))]
+    dropStage(phone)
+    if (!picks.length) return null
+    let r = null; try { r = await wp('traits_set', { id: o.id, picks }) } catch {}
+    if (!r || !r.labels) return null
+    const L = r.labels.join('، ')
+    toTech(o, '🌟 العميل شكر فيك على طلب #' + T.num(o) + ': *' + L + '*\nكمّل كده يا بطل 💚', 'traits-t-' + o.id)
+    toRoom('🌟 تقييم مفصّل لـ' + (o.techName || 'الفني') + ' — طلب #' + T.num(o) + ': ' + L, 'traits-r-' + o.id)
+    return 'شكرًا ليك من القلب 💚 كلامك وصل للفني وهيفرّحه جدًا.'
+  }
+
   async function rateStage(o, text, phone) {
     const r = o.rating || {}
     let stars = null
@@ -1194,9 +1208,16 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       let line = '⭐'.repeat(stars) + ' *تقييم العميل لطلب #' + n + ': ' + stars + '/5*\n👤 ' + (o.clientName || o.clientPhone) + (o.techName ? '\n👷 الفني: ' + o.techName : '') + (comment ? '\n💬 «' + comment + '»' : '')
       if (stars <= 3) { line = '⚠️ *عميل مش راضي*\n' + line + '\n\nكلّمه: *رد ' + n + ' نص الرسالة*'; wp('alert', { id: o.id, title: '⚠️ تقييم منخفض', body: stars + '/5 ' + comment }).catch(() => {}) }
       toRoom(line, 'rate-' + o.id)
+      // the technician hears his own rating (owner, 2026-11-23)
+      toTech(o, '⭐'.repeat(stars) + ' العميل قيّمك *' + stars + '/5* على طلب #' + n + (comment ? '\n💬 «' + comment + '»' : '') + (stars >= 4 ? '\nتسلم إيدك 💚' : '\nراجع العمليات عشان نعرف إيه اللي ضايق العميل.'), 'rate-t-' + o.id)
       // «جلب العملاء» (owner, 2026-11-23): after a good rating, the Google review link and the referral link — each only when switched on
       let more = ''
       if (stars >= 4) { try { const g = await wp('after_rating', { id: o.id, stars }); more = g && g.text ? '\n\n' + g.text : '' } catch {} }
+      // a pleased customer (no complaint, did not chase the technician): the detailed rating, in one message
+      if (stars >= 4 && !comment) {
+        let ta = null; try { ta = await wp('traits_ask', { id: o.id, stars }) } catch {}
+        if (ta && ta.text) { setStage(phone, o.id, 'traits'); return 'شكرًا لتقييمك 🙏 يسعدنا إنك راضي.\n\n' + ta.text + more }
+      }
       if (!comment) return (stars >= 4 ? 'شكرًا لتقييمك 🙏 يسعدنا إنك راضي.\nلو حابب تكتب لنا كلمة عن الفني أو الخدمة اكتبها هنا.' : 'شكرًا لصراحتك 🙏 آسفين إن التجربة ما كانتش زي ما تستاهل.\nقولنا إيه اللي حصل وهيكلمك المسؤول بنفسه.') + more
       dropStage(phone)
       return (stars >= 4 ? 'شكرًا لتقييمك وكلامك 🙏 في خدمتك دايمًا.' : 'شكرًا لصراحتك 🙏 وصلت ملاحظتك للمسؤول وهيتواصل معاك.') + more

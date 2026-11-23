@@ -47,6 +47,8 @@ const wp = async (op, b) => {
   if (op === 'pay_pick') return b.method === 'transfer' ? { text: '🏦 اختار البنك اللي هتحوّل عليه:\n1️⃣ مصرف الراجحي', purpose: 'reply', banks: 1 } : { text: 'ok ' + b.method, purpose: b.method === 'cash' ? 'reply' : 'paylink' }
   if (op === 'pay_bank') return { messages: [{ text: '🏦 *مصرف الراجحي*\nاسم الحساب: أكسجين', image: '' }, { text: 'SA0000001111', image: '' }, { text: 'بعد التحويل ابعت هنا *صورة الإيصال*', image: '' }] }
   if (op === 'transcribe') return { text: b.url.includes('wash') ? 'السلام عليكم عايز أغسل مكيف سبليت' : '' }
+  if (op === 'traits_ask') return b.stars >= 4 ? { text: '🌟 إيه أكتر حاجة عجبتك في الفني؟\n1️⃣ مظهره' } : null
+  if (op === 'traits_set') { calls.push('traits:' + b.picks.join(',')); return { labels: b.picks.map((k) => ({ 1: 'مظهره وشكله', 4: 'أسلوبه وكلامه', 6: 'متقن' })[k] || 'x'), tech: 'الفني علي' } }
   if (op === 'pay_proof') { calls.push('pay_proof:' + b.id); return { ok: true } }
   if (op === 'tech_ask') return { reply: 'جرّب تغيّر الكاباستور (سؤال: ' + b.text + ')' }
   if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; if (b.confirmed) o.customerConfirmed = true; o.acQuote = b.acQuote; o.spec = b.spec; o.mode = b.mode; o.acType = b.acType; o.desc = b.desc; emit('order.created', o); return { ...view(o), details: ['🛠 الخدمة: ' + b.service + ' [' + b.mode + '/' + (b.acType || '-') + ']', '📅 الموعد: ' + b.time] } }
@@ -136,6 +138,11 @@ t('…«1»: that bank — the IBAN alone to copy, «send the receipt», then th
 m = await brain.inbound({ line: 'l1', phone: CUST, text: '', kind: 'image', name: 'العميل' }).then(() => take())
 t('…his receipt picture: on the order, thanked', calls.some((c) => c.startsWith('pay_proof:')) && /وصلنا الإيصال/.test(to(m, CUST)), JSON.stringify(m))
 PAY.on = false
+m = await say(CUST, '5')
+t('5 → the technician hears his rating; a pleased customer gets the detailed rating in one message', /قيّمك \*5\/5\*/.test(to(m, TECH)) && /أكتر حاجة عجبتك/.test(to(m, CUST)), JSON.stringify(m))
+m = await say(CUST, '1 4 6')
+t('…«1 4 6»: saved, the technician and operations hear what he liked', calls.includes('traits:1,4,6') && /شكر فيك/.test(to(m, TECH)) && /تقييم مفصّل/.test(to(m, ROOM)) && /شكرًا ليك من القلب/.test(to(m, CUST)), JSON.stringify(m))
+orders.o1.rating = null; orders.o1.customerRating = null; store.touchChat(T.pkey(CUST), { stage: 'rate', orderId: 'o1', stageAt: Date.now() })
 m = await say(CUST, '5 ممتاز تسلموا')
 t('rating saved and sent to the room', orders.o1.customerRating === 5 && /تقييم العميل لطلب #1002: 5\/5/.test(to(m, ROOM)), JSON.stringify(m))
 t('5 stars → the Google review link follows the thanks (idea 16, only when switched on)', /قيّمنا على خرائط جوجل: https:\/\/g\.page/.test(to(m, CUST)), to(m, CUST))
