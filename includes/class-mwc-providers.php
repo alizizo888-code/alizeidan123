@@ -19,6 +19,8 @@ abstract class MWC_Provider {
     function profile($to) { return []; }
     function connect() { return ['ok' => false, 'error' => 'غير مدعوم']; }
     function state() { return 'unknown'; }
+    /** «مسح عند الجميع» لرسالة بعتناها. Meta الرسمي مالوش الخاصية دي. */
+    function revoke($to, $ext_id) { return ['ok' => false, 'error' => 'غير مدعوم على الرقم ده']; }
 
     protected function http($method, $url, $headers = [], $body = null, $timeout = 30) {
         $args = ['method' => $method, 'headers' => $headers, 'timeout' => $timeout];
@@ -147,6 +149,16 @@ class MWC_Evolution extends MWC_Provider {
         $path = $this->local_file($m['media_url']);
         // الإرسال كـ base64 عشان يشتغل حتى لو السيرفر مش شايف الموقع
         return ($path && file_exists($path) && filesize($path) < 40 * 1024 * 1024) ? base64_encode(file_get_contents($path)) : $m['media_url'];
+    }
+
+    /** مسح رسالة عند الجميع (Evolution: DELETE chat/deleteMessageForEveryone) — لازم قبل ما مهلة واتساب تخلص (حوالي يومين). */
+    function revoke($to, $ext_id) {
+        $num = self::jid_number($to);
+        $jid = strpos($num, '@') !== false ? $num : preg_replace('/\D/', '', $num) . '@s.whatsapp.net';
+        $r = $this->call('DELETE', 'chat/deleteMessageForEveryone/' . $this->inst(), ['id' => (string) $ext_id, 'remoteJid' => $jid, 'fromMe' => true]);
+        if ($r['code'] >= 200 && $r['code'] < 300) return ['ok' => true];
+        $err = $r['body']['response']['message'] ?? ($r['body']['message'] ?? ($r['error'] ?: 'HTTP ' . $r['code']));
+        return ['ok' => false, 'error' => is_array($err) ? wp_json_encode($err, JSON_UNESCAPED_UNICODE) : (string) $err];
     }
 
     function send($to, $m) {

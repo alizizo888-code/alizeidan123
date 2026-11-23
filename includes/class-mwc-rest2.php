@@ -40,6 +40,7 @@ class MWC_Rest2 {
         $r('/meta/info', 'GET', 'meta_info', $auth);
         $r('/accounts/(?P<id>\d+)/templates', 'GET', 'templates', $auth);
         $r('/ext/send', 'POST', 'ext_send', '__return_true');
+        $r('/ext/revoke', 'POST', 'ext_revoke', '__return_true');
         // مفتوحة بمفتاح سري: النبض من السيرفر، واستيراد من أي سكرابر/n8n، وسؤال البوت
         $r('/tick', 'GET', 'tick', '__return_true');
         $r('/ext/leads', 'POST', 'ext_import', '__return_true');
@@ -183,6 +184,7 @@ class MWC_Rest2 {
         return $acc ? MWC_Route::templates($acc) : new WP_Error('nf', 'غير موجود', ['status' => 404]);
     }
     static function ext_send(WP_REST_Request $q) { return MWC_Route::ext_send($q); }
+    static function ext_revoke(WP_REST_Request $q) { return MWC_Route::ext_revoke($q); }
 
     /* ---------- open endpoints (secret key) ---------- */
     static function key_ok(WP_REST_Request $q, $opt) { return hash_equals((string) get_option($opt), (string) ($q->get_param('k') ?: $q->get_header('x_mwc_key'))); }
