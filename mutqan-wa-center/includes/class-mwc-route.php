@@ -60,6 +60,28 @@ class MWC_Route {
         return is_wp_error($m) ? $m : ['ok' => $m['status'] !== 'failed', 'id' => $m['id'], 'error' => $m['error']];
     }
 
+    /**
+     * البوت بيمسح رسالة بعتها عند الجميع:  POST /ext/revoke  {id}  (رقم الرسالة اللي /ext/send رجّعه).
+     * لينك طرق الدفع (طلب المالك 2026-11-23) بيختفي من عند العميل قبل آخر مهلة واتساب للمسح، ولو طلبه تاني بيتبعت من جديد.
+     */
+    static function ext_revoke(WP_REST_Request $q) {
+        $h = self::hub();
+        if (empty($h['key']) || !hash_equals((string) $h['key'], (string) ($q->get_header('x_mwc_key') ?: $q->get_param('k')))) return new WP_Error('forbidden', 'bad key', ['status' => 403]);
+        global $wpdb;
+        $b = $q->get_json_params() ?: [];
+        $m = $wpdb->get_row($wpdb->prepare("SELECT * FROM " . MWC_Store::t('messages') . " WHERE id=%d AND direction='out'", (int) ($b['id'] ?? 0)), ARRAY_A);
+        if (!$m || empty($m['ext_id'])) return ['ok' => false, 'error' => 'not_found'];
+        $chat = MWC_Store::chat((int) $m['chat_id']);
+        $acc = $chat ? MWC_Store::account((int) $chat['account_id']) : null;
+        if (!$chat || !$acc) return ['ok' => false, 'error' => 'not_found'];
+        $r = MWC_Provider::make($acc)->revoke($chat['wa_id'], $m['ext_id']);
+        if (!empty($r['ok'])) {
+            $wpdb->update(MWC_Store::t('messages'), ['body' => '🚫 اتمسحت عند الجميع — ' . mb_substr((string) $m['body'], 0, 120)], ['id' => $m['id']]);
+            MWC_Store::log('revoke', 'اتمسحت رسالة عند الجميع في محادثة ' . $chat['wa_id']);
+        }
+        return ['ok' => !empty($r['ok']), 'error' => $r['error'] ?? ''];
+    }
+
     static function remote_media($url, $caption) {
         $r = wp_remote_get($url, ['timeout' => 20]);
         if (is_wp_error($r) || wp_remote_retrieve_response_code($r) !== 200) return ['type' => 'text', 'body' => $caption];
