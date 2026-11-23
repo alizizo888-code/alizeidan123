@@ -215,6 +215,8 @@ final class Mutqan_OrderBot {
         // $quiet: Mutqan_Order_AI is answering this conversation and raises the room itself (hurry, postpone,
         // cancel, a person) — here only what it does not do: asking the technician and passing requests to him.
         if ($intent === 'complaint') { return self::complaint($o, $text); }
+        // how often he chased the technician: a customer who asked «فين» again and again is not asked for the detailed rating
+        if (in_array($intent, ['urgent', 'where'], true) && !empty($o['id'])) { try { Mutqan_Store::update('orders', (string) $o['id'], ['nudges' => (int) ($o['nudges'] ?? 0) + 1], self::sys()); } catch (Throwable $e) {} }
         if ($quiet) {
             if (in_array($intent, ['urgent', 'where'], true) && !self::facts($o)['eta']) { $a = self::ask_eta($o); if ($a) { $did[] = 'asked_eta'; } }
             if ($intent === 'request' && !empty($o['technicianId'])) { self::tell_tech($o, '📌 طلب من العميل: «' . mb_substr($text, 0, 300) . '»'); $did[] = 'relayed'; }

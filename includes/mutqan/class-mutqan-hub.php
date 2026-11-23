@@ -199,6 +199,24 @@ final class Mutqan_Hub {
             case 'referral': { return ['code' => class_exists('Mutqan_Growth') ? Mutqan_Growth::note_referral((string) ($in['phone'] ?? ''), (string) ($in['text'] ?? '')) : null]; }
             // «طرق الدفع» asked again on WhatsApp: the message with the link for his latest unpaid order, or null (the usual answer then).
             // the payment menu before the rating (owner, 2026-11-23): what to ask, and his answer
+            // the detailed rating of the technician (owner, 2026-11-23): only to a pleased customer — 4–5 stars, no complaint,
+            // no low rating, and who did not chase the technician twice or more
+            case 'traits_ask': {
+                $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
+                if (!$o || (int) ($in['stars'] ?? 0) < 4 || !empty($o['complaint']) || (int) ($o['nudges'] ?? 0) >= 2 || !empty($o['rating']['traits'])) { return null; }
+                $tn = trim(preg_replace('/^الفن[يى]\s+/u', '', (string) ($o['technicianName'] ?? '')));
+                return ['text' => "🌟 سؤال أخير يفرّق معانا" . ($tn !== '' ? ' ويفرّح ' . $tn : '') . ":\nإيه أكتر حاجة عجبتك في الفني" . ($tn !== '' ? ' ' . $tn : '') . "؟ اكتب الأرقام اللي تنطبق (مثال: *1 4 6*)\n"
+                    . "1️⃣ مظهره وشكله 👔\n2️⃣ نظافته وريحته الحلوة 🌸\n3️⃣ هادي ومش رغّاي 🤫\n4️⃣ أسلوبه وطريقة كلامه 💬\n5️⃣ سريع ⚡\n6️⃣ متقن في شغله 🛠️\n7️⃣ أمين 🤝\n8️⃣ مؤدب ولبق 🌷\n\nتقييمك بيوصل للفني نفسه، وبيفرّق في جودة الخدمة 💚", 'traits' => self::TRAITS];
+            }
+            case 'traits_set': {
+                $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
+                if (!$o) { return null; }
+                $got = [];
+                foreach ((array) ($in['picks'] ?? []) as $k) { $k = (int) $k; if (isset(self::TRAITS[$k])) { $got[$k] = self::TRAITS[$k]; } }
+                if (!$got) { return null; }
+                Mutqan_Store::update('orders', (string) $in['id'], ['rating' => array_merge((array) ($o['rating'] ?? []), ['traits' => array_values($got)])], self::sys());
+                return ['labels' => array_values($got), 'tech' => (string) ($o['technicianName'] ?? '')];
+            }
             case 'pay_menu': {
                 if (!class_exists('Mutqan_PayChoice')) { return null; }
                 $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
@@ -355,6 +373,8 @@ final class Mutqan_Hub {
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
     }
+
+    const TRAITS = [1 => 'مظهره وشكله', 2 => 'نظافته وريحته', 3 => 'هادي', 4 => 'أسلوبه وكلامه', 5 => 'سريع', 6 => 'متقن', 7 => 'أمين', 8 => 'مؤدب ولبق'];
 
     private static function num($o) { return (string) ($o['number'] ?? '') ?: substr((string) ($o['id'] ?? ''), -5); }
 
