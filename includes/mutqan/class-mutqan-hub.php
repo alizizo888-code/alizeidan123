@@ -194,6 +194,12 @@ final class Mutqan_Hub {
     public static function op($op, $in) {
         switch ($op) {
             case 'order': { $o = self::order_by($in); return $o ? self::view($o) : null; }
+            // «طرق الدفع» asked again on WhatsApp: the message with the link for his latest unpaid order, or null (the usual answer then).
+            case 'paylink': {
+                if (!class_exists('Mutqan_PayChoice')) { return null; }
+                $o = Mutqan_PayChoice::for_phone((string) ($in['phone'] ?? ''));
+                return $o ? ['text' => Mutqan_PayChoice::message($o), 'orderId' => (string) $o['id']] : null;
+            }
             case 'patch': {
                 $o = self::need($in);
                 $patch = array_intersect_key((array) ($in['patch'] ?? []), array_flip(self::PATCHABLE));

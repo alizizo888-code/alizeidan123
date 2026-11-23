@@ -38,7 +38,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner', 'fp', 'field', 'trainer', 'concierge', 'lines', 'outreach'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner', 'fp', 'field', 'trainer', 'concierge', 'lines', 'outreach', 'paychoice'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -644,6 +644,9 @@ final class Mutqan_Rest {
         }
         return $n;
     }
+
+    /** «طرق الدفع» page of one order — open to whoever holds its link (Mutqan_PayChoice). */
+    public static function h_paychoice($req, $p) { return Mutqan_PayChoice::handle(self::body($req)); }
 
     public static function h_push($req, $p) {
         $in = self::body($req);
