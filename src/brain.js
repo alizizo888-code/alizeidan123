@@ -148,7 +148,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
 
   function rateText(o) {
     const tech = o.techName || ''
-    return '🎉 تم إنجاز طلبك، شكرًا لثقتك' + (o.site ? ' في *' + o.site + '*' : '') + '.\nقيّم الخدمة والفني' + (tech ? ' ' + tech : '') + ' برقم من *1* لـ *5* ⭐ (5 = ممتازة)، ورأيك بيوصل للمدير مباشرة.'
+    // choices, not a free text (owner, 2026-11-23)
+    return '🎉 تم إنجاز طلبك، شكرًا لثقتك' + (o.site ? ' في *' + o.site + '*' : '') + '.\nإيه رأيك في الخدمة والفني' + (tech ? ' ' + tech : '') + '؟ اختار رقم 👇\n5️⃣ راضي جدًا ⭐⭐⭐⭐⭐\n4️⃣ راضي ⭐⭐⭐⭐\n3️⃣ تمام ⭐⭐⭐\n2️⃣ مش راضي ⭐⭐\n1️⃣ سيء ⭐\nرأيك بيوصل للمدير مباشرة.'
   }
   function askRate(o, phone) { setStage(phone, o.id, 'rate'); toCustomer(o, rateText(o), 'rate-' + o.id) }
 
@@ -164,8 +165,33 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     }
     let r = null
     try { r = await wp('pay_pick', { id: o.id, method: m }) } catch (e) { log('warn', 'pay_pick: ' + e.message) }
+    // a transfer: which bank first, then that bank's details (owner, 2026-11-23)
+    if (r && r.banks) {
+      store.set('paybanks:' + o.id, Number(r.banks)); setStage(phone, o.id, 'paybank')
+      toRoom('💳 العميل اختار الدفع: *تحويل بنكي* — طلب #' + T.num(o), 'payc-' + o.id + '-' + m)
+      return r.text
+    }
     if (r && r.text) { const c = chatOf(o.clientPhone); send(T.intl(o.clientPhone), T.sign(o.site || cfg().siteName, r.text), { line: c?.line || o.waLine || '', purpose: r.purpose === 'paylink' ? 'paylink' : 'customer', brand: o.brand }) }
     toRoom('💳 العميل اختار الدفع: *' + ({ cash: 'كاش للفني', transfer: 'تحويل بنكي', online: 'بوابة الدفع' }[m]) + '* — طلب #' + T.num(o), 'payc-' + o.id + '-' + m)
+    askRate(o, phone)
+    return ''
+  }
+
+  /** The bank he picked: its details (the IBAN alone, to copy), the QR when saved, then «send the receipt», then the rating. */
+  async function payBankStage(o, text, phone) {
+    const n = Number((T.norm(text).match(/^\s*([0-9]{1,2})\s*$/) || [])[1] || 0)
+    const max = Number(store.get('paybanks:' + o.id) || 0)
+    if (!n || n > max) {
+      const k = 'paybankask:' + o.id
+      if (store.get(k)) { store.set(k, 0); askRate(o, phone); return '' }
+      store.set(k, 1)
+      return 'اكتب رقم البنك من القايمة 👆'
+    }
+    let r = null
+    try { r = await wp('pay_bank', { id: o.id, idx: n }) } catch (e) { log('warn', 'pay_bank: ' + e.message) }
+    const c = chatOf(o.clientPhone)
+    for (const x of (r && r.messages) || []) send(T.intl(o.clientPhone), x.text, { line: c?.line || o.waLine || '', purpose: 'paylink', image: x.image || '', brand: o.brand })
+    store.set('awaitproof:' + T.pkey(phone), JSON.stringify({ o: o.id, at: now() }))
     askRate(o, phone)
     return ''
   }
@@ -257,9 +283,14 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
    * Every message that arrives on a linked line. `fromMe` is a person typing on the phone itself: it is kept, and the
    * bot gives way — it speaks again only if the customer writes and nobody answers him for two minutes.
    */
-  async function inbound({ line, phone, text = '', kind = 'text', name = '', fromMe = false, self = false }) {
+  async function inbound({ line, phone, text = '', kind = 'text', name = '', fromMe = false, self = false, media = '', mime = '' }) {
     const pk = T.pkey(phone); if (!pk) return
     text = String(text || '').trim()
+    // a voice note (owner, 2026-11-23): heard and answered like a written message — the words are kept with it
+    let heard = ''
+    if (!fromMe && ['voice', 'audio'].includes(kind) && media) {
+      try { const r = await wp('transcribe', { url: media, mime }); heard = String((r && r.text) || '').trim() } catch (e) { log('warn', 'transcribe: ' + e.message) }
+    }
     const shown = text || ({ image: '📷 صورة', video: '🎬 فيديو', voice: '🎤 رسالة صوتية', audio: '🎵 صوت', document: '📄 ملف', sticker: '🙂 ملصق', location: '📍 موقع' }[kind] || '…')
     const c0 = store.chat(pk)
     if (fromMe && !self) {
@@ -268,11 +299,21 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       mirror(pk, line, 'out', shown, 'phone')
       return
     }
-    store.addMsg({ pk, line, dir: 'in', text: shown, kind, by: name })
+    store.addMsg({ pk, line, dir: 'in', text: heard ? '🎤 ' + heard : shown, kind, by: name })
+    if (heard) { text = heard; kind = 'text' }
     const c = store.touchChat(pk, { phone: T.intl(phone), line: c0?.line || line, name: name || c0?.name || '', lastAt: now(), lastText: shown, unread: (c0?.unread || 0) + 1 })
     mirror(pk, line, 'in', shown)
     // family, friends: the owner answers them himself — never the owner's own test phone (live tests, 2026-11-23)
     if (c.kind === 'personal' && !(cfg().testPhone && T.pkey(cfg().testPhone) === pk)) return
+    // the transfer receipt he was asked for (a picture or a file): on the order, operations told
+    if (['image', 'document'].includes(kind)) {
+      let ap = null; try { ap = JSON.parse(store.get('awaitproof:' + pk) || 'null') } catch {}
+      if (ap && now() - ap.at < 3 * DAY) {
+        store.set('awaitproof:' + pk, '')
+        wp('pay_proof', { id: ap.o, kind }).catch(() => {})
+        return say(phone, line, 'وصلنا الإيصال ✅ شكرًا ليك، والعمليات هتأكد الدفع 🌷')
+      }
+    }
     if (!text && kind !== 'location') return     // a picture or a voice note: a person will look at it
 
     const w = await who(phone)
@@ -405,6 +446,11 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     // a friend's referral link (idea 20): the code is remembered on the site; his order is marked when it comes
     if (/كود الترشيح\s*R[0-9A-F]{6}/.test(text)) wp('referral', { phone: T.intl(phone), text }).catch(() => {})
     if (await claimed(c, line, phone, text, name)) return
+    // «عايز أكلمكم / رقمكم إيه» (owner, 2026-11-23): the hotline link of his own site — a free call straight to operations
+    if (/(اكلمكم|اكلم حد منكم|اتصل بيكم|اتصل عليكم|رقمكم|رقم الشركه|رقم التواصل|كلموني|اتصلوا بي|مكالمه|خط ساخن|الخط الساخن|ارن عليكم|ممكن اتصل)/.test(T.norm(text)) && !/رقم الفني|الفني/.test(T.norm(text))) {
+      let h = null; try { h = await wp('hotline', { phone: T.intl(phone), brand: store.line?.(line)?.brand || '' }) } catch {}
+      if (h && h.url) return say(phone, line, '📞 تقدر تكلمنا مباشرة دلوقتي — مكالمة مجانية عن طريق النت، بتوصلك على طول بالعمليات:\n' + h.url + '\n\nأو اكتب لنا هنا وإحنا معاك 🌷')
+    }
     if (M.isAbuse(text) && !humanActive(c, 10 * 60000)) return abuse(c, line, phone, text)
     if (c.welcomedAt && !humanActive(c, 10 * 60000) && await sharedAnswer(line, phone, text)) return
     // The menu: in the middle of a booking it has the floor; at the main menu it takes the numbers — unless an order's
@@ -413,7 +459,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (fm && !humanActive(c, 10 * 60000) && !(c.botOff && c.botOff > now())) {
       const js = stageOf(phone)?.s
       const digit = M.isMenu(text) || /^\d$/.test(T.norm(text).trim())
-      if (fm.step !== 'home' || (digit && !['pay', 'rate', 'winback', 'winback_time', 'confirm'].includes(js))) return flow(c, line, phone, text, name, fm)
+      if (fm.step !== 'home' || (digit && !['pay', 'paybank', 'rate', 'winback', 'winback_time', 'confirm'].includes(js))) return flow(c, line, phone, text, name, fm)
     }
     const j = stageOf(phone)
     if (j && j.o) {
@@ -991,6 +1037,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   async function journey(stage, o, text, phone) {
     if (stage === 'confirm') return confirmStage(o, text, phone)
     if (stage === 'pay') return payStage(o, text, phone)
+    if (stage === 'paybank') return payBankStage(o, text, phone)
     if (stage === 'rate') return rateStage(o, text, phone)
     if (stage === 'winback' || stage === 'winback_time') return winbackStage(o, text, phone, stage)
     return liveStage(o, text, phone)

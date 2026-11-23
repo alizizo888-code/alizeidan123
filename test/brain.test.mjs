@@ -44,7 +44,10 @@ const wp = async (op, b) => {
   if (op === 'approve') { const o = orders[b.id]; Object.assign(o, { techId: 't1', techName: 'الفني علي', status: 'assigned' }); emit('order.assigned', o); return { text: '✅ اتسند للفني علي' } }
   if (op === 'eta_ask') return { result: 'asked' }
   if (op === 'pay_menu') return PAY.on ? { text: '💳 حابب تدفع إزاي؟\n1️⃣ كاش للفني\n2️⃣ تحويل بنكي\n3️⃣ بوابة الدفع الآمنة' } : null
-  if (op === 'pay_pick') return { text: b.method === 'transfer' ? '🏦 مصرف الراجحي آيبان SA00' : 'ok ' + b.method, purpose: b.method === 'cash' ? 'reply' : 'paylink' }
+  if (op === 'pay_pick') return b.method === 'transfer' ? { text: '🏦 اختار البنك اللي هتحوّل عليه:\n1️⃣ مصرف الراجحي', purpose: 'reply', banks: 1 } : { text: 'ok ' + b.method, purpose: b.method === 'cash' ? 'reply' : 'paylink' }
+  if (op === 'pay_bank') return { messages: [{ text: '🏦 *مصرف الراجحي*\nاسم الحساب: أكسجين', image: '' }, { text: 'SA0000001111', image: '' }, { text: 'بعد التحويل ابعت هنا *صورة الإيصال*', image: '' }] }
+  if (op === 'transcribe') return { text: b.url.includes('wash') ? 'السلام عليكم عايز أغسل مكيف سبليت' : '' }
+  if (op === 'pay_proof') { calls.push('pay_proof:' + b.id); return { ok: true } }
   if (op === 'tech_ask') return { reply: 'جرّب تغيّر الكاباستور (سؤال: ' + b.text + ')' }
   if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; if (b.confirmed) o.customerConfirmed = true; o.acQuote = b.acQuote; o.spec = b.spec; o.mode = b.mode; o.acType = b.acType; o.desc = b.desc; emit('order.created', o); return { ...view(o), details: ['🛠 الخدمة: ' + b.service + ' [' + b.mode + '/' + (b.acType || '-') + ']', '📅 الموعد: ' + b.time] } }
   if (op === 'claim') { const o = b.seal ? Object.values(orders).find((x) => b.seal.startsWith(x.seal || '#')) : byNum(b.number); if (!o || o.claimCode !== b.code) return null; const first = !o.customerConfirmed; Object.assign(o, { clientPhone: b.phone, customerConfirmed: true }); return { first, card: first ? '🔔 *طلب جديد — رعد السماء*\nرقم الطلب: #' + o.number : '', ...view(o) } }
@@ -121,7 +124,11 @@ PAY.on = true
 m = await say(TECH, 'تم', 'الفني'); await sleep(); m = m.concat(take())
 t('bare «تم» completes; customer asked HOW HE PAYS first (not the rating yet); room told', orders.o1.status === 'completed' && /حابب تدفع إزاي/.test(to(m, CUST)) && !/قيّم الخدمة/.test(to(m, CUST)) && /تمت المهمة/.test(to(m, ROOM)), JSON.stringify(m))
 m = await say(CUST, '2')
-t('…«2»: our transfer accounts, the room hears his choice, then the rating', /مصرف الراجحي/.test(to(m, CUST)) && /قيّم الخدمة/.test(to(m, CUST)) && /اختار الدفع: \*تحويل بنكي\*/.test(to(m, ROOM)), JSON.stringify(m))
+t('…«2»: which bank (the list), the room hears his choice', /اختار البنك/.test(to(m, CUST)) && /1️⃣ مصرف الراجحي/.test(to(m, CUST)) && !/رأيك في الخدمة/.test(to(m, CUST)) && /اختار الدفع: \*تحويل بنكي\*/.test(to(m, ROOM)), JSON.stringify(m))
+m = await say(CUST, '1')
+t('…«1»: that bank — the IBAN alone to copy, «send the receipt», then the rating as choices', /اسم الحساب/.test(to(m, CUST)) && m.some((x) => x.text.trim() === 'SA0000001111' || / SA0000001111$/.test(x.text)) && /صورة الإيصال/.test(to(m, CUST)) && /5️⃣ راضي جدًا/.test(to(m, CUST)) && !/بتتمسح/.test(to(m, CUST)), JSON.stringify(m))
+m = await brain.inbound({ line: 'l1', phone: CUST, text: '', kind: 'image', name: 'العميل' }).then(() => take())
+t('…his receipt picture: on the order, thanked', calls.some((c) => c.startsWith('pay_proof:')) && /وصلنا الإيصال/.test(to(m, CUST)), JSON.stringify(m))
 PAY.on = false
 m = await say(CUST, '5 ممتاز تسلموا')
 t('rating saved and sent to the room', orders.o1.customerRating === 5 && /تقييم العميل لطلب #1002: 5\/5/.test(to(m, ROOM)), JSON.stringify(m))
@@ -183,6 +190,10 @@ await say(KNOWN, 'عايز اغسل مكيف سبليت'); await sleep(); take()
 store.touchChat(T.pkey(KNOWN), { lead: '{}' })
 m = await say(KNOWN, '1')
 t('a contact the bot already served: a bare «1» does not make him personal', store.chat(T.pkey(KNOWN)).kind !== 'personal', JSON.stringify(store.chat(T.pkey(KNOWN))))
+// a voice note (owner, 2026-11-23): heard and answered like the words in it
+const VO = '0533333355'
+m = await brain.inbound({ line: 'l1', phone: VO, text: '', kind: 'voice', name: 'صوت', media: 'https://x.test/wp-content/uploads/mwc/wash.ogg', mime: 'audio/ogg' }).then(() => take()); await sleep(); m = m.concat(take())
+t('a voice note «عايز أغسل مكيف سبليت» → answered with the price', /ر\.س/.test(to(m, VO)), JSON.stringify(m))
 // the price (owner, 2026-11-23): no «عايز سعر أحسن» — an open question; bargaining only when he complains; at the wall a specialist
 const HG = '0533333366'
 m = await say(HG, 'عايز اغسل 3 مكيف سبليت'); await sleep(); m = m.concat(take())
