@@ -428,6 +428,9 @@ final class Mutqan_Store {
     }
 
     /** 1001, 1002, … — one counter for the whole system. */
+    /** The order's number as the customer hears it (1018), the same in every message — the id's tail only for old orders without one. */
+    public static function num($o) { $o = is_array($o) ? $o : []; $n = trim((string) ($o['number'] ?? '')); return $n !== '' ? $n : substr((string) ($o['id'] ?? ''), -5); }
+
     public static function next_order_number() {
         global $wpdb;
         $n = (int) get_option('mutqan_order_seq', 1000);

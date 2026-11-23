@@ -231,7 +231,7 @@ final class Mutqan_Order_AI {
         foreach ($rows as $o) {
             if ((string) ($o['id'] ?? '') === $oid) { continue; }
             $price = isset($o['price']) && is_numeric($o['price']) && $o['price'] > 0 ? ' — ' . $o['price'] . ' ريال' : '';
-            $out[] = '- #' . substr((string) $o['id'], -5) . ' ' . self::when($o['createdAt'] ?? '') . ': ' . self::spec((string) ($o['specialtyId'] ?? '')) . ' — ' . (self::STATUS[$o['status'] ?? ''] ?? '') . $price
+            $out[] = '- #' . Mutqan_Store::num($o) . ' ' . self::when($o['createdAt'] ?? '') . ': ' . self::spec((string) ($o['specialtyId'] ?? '')) . ' — ' . (self::STATUS[$o['status'] ?? ''] ?? '') . $price
                 . ((string) ($o['description'] ?? '') !== '' ? ' — «' . mb_substr((string) $o['description'], 0, 140) . '»' : '');
             if (count($out) >= 8) { break; }
         }

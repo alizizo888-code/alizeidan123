@@ -131,7 +131,7 @@ final class Mutqan_Growth {
             Mutqan_Store::update('orders', $o['id'], ['referral' => ['code' => $code, 'byPhone' => (string) ($by['clientPhone'] ?? ''), 'byName' => (string) ($by['clientName'] ?? ''), 'pct' => (int) $c['referralPct'], 'at' => gmdate('c')]], self::sys());
             unset($map[$k]); $n++;
             if (class_exists('Mutqan_Rest')) {
-                Mutqan_Rest::admin_alert('🎁 عميل جديد بترشيح #' . substr((string) $o['id'], -5), ((string) ($o['clientName'] ?? '') ?: (string) $o['clientPhone']) . ' جه بترشيح من ' . ((string) ($by['clientName'] ?? '') ?: (string) ($by['clientPhone'] ?? $code)) . ' — خصم ' . (int) $c['referralPct'] . '% للاتنين', '#/staff/order/' . $o['id'], 'order_referral', 'normal', $o['id']);
+                Mutqan_Rest::admin_alert('🎁 عميل جديد بترشيح #' . Mutqan_Store::num($o), ((string) ($o['clientName'] ?? '') ?: (string) $o['clientPhone']) . ' جه بترشيح من ' . ((string) ($by['clientName'] ?? '') ?: (string) ($by['clientPhone'] ?? $code)) . ' — خصم ' . (int) $c['referralPct'] . '% للاتنين', '#/staff/order/' . $o['id'], 'order_referral', 'normal', $o['id']);
             }
         }
         update_option(self::REF_OPT, $map, false);

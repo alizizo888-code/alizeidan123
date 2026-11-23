@@ -244,7 +244,7 @@ final class Mutqan_Fieldops {
             throw new Mutqan_Error('blocked', $msg[$why] ?? 'مش متاح تاخد طلبات دلوقتي.', 403);
         }
         $cur = (string) ($o['technicianId'] ?? '');
-        $num = substr((string) $o['id'], -5);
+        $num = Mutqan_Store::num($o);
         if ($cur !== '' && $cur !== $me) {
             // someone has it: ask the room
             $doc = ['kind' => 'note', 'text' => 'طلب أخذ الطلب #' . $num . ' (مسند حاليًا لـ ' . ((string) ($o['technicianName'] ?? 'فني')) . ')' . (!empty($in['note']) ? ' — ' . mb_substr((string) $in['note'], 0, 200) : ''),
@@ -281,7 +281,7 @@ final class Mutqan_Fieldops {
             'status' => 'new', 'technicianId' => null, 'technicianName' => null, 'handler' => 'operations', 'forced' => false,
             'statusHistory' => array_merge((array) ($o['statusHistory'] ?? []), [['status' => 'new', 'at' => $at, 'by' => 'technician', 'note' => 'اعتذار الفني: ' . self::DECLINE[$r] . ($note ? ' — ' . $note : '')]]),
         ], self::sys());
-        Mutqan_Rest::admin_alert('🙅 فني اعتذر عن طلب', $rec['techName'] . ' اعتذر عن الطلب #' . substr((string) $o['id'], -5) . ' — ' . self::DECLINE[$r] . ($note ? ': ' . $note : '') . "\nالطلب رجع للعمليات.", '#/staff/order/' . $o['id'], 'tech_decline', 'high', (string) $o['id']);
+        Mutqan_Rest::admin_alert('🙅 فني اعتذر عن طلب', $rec['techName'] . ' اعتذر عن الطلب #' . Mutqan_Store::num($o) . ' — ' . self::DECLINE[$r] . ($note ? ': ' . $note : '') . "\nالطلب رجع للعمليات.", '#/staff/order/' . $o['id'], 'tech_decline', 'high', (string) $o['id']);
         return ['ok' => true];
     }
 
@@ -329,7 +329,7 @@ final class Mutqan_Fieldops {
         if (!$o) { throw new Mutqan_Error('not_found', 'الطلب مش موجود.', 404); }
         if (self::is_tech($p) && ($o['technicianId'] ?? '') !== self::me($p)) { throw new Mutqan_Error('forbidden', 'الطلب مش مسند لك.', 403); }
         Mutqan_Store::update('orders', $o['id'], ['invoiceRequest' => ['by' => self::me($p), 'byName' => self::name($p), 'at' => gmdate('c'), 'note' => mb_substr((string) ($in['note'] ?? ''), 0, 200)]], self::sys());
-        Mutqan_Rest::admin_alert('🧾 فني بيطلب إصدار فاتورة', self::name($p) . ' — الطلب #' . substr((string) $o['id'], -5) . (!empty($in['note']) ? ': ' . mb_substr((string) $in['note'], 0, 120) : ''), '#/staff/order/' . $o['id'], 'invoice_request', 'high', (string) $o['id']);
+        Mutqan_Rest::admin_alert('🧾 فني بيطلب إصدار فاتورة', self::name($p) . ' — الطلب #' . Mutqan_Store::num($o) . (!empty($in['note']) ? ': ' . mb_substr((string) $in['note'], 0, 120) : ''), '#/staff/order/' . $o['id'], 'invoice_request', 'high', (string) $o['id']);
         return ['ok' => true];
     }
 }
