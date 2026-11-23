@@ -697,7 +697,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     store.touchChat(c.pk, { stage: 'live', orderId: o.id || '', stageAt: now() })
     // The confirmation carries the whole order as the site saved it: service, A/C type and count, details, address, pin, time, price.
     const det = Array.isArray(o.details) && o.details.length ? o.details : T.summary(o)
-    return say(phone, line, ['✅ *تم تأكيد طلبك رقم ' + T.num(o) + '*', ...det, '', 'جاري تجهيز الفني، وهنبلغك هنا أول ما يتحرك 🚗', o.url ? '🔗 تابع طلبك: ' + o.url : '', 'تقدر في أي وقت تكتب *6* لمتابعة طلبك أو تأجيله.'].filter((x) => x !== null && x !== undefined && x !== false).filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n'))
+    return say(phone, line, ['✅ *تم تأكيد طلبك رقم ' + T.num(o) + '*', ...det, '', 'جاري تجهيز الفني، وهنبلغك هنا أول ما يتحرك 🚗', o.url ? '🔗 تابع طلبك: ' + o.url : '', o.seal ? '🔐 توثيق طلبك (كل اللي اتفقنا عليه): ' + o.seal : '', 'تقدر في أي وقت تكتب *6* لمتابعة طلبك أو تأجيله.'].filter((x) => x !== null && x !== undefined && x !== false).filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n'))
   }
 
   /** One turn of the menu. m: the conversation's step and what was chosen so far. */
