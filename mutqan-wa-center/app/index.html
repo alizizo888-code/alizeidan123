@@ -1173,9 +1173,9 @@ function sendText() {
 $('#btnAttach').onclick = e => {
   e.stopPropagation(); const p = $('#attach'); const was = !p.classList.contains('hidden'); closePops(); if (was) return;
   p.innerHTML = [['📷', 'صور وفيديو', '#bf59cf', () => $('#fMedia').click()], ['📸', 'كاميرا', '#d3396d', () => $('#fCam').click()], ['📄', 'ملف / مستند', '#7f66ff', () => $('#fDoc').click()],
-    ['🎵', 'ملف صوتي', '#f96533', () => $('#fAudio').click()], ['📍', 'موقع', '#1fa855', sendLocation], ['👤', 'جهة اتصال', '#009de2', sendContactCard]]
+    ['🎵', 'ملف صوتي', '#f96533', () => $('#fAudio').click()], ['📍', 'موقع', '#1fa855', sendLocation], ['👤', 'جهة اتصال', '#009de2', sendContactCard], ['🏦', 'حسابات التحويل', '#0ea5e9', sendAccounts]]
     .map((x, i) => `<button data-i="${i}"><span class="pi" style="background:${x[2]}">${x[0]}</span>${x[1]}</button>`).join('');
-  const acts = [() => $('#fMedia').click(), () => $('#fCam').click(), () => $('#fDoc').click(), () => $('#fAudio').click(), sendLocation, sendContactCard];
+  const acts = [() => $('#fMedia').click(), () => $('#fCam').click(), () => $('#fDoc').click(), () => $('#fAudio').click(), sendLocation, sendContactCard, sendAccounts];
   $$('button', p).forEach(b => b.onclick = () => { closePops(); acts[+b.dataset.i](); });
   p.classList.remove('hidden');
 };
@@ -1240,6 +1240,19 @@ function sendLocation() {
   toast('بيحدد موقعك…');
   navigator.geolocation.getCurrentPosition(p => sendPayload({type: 'location', body: JSON.stringify({lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), name: 'موقعي', address: ''})}),
     () => { const q = prompt('اكتب الإحداثيات (lat,lng) أو الصق رابط جوجل ماب:'); const mm = q && q.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/); if (mm) sendPayload({type: 'location', body: JSON.stringify({lat: +mm[1], lng: +mm[2], name: 'موقع', address: ''})}); }, {enableHighAccuracy: true, timeout: 10000});
+}
+/* حسابات التحويل من «طرق الدفع» (صاحب الشغل 2026-11-24): البيانات والكود يترفقوا بضغطة — ودايمًا آخر نسخة */
+async function sendAccounts() {
+  let L = [];
+  try { L = (await API.req('GET', '/pay/accounts')).accounts || []; } catch (e) { return toast(e.message); }
+  if (!L.length) return toast('مفيش حسابات تحويل شغالة — ضيفها من «طرق الدفع» في التطبيق');
+  const txt = a => [`🏦 *${a.name}*`, a.holder && `باسم: ${a.holder}`, a.iban && `الآيبان: ${a.iban}`, a.number && `رقم الحساب: ${a.number}`, a.wallet && `جوال المحفظة: ${a.wallet}`].filter(Boolean).join('\n');
+  const m = modal('حسابات التحويل', `<div class="muted" style="font-size:12px;margin-bottom:8px">اختار الحساب: بتتبعت بياناته، والآيبان لوحده عشان يتنسخ، والكود صورة لو موجود.</div>` +
+    L.map((a, i) => `<div class="card" style="display:flex;gap:10px;align-items:center;margin-bottom:8px">${a.qr ? `<img src="${esc(a.qr)}" style="width:64px;height:64px;background:#fff;border-radius:8px;object-fit:contain">` : '<div style="width:64px;height:64px;display:grid;place-items:center;font-size:28px">🏦</div>'}<div class="grow" style="min-width:0"><b>${esc(a.name)}</b><div class="muted ell" style="font-size:12px" dir="ltr">${esc(a.iban || a.number || a.wallet || '')}</div></div><button class="btn" data-acc="${i}">إرسال</button></div>`).join(''),
+    `<button class="btn" id="accAll">إرسال الكل</button><button class="btn ghost" data-close>إغلاق</button>`);
+  const one = async a => { await sendPayload({type: 'text', body: txt(a)}); if (a.iban) await sendPayload({type: 'text', body: a.iban}); if (a.qr) await sendPayload({type: 'image', media_url: a.qr, mime: 'image/png', file_name: 'qr.png', body: 'امسح الكود من تطبيق البنك 📷'}); };
+  $$('[data-acc]', m).forEach(b => b.onclick = async () => { m.remove(); await one(L[+b.dataset.acc]); await sendPayload({type: 'text', body: 'بعد التحويل ابعت هنا صورة الإيصال 🌷'}); });
+  $('#accAll', m).onclick = async () => { m.remove(); for (const a of L) await one(a); await sendPayload({type: 'text', body: 'بعد التحويل ابعت هنا صورة الإيصال 🌷'}); };
 }
 function sendContactCard() {
   const m = modal('إرسال جهة اتصال', `<div class="fld"><label>الاسم</label><input id="ccn" placeholder="مثلاً: الدعم الفني — أكسجين"></div><div class="fld"><label>الرقم</label><input id="ccp" inputmode="tel" placeholder="05xxxxxxxx"></div>

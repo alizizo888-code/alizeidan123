@@ -17,6 +17,7 @@ class MWC_Rest {
         $r('/chats/(?P<id>\d+)', 'POST', [__CLASS__, 'chat_update'], $auth);
         $r('/chats/(?P<id>\d+)/messages', 'GET', [__CLASS__, 'messages'], $auth);
         $r('/chats/(?P<id>\d+)/send', 'POST', [__CLASS__, 'send'], $auth);
+        $r('/pay/accounts', 'GET', [__CLASS__, 'pay_accounts'], $auth);
         $r('/chats/(?P<id>\d+)/read', 'POST', [__CLASS__, 'read'], $auth);
         $r('/chats/(?P<id>\d+)/profile', 'GET', [__CLASS__, 'profile'], $auth);
         $r('/messages/(?P<id>\d+)/retry', 'POST', [__CLASS__, 'retry'], $auth);
@@ -255,6 +256,13 @@ class MWC_Rest {
         $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM " . MWC_Store::t('messages') . " WHERE id=%d", $id), ARRAY_A);
         do_action('mwc_sent', $row, $chat, $acc);
         return self::msg_out($row);
+    }
+
+    /** حسابات التحويل من «طرق الدفع» في التطبيق — دايمًا آخر نسخة (لما المالك يضيف/يقفل حساب بتتحدث هنا لوحدها). */
+    static function pay_accounts(WP_REST_Request $req) {
+        if (!class_exists('Mutqan_PayChoice')) return ['accounts' => []];
+        try { $L = Mutqan_PayChoice::accounts(); } catch (Throwable $e) { $L = []; }
+        return ['accounts' => array_map(function ($a) { return ['name' => $a['name'], 'holder' => $a['holder'], 'iban' => $a['iban'], 'number' => $a['number'], 'wallet' => $a['wallet'], 'qr' => $a['qr']]; }, $L)];
     }
 
     static function send(WP_REST_Request $req) {
