@@ -373,6 +373,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
 
   async function customer({ c, line, phone, text, name }) {
     const C = cfg()
+    // a friend's referral link (idea 20): the code is remembered on the site; his order is marked when it comes
+    if (/كود الترشيح\s*R[0-9A-F]{6}/.test(text)) wp('referral', { phone: T.intl(phone), text }).catch(() => {})
     if (await claimed(c, line, phone, text, name)) return
     if (M.isAbuse(text) && !humanActive(c, 10 * 60000)) return abuse(c, line, phone, text)
     if (c.welcomedAt && !humanActive(c, 10 * 60000) && await sharedAnswer(line, phone, text)) return
@@ -1087,9 +1089,12 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       let line = '⭐'.repeat(stars) + ' *تقييم العميل لطلب #' + n + ': ' + stars + '/5*\n👤 ' + (o.clientName || o.clientPhone) + (o.techName ? '\n👷 الفني: ' + o.techName : '') + (comment ? '\n💬 «' + comment + '»' : '')
       if (stars <= 3) { line = '⚠️ *عميل مش راضي*\n' + line + '\n\nكلّمه: *رد ' + n + ' نص الرسالة*'; wp('alert', { id: o.id, title: '⚠️ تقييم منخفض', body: stars + '/5 ' + comment }).catch(() => {}) }
       toRoom(line, 'rate-' + o.id)
-      if (!comment) return stars >= 4 ? 'شكرًا لتقييمك 🙏 يسعدنا إنك راضي.\nلو حابب تكتب لنا كلمة عن الفني أو الخدمة اكتبها هنا.' : 'شكرًا لصراحتك 🙏 آسفين إن التجربة ما كانتش زي ما تستاهل.\nقولنا إيه اللي حصل وهيكلمك المسؤول بنفسه.'
+      // «جلب العملاء» (owner, 2026-11-23): after a good rating, the Google review link and the referral link — each only when switched on
+      let more = ''
+      if (stars >= 4) { try { const g = await wp('after_rating', { id: o.id, stars }); more = g && g.text ? '\n\n' + g.text : '' } catch {} }
+      if (!comment) return (stars >= 4 ? 'شكرًا لتقييمك 🙏 يسعدنا إنك راضي.\nلو حابب تكتب لنا كلمة عن الفني أو الخدمة اكتبها هنا.' : 'شكرًا لصراحتك 🙏 آسفين إن التجربة ما كانتش زي ما تستاهل.\nقولنا إيه اللي حصل وهيكلمك المسؤول بنفسه.') + more
       dropStage(phone)
-      return stars >= 4 ? 'شكرًا لتقييمك وكلامك 🙏 في خدمتك دايمًا.' : 'شكرًا لصراحتك 🙏 وصلت ملاحظتك للمسؤول وهيتواصل معاك.'
+      return (stars >= 4 ? 'شكرًا لتقييمك وكلامك 🙏 في خدمتك دايمًا.' : 'شكرًا لصراحتك 🙏 وصلت ملاحظتك للمسؤول وهيتواصل معاك.') + more
     }
     if (r.stars) {
       await wp('patch', { id: o.id, patch: { rating: { ...r, comment: ((r.comment || '') + ' ' + text.slice(0, 300)).trim() } } })

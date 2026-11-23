@@ -52,6 +52,8 @@ const wp = async (op, b) => {
   if (op === 'ac_table') return { text: 'جدول المالك' }
   if (op === 'parts') return /مكثف/.test(b.text) ? { text: '🔧 *تغيير المكثف*: *150 ر.س*', image: 'https://oxygen11.com/cap.jpg', parts: ['capacitor'], strategy: 'إحنا مش محل قطع غيار 🙏 بنبيعلك حل العطل' } : { text: '🔧 *أسعار الإصلاح*', parts: [], strategy: 'إحنا مش محل قطع غيار' }
   if (op === 'cancel' && SITE.on) { const o = orders[b.id]; if (['accepted', 'en_route', 'nearby', 'arrived', 'in_progress'].includes(o.status)) { o.cancelRequest = { text: b.text }; return { done: 'requested', reply: 'وصلني طلب الإلغاء ✅ الفني كان متحرك لك، فبلّغته يستنى' } } o.status = 'cancelled'; return { done: 'cancelled', reply: 'تم إلغاء طلبك #' + o.number + ' ✅' } }
+  if (op === 'after_rating') return { text: b.stars >= 5 ? '⭐ قيّمنا على خرائط جوجل: https://g.page/r/test' : '' }
+  if (op === 'referral') { calls.push('referral:' + b.text); return { code: 'R123ABC' } }
   if (op === 'paylink' && SITE.on) { const o = Object.values(orders).find((x) => T.pkey(x.clientPhone) === T.pkey(b.phone) && ['completed', 'closed'].includes(x.status) && !x.paid); return o ? { text: '💳 *طرق الدفع — طلب #' + o.number + '* https://x.test/app/#/pay?o=' + o.id + '&k=abc' } : null }
   if (op === 'answer' && SITE.on) { const m = T.norm(b.text).match(/طلب\s*#?(\d{3,})/); if (m) { const o = Object.values(orders).find((x) => String(x.number) === m[1]); return { reply: o && T.pkey(o.clientPhone) === T.pkey(b.phone) ? 'طلبك #' + o.number + ' — ' + (SL[o.status] || o.status) : 'مش لاقي طلب رقم ' + m[1] + ' على رقمك' } } if (/طرق الدفع/.test(b.text)) return { reply: '💳 *طرق الدفع* (من الموقع)' }; return { reply: null } }
   if (op === 'converse') return AI.on ? { reply: 'أكيد، غسيل المكيف السبليت بـ 120 ر.س للجهاز. في أي حي؟', lead: { service: 'غسيل 2 سبليت', area: AI.area || '', time: AI.time || '' }, complete: !!(AI.area && AI.time) } : null
@@ -115,6 +117,9 @@ m = await say(TECH, 'تم', 'الفني')
 t('bare «تم» completes; customer asked to rate; room told', orders.o1.status === 'completed' && /قيّم الخدمة/.test(to(m, CUST)) && /تمت المهمة/.test(to(m, ROOM)), JSON.stringify(m))
 m = await say(CUST, '5 ممتاز تسلموا')
 t('rating saved and sent to the room', orders.o1.customerRating === 5 && /تقييم العميل لطلب #1002: 5\/5/.test(to(m, ROOM)), JSON.stringify(m))
+t('5 stars → the Google review link follows the thanks (idea 16, only when switched on)', /قيّمنا على خرائط جوجل: https:\/\/g\.page/.test(to(m, CUST)), to(m, CUST))
+m = await say('966500009999', 'السلام عليكم، جاي بترشيح من صاحبي — كود الترشيح R1A2B3C')
+t('a referral code in a message is passed to the site (idea 20)', calls.some((c) => c.startsWith('referral:')), calls.slice(-3))
 
 // ===== E. a stranger writes: welcome, a person, an order from the chat =====
 transcript.push('\n### هـ) عميل جديد بيكلم الخط: ترحيب، موظف، وطلب من الشات')
