@@ -77,7 +77,9 @@ export function createChatwoot({ store, wp, log = () => {}, hookBase }) {
     return r
   }
 
-  const WHO = { bot: '🤖 الاستقبال', reply: '🤖 الاستقبال', customer: '🔗 متابعة الطلب', site: '⚙️ النظام', phone: '📱 من الموبايل', agent: '👤 الفريق', room: '', tech: '' }
+  // 'phone' (a message sent straight from the linked phone, not through the app) shows no label at all now — the
+  // owner asked for the "📱 من الموبايل" tag to stop appearing on messages (2026-11-22).
+  const WHO = { bot: '🤖 الاستقبال', reply: '🤖 الاستقبال', customer: '🔗 متابعة الطلب', site: '⚙️ النظام', phone: '', agent: '👤 الفريق', room: '', tech: '' }
   /** Every message of a customer chat. Never throws, never blocks WhatsApp. */
   function mirror(pk, lineId, dir, text, by = '') {
     if (!on() || by === 'chatwoot') return

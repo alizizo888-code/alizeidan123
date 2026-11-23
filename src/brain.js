@@ -30,7 +30,7 @@ export const DEFAULTS = {
   emergencyPhone: '0536554731',
   humanFirstSec: 120,             // a person gets two minutes to answer before the bot takes the conversation
   ignoreContacts: true,           // names saved in the line's phone (family, friends) are left alone
-  dailyReport: true,              // the day's summary to the room at closing time
+  dailyReport: false,             // owner, 2026-11-22: the day's summary stays in the app (notifications), not on WhatsApp
   washVideos: M.WASH_VIDEOS,       // «طريقة الغسيل» (5 in the menu) — the owner's own videos
   prices: 'أسعارنا بتتحدد حسب نوع الجهاز والعدد، والمعاينة مجانية لحد جهازين.\nابعت نوع الخدمة وعدد الأجهزة والحي، ونبعتلك السعر على طول 🌷',
 }
@@ -152,7 +152,10 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const phone = o.clientPhone || ''
     const st = o.status
     if (WA_STATUS[st] && phone) {
-      toCustomer(o, WA_STATUS[st].replace('{tech}', tech).replace(/\s{2,}/g, ' ') + '\n\n' + (o.statusText || ''), 'st-' + o.id + '-' + st)
+      // «تتبع الفني» (owner, 2026-11-23 — idea 13): on the way / close by, the customer gets his order page, where the
+      // technician's position moves live.
+      const track = ['en_route', 'nearby'].includes(st) && o.url ? '\n📍 تابع مكان الفني لحظة بلحظة: ' + o.url : ''
+      toCustomer(o, WA_STATUS[st].replace('{tech}', tech).replace(/\s{2,}/g, ' ') + track + '\n\n' + (o.statusText || ''), 'st-' + o.id + '-' + st)
       const j = stageOf(phone)
       if (!j || j.o === o.id) setStage(phone, o.id, j && j.s === 'confirm' && !o.customerConfirmed ? 'confirm' : 'live')
     }
@@ -869,6 +872,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     }
     const fresh = !c.needsHuman || now() - (c.lastAt || 0) > 1800000
     store.touchChat(c.pk, { needsHuman: 1, agent: agent ? agent.name : c.agent })
+    // the phones ring for it too (apps' notifications), whatever happens on WhatsApp (owner, 2026-11-22)
+    if (fresh) wp('chat_alert', { title: '🙋 عميل محتاج موظف — ' + (c.name || c.phone), body: String(text || '').slice(0, 200) }).catch(() => {})
     if (fresh && C.notifyAgents) {
       const msg = '🙋 *عميل محتاج موظف*\n👤 ' + (c.name || '—') + ' — ' + c.phone + '\n💬 «' + String(text || '').slice(0, 200) + '»\n\nرد عليه: *عميل ' + c.phone + ' النص*'
       if (agent?.phone) send(T.intl(agent.phone), msg, { purpose: 'agent', dedup: 'h-' + c.pk + '-' + Math.floor(now() / 1800000) })
@@ -1220,7 +1225,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
 
   /** At closing time, once a day: the day's summary to the room. */
   async function daily() {
-    const C = cfg(); if (!C.dailyReport) return
+    const C = cfg(); if (C.dailyReport !== 'whatsapp') return   // only if ever asked for in so many words
     const p = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', minute: 'numeric', hour12: false, timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(now()))
     const v = Object.fromEntries(p.map((x) => [x.type, x.value]))
     const at = Math.min(23, (C.hoursTo >= 24 ? 23 : C.hoursTo))

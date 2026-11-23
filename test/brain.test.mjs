@@ -23,7 +23,7 @@ const to = (msgs, phone) => msgs.filter((m) => T.pkey(m.phone) === T.pkey(phone)
 const orders = {}
 const calls = []
 const SL = { new: 'جديد', assigned: 'مُسند', accepted: 'قَبِل الفني', en_route: 'في الطريق', arrived: 'وصل', completed: 'تم الإنجاز', cancelled: 'ملغي' }
-const view = (o) => ({ ...o, statusLabel: SL[o.status] || o.status, facts: { stepLabel: SL[o.status] }, statusText: '📋 طلب #' + o.number + ' — ' + (SL[o.status] || o.status), techPhone: o.techId ? TECH : '', jobCard: '*🔧 طلب جديد ليك*\n📋 رقم الطلب: *' + o.number + '*\nرد بكلمة: *قبلت*' })
+const view = (o) => ({ url: 'https://x.test/o/' + o.id, ...o, statusLabel: SL[o.status] || o.status, facts: { stepLabel: SL[o.status] }, statusText: '📋 طلب #' + o.number + ' — ' + (SL[o.status] || o.status), techPhone: o.techId ? TECH : '', jobCard: '*🔧 طلب جديد ليك*\n📋 رقم الطلب: *' + o.number + '*\nرد بكلمة: *قبلت*' })
 let brain
 const SITE = { on: false }   // the site's shared brain (cancel / answer ops) — switched on for section X
 const events = []
@@ -90,6 +90,7 @@ m = await say(TECH, 'قبلت', 'الفني')
 t('technician «قبلت» moves the order and the customer hears', orders.o1.status === 'accepted' && /قبل طلبك/.test(to(m, CUST)) && /تم استلام الطلب/.test(to(m, TECH)), JSON.stringify(m))
 m = await say(TECH, 'في الطريق', 'الفني')
 t('on the way: customer + room', orders.o1.status === 'en_route' && /في الطريق ليك/.test(to(m, CUST)) && /اتحرك/.test(to(m, ROOM)), JSON.stringify(m))
+t('on the way: the customer gets the live tracking link (idea 13)', /تابع مكان الفني لحظة بلحظة: https:\/\/x\.test\/o\//.test(to(m, CUST)), to(m, CUST))
 m = await say(CUST, 'الفني فين؟')
 t('«الفني فين؟» asks the technician and answers from facts', calls.some((c) => c.startsWith('eta_ask')) && /سألت الفني/.test(to(m, CUST)), to(m, CUST))
 
