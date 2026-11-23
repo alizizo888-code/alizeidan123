@@ -33,6 +33,16 @@ async function centerSend(row) {
   if (j.ok === false) throw new Error(j.error || 'center send failed')
   return { waId: 'mwc' + (j.id || '') }
 }
+// What we just sent, for ten minutes: when the center sends a team alert from one of our numbers to another of ours
+// (the room), the receiving number reports it back as an incoming message — it must not be read as a customer writing
+// (the owner's test phone is one of our numbers and is treated as a customer, live test 2026-11-23).
+const recentOut = new Map()
+const outKey = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 300)
+function noteOut(text) {
+  const now = Date.now(); recentOut.set(outKey(text), now)
+  if (recentOut.size > 500) for (const [k, at] of recentOut) if (now - at > 600000) recentOut.delete(k)
+}
+const isEcho = (text) => { const at = recentOut.get(outKey(text)); return !!at && Date.now() - at < 600000 }
 const EXPIRE_MS = 6 * 3600000                         // a message nobody could send within six hours is dropped, not sent late
 
 const store = openStore(path.join(DATA, 'hub.db'))
@@ -109,6 +119,7 @@ async function pump() {
       if (isCenter(lineId)) {
         if (!CENTER_URL || !CENTER_KEY || busy.has(lineId)) continue
         busy.add(lineId)
+        noteOut(row.text)
         centerSend({ ...row, line: lineId }).then((r) => {
           store.outDone(row.id, r.skipped ? 'skipped' : 'sent', r.skipped || ''); meta.delete(row.id)
           if (r.skipped) return
@@ -132,6 +143,7 @@ async function pump() {
         continue
       }
       busy.add(lineId)
+      noteOut(row.text)
       lines.sendText(lineId, row.phone, row.text, row.media || '').then((r) => {
         store.outDone(row.id, 'sent'); meta.delete(row.id)
         const pk = pkey(row.phone)
@@ -406,6 +418,8 @@ const server = http.createServer(async (req, res) => {
       const line = 'mwc:' + Number(b.account || 0)
       const pk = pkey(b.phone)
       if (!pk) return
+      // one of our own numbers handing back what we sent it a moment ago (a team alert): not a message to answer
+      if (!b.fromMe && isEcho(b.text) && (brain.cfg().ourNumbers || {})[pk]) { log('chat', 'رسالة من رقمنا لرقمنا (تنبيه للفريق) — اتجاهلت'); return }
       if (!b.fromMe) { const c0 = store.chat(pk); if (!c0 || c0.line !== line) store.touchChat(pk, { phone: intl(b.phone), line }) }
       brain.inbound({ line, phone: String(b.phone), text: String(b.text || ''), kind: String(b.kind || 'text'), name: String(b.name || ''), fromMe: !!b.fromMe })
         .catch((e) => log('error', 'center inbound: ' + (e?.message || e)))
