@@ -10,6 +10,13 @@ class MWC_Maps {
     const TRADES = ['صيانة مكيفات', 'غسيل مكيفات', 'تركيب مكيفات', 'صيانة غرف تبريد وتجميد'];
 
     /**
+     * أماكن تجارية بتشغّل مكيفات وغرف تبريد — دول العملاء نفسهم (صاحب الشغل 2026-11-24: مطاعم، كافيهات، مولات…).
+     * أرقامهم منشورة على خرائط جوجل كأرقام نشاط تجاري. أرقام الأفراد مش بتتسحب.
+     */
+    const TARGETS = ['مطاعم', 'كافيهات', 'مولات ومراكز تجارية', 'فنادق', 'سوبر ماركت', 'مستودعات تبريد', 'محلات لحوم ودواجن',
+                     'مخابز وحلويات', 'مستوصفات وعيادات', 'مدارس أهلية', 'صالات أفراح', 'معارض ومحلات'];
+
+    /**
      * أحياء مكة وجدة. السحب بيمشي على (مجال × حي) واحدة ورا التانية بدل ما يسأل «صيانة مكيفات مكة» مرة واحدة —
      * خرائط جوجل بترجع عدد محدود للبحث الواحد، فالبحث على مستوى الحي هو اللي بيوصل لكل المحلات فعلاً.
      */
@@ -31,7 +38,7 @@ class MWC_Maps {
         foreach ($cities as $city) {
             $col = [];
             foreach (self::AREAS[$city] as $area) {
-                foreach (self::TRADES as $trade) { $col[] = ['city' => $city, 'area' => $area, 'trade' => $trade]; }
+                foreach (array_merge(self::TARGETS, self::TRADES) as $trade) { $col[] = ['city' => $city, 'area' => $area, 'trade' => $trade]; }
             }
             $cols[] = $col;
         }
@@ -44,13 +51,13 @@ class MWC_Maps {
 
     static function plan() {
         $p = get_option('mwc_maps_plan');
-        return array_merge(['on' => 0, 'per_day' => 6, 'hour' => 3, 'depth' => 5, 'cursor' => 0, 'last_run' => '',
+        return array_merge(['on' => 1, 'per_day' => 24, 'hour' => 1, 'depth' => 5, 'cursor' => 0, 'last_run' => '',
                             'day' => '', 'started_today' => 0], is_array($p) ? $p : []);
     }
     static function save_plan($in) {
         $p = self::plan();
         if (isset($in['on']))      $p['on'] = empty($in['on']) ? 0 : 1;
-        if (isset($in['per_day'])) $p['per_day'] = max(1, min(30, (int) $in['per_day']));
+        if (isset($in['per_day'])) $p['per_day'] = max(1, min(60, (int) $in['per_day']));
         if (isset($in['hour']))    $p['hour'] = max(0, min(23, (int) $in['hour']));
         if (isset($in['depth']))   $p['depth'] = max(1, min(30, (int) $in['depth']));
         if (isset($in['cursor']))  $p['cursor'] = max(0, (int) $in['cursor']);
@@ -98,7 +105,28 @@ class MWC_Maps {
      * عدد اليوم. السبب: الـVPS معالج واحد وأداة السحب بتفتح متصفح — 6 عمليات مع بعض بتخليهم كلهم يزحفوا
      * ساعات من غير ما تخلص ولا واحدة (اتجرب 2026-11-23). واحدة ورا واحدة أسرع فعليًا وبتسيب نفس للواتساب.
      */
-    const MAX_RUNNING = 2;
+    const MAX_RUNNING = 1;
+
+    /**
+     * شغلانة بقالها أكتر من وقتها على الأداة = واقفة (اتشاف 2026-11-24: 7 شغلانات «شغالة» من يومين، والأداة نفسها
+     * كانت وقفت بعد أول واحدة — فالجدول فضل مستني ومحدش اتسحب). بنقفلها ونكمّل، والأماكن اللي فاتت بترجع في الدورة.
+     */
+    static function expire_stuck() {
+        global $wpdb;
+        $t = MWC_Store::t('jobs');
+        $rows = $wpdb->get_results("SELECT * FROM $t WHERE status IN ('working','pending')", ARRAY_A);
+        $n = 0;
+        foreach ($rows as $j) {
+            $kw = max(1, count(array_filter(preg_split('/[\r\n]+/', (string) $j['keywords']))));
+            $limit = max(300, min(7200, (int) $j['depth'] * 240 * $kw)) + 1800;
+            if (time() - (int) $j['created'] < $limit) continue;
+            if (!empty($j['ext_id'])) self::call('DELETE', '/api/v1/jobs/' . rawurlencode($j['ext_id']), null, 10);
+            $wpdb->update($t, ['status' => 'failed', 'error' => 'وقفت على الأداة أكتر من وقتها — اتقفلت وهتتعاد في الدورة', 'finished' => time()], ['id' => $j['id']]);
+            $n++;
+        }
+        if ($n) MWC_Store::log('maps', 'قفلت ' . $n . ' شغلانة سحب كانت واقفة', 'النظام');
+        return $n;
+    }
 
     static function run_daily() {
         global $wpdb;
@@ -198,6 +226,7 @@ class MWC_Maps {
         global $wpdb;
         $jobs = $wpdb->get_results("SELECT * FROM " . MWC_Store::t('jobs') . " WHERE status='working' ORDER BY id LIMIT 5", ARRAY_A);
         foreach ($jobs as $j) self::check($j);
+        self::expire_stuck();
         // الجدول اليومي بيركب على نفس النبضة دي بدل كرون لوحده: النبضة جاية من ticker السيرفر ومن ووردبريس
         // الاتنين، فلو واحد فيهم وقف الجدول بيفضل ماشي. وهي بتتحكم في الزحمة بنفسها.
         self::run_daily();
