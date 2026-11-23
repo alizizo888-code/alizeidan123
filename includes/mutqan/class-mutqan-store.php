@@ -473,6 +473,8 @@ final class Mutqan_Store {
             // The hub hears the move and decides who is told what on WhatsApp.
             if ($newTech) { Mutqan_Hub::order_assigned($doc); }
             if (array_key_exists('status', $patch)) { Mutqan_Hub::order_status($doc, $old, $p); }
+            // the payment-methods link (idea 25) lived in the old journey only — with the hub on it was never sent (live test 2026-11-23)
+            if (($patch['status'] ?? '') === 'completed' && ($old['status'] ?? '') !== 'completed' && class_exists('Mutqan_PayChoice')) { Mutqan_PayChoice::on_completed($doc); }
         } else {
             if ($coll === 'orders' && array_key_exists('status', $patch) && class_exists('Mutqan_OrderBot')) { Mutqan_OrderBot::on_status($doc, $old); }
             if ($coll === 'orders' && array_key_exists('status', $patch) && class_exists('Mutqan_WA_Journey')) { Mutqan_WA_Journey::on_status($doc, $old, $p); }
