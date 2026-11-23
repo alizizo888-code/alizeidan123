@@ -154,7 +154,9 @@ final class Mutqan_Shop {
         echo '<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>توثيق الطلب</title>'
             . '<body style="font-family:Tahoma,sans-serif;background:#eef4fb;margin:0;padding:24px"><div style="max-width:440px;margin:auto;background:#fff;border-radius:16px;padding:24px;box-shadow:0 4px 18px #0002;border-top:8px solid ' . $m[1] . '">'
             . '<h1 style="margin:0 0 8px;color:' . $m[1] . ';font-size:24px">' . $m[0] . '</h1><p style="color:#444">' . $m[2] . '</p>'
-            . ($rows ? '<table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:15px">' . str_replace('<td>', '<td style="padding:8px;border-bottom:1px solid #eee;vertical-align:top">', $rows) . (!empty($f['at']) ? '<p style="color:#888;font-size:12px;margin-top:12px">اتسجّل في النظام: ' . esc_html(wp_date('Y-m-d H:i', strtotime((string) $f['at']))) . ' — أي تغيير في البيانات بعد كده بيخلي الرابط «غير مطابق».</p>' : '') . '</table>' : '')
+            . ($rows ? '<table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:15px">' . str_replace('<td>', '<td style="padding:8px;border-bottom:1px solid #eee;vertical-align:top">', $rows) . '</table>'
+                // Makkah time, under the table (live test 2026-11-24: it showed the server's clock, above the rows)
+                . (!empty($f['at']) && ($ts = strtotime((string) $f['at'])) ? '<p style="color:#888;font-size:12px;margin-top:12px">اتسجّل في النظام: ' . esc_html((new DateTime('@' . $ts))->setTimezone(new DateTimeZone('Asia/Riyadh'))->format('Y-m-d H:i')) . ' (مكة) — أي تغيير في البيانات بعد كده بيخلي الرابط «غير مطابق».</p>' : '') : '')
             . '</div></body></html>';
         exit;
     }

@@ -63,7 +63,7 @@ final class Mutqan_Hub {
             'rating' => $o['rating'] ?? null, 'winbackPct' => class_exists('Mutqan_WA_Journey') ? Mutqan_WA_Journey::winback_offer_pct() : 10,
             'facts' => $f, 'statusText' => $f && class_exists('Mutqan_OrderBot') ? Mutqan_OrderBot::status_text($f) : '',
             'jobCard' => class_exists('Mutqan_WA_Desk') ? Mutqan_WA_Desk::job_card($o) : '',
-            'url' => class_exists('Mutqan_OrderBot') ? Mutqan_OrderBot::order_url($id) : '', 'staffUrl' => home_url('/app/#/staff/order/' . rawurlencode($id)), 'waClaim' => !empty($o['claimCode']) && empty($o['customerConfirmed']),
+            'url' => class_exists('Mutqan_OrderBot') ? Mutqan_OrderBot::order_url($id) : '', 'seal' => (string) ($o['sealUrl'] ?? ''), 'staffUrl' => home_url('/app/#/staff/order/' . rawurlencode($id)), 'waClaim' => !empty($o['claimCode']) && empty($o['customerConfirmed']),
         ];
     }
 
