@@ -191,6 +191,10 @@ class MWC_Rest2 {
 
     static function tick(WP_REST_Request $q) {
         if (!self::key_ok($q, 'mwc_tick_key')) return new WP_Error('forbidden', 'bad key', ['status' => 403]);
+        // never from a cache (2026-11-24: the host's cache answered the ticker with the same «01:19» for hours, so the
+        // campaigns and the maps schedule never ran)
+        if (!defined('DONOTCACHEPAGE')) define('DONOTCACHEPAGE', true);
+        if (!headers_sent()) { nocache_headers(); header('X-LiteSpeed-Cache-Control: no-cache'); header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0'); }
         update_option('mwc_last_tick', time(), false);
         $GLOBALS['mwc_user_obj'] = MWC_Users::owner() + ['name' => 'النظام'];
         $c = MWC_Campaigns::tick();
