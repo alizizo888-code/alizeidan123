@@ -303,7 +303,7 @@ final class Mutqan_Rest {
         $code = preg_match('~/v/([A-Z0-9]{8})~', (string) $seal, $m) ? $m[1] : '';
         $lines = array_filter([
             '🔔 *طلب جديد — ' . self::order_brand_name($d) . '*',
-            'رقم الطلب: #' . substr((string) $d['id'], -5),
+            'رقم الطلب: #' . Mutqan_Store::num($d),
             '🌐 جاي من: ' . self::origin_text($d),
             !empty($d['clientName']) ? '👤 الاسم: ' . $d['clientName'] : '',
             !empty($d['clientPhone']) ? '📱 الجوال: ' . $d['clientPhone'] : '',

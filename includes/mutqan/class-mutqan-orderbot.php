@@ -180,7 +180,7 @@ final class Mutqan_OrderBot {
     }
 
     private static function alert($o, $title, $body, $event = 'order_bot') {
-        if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert($title . ' #' . substr((string) $o['id'], -5), $body, '#/staff/order/' . $o['id'], $event, 'high', $o['id']); }
+        if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert($title . ' #' . Mutqan_Store::num($o), $body, '#/staff/order/' . $o['id'], $event, 'high', $o['id']); }
     }
 
     /** Does what the message asks. Returns the notes the reply is written from. */

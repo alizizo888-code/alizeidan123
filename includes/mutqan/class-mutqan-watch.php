@@ -149,9 +149,9 @@ final class Mutqan_Watch {
         $body = $why . ($who !== '' ? ' — ' . $who : '');
         $sys = self::sys();
         foreach (['operations', 'supervisor'] as $role) {
-            Mutqan_Store::insert('_push', ['target' => ['role' => $role], 'title' => $title . ' #' . substr($id, -5), 'body' => mb_substr($body, 0, 300), 'url' => '#/staff/order/' . $id, 'sound' => 'bell', 'priority' => 'high', 'event' => $event, 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 2 * 86400)], $sys);
+            Mutqan_Store::insert('_push', ['target' => ['role' => $role], 'title' => $title . ' #' . Mutqan_Store::num($o), 'body' => mb_substr($body, 0, 300), 'url' => '#/staff/order/' . $id, 'sound' => 'bell', 'priority' => 'high', 'event' => $event, 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 2 * 86400)], $sys);
         }
-        if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert($title . ' #' . substr($id, -5), $body, '#/staff/order/' . $id, $event, 'high', $id); }
+        if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert($title . ' #' . Mutqan_Store::num($o), $body, '#/staff/order/' . $id, $event, 'high', $id); }
     }
 
     /**
@@ -171,7 +171,7 @@ final class Mutqan_Watch {
             'statusHistory' => array_merge((array) ($o['statusHistory'] ?? []), [['status' => 'new', 'at' => $at, 'by' => 'transfer', 'note' => ($o['technicianName'] ?? 'الفني') . ' ما قبلش خلال المهلة']]),
             'transferLog' => array_merge((array) ($o['transferLog'] ?? []), [['from' => 'technician', 'to' => 'operations', 'at' => $at, 'by' => 'transfer', 'note' => (string) ($o['technicianName'] ?? '')]]),
         ], $sys);
-        Mutqan_Store::insert('_push', ['target' => ['user' => $was], 'title' => '↪️ الطلب #' . substr($id, -5) . ' اتحوّل لفني تاني', 'body' => 'ما اتقبلش خلال المهلة، فاتحوّل لغيرك.', 'url' => '#/staff', 'sound' => 'chime', 'priority' => 'normal', 'event' => 'order_transferred', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 2 * 86400)], $sys);
+        Mutqan_Store::insert('_push', ['target' => ['user' => $was], 'title' => '↪️ الطلب #' . Mutqan_Store::num($o) . ' اتحوّل لفني تاني', 'body' => 'ما اتقبلش خلال المهلة، فاتحوّل لغيرك.', 'url' => '#/staff', 'sound' => 'chime', 'priority' => 'normal', 'event' => 'order_transferred', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 2 * 86400)], $sys);
         $after = Mutqan_Dispatch::dispatch(is_array($back) && !empty($back['id']) ? $back : array_merge($o, ['technicianId' => null, 'skipTechIds' => $skip, 'id' => $id]));
         return is_array($after) && ($after['technicianId'] ?? '') !== $was;
     }

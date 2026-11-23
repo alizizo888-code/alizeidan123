@@ -288,7 +288,7 @@ final class Mutqan_Dispatch {
         $id = (string) ($order['id'] ?? '');
         if ($id === '') { return; }
         foreach (['operations', 'owner'] as $role) {
-            Mutqan_Store::insert('_push', ['target' => ['role' => $role], 'title' => '⚠️ طلب بدون فني #' . substr($id, -5), 'body' => $why, 'url' => '#/staff/order/' . $id, 'sound' => 'bell', 'priority' => 'high', 'event' => 'order_unassigned', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 3 * 86400)], self::sys());
+            Mutqan_Store::insert('_push', ['target' => ['role' => $role], 'title' => '⚠️ طلب بدون فني #' . Mutqan_Store::num($order), 'body' => $why, 'url' => '#/staff/order/' . $id, 'sound' => 'bell', 'priority' => 'high', 'event' => 'order_unassigned', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 3 * 86400)], self::sys());
         }
     }
 
@@ -332,7 +332,7 @@ final class Mutqan_Dispatch {
     public static function tell($old, $doc, $patch, $p, $ownerId) {
         $id = (string) ($doc['id'] ?? '');
         if ($id === '') { return; }
-        $short = '#' . substr($id, -5);
+        $short = '#' . Mutqan_Store::num($doc);
         $byServer = ($p['id'] ?? '') === 'system';
         $sys = self::sys();
         $put = function ($target, $title, $body, $url, $event, $prio = 'high', $sound = 'bell') use ($sys) {
