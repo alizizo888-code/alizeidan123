@@ -260,18 +260,38 @@ final class Mutqan_Dispatch {
         // the stars, the good things they ticked (look, manners, speed…), and no jobs left hanging open on him.
         // With 5 or fewer the work goes to whoever can take it (there is nobody else to choose from).
         if (self::merit_mode($all)) {
-            $traits = 0; $tr = 0;
-            foreach ($rated as $o) { $x = is_array($o['rating'] ?? null) ? (array) ($o['rating']['traits'] ?? []) : (array) ($o['ratingTags'] ?? []); if ($x) { $traits += min(8, count($x)); $tr++; } }
-            $traitS = $tr ? $traits / ($tr * 8) : 0.5;
-            $stuck = count(array_filter($orders, function ($o) use ($t) { return ($o['technicianId'] ?? null) === $t['userId'] && in_array((string) ($o['status'] ?? ''), ['accepted', 'en_route', 'nearby', 'arrived', 'in_progress'], true) && (time() - (strtotime((string) ($o['createdAt'] ?? '')) ?: time())) > 86400; }));
-            $count = min(1, count($rated) / 10);
-            $merit = ($rating ? $rating / 5 : 0.6) * 0.55 + $traitS * 0.2 + $count * 0.1 + max(0, 1 - $stuck * 0.34) * 0.15;
-            $s = $s * 0.55 + $merit * 0.45;
+            $q = self::quality($t, $orders);
+            $s = $s * 0.55 + ($q['score'] / 100) * 0.45;
         }
         if ($pres === 'offline') { $s *= 0.7; }
         // the owner's own push for a technician (−30 … +30), on top of rating and efficiency
         $boost = class_exists('Mutqan_Wallet') ? Mutqan_Wallet::boost((string) ($t['userId'] ?? '')) - Mutqan_Wallet::returns_drag((string) ($t['userId'] ?? ''), $orders) : 0;
         return max(0, (int) round($s * 100) + $boost);
+    }
+
+    /**
+     * «سكور الفني» (owner, 2026-11-23) — 0…100 from what the customers and the work say about him:
+     * the stars (55%), the good things customers ticked — look, manners, speed… (20%), how many rated jobs back it (10%),
+     * jobs left hanging open on him for more than a day (−), jobs only operations could close (−), and returns under
+     * warranty (−). Used in automatic dispatch when more than 5 technicians are active; shown on his performance card.
+     */
+    public static function quality($t, $orders) {
+        $id = (string) ($t['userId'] ?? ($t['id'] ?? ''));
+        $mine = array_values(array_filter((array) $orders, function ($o) use ($id) { return (string) ($o['technicianId'] ?? '') === $id; }));
+        $rated = array_values(array_filter($mine, function ($o) { return self::stars($o) > 0; }));
+        $rating = $rated ? array_sum(array_map([__CLASS__, 'stars'], $rated)) / count($rated) : null;
+        $traits = 0; $tr = 0;
+        foreach ($rated as $o) { $x = is_array($o['rating'] ?? null) ? (array) ($o['rating']['traits'] ?? []) : (array) ($o['ratingTags'] ?? []); if ($x) { $traits += min(8, count($x)); $tr++; } }
+        $stuck = count(array_filter($mine, function ($o) { return in_array((string) ($o['status'] ?? ''), ['accepted', 'en_route', 'nearby', 'arrived', 'in_progress'], true) && (time() - (strtotime((string) ($o['createdAt'] ?? '')) ?: time())) > 86400; }));
+        $done = array_values(array_filter($mine, function ($o) { return in_array((string) ($o['status'] ?? ''), ['completed', 'closed'], true); }));
+        $opsClosed = count(array_filter($done, function ($o) {
+            foreach (array_reverse((array) ($o['statusHistory'] ?? [])) as $h) { if (($h['status'] ?? '') === 'completed') { return in_array((string) ($h['by'] ?? ''), ['operations', 'owner', 'supervisor'], true) && empty($h['actedBy']); } }
+            return false;
+        }));
+        $returns = count(array_filter($mine, function ($o) { return !empty($o['warrantyClaim']) || !empty($o['returnOf']) || !empty($o['complaint']); }));
+        $score = ($rating ? $rating / 5 : 0.6) * 55 + ($tr ? $traits / ($tr * 8) : 0.5) * 20 + min(1, count($rated) / 10) * 10 + 15;
+        $score -= min(15, $stuck * 5) + ($done ? min(15, 30 * $opsClosed / count($done)) : 0) + min(20, $returns * 4);
+        return ['score' => (int) max(0, min(100, round($score))), 'rating' => $rating ? round($rating, 1) : null, 'rated' => count($rated), 'traits' => $tr, 'stuck' => $stuck, 'opsClosed' => $opsClosed, 'returns' => $returns, 'done' => count($done)];
     }
 
     /** pickTechnician() — smart, capacity or nearest. Null when nobody can take it. */

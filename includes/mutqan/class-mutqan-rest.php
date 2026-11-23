@@ -260,6 +260,48 @@ final class Mutqan_Rest {
         return $b && empty($b['core']) ? $b['name'] : 'متقن';
     }
 
+    /**
+     * Every fact of the agreement, for the verification page (owner, 2026-11-23): the seal signs them all, so nobody can
+     * change the number of units, the wash (inside only / inside and outside), the price, the day or the time later.
+     * @return array<int,array{0:string,1:string}> [label, value]
+     */
+    public static function seal_facts($d, $price = null) {
+        $F = [];
+        $add = function ($l, $v) use (&$F) { $v = trim((string) $v); if ($v !== '') { $F[] = [$l, mb_substr($v, 0, 200)]; } };
+        $add('رقم الطلب', '#' . Mutqan_Store::num($d));
+        $add('جهة الطلب', self::origin_text($d));
+        $add('الخدمة', self::spec_label($d['specialtyId'] ?? ''));
+        $add('نوع الطلب', self::kind_label($d));
+        $add('تفاصيل الخدمة', (string) ($d['serviceLabel'] ?? ''));
+        $aq = (array) ($d['acQuote'] ?? []);
+        $items = isset($aq['items']) && is_array($aq['items']) ? $aq['items'] : ($aq ? [$aq] : []);
+        $U = [];
+        foreach ($items as $it) {
+            if (empty($it['type']) && empty($it['qty'])) { continue; }
+            $scope = ($aq['mode'] ?? '') === 'wash' || ($it['mode'] ?? '') === 'wash' ? (array_key_exists('full', $it) ? (!empty($it['full']) ? ' — غسيل داخلي وخارجي' : ' — غسيل داخلي فقط') : '') : '';
+            $U[] = trim((string) ($it['type'] ?? 'مكيف')) . ' × ' . max(1, (int) ($it['qty'] ?? 1)) . $scope;
+        }
+        $add('المكيفات', $U ? implode('، ', $U) : self::units_text($d));
+        $p = $price ?? ((float) ($d['agreedPrice'] ?? 0) ?: (float) ($d['price'] ?? 0));
+        if ((float) $p > 0) { $add('السعر المتفق عليه', rtrim(rtrim(number_format((float) $p, 2, '.', ''), '0'), '.') . ' ر.س'); }
+        $add('الموعد المطلوب', self::when_text($d));
+        $date = empty($d['appointmentAt']) ? self::day_of_text(($d['preferredTime'] ?? '') ?: 'اليوم') : '';
+        $add('تاريخ الموعد', $date);
+        $add('وقت إرسال الطلب', !empty($d['createdAt']) ? self::full_when((string) $d['createdAt']) : self::full_when(gmdate('c')));
+        $add('العنوان', (string) ($d['address'] ?? ''));
+        if (!empty($d['lat']) && !empty($d['lng'])) {
+            $add('تأكيد الموقع', '✅ العميل بعت اللوكيشن بنفسه');
+            $add('اللوكيشن', 'https://maps.google.com/?q=' . round((float) $d['lat'], 5) . ',' . round((float) $d['lng'], 5));
+        }
+        if (!empty($d['customerConfirmed'])) { $add('تأكيد العميل', '✅ العميل أكّد الطلب' . (($d['confirmedVia'] ?? '') === 'whatsapp' ? ' على واتساب' : '')); }
+        // the full name (owner, 2026-11-23: «ادخل الاقي الاسم») — the phone stays masked
+        $add('العميل', (string) ($d['clientName'] ?? ''));
+        $ph = preg_replace('/\D/', '', (string) ($d['clientPhone'] ?? ''));
+        if (strlen($ph) >= 9) { $add('جوال العميل', '•••' . substr($ph, -4)); }
+        $add('ملاحظات', self::note_text($d));
+        return $F;
+    }
+
     /** The full order card (as the customer gets it on WhatsApp), with its verification link — for the hub. */
     public static function order_card($d) {
         $price = (isset($d['price']) && is_numeric($d['price']) && $d['price'] > 0) ? $d['price'] : (Mutqan_Policy::quoted_total($d) ?: null);
