@@ -120,6 +120,10 @@ t('«رجعه» reopens with the discount', orders.o1.status === 'new' && orders
 // ===== D. a problem on site, then done and rated =====
 transcript.push('\n### د) مشكلة عند العميل، وبعدين التنفيذ والتقييم')
 m = await say(ROOM, 'اعتمد 1002', 'الغرفة'); await say(TECH, 'قبلت', 'الفني')
+// a new service while his order is open (live test 2026-11-24): a new booking, not a message to the technician
+m = await say(CUST, 'عايز أغسل مكيف شباك واحد'); await sleep(); m = m.concat(take())
+t('a new service while an order is open → a new booking (price), not relayed to the technician', /طلب جديد/.test(to(m, CUST)) && /ر\.س/.test(to(m, CUST)) && !to(m, TECH), JSON.stringify(m))
+await say(CUST, '0')
 // «فاضل لك قد إيه؟» answered by a number (owner, 2026-11-23)
 m = await say(TECH, '3', 'الفني')
 t('technician «3» → the customer hears he is finishing another job', /لسه بيخلّص شغل قبلك/.test(to(m, CUST)) && /بلّغت العميل/.test(to(m, TECH)), JSON.stringify(m))

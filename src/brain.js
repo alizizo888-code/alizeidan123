@@ -82,6 +82,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   function setStage(phone, orderId, stage) {
     const pk = T.pkey(phone); if (!pk) return
     store.touchChat(pk, { phone: T.intl(phone), stage, orderId: String(orderId || ''), stageAt: now() })
+    // the order asks him something (how he pays, a rating…): a menu left open must not take his «1 / 2 / 3» (live test 2026-11-24)
+    if (['pay', 'paybank', 'rate', 'traits'].includes(stage)) { const c = store.chat(pk); if (c && c.lead) { let L = {}; try { L = JSON.parse(c.lead || '{}') } catch {} if (L.m) { delete L.m; store.touchChat(pk, { lead: JSON.stringify(L) }) } } }
   }
   function stageOf(phone) {
     const c = chatOf(phone)
@@ -478,6 +480,12 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       if (fm.step !== 'home' || (digit && !['pay', 'paybank', 'rate', 'traits', 'winback', 'winback_time', 'confirm'].includes(js))) return flow(c, line, phone, text, name, fm)
     }
     const j = stageOf(phone)
+    // A new service while he has an open order (live test 2026-11-24: «عايز أغسل مكيف شباك» went to the technician as a
+    // message): a new booking, said plainly — his open order stays as it is.
+    if (j && j.o && ['live', 'confirm'].includes(j.s) && (M.parseAc(text).found || /(عايز|عاوز|ابغي|ابغى|محتاج|حابب)\s*(اغسل|غسيل|اركب|تركيب|اصلح|صيانه|صيانة|افك|فك|انقل|نقل)/.test(T.norm(text)))) {
+      say(phone, line, 'تمام 🌷 ده هيبقى *طلب جديد*، وطلبك المفتوح زي ما هو.')
+      return startFrom(c, line, phone, text, name)
+    }
     if (j && j.o) {
       // The order's own conversation: at once — unless a person is talking to him right now.
       const go = async (t) => {
