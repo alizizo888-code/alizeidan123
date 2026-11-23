@@ -107,7 +107,9 @@ final class Mutqan_Shop {
     }
     private static function seal_for_order_new($doc, $price) {
         $f = ['service' => mb_substr(wp_strip_all_tags((string) ($doc['specialtyLabel'] ?? $doc['specialtyId'] ?? '')), 0, 120), 'price' => max(0, (int) round((float) $price)),
-            'time' => mb_substr(wp_strip_all_tags((string) ($doc['preferredTime'] ?? '')), 0, 80), 'address' => mb_substr(wp_strip_all_tags((string) ($doc['address'] ?? '')), 0, 200), 'ref' => substr((string) ($doc['id'] ?? ''), -5)];
+            'time' => mb_substr(wp_strip_all_tags((string) ($doc['preferredTime'] ?? '')), 0, 80), 'address' => mb_substr(wp_strip_all_tags((string) ($doc['address'] ?? '')), 0, 200), 'ref' => Mutqan_Store::num($doc)];
+        // every fact of the agreement, signed with the rest (owner, 2026-11-23)
+        if (class_exists('Mutqan_Rest')) { try { $f['facts'] = Mutqan_Rest::seal_facts($doc, $price); } catch (Throwable $e) { /* the short seal still holds */ } }
         if ($f['service'] === '') { return ''; }
         $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; $code = '';
         for ($i = 0; $i < 8; $i++) { $code .= $alphabet[random_int(0, strlen($alphabet) - 1)]; }
@@ -131,7 +133,14 @@ final class Mutqan_Shop {
         $map = ['verified' => ['✅ طلب موثّق', '#0a7d3b', 'بيانات الطلب مطابقة لما سُجّل في النظام.'], 'invalid' => ['⚠️ طلب غير مطابق (غلط)', '#b3261e', 'الرابط لا يطابق بيانات الطلب المسجّلة. لا تعتمد على الرسالة.'], 'missing' => ['❌ طلب غير موجود', '#6b6b6b', 'لا يوجد طلب بهذا الكود.']];
         $m = $map[$st];
         $rows = '';
-        if ($f) {
+        if ($f && !empty($f['facts']) && is_array($f['facts'])) {
+            foreach ($f['facts'] as $row) {
+                if (!is_array($row) || count($row) < 2) { continue; }
+                $v = (string) $row[1];
+                $cell = preg_match('#^https://maps\.google\.com/#', $v) ? '<a href="' . esc_url($v) . '" target="_blank" rel="noopener">📍 افتح على الخريطة</a>' : esc_html($v);
+                $rows .= '<tr><td>' . esc_html((string) $row[0]) . '</td><td><b>' . $cell . '</b></td></tr>';
+            }
+        } elseif ($f) {
             $L = ['service' => 'الخدمة', 'price' => 'السعر', 'time' => 'الموعد', 'address' => 'الموقع', 'ref' => 'رقم الطلب'];
             foreach ($L as $k => $lab) {
                 if (!isset($f[$k]) || $f[$k] === '' || ($k === 'price' && !$f[$k])) { continue; }
@@ -145,7 +154,7 @@ final class Mutqan_Shop {
         echo '<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>توثيق الطلب</title>'
             . '<body style="font-family:Tahoma,sans-serif;background:#eef4fb;margin:0;padding:24px"><div style="max-width:440px;margin:auto;background:#fff;border-radius:16px;padding:24px;box-shadow:0 4px 18px #0002;border-top:8px solid ' . $m[1] . '">'
             . '<h1 style="margin:0 0 8px;color:' . $m[1] . ';font-size:24px">' . $m[0] . '</h1><p style="color:#444">' . $m[2] . '</p>'
-            . ($rows ? '<table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:15px">' . str_replace('<td>', '<td style="padding:8px;border-bottom:1px solid #eee">', $rows) . '</table>' : '')
+            . ($rows ? '<table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:15px">' . str_replace('<td>', '<td style="padding:8px;border-bottom:1px solid #eee;vertical-align:top">', $rows) . (!empty($f['at']) ? '<p style="color:#888;font-size:12px;margin-top:12px">اتسجّل في النظام: ' . esc_html(wp_date('Y-m-d H:i', strtotime((string) $f['at']))) . ' — أي تغيير في البيانات بعد كده بيخلي الرابط «غير مطابق».</p>' : '') . '</table>' : '')
             . '</div></body></html>';
         exit;
     }

@@ -203,7 +203,8 @@ final class Mutqan_Hub {
             // no low rating, and who did not chase the technician twice or more
             case 'traits_ask': {
                 $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
-                if (!$o || (int) ($in['stars'] ?? 0) < 4 || !empty($o['complaint']) || (int) ($o['nudges'] ?? 0) >= 2 || !empty($o['rating']['traits'])) { return null; }
+                $hard = array_intersect((array) ($o['techOnClient']['tags'] ?? []), ['صعب التعامل', 'بيفاصل في السعر']);   // the technician's own word on him
+                if (!$o || (int) ($in['stars'] ?? 0) < 4 || !empty($o['complaint']) || (int) ($o['nudges'] ?? 0) >= 2 || !empty($o['rating']['traits']) || $hard || !empty($o['warrantyClaim']) || !empty($o['escalation'])) { return null; }
                 $tn = trim(preg_replace('/^الفن[يى]\s+/u', '', (string) ($o['technicianName'] ?? '')));
                 return ['text' => "🌟 سؤال أخير يفرّق معانا" . ($tn !== '' ? ' ويفرّح ' . $tn : '') . ":\nإيه أكتر حاجة عجبتك في الفني" . ($tn !== '' ? ' ' . $tn : '') . "؟ اكتب الأرقام اللي تنطبق (مثال: *1 4 6*)\n"
                     . "1️⃣ مظهره وشكله 👔\n2️⃣ نظافته وريحته الحلوة 🌸\n3️⃣ هادي ومش رغّاي 🤫\n4️⃣ أسلوبه وطريقة كلامه 💬\n5️⃣ سريع ⚡\n6️⃣ أكسجين في شغله 🛠️\n7️⃣ أمين 🤝\n8️⃣ مؤدب ولبق 🌷\n\nتقييمك بيوصل للفني نفسه، وبيفرّق في جودة الخدمة 💚", 'traits' => self::TRAITS];
