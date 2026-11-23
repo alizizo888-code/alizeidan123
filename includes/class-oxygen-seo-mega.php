@@ -19,7 +19,7 @@ class Oxygen_SEO_Mega {
         return $m[$sid] ?? $sid;
     }
     /** How a service reads next to a brand name ("صيانة ثلاجات LG"). */
-    private static function brand_phrase($sid, $b) {
+    public static function brand_phrase($sid, $b) {
         static $m = ['ac-wash' => 'غسيل مكيفات {b}', 'ac-maint' => 'صيانة مكيفات {b}', 'ac-install' => 'تركيب مكيفات {b}', 'ac-central' => 'صيانة تكييف {b} المركزي', 'plumbing' => 'صيانة سخانات ومضخات {b}',
             'fridge' => 'صيانة ثلاجات {b}', 'appliances' => 'صيانة أجهزة {b}', 'cameras' => 'تركيب كاميرات {b}', 'locks' => 'تركيب أقفال {b}', 'solar' => 'تركيب أنظمة {b} للطاقة الشمسية',
             'satellite' => 'تركيب أجهزة {b}', 'paint' => 'دهانات {b}', 'tiling' => 'تركيب مواد {b}'];

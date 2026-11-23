@@ -194,6 +194,9 @@ final class Mutqan_Hub {
     public static function op($op, $in) {
         switch ($op) {
             case 'order': { $o = self::order_by($in); return $o ? self::view($o) : null; }
+            // «جلب العملاء» (Mutqan_Growth): what follows a good rating (Google review, referral link), and a referral code seen in a message.
+            case 'after_rating': { if (!class_exists('Mutqan_Growth')) { return ['text' => '']; } $o = self::need($in); return ['text' => Mutqan_Growth::after_rating($o, (int) ($in['stars'] ?? 0))]; }
+            case 'referral': { return ['code' => class_exists('Mutqan_Growth') ? Mutqan_Growth::note_referral((string) ($in['phone'] ?? ''), (string) ($in['text'] ?? '')) : null]; }
             // «طرق الدفع» asked again on WhatsApp: the message with the link for his latest unpaid order, or null (the usual answer then).
             case 'paylink': {
                 if (!class_exists('Mutqan_PayChoice')) { return null; }
@@ -256,6 +259,8 @@ final class Mutqan_Hub {
             // The WhatsApp menu's price: counted by type (split / window / other), priced by the owner's table — never by a model.
             case 'ac_price': return self::ac_price($in);
             case 'ac_table': return ['text' => self::ac_table_text()];
+            // the big units' rough range + inspection fee, when the owner set them (Mutqan_Policy::big_price_text)
+            case 'big_price': return ['text' => Mutqan_Policy::big_price_text((string) ($in['type'] ?? ''), (int) ($in['count'] ?? 1))];
             case 'parts': return self::parts_answer((string) ($in['text'] ?? '')) + ['strategy' => self::part_strategy()];
             case 'events': return ['events' => self::take_queue()];
             case 'ping': return ['ok' => true, 'site' => home_url('/')];

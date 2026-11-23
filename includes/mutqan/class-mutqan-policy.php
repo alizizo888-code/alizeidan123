@@ -45,6 +45,8 @@ final class Mutqan_Policy {
                 'call_log' => ['read', 'write', 'write', 'write'], 'call_contacts' => ['read', 'write', 'write', 'write'],
                 'notifications' => ['creator_or_read', 'authed', 'target_or_write', 'write'],
                 'warranties' => ['read', 'write', 'write', 'owner'],
+                // Yearly maintenance contracts (Mutqan_Growth, owner 2026-11-23): the office writes them, visits become orders.
+                'contracts' => ['read', 'write', 'write', 'owner'],
                 'warranty_claims' => ['creator_or_read', 'authed', 'write', 'write'],
                 'wa_threads' => ['read', 'write', 'write', 'write'], 'wa_msgs' => ['read', 'write', 'write', 'write'], 'wa_bot' => ['read', 'write', 'write', 'write'],
                 'wa_outbox' => ['read', 'write', 'write', 'write'],
@@ -448,10 +450,29 @@ final class Mutqan_Policy {
     public static function ac_table() {
         $row = Mutqan_Store::get_raw('pricing', 'ac_calc') ?: [];
         $d = ['split1' => 100, 'split2' => 140, 'split3' => 200, 'win1' => 60, 'win2' => 100, 'win3' => 150, 'winExtra' => 50, 'other1' => 180,
-              'innerOff1' => 10, 'innerOff2' => 20, 'innerOff3' => 40, 'w1' => 10, 'w2' => 20, 'w3' => 30, 'vatPct' => 15, 'maxDiscountPct' => 10];
+              'innerOff1' => 10, 'innerOff2' => 20, 'innerOff3' => 40, 'w1' => 10, 'w2' => 20, 'w3' => 30, 'vatPct' => 15, 'maxDiscountPct' => 10,
+              // big units (owner, 2026-11-23): inspection fee + rough range per unit; 0 = not set
+              'bigInspectFee' => 0, 'concealedFrom' => 0, 'concealedTo' => 0, 'ductFrom' => 0, 'ductTo' => 0, 'packageFrom' => 0, 'packageTo' => 0, 'centralFrom' => 0, 'centralTo' => 0];
         $c = [];
         foreach ($d as $k => $fb) { $c[$k] = (isset($row[$k]) && is_numeric($row[$k])) ? max(0, (float) $row[$k]) : (float) $fb; }
         return $c;
+    }
+
+    /**
+     * The big units' price words (owner, 2026-11-23): «السعر التقريبي من X لـ Y ر.س للوحدة، والمعاينة Z ر.س وبتتخصم لو نفذنا».
+     * '' when the owner hasn't set a range for that type — the old «بعد المعاينة» then.
+     */
+    public static function big_price_text($type, $count = 1) {
+        $c = self::ac_table();
+        $t = in_array($type, ['concealed', 'duct', 'package', 'central'], true) ? $type : (in_array($type, ['standing', 'cassette'], true) ? 'concealed' : '');
+        if ($t === '') { return ''; }
+        $from = (float) $c[$t . 'From']; $to = (float) $c[$t . 'To']; $fee = (float) $c['bigInspectFee'];
+        if ($from <= 0 && $fee <= 0) { return ''; }
+        $n = max(1, (int) $count);
+        $L = [];
+        if ($from > 0) { $L[] = 'السعر التقريبي ' . ($to > $from ? 'من ' . (int) $from . ' لـ ' . (int) $to : 'يبدأ من ' . (int) $from) . ' ر.س للوحدة' . ($n > 1 ? ' (حوالي ' . (int) ($from * $n) . ($to > $from ? '–' . (int) ($to * $n) : '') . ' ر.س لـ ' . $n . ' وحدات)' : ''); }
+        if ($fee > 0) { $L[] = 'المعاينة ' . (int) $fee . ' ر.س وبتتخصم من الفاتورة لو نفذنا'; }
+        return implode('، ', $L) . '. السعر النهائي بيتأكد بعد المعاينة وقبل أي شغل.';
     }
 
     /** Port of pricing.js computeQuote (without add-ons): the lowest total negotiation may reach. */
@@ -516,7 +537,9 @@ final class Mutqan_Policy {
         }
         $row = Mutqan_Store::get_raw('pricing', 'ac_calc') ?: [];
         $d = ['split1' => 100, 'split2' => 140, 'split3' => 200, 'win1' => 60, 'win2' => 100, 'win3' => 150, 'winExtra' => 50, 'other1' => 180,
-              'innerOff1' => 10, 'innerOff2' => 20, 'innerOff3' => 40, 'w1' => 10, 'w2' => 20, 'w3' => 30, 'vatPct' => 15, 'maxDiscountPct' => 10];
+              'innerOff1' => 10, 'innerOff2' => 20, 'innerOff3' => 40, 'w1' => 10, 'w2' => 20, 'w3' => 30, 'vatPct' => 15, 'maxDiscountPct' => 10,
+              // big units (owner, 2026-11-23): inspection fee + rough range per unit; 0 = not set
+              'bigInspectFee' => 0, 'concealedFrom' => 0, 'concealedTo' => 0, 'ductFrom' => 0, 'ductTo' => 0, 'packageFrom' => 0, 'packageTo' => 0, 'centralFrom' => 0, 'centralTo' => 0];
         $c = [];
         foreach ($d as $k => $fb) { $c[$k] = (isset($row[$k]) && is_numeric($row[$k])) ? max(0, (float) $row[$k]) : (float) $fb; }
         $mode = (string) ($q['mode'] ?? 'wash');

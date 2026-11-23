@@ -32,6 +32,11 @@ final class Mutqan_AI {
             }
             $L[] = '- باقي الخدمات (زيارة/أول وحدة، والنهائي بعد المعاينة): ' . implode('، ', $other) . ' ر.س.';
             $L[] = '- التركيب والإصلاح: يتسعّر بعد الفحص؛ الكشف مجاني لحد مكيفين.';
+            // the big units' rough range + inspection fee, when the owner set them (owner, 2026-11-23)
+            foreach (['concealed' => 'كونسيلد', 'duct' => 'داكت', 'package' => 'باكيدج', 'central' => 'مركزي'] as $k => $nm) {
+                $bt = Mutqan_Policy::big_price_text($k, 1);
+                if ($bt !== '') { $L[] = '- غسيل/صيانة ' . $nm . ': ' . $bt; }
+            }
         }
         if (class_exists('Mutqan_Hub')) { $L[] = Mutqan_Hub::parts_for_prompt(); }
         return implode("\n", $L);
