@@ -266,12 +266,8 @@ final class Mutqan_Hub {
             }
             // the transfer receipt he sent on WhatsApp: on the order, and operations told
             case 'pay_proof': {
-                $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
-                if (!$o) { return null; }
-                $n = self::num($o + ['id' => (string) $in['id']]);
-                Mutqan_Store::update('orders', (string) $in['id'], ['paymentProof' => ['at' => gmdate('c'), 'via' => 'whatsapp', 'kind' => (string) ($in['kind'] ?? 'image'), 'url' => preg_match('#^https://#', (string) ($in['url'] ?? '')) ? (string) $in['url'] : '']], self::sys());
-                if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert('🧾 العميل بعت إيصال التحويل #' . $n, ((string) ($o['clientName'] ?? '') ?: (string) ($o['clientPhone'] ?? '')) . ' — راجعه في محادثته وأكّد الدفع', '#/staff/order/' . $in['id'], 'order_pay_proof', 'high', (string) $in['id']); }
-                return ['ok' => true];
+                if (class_exists('Mutqan_Proof')) { return Mutqan_Proof::arrived((string) ($in['id'] ?? ''), (string) ($in['kind'] ?? 'image'), (string) ($in['url'] ?? '')); }
+                return null;
             }
             case 'paylink': {
                 if (!class_exists('Mutqan_PayChoice')) { return null; }
