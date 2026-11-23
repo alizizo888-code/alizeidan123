@@ -383,11 +383,14 @@ function fmtListTime(ts) { if (!ts) return ''; const k = fmtDay(ts); return k ==
 function fmtDur(s) { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + pad(s % 60); }
 function fmtPhone(p) { p = String(p || ''); if (p.startsWith('lid:')) return 'رقم مخفي'; if (/^9665\d{8}$/.test(p)) return '+966 ' + p.slice(3, 5) + ' ' + p.slice(5, 8) + ' ' + p.slice(8); return '+' + p; }
 function localPhone(p) { p = String(p || ''); return /^966[15]\d{8}$/.test(p) ? '0' + p.slice(3) : p; }
-function nameOf(c) { return c.name || c.push_name || fmtPhone(c.wa_id); }
+// رقمنا بيكلّم نفسه = محادثة التقارير والملخصات (صاحب الشغل 2026-11-24): اسمها «التقارير» ولوجو تقرير، عشان تتعرف من أول نظرة
+function isReports(c) { if (!c || !c.account_id || !c.wa_id) return false; const a = (S.accounts || []).find(x => +x.id === +c.account_id); const d = s => String(s || '').replace(/\D/g, '').slice(-9); return !!a && d(a.phone) !== '' && d(a.phone) === d(c.wa_id); }
+function nameOf(c) { return isReports(c) ? '📊 التقارير' : (c.name || c.push_name || fmtPhone(c.wa_id)); }
 const COLORS = ['#e17076','#7bc862','#e5ca77','#65aadd','#a695e7','#ee7aae','#6ec9cb','#faa774','#00a884'];
 function colorFor(s) { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) | 0; return COLORS[Math.abs(h) % COLORS.length]; }
 function initials(n) { n = String(n || '').replace(/[+\d\s]/g, '').trim(); if (!n) return '👤'; const p = n.split(/\s+/); return (p[0][0] + (p[1] ? p[1][0] : '')).toUpperCase(); }
 function avatar(c, cls = '') {
+  if (isReports(c)) return `<div class="av ${cls}" style="background:linear-gradient(135deg,#0ea5e9,#10b981)" title="التقارير"><svg viewBox="0 0 24 24" width="60%" height="60%" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 17v-4M12 17V9M16 17v-6"/></svg></div>`;
   const n = nameOf(c);
   return c.avatar ? `<div class="av ${cls}"><img src="${esc(c.avatar)}" alt="" loading="lazy" onerror="this.remove()"></div>`
                   : `<div class="av ${cls}" style="background:${colorFor(c.wa_id || n)}">${esc(initials(n))}</div>`;
