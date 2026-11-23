@@ -181,7 +181,7 @@ final class Mutqan_OrderBot {
         if (get_transient($key)) { return 'already'; }
         if (empty($o['technicianId']) || !in_array((string) ($o['status'] ?? ''), ['assigned', 'accepted', 'en_route', 'nearby'], true)) { return false; }
         set_transient($key, time(), self::ASK_EVERY);
-        self::tell_tech($o, "العميل بيسأل: فاضل لك قد إيه وتوصل؟ رد برقم:\n1️⃣ أنا في الطريق\n2️⃣ قدامي وقت — اكتب الدقايق (مثال: *2 15*)\n3️⃣ لسه في شغل تاني ما خلصتش", 'eta_ask');
+        self::tell_tech($o, "العميل بيسأل: فاضل لك قد إيه وتوصل؟\nاكتب الدقايق (مثال: *15*) · أو *3* لو اتحركت · أو *مشغول* لو لسه في شغل تاني", 'eta_ask');
         return 'asked';
     }
 
