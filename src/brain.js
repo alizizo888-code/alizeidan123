@@ -1195,7 +1195,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (!r || !r.labels) return null
     const L = r.labels.join('، ')
     toTech(o, '🌟 العميل شكر فيك على طلب #' + T.num(o) + ': *' + L + '*\nكمّل كده يا بطل 💚', 'traits-t-' + o.id)
-    toRoom('🌟 تقييم مفصّل لـ' + (o.techName || 'الفني') + ' — طلب #' + T.num(o) + ': ' + L, 'traits-r-' + o.id)
+    toRoom('🌟 تقييم مفصّل للفني ' + String(o.techName || '').replace(/^الفن[يى]\s+/, '') + ' — طلب #' + T.num(o) + ': ' + L, 'traits-r-' + o.id)
     return 'شكرًا ليك من القلب 💚 كلامك وصل للفني وهيفرّحه جدًا.'
   }
 
