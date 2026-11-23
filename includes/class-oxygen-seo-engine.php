@@ -660,6 +660,8 @@ class Oxygen_SEO_Engine {
         if ($nk === '' || !$wc) { return 0.0; }
         return mb_substr_count($t, $nk) * count(preg_split('/\s+/u', $nk)) / $wc * 100;
     }
+    /** sanitize_title outside WordPress too (the test suite loads this class without WordPress) */
+    private static function slugify($s) { return function_exists('sanitize_title') ? sanitize_title($s) : strtolower(rawurlencode(str_replace(' ', '-', trim((string) $s)))); }
     /** A keyword is letters, digits and spaces only, so the address (sanitize_title) carries all of it. */
     public static function clean_kw($kw) { return trim(preg_replace('/\s+/u', ' ', preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', (string) $kw))); }
 
@@ -731,7 +733,7 @@ class Oxygen_SEO_Engine {
                 // the whole keyword has to fit in the address (kw_slug keeps 185 encoded characters): shorter wordings, best first
                 $svs = [$sv]; if (!empty($item['facet']) && mb_substr($sv, -mb_strlen(' ' . $item['facet'])) === ' ' . $item['facet']) { $svs[] = mb_substr($sv, 0, mb_strlen($sv) - mb_strlen(' ' . $item['facet'])); }
                 $pls = [$short]; if (!empty($item['district'])) { $pls[] = 'حي ' . $item['district']; } if (!empty($item['place'])) { $pls[] = $item['place']; } $pls[] = mb_strpos($short, 'جدة') !== false && mb_strpos($short, 'مكة') === false ? 'جدة' : 'مكة';
-                foreach (array_unique($pls) as $b2) { foreach ($svs as $a2) { foreach ([' في ', ' '] as $j) { $c = self::clean_kw($a2 . $j . $b2); if (strlen(sanitize_title($c)) <= 185) { $kw = $c; break 3; } } } }
+                foreach (array_unique($pls) as $b2) { foreach ($svs as $a2) { foreach ([' في ', ' '] as $j) { $c = self::clean_kw($a2 . $j . $b2); if (strlen(self::slugify($c)) <= 185) { $kw = $c; break 3; } } } }
                 if ($kw === '') { $kw = self::clean_kw($sv . ' في ' . $short); }
                 $r = $title;
                 $p = mb_strpos($r, $sv); $r = mb_substr($r, 0, $p) . ' ' . mb_substr($r, $p + mb_strlen($sv));
@@ -764,7 +766,7 @@ class Oxygen_SEO_Engine {
         if ($kw === '') { return (string) $item['key']; }
         // WordPress keeps 200 encoded characters (an Arabic letter takes 6) and Oxygen_Domain_Guard may add «-dN»: stay well under it, cut on a word.
         $w = preg_split('/\s+/u', $kw); $s = '';
-        while ($w) { $s = sanitize_title(implode(' ', $w)); if (strlen($s) <= 185) { break; } array_pop($w); }
+        while ($w) { $s = self::slugify(implode(' ', $w)); if (strlen($s) <= 185) { break; } array_pop($w); }
         return ($s !== '' ? $s : (string) $item['key']) . $tail;
     }
     /** A sub-heading with the exact keyword right after the opening paragraph, when the article has none. */
