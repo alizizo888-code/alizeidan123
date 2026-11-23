@@ -52,7 +52,7 @@ final class Mutqan_Command {
         $str = ['type' => 'string'];
         return [
             ['name' => 'kit_get', 'description' => 'بيانات الخدمة المحفوظة في قاعدة البيانات: فيديوهات الغسيل، أسعار الإصلاح (القطع)، استراتيجية «بنبيع حل العطل»، قواعد الفصال والمواعيد.', 'input_schema' => $s([])],
-            ['name' => 'kit_video', 'description' => 'غيّر أو ضيف فيديو طريقة غسيل: type = split أو window، url، label اختياري. replace=true يستبدل فيديوهات النوع ده.', 'input_schema' => $s(['type' => ['type' => 'string', 'enum' => ['split', 'window']], 'url' => $str, 'label' => $str, 'replace' => ['type' => 'boolean']])],
+            ['name' => 'kit_video', 'description' => 'غيّر أو ضيف فيديو طريقة غسيل: type = split أو window، url، label اختياري. replace=true يستبدل فيديوهات النوع ده. clear=true يمسح كل الفيديوهات (البوت يبطل يبعت لينكات).', 'input_schema' => $s(['type' => ['type' => 'string', 'enum' => ['split', 'window']], 'url' => $str, 'label' => $str, 'replace' => ['type' => 'boolean'], 'clear' => ['type' => 'boolean']])],
             ['name' => 'kit_part', 'description' => 'غيّر سعر إصلاح قطعة أو ضيف قطعة: id (capacitor, thermostat, freon, contactor, power_board, digital_board, fan_motor, fan_blade, compressor أو جديد)، label، from و to (سعر القطعة)، fit (التركيب)، noPrice=true لو السعر بعد الكشف.', 'input_schema' => $s(['id' => $str, 'label' => $str, 'from' => ['type' => 'number'], 'to' => ['type' => 'number'], 'fit' => ['type' => 'number'], 'noPrice' => ['type' => 'boolean']])],
             ['name' => 'kit_strategy', 'description' => 'غيّر الجملة اللي البوت بيقولها للي بيفاصل في سعر قطعة (استراتيجية «بنبيع حل العطل مش القطعة»).', 'input_schema' => $s(['text' => $str])],
             ['name' => 'wa_chats', 'description' => 'اعرض آخر محادثات العملاء على خط واتساب السيرفر بالنص (لمراجعة ردود البوت). phone اختياري لعميل معين، limit عدد المحادثات.', 'input_schema' => $s(['phone' => $str, 'limit' => ['type' => 'number']])],
@@ -169,6 +169,8 @@ final class Mutqan_Command {
         switch ($name) {
             case 'kit_get': return ['text' => Mutqan_Kit::summary()];
             case 'kit_video': {
+                // «امسح لينكات الفيديو» (owner, 2026-11-23): no wash videos at all — the bot stops sending them
+                if (!empty($in['clear'])) { Mutqan_Kit::set(['washVideos' => []], (string) ($p['name'] ?? '')); return ['text' => "✅ اتمسحت كل فيديوهات الغسيل — البوت مش هيبعت لينكات فيديو تاني.\n" . Mutqan_Kit::summary()]; }
                 $url = trim((string) ($in['url'] ?? ''));
                 if (!preg_match('#^https://#', $url)) { throw new Exception('اللينك لازم يبدأ بـ https://'); }
                 $type = ($in['type'] ?? 'split') === 'window' ? 'window' : 'split';
