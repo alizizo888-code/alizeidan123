@@ -177,6 +177,47 @@ class MWC_Leads {
         return $r ? self::out($r) : null;
     }
 
+    /**
+     * «شيت عملائنا» (صاحب الشغل 2026-11-24): كل واحد كلّمنا على أي واتساب من واتساباتنا بيدخل قاعدة العملاء لوحده،
+     * تصنيفه «عميل واتساب» ومصدره الواتساب اللي كلّمه — فيطلع شيت لوحده جنب شيت مكة وشيت جدة. أرقامنا والجروبات لأ.
+     */
+    const OWN = 'عميل واتساب';
+    static function from_whatsapp($wa_id, $name = '', $label = '') {
+        global $wpdb;
+        $phone = self::norm($wa_id);
+        if (!$phone || strlen(preg_replace('/\D/', '', (string) $wa_id)) > 15) return false;
+        $ours = $wpdb->get_col("SELECT phone FROM " . MWC_Store::t('accounts'));
+        foreach ($ours as $o) { $o = self::norm($o); if ($o && $o === $phone) return false; }
+        $t = MWC_Store::t('leads');
+        $old = $wpdb->get_row($wpdb->prepare("SELECT id, tags, category FROM $t WHERE phone=%s", $phone), ARRAY_A);
+        $now = time();
+        if ($old) {
+            if (in_array('واتساب', explode(',', (string) $old['tags']), true)) return true;
+            $tags = array_unique(array_filter(array_merge(explode(',', (string) $old['tags']), ['واتساب'])));
+            $wpdb->update($t, ['tags' => implode(',', $tags), 'updated' => $now], ['id' => $old['id']]);
+            return true;
+        }
+        $wpdb->insert($t, ['phone' => $phone, 'name' => mb_substr(sanitize_text_field($name), 0, 200), 'city' => '', 'category' => self::OWN,
+            'source' => mb_substr('واتساب — ' . ($label ?: 'رقمنا'), 0, 200), 'country' => self::country($phone), 'kind' => self::kind($phone),
+            'tags' => 'عملاء,واتساب', 'status' => 'replied', 'notes' => '', 'extra' => '{}', 'created' => $now, 'updated' => $now]);
+        return true;
+    }
+
+    /** مرة واحدة على دفعات: كل اللي كلّمونا قبل كده يدخلوا الشيت (500 في كل نبضة لحد ما يخلصوا). */
+    static function backfill_whatsapp() {
+        global $wpdb;
+        $at = (int) get_option('mwc_wa_backfill', 0);
+        if ($at < 0) return 0;
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT k.id, k.wa_id, k.name, k.push_name, MIN(a.label) label FROM " . MWC_Store::t('contacts') . " k
+            JOIN " . MWC_Store::t('chats') . " c ON c.contact_id=k.id LEFT JOIN " . MWC_Store::t('accounts') . " a ON a.id=c.account_id
+            WHERE k.id>%d AND c.last_in_ts>0 GROUP BY k.id ORDER BY k.id LIMIT 500", $at), ARRAY_A);
+        if (!$rows) { update_option('mwc_wa_backfill', -1, false); return 0; }
+        $n = 0;
+        foreach ($rows as $r) { if (self::from_whatsapp($r['wa_id'], $r['name'] ?: $r['push_name'], $r['label'] ?? '')) $n++; $at = (int) $r['id']; }
+        update_option('mwc_wa_backfill', $at, false);
+        return $n;
+    }
+
     /** لما عميل يرد: نحدّث حالته في قاعدة العملاء والحملة، ونوقف الإرسال لو طلب الإيقاف */
     static function on_incoming($wa_id, $text) {
         global $wpdb;

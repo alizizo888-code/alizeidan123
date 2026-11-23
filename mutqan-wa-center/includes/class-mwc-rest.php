@@ -399,6 +399,7 @@ class MWC_Rest {
                 if (!$src) $src = ['source' => 'واتساب مباشر — ' . ($acc['label'] ?? ''), 'source_url' => ''];
                 MWC_Store::contact_upsert($contact['wa_id'], $src);
             }
+            if ($contact) MWC_Leads::from_whatsapp($contact['wa_id'], $contact['name'] ?: ($contact['push_name'] ?? ''), $acc['label'] ?? '');
             if ($m['type'] === 'text' || $m['type'] === 'template') MWC_Leads::on_incoming($contact['wa_id'] ?? '', $m['body'] ?? '');
             $chat = MWC_Store::chat($chat_id);
             do_action('mwc_incoming', $m + ['id' => $id], $chat, $acc);
