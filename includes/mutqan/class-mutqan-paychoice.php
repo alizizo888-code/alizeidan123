@@ -69,7 +69,7 @@ final class Mutqan_PayChoice {
                 if (!in_array((string) ($m['type'] ?? ''), ['bank_transfer', 'wallet_app'], true)) { continue; }
                 $any = true;   // the owner manages his accounts here: switched-off ones never come back from the quote's list
                 if (!empty($m['deleted']) || (isset($m['enabled']) && !$m['enabled'])) { continue; }
-                $a = ['name' => (string) ($m['bankName'] ?? '') ?: (string) ($m['name'] ?? 'حساب'), 'iban' => preg_replace('/\s+/', '', (string) ($m['iban'] ?? '')), 'number' => (string) ($m['accountNumber'] ?? ''), 'wallet' => (string) ($m['walletPhone'] ?? ''), 'holder' => (string) ($m['accountHolder'] ?? ''), 'qr' => preg_match('#^https://#', (string) ($m['qrUrl'] ?? '')) ? (string) $m['qrUrl'] : '', 'sort' => (int) ($m['sort'] ?? 99)];
+                $a = ['name' => (string) ($m['bankName'] ?? '') ?: (string) ($m['name'] ?? 'حساب'), 'iban' => preg_replace('/\s+/', '', (string) ($m['iban'] ?? '')), 'number' => (string) ($m['accountNumber'] ?? ''), 'wallet' => (string) ($m['walletPhone'] ?? ''), 'holder' => (string) ($m['accountHolder'] ?? ''), 'qr' => (($m['showQr'] ?? true) !== false && preg_match('#^https://#', (string) ($m['qrUrl'] ?? ''))) ? (string) $m['qrUrl'] : '', 'sort' => (int) ($m['sort'] ?? 99)];
                 if ($a['iban'] === '' && $a['number'] === '' && $a['wallet'] === '') { continue; }
                 $L[] = $a;
             }
