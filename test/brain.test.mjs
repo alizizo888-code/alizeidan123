@@ -168,6 +168,13 @@ t('…«1» → the same service again, straight into it', /غسيل مكيفا�
 brain.contact(FRIEND, 'خالي محمد')
 m = await say(FRIEND, 'إزيك يا علي عامل ايه')
 t('a name saved in the phone, not from our sites: left alone', !to(m, FRIEND) && store.chat(T.pkey(FRIEND)).kind === 'personal', JSON.stringify(m))
+// live test 2026-11-23: someone in the phone's contacts whom the bot already quoted, writing a bare «1» later, is not «personal»
+const KNOWN = '0533333377'
+brain.contact(KNOWN, 'عميل معروف')
+await say(KNOWN, 'عايز اغسل مكيف سبليت'); await sleep(); take()
+store.touchChat(T.pkey(KNOWN), { lead: '{}' })
+m = await say(KNOWN, '1')
+t('a contact the bot already served: a bare «1» does not make him personal', store.chat(T.pkey(KNOWN)).kind !== 'personal', JSON.stringify(store.chat(T.pkey(KNOWN))))
 m = await say(NEW.replace(/9$/, '8'), 'عايز اغسل مكيف سبليت')
 t('a full request: welcome and the price at once, no waiting', /مرحبًا بكم/.test(m.map((x) => x.text).join()) && /\*100 ر\.س\*/.test(m.map((x) => x.text).join()), JSON.stringify(m))
 await brain.inbound({ line: 'l1', phone: NEW.replace(/9$/, '8'), text: 'أهلا بيك يا فندم، في أي حي؟', fromMe: true })
