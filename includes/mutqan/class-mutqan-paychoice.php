@@ -44,7 +44,7 @@ final class Mutqan_PayChoice {
         return "💳 *طرق الدفع — طلب #" . $n . "*\n"
             . ($amt > 0 ? 'المبلغ: *' . rtrim(rtrim(number_format($amt, 2, '.', ''), '0'), '.') . " ر.س*\n" : '')
             . "اختار طريقة الدفع اللي تناسبك من هنا 👇\n" . self::link($o)
-            . "\n\nالرسالة دي بتتمسح لوحدها بعد يومين — لو احتجتها تاني اكتب *طرق الدفع*.";
+            . "\n\nلو احتجت طرق الدفع تاني اكتب *طرق الدفع* 🌷";
     }
 
     /* ---------------------------------------------------------------- the WhatsApp menu before the rating (owner, 2026-11-23)
@@ -60,6 +60,52 @@ final class Mutqan_PayChoice {
     }
 
     private static function money($v) { return rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.'); }
+
+    /** The company's transfer accounts: [{name, iban, number, wallet, holder, qr}] from «طرق الدفع», else the quote's banks. */
+    public static function accounts() {
+        $L = [];
+        try {
+            foreach (Mutqan_Store::select('payment_methods', [], ['limit' => 100], self::sys()) as $m) {
+                if (!empty($m['deleted']) || (isset($m['enabled']) && !$m['enabled'])) { continue; }
+                if (!in_array((string) ($m['type'] ?? ''), ['bank_transfer', 'wallet_app'], true)) { continue; }
+                $a = ['name' => (string) ($m['bankName'] ?? '') ?: (string) ($m['name'] ?? 'حساب'), 'iban' => preg_replace('/\s+/', '', (string) ($m['iban'] ?? '')), 'number' => (string) ($m['accountNumber'] ?? ''), 'wallet' => (string) ($m['walletPhone'] ?? ''), 'holder' => (string) ($m['accountHolder'] ?? ''), 'qr' => preg_match('#^https://#', (string) ($m['qrUrl'] ?? '')) ? (string) $m['qrUrl'] : '', 'sort' => (int) ($m['sort'] ?? 99)];
+                if ($a['iban'] === '' && $a['number'] === '' && $a['wallet'] === '') { continue; }
+                $L[] = $a;
+            }
+            usort($L, function ($x, $y) { return $x['sort'] <=> $y['sort']; });
+        } catch (Throwable $e) { /* fall back below */ }
+        if (!$L && class_exists('Mutqan_Quote')) {
+            try { $c = Mutqan_Quote::company(); foreach ((array) ($c['banks'] ?? []) as $b) { if (!empty($b['iban'])) { $L[] = ['name' => (string) $b['bank'], 'iban' => preg_replace('/\s+/', '', (string) $b['iban']), 'number' => '', 'wallet' => '', 'holder' => (string) ($c['nameAr'] ?? ''), 'qr' => '', 'sort' => 99]; } } } catch (Throwable $e) { /* none */ }
+        }
+        return array_values($L);
+    }
+
+    /** «2» → which bank: the list by number. */
+    public static function banks_menu($o) {
+        $L = self::accounts();
+        if (!$L) { return ''; }
+        $amt = self::amount($o);
+        $out = '🏦 اختار البنك اللي هتحوّل عليه' . ($amt > 0 ? ' — المبلغ *' . self::money($amt) . ' ر.س*' : '') . ":\n";
+        foreach ($L as $i => $a) { $out .= ($i + 1) . '️⃣ ' . $a['name'] . "\n"; }
+        return rtrim($out);
+    }
+
+    /** One bank, the way he copies it: the details, the IBAN alone (one tap to copy), the QR image when saved. */
+    public static function bank_details($o, $idx) {
+        $L = self::accounts();
+        $a = $L[(int) $idx - 1] ?? null;
+        if (!$a) { return null; }
+        $amt = self::amount($o);
+        $d = '🏦 *' . $a['name'] . '*' . ($amt > 0 ? ' — حوّل *' . self::money($amt) . ' ر.س*' : '') . "\n"
+            . ($a['holder'] !== '' ? 'اسم الحساب: ' . $a['holder'] . "\n" : '')
+            . ($a['number'] !== '' ? 'رقم الحساب: ' . $a['number'] . "\n" : '')
+            . ($a['wallet'] !== '' ? 'رقم المحفظة: ' . $a['wallet'] . "\n" : '')
+            . ($a['iban'] !== '' ? "الآيبان في الرسالة اللي جاية — اضغط عليها مطوّل وانسخها 👇" : '');
+        $msgs = [['text' => trim($d), 'image' => $a['qr']]];
+        if ($a['iban'] !== '') { $msgs[] = ['text' => $a['iban'], 'image' => '']; }
+        $msgs[] = ['text' => "بعد التحويل ابعت هنا *صورة الإيصال* أو ملف التحويل 🌷", 'image' => ''];
+        return ['messages' => $msgs, 'bank' => $a['name']];
+    }
 
     /** The company's transfer accounts, as saved in «طرق الدفع» (payment_methods), else the quote's banks. */
     public static function accounts_text() {
@@ -96,11 +142,13 @@ final class Mutqan_PayChoice {
         $amt = self::amount($o); $tech = (string) ($o['technicianName'] ?? 'الفني');
         if ($method === 'cash') { return ['text' => 'تمام ✅ ادفع' . ($amt > 0 ? ' *' . self::money($amt) . ' ر.س*' : '') . ' كاش للفني ' . $tech . '.', 'purpose' => 'reply']; }
         if ($method === 'transfer') {
+            $menu = self::banks_menu($o);
+            if ($menu !== '') { return ['text' => $menu, 'purpose' => 'reply', 'banks' => count(self::accounts())]; }
             $acc = self::accounts_text();
-            return ['text' => ($acc !== '' ? "تمام ✅ دي حساباتنا للتحويل" . ($amt > 0 ? ' — المبلغ *' . self::money($amt) . ' ر.س*' : '') . ":\n\n" . $acc : 'تمام ✅ موظف هيبعتلك حسابات التحويل حالًا.') . "\n\nبعد التحويل ابعت صورة الإيصال هنا 🌷\nالرسالة دي بتتمسح لوحدها بعد يومين — لو احتجتها تاني اكتب *طرق الدفع*.", 'purpose' => 'paylink'];
+            return ['text' => ($acc !== '' ? "تمام ✅ دي حساباتنا للتحويل" . ($amt > 0 ? ' — المبلغ *' . self::money($amt) . ' ر.س*' : '') . ":\n\n" . $acc : 'تمام ✅ موظف هيبعتلك حسابات التحويل حالًا.') . "\n\nبعد التحويل ابعت صورة الإيصال هنا 🌷 أو ملف التحويل.", 'purpose' => 'paylink'];
         }
         Mutqan_Store::update('orders', (string) $o['id'], ['paylinkSentAt' => gmdate('c')], self::sys());
-        return ['text' => "🔒 *بوابة الدفع الآمنة* — طلب #" . $n . ($amt > 0 ? ' — *' . self::money($amt) . ' ر.س*' : '') . "\nادفع بالفيزا / مدى أو بحساباتك الأونلاين من هنا 👇\n" . self::link($o + ['payToken' => self::token($o)]) . "\n\nالرسالة دي بتتمسح لوحدها بعد يومين — لو احتجتها تاني اكتب *طرق الدفع*.", 'purpose' => 'paylink'];
+        return ['text' => "🔒 *بوابة الدفع الآمنة* — طلب #" . $n . ($amt > 0 ? ' — *' . self::money($amt) . ' ر.س*' : '') . "\nادفع بالفيزا / مدى أو بحساباتك الأونلاين من هنا 👇\n" . self::link($o + ['payToken' => self::token($o)]), 'purpose' => 'paylink'];
     }
 
     /** Sends it now (the hub marks it to be deleted for everyone later). True when handed over. */
