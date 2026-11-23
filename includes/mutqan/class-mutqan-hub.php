@@ -796,6 +796,18 @@ final class Mutqan_Hub {
         return (array) ($j['chats'] ?? []);
     }
 
+    /** How the hub sees one number (owner's diagnosis): chat record, who it is, the test phone, the log lines about it. */
+    public static function diag($phone) {
+        $c = self::cfg();
+        if ((string) $c['url'] === '' || strlen((string) $c['secret']) < 32) { throw new Mutqan_Error('hub_off', 'مركز الواتساب مش مربوط.', 400); }
+        $raw = wp_json_encode(['ts' => time(), 'phone' => (string) $phone]);
+        $r = wp_remote_post(rtrim((string) $c['url'], '/') . '/wp/diag', ['timeout' => 15, 'headers' => ['content-type' => 'application/json', 'x-mq-hub' => hash_hmac('sha256', $raw, (string) $c['secret'])], 'body' => $raw]);
+        if (is_wp_error($r)) { throw new Mutqan_Error('hub_down', 'مركز الواتساب مش بيرد: ' . $r->get_error_message(), 502); }
+        $j = json_decode((string) wp_remote_retrieve_body($r), true);
+        if ((int) wp_remote_retrieve_response_code($r) !== 200 || !is_array($j)) { throw new Mutqan_Error('hub_down', 'مركز الواتساب رد بخطأ ' . wp_remote_retrieve_response_code($r), 502); }
+        return $j;
+    }
+
     public static function status() { $c = self::cfg(); return ['on' => self::on(), 'url' => (string) $c['url'], 'paired' => strlen((string) $c['secret']) >= 32, 'queued' => count((array) get_option(self::QUEUE, []))]; }
 
     /** POST /hubadmin {op: status|pair|on|off} — the owner only. */
@@ -804,6 +816,8 @@ final class Mutqan_Hub {
         $op = (string) ($in['op'] ?? 'status');
         if ($op === 'pair') { return self::pair((string) ($in['url'] ?? ''), (string) ($in['pairToken'] ?? '')); }
         if ($op === 'on' || $op === 'off') { return self::set_on($op === 'on'); }
+        if ($op === 'chats') { return ['chats' => self::chats((string) ($in['phone'] ?? ''), (int) ($in['limit'] ?? 3), (int) ($in['msgs'] ?? 40))]; }
+        if ($op === 'diag') { return self::diag((string) ($in['phone'] ?? '')); }
         return self::status();
     }
 }
