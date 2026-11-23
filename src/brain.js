@@ -356,7 +356,14 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   /** The same answers as the site chat (the site's shared brain): an order by its number, payment, warranty, offers. */
   async function sharedAnswer(line, phone, text) {
     const n = T.norm(text); const it = T.intent(text)
-    if (!(/(طلب|رقم|#)\s*#?\s*\d{3,7}/.test(n) || ['pay', 'warranty'].includes(it) || /^(العروض|عروض|الخصومات|في عروض|فيه عروض|عندكم عروض|طرق الدفع|الضمان)$/.test(n))) return false
+    if (!(/(طلب|رقم|#)\s*#?\s*\d{3,7}/.test(n) || ['pay', 'warranty'].includes(it) || /^(العروض|عروض|الخصومات|في عروض|فيه عروض|عندكم عروض|طرق الدفع|الضمان)$/.test(n) || /طرق الدفع|طريقه الدفع|رابط الدفع/.test(n))) return false
+    // «طرق الدفع» again (owner, 2026-11-23): the payment-methods link of his unpaid order is sent anew — it is deleted for
+    // everyone two days after each send (revoke.js), so asking is how he gets it back.
+    if (it === 'pay' || /طرق الدفع|طريقه الدفع|رابط الدفع|حساباتكم|رقم الحساب/.test(n)) {
+      let pl = null
+      try { pl = await wp('paylink', { phone: T.intl(phone) }) } catch (e) { log('warn', 'paylink: ' + e.message) }
+      if (pl && pl.text) { send(T.intl(phone), pl.text, { line, purpose: 'paylink' }); return true }
+    }
     let a = null
     try { a = await wp('answer', { phone: T.intl(phone), text, brand: store.line?.(line)?.brand || '' }) } catch (e) { log('warn', 'answer: ' + e.message) }
     if (!a || !a.reply) return false

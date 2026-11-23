@@ -168,5 +168,14 @@ export function createLines({ dataDir, onMessage, onStatus, onContact, log = pin
     return { waId: sent?.key?.id || '' }
   }
 
-  return { start, stop, sendText, view, isOpen: (id) => S.get(id)?.status === 'open', ids: () => [...S.keys()] }
+  /** «Delete for everyone» for a message this line sent (within WhatsApp's window). */
+  async function revoke(id, to, waId) {
+    const st = S.get(id)
+    if (!st || st.status !== 'open' || !waId) throw new Error('الخط مش متصل')
+    const jid = toJid(to)
+    await st.sock.sendMessage(jid, { delete: { remoteJid: jid, fromMe: true, id: String(waId) } })
+    return true
+  }
+
+  return { start, stop, sendText, revoke, view, isOpen: (id) => S.get(id)?.status === 'open', ids: () => [...S.keys()] }
 }

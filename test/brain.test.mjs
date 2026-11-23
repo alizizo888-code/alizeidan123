@@ -52,6 +52,7 @@ const wp = async (op, b) => {
   if (op === 'ac_table') return { text: 'جدول المالك' }
   if (op === 'parts') return /مكثف/.test(b.text) ? { text: '🔧 *تغيير المكثف*: *150 ر.س*', image: 'https://oxygen11.com/cap.jpg', parts: ['capacitor'], strategy: 'إحنا مش محل قطع غيار 🙏 بنبيعلك حل العطل' } : { text: '🔧 *أسعار الإصلاح*', parts: [], strategy: 'إحنا مش محل قطع غيار' }
   if (op === 'cancel' && SITE.on) { const o = orders[b.id]; if (['accepted', 'en_route', 'nearby', 'arrived', 'in_progress'].includes(o.status)) { o.cancelRequest = { text: b.text }; return { done: 'requested', reply: 'وصلني طلب الإلغاء ✅ الفني كان متحرك لك، فبلّغته يستنى' } } o.status = 'cancelled'; return { done: 'cancelled', reply: 'تم إلغاء طلبك #' + o.number + ' ✅' } }
+  if (op === 'paylink' && SITE.on) { const o = Object.values(orders).find((x) => T.pkey(x.clientPhone) === T.pkey(b.phone) && ['completed', 'closed'].includes(x.status) && !x.paid); return o ? { text: '💳 *طرق الدفع — طلب #' + o.number + '* https://x.test/app/#/pay?o=' + o.id + '&k=abc' } : null }
   if (op === 'answer' && SITE.on) { const m = T.norm(b.text).match(/طلب\s*#?(\d{3,})/); if (m) { const o = Object.values(orders).find((x) => String(x.number) === m[1]); return { reply: o && T.pkey(o.clientPhone) === T.pkey(b.phone) ? 'طلبك #' + o.number + ' — ' + (SL[o.status] || o.status) : 'مش لاقي طلب رقم ' + m[1] + ' على رقمك' } } if (/طرق الدفع/.test(b.text)) return { reply: '💳 *طرق الدفع* (من الموقع)' }; return { reply: null } }
   if (op === 'converse') return AI.on ? { reply: 'أكيد، غسيل المكيف السبليت بـ 120 ر.س للجهاز. في أي حي؟', lead: { service: 'غسيل 2 سبليت', area: AI.area || '', time: AI.time || '' }, complete: !!(AI.area && AI.time) } : null
   return { ok: true }
@@ -415,6 +416,10 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   t('«طلب 1999 وصل لفين؟» → the site\'s answer (same as the site chat)', /طلبك #1999/.test(to(r, SX)), JSON.stringify(r))
   r = await say(SX, 'طرق الدفع'); await sleep(); r = r.concat(take())
   t('«طرق الدفع» → the site\'s text', /من الموقع/.test(to(r, SX)), JSON.stringify(r))
+  orders.oy = { id: 'oy', number: 1998, status: 'completed', techId: 't1', techName: 'الفني علي', clientPhone: SX, clientName: 'سامي', service: 'غسيل مكيف', customerConfirmed: true }
+  r = await say(SX, 'طرق الدفع'); await sleep(); r = r.concat(take())
+  t('«طرق الدفع» with a finished unpaid order → the payment link is sent again, as a «paylink» (deleted in two days)', /#\/pay\?o=oy/.test(to(r, SX)) && r.some((x) => x.purpose === 'paylink'), JSON.stringify(r))
+  orders.oy.paid = true
   r = await say(SX, 'طلب 1002 فين'); await sleep(); r = r.concat(take())
   t('another customer\'s order number is not shown', /مش لاقي/.test(to(r, SX)), JSON.stringify(r))
   r = await say(SX, 'الغي الطلب'); await sleep(); r = r.concat(take())

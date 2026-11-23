@@ -11,6 +11,7 @@ import { createBrain, DEFAULTS } from './brain.js'
 import { intl, pkey } from './text.js'
 import { createChatwoot } from './chatwoot.js'
 import * as OR from './outreach.js'
+import { createRevoker } from './revoke.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 8787)
@@ -113,6 +114,7 @@ async function pump() {
           if (r.skipped) return
           const pk = pkey(row.phone)
           store.addMsg({ pk, line: lineId, dir: 'out', text: row.text, by: row.purpose || 'bot', status: 'sent', waId: r.waId })
+          revoker.remember(row, lineId, r.waId)
           const c = store.chat(pk)
           store.touchChat(pk, { phone: row.phone, line: c?.line || lineId, lastAt: Date.now(), lastText: row.text.slice(0, 200), kind: c?.kind || (['room', 'tech', 'agent'].includes(row.purpose) ? 'team' : 'customer') })
         }, (e) => {
@@ -134,6 +136,7 @@ async function pump() {
         store.outDone(row.id, 'sent'); meta.delete(row.id)
         const pk = pkey(row.phone)
         store.addMsg({ pk, line: lineId, dir: 'out', text: row.text, by: row.purpose || 'bot', status: 'sent', waId: r.waId })
+        revoker.remember(row, lineId, r.waId)
         const c = store.chat(pk)
         store.touchChat(pk, { phone: row.phone, line: c?.line || lineId, lastAt: Date.now(), lastText: row.text.slice(0, 200), kind: c?.kind || (['room', 'tech', 'agent'].includes(row.purpose) ? 'team' : 'customer') })
         cw.mirror(pk, lineId, 'out', row.text, row.purpose)
@@ -145,6 +148,26 @@ async function pump() {
   } finally { pumping = false }
 }
 setInterval(pump, 2000)
+
+// The payment-methods link (and any other message sent to expire) is deleted for everyone before WhatsApp's limit.
+const revoker = createRevoker({ store })
+async function revokeDue() {
+  for (const x of revoker.due()) {
+    try {
+      if (isCenter(x.line)) {
+        if (!CENTER_URL || !CENTER_KEY) continue
+        const r = await fetch(CENTER_URL + '/ext/revoke', { method: 'POST', headers: { 'content-type': 'application/json', 'x-mwc-key': CENTER_KEY }, body: JSON.stringify({ id: Number(String(x.waId).replace(/^mwc/, '')) }), signal: AbortSignal.timeout(30000) })
+        const j = await r.json().catch(() => ({}))
+        if (!j.ok) log('warn', 'revoke ' + x.phone + ': ' + (j.error || r.status))
+      } else if (lines?.revoke) {
+        await lines.revoke(x.line, x.phone, x.waId)
+      }
+      log('chat', 'اتمسحت رسالة عند الجميع (' + x.phone + ')')
+    } catch (e) { log('warn', 'revoke ' + x.phone + ': ' + (e?.message || e)) }
+    revoker.drop(x)   // once: a second try after WhatsApp's limit would fail anyway
+  }
+}
+setInterval(() => revokeDue().catch(() => {}), 300000).unref?.()
 
 const PUBLIC_URL = process.env.PUBLIC_URL || 'https://vps.oxygen11.com'
 const cw = createChatwoot({ store, wp, log, hookBase: PUBLIC_URL })
