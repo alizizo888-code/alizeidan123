@@ -256,6 +256,18 @@ final class Mutqan_Dispatch {
             ? ['dist' => 0.3, 'pres' => 0.2, 'free' => 0.16, 'spec' => 0.12, 'work' => 0.04, 'scope' => 0.04, 'qual' => 0.07, 'prod' => 0.07]
             : ['dist' => 0.22, 'pres' => 0.16, 'free' => 0.12, 'spec' => 0.14, 'work' => 0.1, 'scope' => 0.04, 'qual' => 0.1, 'prod' => 0.12];
         $s = $distS * $w['dist'] + $presS * $w['pres'] + $freeS * $w['free'] + $specS * $w['spec'] + $workS * $w['work'] + $scopeS * $w['scope'] + $qualS * $w['qual'] + $prodS * $w['prod'];
+        // «الأولوية بالتقييم» (owner, 2026-11-23): with more than 5 technicians active, the customers' word decides more —
+        // the stars, the good things they ticked (look, manners, speed…), and no jobs left hanging open on him.
+        // With 5 or fewer the work goes to whoever can take it (there is nobody else to choose from).
+        if (self::merit_mode($all)) {
+            $traits = 0; $tr = 0;
+            foreach ($rated as $o) { $x = is_array($o['rating'] ?? null) ? (array) ($o['rating']['traits'] ?? []) : (array) ($o['ratingTags'] ?? []); if ($x) { $traits += min(8, count($x)); $tr++; } }
+            $traitS = $tr ? $traits / ($tr * 8) : 0.5;
+            $stuck = count(array_filter($orders, function ($o) use ($t) { return ($o['technicianId'] ?? null) === $t['userId'] && in_array((string) ($o['status'] ?? ''), ['accepted', 'en_route', 'nearby', 'arrived', 'in_progress'], true) && (time() - (strtotime((string) ($o['createdAt'] ?? '')) ?: time())) > 86400; }));
+            $count = min(1, count($rated) / 10);
+            $merit = ($rating ? $rating / 5 : 0.6) * 0.55 + $traitS * 0.2 + $count * 0.1 + max(0, 1 - $stuck * 0.34) * 0.15;
+            $s = $s * 0.55 + $merit * 0.45;
+        }
         if ($pres === 'offline') { $s *= 0.7; }
         // the owner's own push for a technician (−30 … +30), on top of rating and efficiency
         $boost = class_exists('Mutqan_Wallet') ? Mutqan_Wallet::boost((string) ($t['userId'] ?? '')) - Mutqan_Wallet::returns_drag((string) ($t['userId'] ?? ''), $orders) : 0;
@@ -263,6 +275,11 @@ final class Mutqan_Dispatch {
     }
 
     /** pickTechnician() — smart, capacity or nearest. Null when nobody can take it. */
+    /** More than 5 technicians active (not offline): the rating weighs in the choice. */
+    public static function merit_mode($techs) {
+        return count(array_filter((array) $techs, function ($t) { return self::presence($t) !== 'offline' && ($t['active'] ?? true) !== false; })) > 5;
+    }
+
     public static function pick($order, $techs, $orders, $strategy = 'smart') {
         // a technician who already reported «couldn't fix it» on this job is not sent back to it
         $skip = self::skipped($order);
