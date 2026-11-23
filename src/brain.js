@@ -562,7 +562,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const vids = (cfg().washVideos || M.WASH_VIDEOS)
     const v = (m.items.split ? vids.find((x) => /سبليت/.test(x.label)) : null) || (m.items.window ? vids.find((x) => /شباك/.test(x.label)) : null)
     if (v && !m.videoSent) { L.push('🎥 شوف طريقة الغسيل عندنا: ' + v.url); m.videoSent = 1; saveFlow(c.pk, m) }
-    L.push('', '1️⃣ تمام، كمّل الحجز', '2️⃣ عايز سعر أحسن', '3️⃣ غيّر العدد أو النوع')
+    // no «عايز سعر أحسن» (owner, 2026-11-23): an open question about the price — the bargaining starts only when he says so
+    L.push('السعر ده مناسب لحضرتك؟ 🌷', '', '1️⃣ تمام، كمّل الحجز', '2️⃣ غيّر العدد أو النوع', '3️⃣ كلّم فني مختص')
     return say(phone, line, L.filter(Boolean).join('\n') + M.FOOT)
   }
 
@@ -709,15 +710,20 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
         let money = T.moneyIn(text)
         if (money && T.isHaggle(text) && money >= m.offer) money = null
         if (k === 1 || (T.isYes(text) && !money)) { m.agreed = m.agreed || m.offer; return askPlace(c, line, phone, m, 'تمام ✅ اتفقنا على *' + m.agreed + ' ر.س*.') }
-        if (k === 3) { m.step = 'wash_type'; m.items = {}; saveFlow(c.pk, m); return say(phone, line, 'نوع المكيفات إيه؟\n' + M.TYPES + M.FOOT) }
-        if (k === 2 || money || T.isHaggle(text)) {
+        if (k === 2) { m.step = 'wash_type'; m.items = {}; saveFlow(c.pk, m); return say(phone, line, 'نوع المكيفات إيه؟\n' + M.TYPES + M.FOOT) }
+        // a specialist (owner, 2026-11-23): at the wall of the bargaining, or whenever he asks — with the deal so far
+        if (k === 3 || k === 7) {
+          saveFlow(c.pk, null)
+          notifyHuman(c, (m.wall ? '💸 عميل وصل لأقل سعر وعايز عرض أحسن' : '🙋 عميل عايز يكلم فني مختص وقت السعر') + ' — ' + m.price.label + ': الرسمي ' + m.price.total + '، آخر عرض ' + m.offer + ' ر.س', false)
+          return say(phone, line, 'تمام 🌷 حوّلتك لفني مختص هيشوفلك العروض المتاحة النهارده ويكلمك هنا حالًا.')
+        }
+        if (money || T.isHaggle(text)) {
           const h = M.haggle(m, money)
           if (h.agreed) return askPlace(c, line, phone, m, h.text)
           saveFlow(c.pk, m)
-          return say(phone, line, h.text + '\n\n1️⃣ تمام بـ ' + m.offer + ' ر.س، كمّل الحجز\n3️⃣ غيّر العدد أو النوع\n7️⃣ كلّم الدعم الفني' + M.FOOT)
+          return say(phone, line, h.text + '\n\n1️⃣ تمام بـ ' + m.offer + ' ر.س، كمّل الحجز\n2️⃣ غيّر العدد أو النوع\n3️⃣ كلّم فني مختص' + M.FOOT)
         }
-        if (k === 7) { saveFlow(c.pk, null); return notifyHuman(c, 'طلب الدعم الفني وقت السعر', true) }
-        return say(phone, line, 'السعر الحالي *' + m.offer + ' ر.س* لـ' + m.price.label + '\n\n1️⃣ تمام، كمّل الحجز\n2️⃣ عايز سعر أحسن\n3️⃣ غيّر العدد أو النوع' + M.FOOT)
+        return say(phone, line, 'السعر الحالي *' + m.offer + ' ر.س* لـ' + m.price.label + ' — مناسب لحضرتك؟ 🌷\n\n'+'1️⃣ تمام، كمّل الحجز\n2️⃣ غيّر العدد أو النوع\n3️⃣ كلّم فني مختص' + M.FOOT)
       }
       case 'rep_type': {
         const ty = M.KIND_OF[k]

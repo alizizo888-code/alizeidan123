@@ -156,10 +156,13 @@ export function haggle(m, money) {
   if (money && money >= m.offer) { m.agreed = m.offer; return { agreed: m.offer, text: 'اتفقنا ✅ *' + m.offer + ' ر.س* لـ' + P.label + '.' } }
   if (money && money >= floor && (m.round || 0) >= 1) { const v = Math.min(m.offer, Math.max(floor, r5(money))); m.agreed = v; m.offer = v; return { agreed: v, text: 'عشان خاطرك 🌷 اتفقنا على *' + v + ' ر.س* لـ' + P.label + '.' } }
   m.round = (m.round || 0) + 1
-  if (floor >= P.total) return { offer: m.offer, text: 'آسفين جدًا 🙏 السعر ده هو السعر الرسمي النهارده ومفيش عليه خصم، وشامل الغسيل الكامل بالمضخة والضمان.' }
+  // the wall (owner, 2026-11-23): no lower price from the bot — a specialist who knows today's offers takes it from here
+  const WALL = '\n\nلو حابب، أحوّلك لـ*فني مختص* يشوفلك العروض اليومية المتاحة — ممكن يكون فيها سعر أحسن 🌷 اكتب *3*.'
+  if (floor >= P.total) { m.wall = 1; return { offer: m.offer, text: 'آسفين جدًا 🙏 السعر ده هو السعر الرسمي النهارده، وشامل الغسيل الكامل بالمضخة والضمان.' + WALL } }
   if (m.round === 1) { m.offer = Math.max(floor, r5(P.total - (P.total - floor) / 2)); return { offer: m.offer, text: (money ? 'للأسف ' + money + ' ر.س أقل من تكلفة الشغل 🙏 ' : '') + 'عشانك نقدر نخليها *' + m.offer + ' ر.س* بدل ' + P.total + '.' } }
   if (m.round === 2) { m.offer = floor; return { offer: floor, text: (money ? 'مقدرش أنزل لـ ' + money + ' 🙏 ' : '') + 'ده آخر سعر نقدر عليه: *' + floor + ' ر.س* — وشامل الضمان والغسيل الكامل.' } }
-  return { offer: m.offer, text: 'آسفين جدًا 🙏 ' + m.offer + ' ر.س هو أقل سعر ممكن، ومقدرش أنزل عنه. لو حابب تكلّم الدعم الفني اكتب *7*.' }
+  m.wall = 1
+  return { offer: m.offer, text: 'وصلنا لأقل سعر عندي 🙏 *' + m.offer + ' ر.س*، ومقدرش أنزل عنه.' + WALL }
 }
 
 /** The appointment choices for the hour it is now (the owner's rule: 7 am–10 pm today, from 11 pm tomorrow). */

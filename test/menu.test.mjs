@@ -26,7 +26,7 @@ h = M.haggle(m, 100); t('100 under the floor → refused, the floor offered', !h
 h = M.haggle(m, 100); t('100 again → still refused', !h.agreed && h.offer === 144, h)
 h = M.haggle(m, 145); t('145 (above our last offer 144) → agreed at 144', h.agreed === 144, h)
 const m2 = { price: { total: 100, floor: 100, label: 'غسيل 1 سبليت' } }
-h = M.haggle(m2, null); t('«ممنوع فصال» (floor = list) → a polite no', !h.agreed && /مفيش عليه خصم/.test(h.text), h)
+h = M.haggle(m2, null); t('«ممنوع فصال» (floor = list) → a polite no', !h.agreed && /السعر الرسمي/.test(h.text) && /فني مختص/.test(h.text), h)
 t('time: 9 am → today options', M.timeChoices(9).mode === 'today' && M.timeChoices(9).opts[0].startsWith('اليوم'))
 t('time: 22 → late, 23 and 2 am → tomorrow', M.timeChoices(22).mode === 'late' && M.timeChoices(23).mode === 'tomorrow' && M.timeChoices(2).opts[0].startsWith('النهارده الصبح'))
 { const p = M.parseAc('غسيل 2 داكت'); t('«2 داكت» → a big unit (survey), not priced as split', p.big === 2 && p.bigType === 'duct' && p.units === 0, p) }
