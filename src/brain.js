@@ -146,6 +146,30 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     arrived: '🏠 الفني {tech} وصل لموقعك.',
   }
 
+  function rateText(o) {
+    const tech = o.techName || ''
+    return '🎉 تم إنجاز طلبك، شكرًا لثقتك' + (o.site ? ' في *' + o.site + '*' : '') + '.\nقيّم الخدمة والفني' + (tech ? ' ' + tech : '') + ' برقم من *1* لـ *5* ⭐ (5 = ممتازة)، ورأيك بيوصل للمدير مباشرة.'
+  }
+  function askRate(o, phone) { setStage(phone, o.id, 'rate'); toCustomer(o, rateText(o), 'rate-' + o.id) }
+
+  /** His answer to «حابب تدفع إزاي؟»: recorded on the site, what he needs now, then the rating. */
+  async function payStage(o, text, phone) {
+    const n = T.norm(text).trim()
+    const m = /^(1|١)$|كاش|نقد|cash|للفني/.test(n) ? 'cash' : /^(2|٢)$|تحويل|بنك|ايبان|حساب|راجحي|اهلي|stc|برق|رياض/.test(n) ? 'transfer' : /^(3|٣)$|بوابه|فيزا|مدي|اونلاين|بطاقه|كارت|ماستر|باي ?بال|paypal|ابل باي/.test(n) ? 'online' : null
+    if (!m) {
+      const k = 'payask:' + o.id
+      if (store.get(k)) { store.set(k, 0); askRate(o, phone); return '' }   // he wants to talk about something else: move on
+      store.set(k, 1)
+      return 'اختار رقم من التلاتة 👇\n1️⃣ كاش للفني\n2️⃣ تحويل بنكي\n3️⃣ بوابة الدفع الآمنة (فيزا / مدى / حسابات أونلاين)'
+    }
+    let r = null
+    try { r = await wp('pay_pick', { id: o.id, method: m }) } catch (e) { log('warn', 'pay_pick: ' + e.message) }
+    if (r && r.text) { const c = chatOf(o.clientPhone); send(T.intl(o.clientPhone), T.sign(o.site || cfg().siteName, r.text), { line: c?.line || o.waLine || '', purpose: r.purpose === 'paylink' ? 'paylink' : 'customer', brand: o.brand }) }
+    toRoom('💳 العميل اختار الدفع: *' + ({ cash: 'كاش للفني', transfer: 'تحويل بنكي', online: 'بوابة الدفع' }[m]) + '* — طلب #' + T.num(o), 'payc-' + o.id + '-' + m)
+    askRate(o, phone)
+    return ''
+  }
+
   function moved(o, was, byCustomer) {
     if (!o || o.status === was) return
     const n = T.num(o); const tech = o.techName || ''; const who = o.clientName || o.clientPhone || ''
@@ -163,9 +187,11 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (st === 'arrived') toRoom('🏠 *الفني ' + tech + ' وصل* لطلب #' + n + ' — ' + who + (o.address ? '\n📍 ' + String(o.address).slice(0, 100) : ''), 'arr-' + o.id)
     if (st === 'completed') {
       toRoom('✅ *تمت المهمة* — طلب #' + n + '\n👤 ' + who + (tech ? '\n👷 الفني: ' + tech : '') + (Number(o.price) > 0 ? '\n💰 ' + o.price + ' ر.س' : '') + '\n⭐ تقييم العميل هيوصلك هنا أول ما يرد.', 'done-' + o.id)
+      // first how he pays (owner, 2026-11-23): 1 cash · 2 transfer · 3 the secure gateway — then the thanks and the rating
       if (phone) {
-        setStage(phone, o.id, 'rate')
-        toCustomer(o, '🎉 تم إنجاز طلبك، شكرًا لثقتك' + (o.site ? ' في *' + o.site + '*' : '') + '.\nقيّم الخدمة والفني' + (tech ? ' ' + tech : '') + ' برقم من *1* لـ *5* ⭐ (5 = ممتازة)، ورأيك بيوصل للمدير مباشرة.', 'rate-' + o.id)
+        wp('pay_menu', { id: o.id }).catch(() => null).then((pm) => {
+          if (pm && pm.text) { setStage(phone, o.id, 'pay'); toCustomer(o, pm.text, 'pay-' + o.id) } else askRate(o, phone)
+        })
       }
     }
     if (st === 'cancelled') {
@@ -387,7 +413,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (fm && !humanActive(c, 10 * 60000) && !(c.botOff && c.botOff > now())) {
       const js = stageOf(phone)?.s
       const digit = M.isMenu(text) || /^\d$/.test(T.norm(text).trim())
-      if (fm.step !== 'home' || (digit && !['rate', 'winback', 'winback_time', 'confirm'].includes(js))) return flow(c, line, phone, text, name, fm)
+      if (fm.step !== 'home' || (digit && !['pay', 'rate', 'winback', 'winback_time', 'confirm'].includes(js))) return flow(c, line, phone, text, name, fm)
     }
     const j = stageOf(phone)
     if (j && j.o) {
@@ -964,6 +990,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
 
   async function journey(stage, o, text, phone) {
     if (stage === 'confirm') return confirmStage(o, text, phone)
+    if (stage === 'pay') return payStage(o, text, phone)
     if (stage === 'rate') return rateStage(o, text, phone)
     if (stage === 'winback' || stage === 'winback_time') return winbackStage(o, text, phone, stage)
     return liveStage(o, text, phone)
