@@ -249,7 +249,10 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (!text && kind !== 'location') return     // a picture or a voice note: a person will look at it
 
     const w = await who(phone)
-    if (w.kind === 'line') { store.touchChat(pk, { kind: 'team', unread: 0 }); return }
+    // the owner's test phone may be one of our own numbers (owner, 2026-11-23: 0536554731 plays the customer in the live
+    // tests) — then it is a customer, not a line of ours to stay quiet with
+    const testing = cfg().testPhone && T.pkey(cfg().testPhone) === pk
+    if (w.kind === 'line' && !testing) { store.touchChat(pk, { kind: 'team', unread: 0 }); return }
     // «إيقاف»: out of every campaign list for good, and told so once.
     if (w.kind === 'customer' && M.isStop(text)) {
       try { await wp('outreach_optout', { phone: T.intl(phone) }) } catch (e) { log('warn', 'optout: ' + e.message) }
@@ -259,7 +262,6 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (w.kind === 'customer' && !store.get('or:' + pk) && store.msgs(pk, 6).some((m) => m.by === 'outreach')) {
       store.set('or:' + pk, 1); wp('outreach_reply', { phone: T.intl(phone) }).catch(() => {})
     }
-    const testing = cfg().testPhone && T.pkey(cfg().testPhone) === pk
     if (w.kind !== 'customer' && !(testing && !T.roomCommand(text) && !/^عميل\s/.test(text))) {
       // A colleague: no welcome, no small talk — only his work words (a technician's step, the room's commands).
       store.touchChat(pk, { kind: w.kind })
