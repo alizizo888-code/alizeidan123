@@ -370,6 +370,23 @@ const server = http.createServer(async (req, res) => {
       const out = list.slice(0, n).map((c) => ({ phone: c.phone || c.pk, name: c.name || '', lastAt: c.lastAt, lead: c.lead || '', msgs: store.msgs(c.pk, Math.min(120, Number(j.msgs || 60))).map((m) => ({ dir: m.dir, by: m.by || '', at: m.at, text: String(m.text || '').slice(0, 600) })) }))
       return json(res, 200, { chats: out })
     }
+    // The owner checks one number from the site (signed like /wp/chats): how the hub sees it — the chat record, who it
+    // thinks this is, the test phone it holds, and the last log lines that mention it. No secrets in the answer.
+    if (route === 'POST /wp/diag') {
+      const raw = await body(req)
+      const p = store.get('pair')
+      if (!p?.secret || !safeEq(req.headers['x-mq-hub'], hmac(p.secret, raw))) return json(res, 401, { error: 'bad signature' })
+      const j = JSON.parse(raw || '{}')
+      if (Math.abs(Date.now() / 1000 - Number(j.ts || 0)) > 600) return json(res, 401, { error: 'stale' })
+      const pk = pkey(String(j.phone || ''))
+      const c = pk ? store.chat(pk) : null
+      const C = brain.cfg()
+      let w = null; try { w = pk ? await brain.who(String(j.phone)) : null } catch (e) { w = { error: String(e?.message || e) } }
+      const tail = pk.slice(-9)
+      const logs = store.logs(400).filter((l) => !tail || JSON.stringify(l).includes(tail)).slice(0, 30)
+      const { greet, ...chat } = c || {}
+      return json(res, 200, { pk, chat: c ? chat : null, who: w, testPhone: C.testPhone || '', roomPhone: C.roomPhone || '', isOurs: !!(C.ourNumbers || {})[pk], ourNumbers: Object.keys(C.ourNumbers || {}), centerKey: !!CENTER_KEY, msgs: pk ? store.msgs(pk, 12) : [], logs, recent: store.logs(25) })
+    }
     // The AI keys kept as GitHub secrets: a workflow of the owner's repository proves itself with GitHub's own signed
     // token (OIDC) — no password to keep anywhere — and the hub hands the keys to the website over the paired channel.
     if (route === 'POST /ai-keys') {

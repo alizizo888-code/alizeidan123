@@ -1252,5 +1252,5 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     try { const r = await wp('report', { what: 'report' }); if (r?.text) toRoom('🌙 *ملخص اليوم*\n' + r.text, 'daily-' + day) } catch (e) { log('warn', 'daily: ' + e.message) }
   }
 
-  return { onEvent, inbound, contact, cfg, template, daily }
+  return { onEvent, inbound, contact, cfg, template, daily, who }
 }
