@@ -506,7 +506,7 @@ final class Mutqan_WA_Journey {
             if ($noPhone || !empty($t['isSite'])) {
                 // Nobody's phone will ring for this one: the room gets the whole job card to review and pass on by hand.
                 $card = class_exists('Mutqan_WA_Desk') ? Mutqan_WA_Desk::job_card($doc) : '';
-                $card = preg_replace('/\n*رد بكلمة:.*$/su', '', (string) $card);
+                $card = preg_replace('/\n*رد (?:بكلمة|برقم):.*$/su', '', (string) $card);
                 $why = !empty($t['isSite']) ? '«فني الموقع» حساب عام' : 'الفني ده ما لوش رقم واتساب في ملفه';
                 self::tell_room("⚠️ *راجع وابعت بنفسك* — " . $why . "\n" . $head . "\n\n" . $card . (empty($doc['clientPhone']) ? "\n\n📵 الطلب من غير رقم عميل — كلّمه من بيانات الطلب في التطبيق." : '') . "\n\nوزّعه على فني: *اسند طلب " . self::num($doc) . " لمحمود*", 'jr-as-' . $doc['id'] . '-' . $doc['technicianId'], $doc);
                 return true;

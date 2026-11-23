@@ -201,6 +201,33 @@ final class Mutqan_Hub {
             // the payment menu before the rating (owner, 2026-11-23): what to ask, and his answer
             // the detailed rating of the technician (owner, 2026-11-23): only to a pleased customer — 4–5 stars, no complaint,
             // no low rating, and who did not chase the technician twice or more
+            // ONE rating (owner, 2026-11-24): for each point a good and a bad number — he writes the numbers that apply.
+            // Not asked of a customer who complained, chased the technician twice, or whom the technician marked difficult.
+            case 'rate_menu': {
+                $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
+                if (!$o) { return null; }
+                $hard = array_intersect((array) ($o['techOnClient']['tags'] ?? []), ['صعب التعامل']);
+                if (!empty($o['complaint']) || (int) ($o['nudges'] ?? 0) >= 2 || $hard || !empty($o['warrantyClaim']) || !empty($o['escalation'])) { return ['skip' => true]; }
+                $L = ["🌟 *رأيك يهمنا* — رأيك بيساعدنا نرتقي ونطوّر من نفسنا، ونقدّم لك مستوى يليق بيك.", "اكتب رقم من كل سطر (مثال: *1 3 5 7*):", ''];
+                foreach (self::RATE_PAIRS as $p) { $L[] = $p[0] . ' ' . $p[1] . ': ' . $p[2] . ' ' . $p[3] . ' · ' . $p[5] . ' ' . $p[6]; }
+                $L[] = ''; $L[] = 'ولو كله كان ممتاز اكتب *ممتاز* 💯';
+                return ['text' => implode("\n", $L)];
+            }
+            case 'rate_set': {
+                $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
+                if (!$o) { return null; }
+                $picks = array_map('intval', (array) ($in['picks'] ?? []));
+                $pros = []; $cons = [];
+                foreach (self::RATE_PAIRS as $p) {
+                    $good = in_array($p[2], $picks, true) || !empty($in['all']); $bad = !empty($in['all']) ? false : in_array($p[5], $picks, true);
+                    if ($good && !$bad) { $pros[] = $p[4]; } elseif ($bad && !$good) { $cons[] = $p[7]; }
+                }
+                if (!$pros && !$cons) { return null; }
+                $stars = !$cons ? 5 : (!$pros ? 1 : (int) max(1, min(5, round(1 + 4 * count($pros) / (count($pros) + count($cons))))));
+                $comment = mb_substr(trim((string) ($in['comment'] ?? '')), 0, 300);
+                Mutqan_Store::update('orders', (string) $in['id'], ['rating' => ['stars' => $stars, 'traits' => $pros, 'cons' => $cons, 'comment' => $comment, 'at' => gmdate('c'), 'via' => 'whatsapp'], 'customerRating' => $stars], self::sys());
+                return ['stars' => $stars, 'pros' => $pros, 'cons' => $cons, 'tech' => (string) ($o['technicianName'] ?? '')];
+            }
             case 'traits_ask': {
                 $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
                 $hard = array_intersect((array) ($o['techOnClient']['tags'] ?? []), ['صعب التعامل', 'بيفاصل في السعر']);   // the technician's own word on him
@@ -374,6 +401,14 @@ final class Mutqan_Hub {
         }
         throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
     }
+
+    // [icon, point, good number, good words, good label, bad number, bad words, bad label]
+    const RATE_PAIRS = [
+        ['🧼', 'النظافة والمظهر', 1, 'نضيف ومرتب', 'نظافته ومظهره', 2, 'محتاج يهتم', 'النظافة والمظهر'],
+        ['💬', 'الأسلوب والكلام', 3, 'لبق ومحترم', 'أسلوبه وكلامه', 4, 'مش كويس', 'الأسلوب'],
+        ['⏱️', 'الالتزام بالمعاد', 5, 'في معاده', 'التزامه بالمعاد', 6, 'اتأخر', 'التأخير'],
+        ['🛠️', 'جودة الشغل', 7, 'شغله نضيف ومضبوط', 'جودة شغله', 8, 'مش راضي عنه', 'جودة الشغل'],
+    ];
 
     const TRAITS = [1 => 'مظهره وشكله', 2 => 'نظافته وريحته', 3 => 'هادي', 4 => 'أسلوبه وكلامه', 5 => 'سريع', 6 => 'شاطر وشغله نضيف', 7 => 'أمين', 8 => 'مؤدب ولبق'];
 

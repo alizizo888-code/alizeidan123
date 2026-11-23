@@ -308,7 +308,8 @@ final class Mutqan_WA_Desk {
         if (!empty($order['appointmentAt'])) { $l[] = '🕐 الموعد: ' . $order['appointmentAt']; }
         if (!empty($order['note'])) { $l[] = '📝 ' . mb_substr((string) $order['note'], 0, 200); }
         $l[] = '';
-        $l[] = 'رد بكلمة: *قبلت* لما تستلم، وبعدين *في الطريق* · *وصلت* · *بدأت العمل* · *تم إنجاز المهمة*';
+        // numbers, not words (owner, 2026-11-24)
+        $l[] = "رد برقم:\n1️⃣ قبلت الطلب\n2️⃣ أعتذر عن الطلب\n3️⃣ في الطريق\n4️⃣ وصلت\n5️⃣ بدأت الشغل\n6️⃣ خلصت الشغل";
         return implode("\n", $l);
     }
 
