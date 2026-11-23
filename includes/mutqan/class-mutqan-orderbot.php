@@ -119,6 +119,9 @@ final class Mutqan_OrderBot {
     /* ------------------------------------------------------------------ what the customer wants */
 
     const INTENTS = [
+        // a complaint about the technician (live test 2026-11-23: «الفني اتعامل معايا بقلة ذوق» went TO the technician as a
+        // «request»). First, so no other word wins; it goes to the owner and operations, never to him.
+        'complaint' => ['اشتكي', 'اشتكى', 'شكوي', 'شكوه', 'قله ذوق', 'قليل الذوق', 'مش محترم', 'مو محترم', 'غير محترم', 'وقح', 'قليل الادب', 'قله ادب', 'علي صوته', 'زعق', 'صرخ', 'اتخانق', 'اتعارك', 'تعارك', 'خناقه', 'شتم', 'سبني', 'غلط فيا', 'غلط في', 'اهانني', 'ضربني', 'سرق', 'حرامي', 'بلطجي', 'نصاب', 'خرب', 'بوظ', 'كسر', 'اسوا فني', 'فني سيء', 'تعامل سيء', 'معاملته', 'اسلوبه'],
         'human' => ['موظف', 'انسان', 'بشري', 'مسؤول', 'كلمني حد', 'اكلم حد', 'خدمه العملاء'],
         'cancel' => ['الغاء', 'الغي', 'كنسل', 'مش عايز الطلب', 'ما ابغى الطلب'],
         'postpone' => ['اجل', 'تاجيل', 'اغير الموعد', 'غير الموعد', 'موعد ثاني', 'ميعاد تاني', 'يوم ثاني', 'يوم تاني', 'مش فاضي', 'مو فاضي', 'ما ني فاضي', 'بعدين تعال'],
@@ -183,11 +186,27 @@ final class Mutqan_OrderBot {
         if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert($title . ' #' . Mutqan_Store::num($o), $body, '#/staff/order/' . $o['id'], $event, 'high', $o['id']); }
     }
 
+    /** A complaint about the technician: the owner and operations at once (high), written on the order, never to him. */
+    public static function complaint($o, $text) {
+        $k = 'mq_ob_complaint_' . md5((string) $o['id'] . '|' . mb_substr((string) $text, 0, 80));
+        if (!get_transient($k)) {
+            set_transient($k, 1, 6 * 3600);
+            self::insert_msg($o['id'], 'ops', 'complaint', mb_substr((string) $text, 0, 400));
+            $who = ($o['technicianName'] ?? 'الفني');
+            $body = ($o['clientName'] ?? 'العميل') . ' بيشتكي من ' . $who . ': «' . mb_substr((string) $text, 0, 220) . '»';
+            self::alert($o, '🚨 شكوى من العميل على الفني', $body, 'order_complaint');
+            try { Mutqan_Store::insert('_push', ['target' => ['role' => 'owner'], 'title' => '🚨 شكوى على ' . $who . ' — طلب #' . Mutqan_Store::num($o), 'body' => mb_substr($body, 0, 300), 'url' => '#/staff/order/' . $o['id'], 'sound' => 'bell', 'priority' => 'high', 'event' => 'order_complaint', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 3 * 86400)], self::sys(), false); } catch (Throwable $e) { /* never block */ }
+            try { Mutqan_Store::update('orders', (string) $o['id'], ['complaint' => ['at' => gmdate('c'), 'text' => mb_substr((string) $text, 0, 400), 'about' => 'technician']], self::sys()); } catch (Throwable $e) { /* never block */ }
+        }
+        return ['حقك علينا 🙏 آسفين جدًا على اللي حصل', 'سجلت شكوتك وبلّغت الإدارة والمالك فورًا — ومحدش غيرهم هيشوفها', 'مسؤول هيكلمك هنا حالًا، ولو حابب نبعتلك فني تاني بلّغنا'];
+    }
+
     /** Does what the message asks. Returns the notes the reply is written from. */
     public static function act($intent, $o, $text, $quiet = false) {
         $did = [];
         // $quiet: Mutqan_Order_AI is answering this conversation and raises the room itself (hurry, postpone,
         // cancel, a person) — here only what it does not do: asking the technician and passing requests to him.
+        if ($intent === 'complaint') { return self::complaint($o, $text); }
         if ($quiet) {
             if (in_array($intent, ['urgent', 'where'], true) && !self::facts($o)['eta']) { $a = self::ask_eta($o); if ($a) { $did[] = 'asked_eta'; } }
             if ($intent === 'request' && !empty($o['technicianId'])) { self::tell_tech($o, '📌 طلب من العميل: «' . mb_substr($text, 0, 300) . '»'); $did[] = 'relayed'; }
@@ -230,6 +249,7 @@ final class Mutqan_OrderBot {
 
     public static function template($intent, $f, $did) {
         $L = [];
+        if ($intent === 'complaint') { return implode("\n", array_map(function ($d) { return $d . '.'; }, $did)); }
         if ($f['cancelled']) { $L[] = 'طلبك ' . $f['short'] . ' ملغي حاليًا. لو حابب نرجّعه أو نفتح طلب جديد قول لي.'; }
         elseif ($intent === 'where' || $intent === 'urgent') {
             if ($f['eta']) { $L[] = 'الفني ' . $f['tech'] . ' قال إنه يوصل خلال حوالي ' . $f['eta']['minutes'] . ' دقيقة 🚗'; }
