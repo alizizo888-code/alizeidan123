@@ -533,6 +533,29 @@ final class Mutqan_AI {
         return ['ok' => false, 'text' => '', 'error' => $last];
     }
 
+    /**
+     * A voice note → its words (owner, 2026-11-23: customers who talk instead of typing). Gemini hears the audio itself;
+     * Groq's Whisper is the second try. Returns '' when nobody could.
+     */
+    public static function transcribe($bytes, $mime) {
+        if ($bytes === '' || strlen($bytes) > 15 * 1024 * 1024) { return ''; }
+        $mime = $mime !== '' ? preg_replace('/;.*$/', '', $mime) : 'audio/ogg';
+        $r = self::vision(base64_encode($bytes), $mime, 'ده تسجيل صوتي من عميل لشركة صيانة مكيفات في السعودية. اكتب الكلام اللي اتقال فيه بالحرف وباللهجة اللي اتقال بيها، من غير أي تعليق أو مقدمة. لو مفيش كلام مفهوم اكتب: ---', false);
+        $t = trim((string) ($r['text'] ?? ''));
+        if ($t !== '' && $t !== '---') { return mb_substr($t, 0, 2000); }
+        $s = self::settings(); $c = $s['providers']['groq'] ?? [];
+        if (!self::usable('groq', $c)) { return ''; }
+        $b = 'mq' . wp_generate_password(16, false, false);
+        $ext = strpos($mime, 'mpeg') !== false ? 'mp3' : (strpos($mime, 'mp4') !== false || strpos($mime, 'm4a') !== false ? 'm4a' : 'ogg');
+        $body = "--$b\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-large-v3\r\n"
+            . "--$b\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nar\r\n"
+            . "--$b\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voice.$ext\"\r\nContent-Type: $mime\r\n\r\n" . $bytes . "\r\n--$b--\r\n";
+        $res = wp_remote_post('https://api.groq.com/openai/v1/audio/transcriptions', ['timeout' => 60, 'headers' => ['Authorization' => 'Bearer ' . $c['key'], 'Content-Type' => 'multipart/form-data; boundary=' . $b], 'body' => $body]);
+        if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) >= 300) { return ''; }
+        $j = json_decode((string) wp_remote_retrieve_body($res), true);
+        return mb_substr(trim((string) ($j['text'] ?? '')), 0, 2000);
+    }
+
     /** Raw Messages API call (used by run() and by the owner agent with tools). @return array [code, data, raw, retry] */
     public static function anthropic_request($body, $key = null) {
         $key = $key ?: self::anthropic_key();

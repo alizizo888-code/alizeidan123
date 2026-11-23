@@ -210,6 +210,23 @@ final class Mutqan_Hub {
                 $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
                 return $o ? Mutqan_PayChoice::pick($o + ['id' => (string) $in['id']], (string) ($in['method'] ?? '')) : null;
             }
+            case 'pay_bank': {
+                if (!class_exists('Mutqan_PayChoice')) { return null; }
+                $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
+                if (!$o) { return null; }
+                $r = Mutqan_PayChoice::bank_details($o + ['id' => (string) $in['id']], (int) ($in['idx'] ?? 0));
+                if ($r) { try { Mutqan_Store::update('orders', (string) $in['id'], ['paymentChoice' => array_merge((array) ($o['paymentChoice'] ?? []), ['account' => $r['bank']])], self::sys()); } catch (Throwable $e) {} }
+                return $r;
+            }
+            // the transfer receipt he sent on WhatsApp: on the order, and operations told
+            case 'pay_proof': {
+                $o = Mutqan_Store::get_raw('orders', (string) ($in['id'] ?? ''));
+                if (!$o) { return null; }
+                $n = self::num($o + ['id' => (string) $in['id']]);
+                Mutqan_Store::update('orders', (string) $in['id'], ['paymentProof' => ['at' => gmdate('c'), 'via' => 'whatsapp', 'kind' => (string) ($in['kind'] ?? 'image'), 'url' => preg_match('#^https://#', (string) ($in['url'] ?? '')) ? (string) $in['url'] : '']], self::sys());
+                if (class_exists('Mutqan_Rest')) { Mutqan_Rest::admin_alert('🧾 العميل بعت إيصال التحويل #' . $n, ((string) ($o['clientName'] ?? '') ?: (string) ($o['clientPhone'] ?? '')) . ' — راجعه في محادثته وأكّد الدفع', '#/staff/order/' . $in['id'], 'order_pay_proof', 'high', (string) $in['id']); }
+                return ['ok' => true];
+            }
             case 'paylink': {
                 if (!class_exists('Mutqan_PayChoice')) { return null; }
                 $o = Mutqan_PayChoice::for_phone((string) ($in['phone'] ?? ''));
@@ -298,6 +315,27 @@ final class Mutqan_Hub {
             case 'outreach_reply': return class_exists('Mutqan_Outreach') ? Mutqan_Outreach::replied((string) ($in['phone'] ?? '')) : ['ok' => false];
             // «#سؤال» from a technician on WhatsApp (owner, 2026-11-23): the AI answers him like a senior colleague — prices
             // from the house sheet, technical know-how, his open job. Never a customer's private data beyond his own job.
+            // «عايز أكلمكم» (owner, 2026-11-23): the hotline page of the site HE came through — a free call over the internet
+            case 'hotline': {
+                $brand = preg_replace('/[^a-z]/', '', strtolower((string) ($in['brand'] ?? '')));
+                $ph = substr(preg_replace('/\D/', '', (string) ($in['phone'] ?? '')), -9);
+                if (strlen($ph) === 9) {
+                    try { foreach (Mutqan_Store::select('orders', [], ['limit' => 200, 'order' => '-createdAt'], self::sys()) as $o) { if (substr(preg_replace('/\D/', '', (string) ($o['clientPhone'] ?? '')), -9) === $ph && !empty($o['brand'])) { $brand = preg_replace('/[^a-z]/', '', strtolower((string) $o['brand'])); break; } } } catch (Throwable $e) { /* the line's brand then */ }
+                }
+                $host = $brand === '' || $brand === 'oxygen' ? 'oxygen11.com' : ($brand === 'mutqan' ? 'mutqan.oxygen11.com' : $brand . '-maintenance-general-contracting.oxygen11.com');
+                return ['url' => 'https://' . $host . '/app/#/call', 'brand' => $brand];
+            }
+            // a voice note on WhatsApp → its words, so the bot answers it like a written message (owner, 2026-11-23).
+            // Only a file of this site's own uploads (the WhatsApp center keeps the media there).
+            case 'transcribe': {
+                $url = (string) ($in['url'] ?? '');
+                $up = wp_upload_dir();
+                $base = trailingslashit((string) $up['baseurl']);
+                if ($url === '' || strpos($url, $base) !== 0 || strpos($url, '..') !== false) { return ['text' => '']; }
+                $path = trailingslashit((string) $up['basedir']) . substr($url, strlen($base));
+                if (!is_file($path) || filesize($path) > 15 * 1024 * 1024) { return ['text' => '']; }
+                return ['text' => class_exists('Mutqan_AI') ? Mutqan_AI::transcribe((string) file_get_contents($path), (string) ($in['mime'] ?? '')) : ''];
+            }
             case 'tech_ask': {
                 $q = trim((string) ($in['text'] ?? ''));
                 if ($q === '') { return ['reply' => 'اكتب سؤالك بعد # 🙏']; }
