@@ -77,7 +77,8 @@ final class Mutqan_OrderBot {
             'id' => (string) ($o['id'] ?? ''), 'short' => '#' . ((string) ($o['number'] ?? '') !== '' ? (string) $o['number'] : substr((string) ($o['id'] ?? ''), -5)),
             'service' => class_exists('Mutqan_Rest') ? Mutqan_Rest::spec_label($o['specialtyId'] ?? '') : (string) ($o['specialtyId'] ?? ''),
             'status' => $st, 'cancelled' => $st === 'cancelled', 'step' => $i, 'stepLabel' => $st === 'cancelled' ? 'ملغي' : self::STEPS[$i],
-            'tech' => (string) ($o['technicianName'] ?? ''), 'hasTech' => !empty($o['technicianId']), 'techPhone' => !empty($o['technicianId']) ? self::tech_phone($o) : '',
+            // «فني الموقع» is a placeholder account, not a person: to the customer the order is still being dispatched (live test 2026-11-24)
+            'tech' => ($site = (($o['dispatch'] ?? '') === 'site')) ? '' : (string) ($o['technicianName'] ?? ''), 'hasTech' => !$site && !empty($o['technicianId']), 'techPhone' => !$site && !empty($o['technicianId']) ? self::tech_phone($o) : '',
             'appointment' => null, 'eta' => null, 'distanceKm' => null, 'posAgoMin' => null, 'techMap' => null,
             'price' => class_exists('Mutqan_Sales') ? (int) Mutqan_Sales::amount($o) : 0,
             'paid' => ($o['paymentStatus'] ?? '') === 'paid', 'warranty' => self::warranty($o), 'url' => self::order_url($o['id'] ?? ''),
