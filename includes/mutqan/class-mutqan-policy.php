@@ -367,6 +367,9 @@ final class Mutqan_Policy {
             if ($creator && ($p['role'] ?? null) !== 'technician') {
                 $deny = array_merge($deny, ['technicianId', 'technicianName', 'paymentStatus', 'paidAt', 'paymentMethod', 'paidRecordedBy']);
             }
+            // the follow-up marks are the server's (Mutqan_Watch); the internal notes are the team's, never a customer's
+            $deny = array_merge($deny, ['watch', 'skipTechIds', 'transferCount']);
+            if (!self::is_staff($p)) { $deny[] = 'internalNotes'; }
             foreach ($deny as $k) { unset($patch[$k]); }
             if ($finalPrice !== null) { $patch = array_merge($patch, $finalPrice); }
             if (($p['role'] ?? null) === 'technician' && !$creator) {

@@ -649,6 +649,8 @@ final class Mutqan_Rest {
         $in = self::body($req);
         $op = (string) ($in['op'] ?? '');
         if ($op === 'inbox' && !get_transient('mutqan_rem_lock')) { set_transient('mutqan_rem_lock', 1, 60); self::send_reminders(); }
+        // the follow-up watch (Mutqan_Watch) rides the same poll, so a quiet site that WP-Cron rarely wakes still gets it
+        if ($op === 'inbox' && class_exists('Mutqan_Watch') && !get_transient('mutqan_watch_lock')) { set_transient('mutqan_watch_lock', 1, 120); try { Mutqan_Watch::sweep(); } catch (Throwable $e) { error_log('[mutqan] watch ' . $e->getMessage()); } }
         if (($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
         if ($op === 'inbox') {
             $raw = $in['since'] ?? 0;

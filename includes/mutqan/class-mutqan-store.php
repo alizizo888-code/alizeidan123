@@ -239,7 +239,9 @@ final class Mutqan_Store {
      * السعر» is useful to the next technician and an insult if the customer sees it. The flag on a
      * price the office should double-check, and the quote it replaced, are internal for the same reason.
      */
-    const HIDDEN = ['orders' => ['techOnClient', 'priceReview', 'quotedTotal']];
+    // internalNotes / watch / skipTechIds: the team's own notes and the follow-up marks on an order (owner, 2026-11-23) —
+    // the customer reads his order, never these.
+    const HIDDEN = ['orders' => ['techOnClient', 'priceReview', 'quotedTotal', 'internalNotes', 'watch', 'skipTechIds', 'transferCount']];
 
     private static function is_team($p) {
         return Mutqan_Policy::has_power($p, 'read') || in_array($p['role'] ?? null, ['owner', 'operations', 'technician'], true);
