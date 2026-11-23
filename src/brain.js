@@ -534,11 +534,13 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   }
 
   /** Washing a duct / concealed / package / central unit: the count, then the survey — no table price. */
-  function bigWash(c, line, phone, m) {
+  async function bigWash(c, line, phone, m) {
     const nm = M.AC_NAMES[m.acType] || 'مخفي'
     if (!m.count) { m.step = 'big_count'; saveFlow(c.pk, m); return say(phone, line, 'كام وحدة ' + nm + '؟ (اكتب الرقم)') }
     Object.assign(m, { label: 'غسيل ' + m.count + ' مكيف ' + nm, priceLater: true })
-    return askPlace(c, line, phone, m, 'تمام ✅ غسيل الـ' + nm + ' سعره بيتحدد بعد المعاينة (حسب الطن وعدد الفتحات)، والفني بيقولك السعر قبل أي شغل.')
+    // the owner's rough range + inspection fee for this type, when set (owner, 2026-11-23) — instead of a bare «بعد المعاينة»
+    let bp = ''; try { const r = await wp('big_price', { type: m.acType || 'concealed', count: m.count }); bp = (r && r.text) || '' } catch {}
+    return askPlace(c, line, phone, m, 'تمام ✅ غسيل الـ' + nm + ' ' + (bp ? '— ' + bp : 'سعره بيتحدد بعد المعاينة (حسب الطن وعدد الفتحات)، والفني بيقولك السعر قبل أي شغل.'))
   }
 
   async function priceStep(c, line, phone, m, prefix = '') {
