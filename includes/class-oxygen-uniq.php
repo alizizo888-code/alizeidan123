@@ -76,6 +76,8 @@ final class Oxygen_Uniq {
         $rw = (class_exists('Mutqan_AI') && Mutqan_AI::any_enabled()) ? Mutqan_Fp::rewrite_local($html, $title, self::brand(), $angle) : Mutqan_Fp::call('rewrite', ['text' => $html, 'title' => $title, 'brand' => self::brand(), 'angle' => $angle]);
         $new = is_array($rw) ? (string) ($rw['html'] ?? '') : '';
         if ($new === '') { return ''; }
+        // the AI is told not to, but a price, a percentage, a phone number, a licence, years of experience or a rating never gets published
+        if (class_exists('Oxygen_SEO_Engine')) { $new = Oxygen_SEO_Engine::strip_claims($new); }
         $img = preg_match('#^\s*<p><img[^>]+></p>#u', (string) $html, $m) ? $m[0] : '';
         return $img . $new;
     }
@@ -137,6 +139,8 @@ final class Oxygen_Uniq {
             update_post_meta($id, '_oxy_rewritten', 1);
             update_post_meta($id, '_oxy_fp_sim', $sim);
             delete_post_meta($id, '_oxy_uniq_tries');
+            // the new text gets the engine's on-page rules too (keyword opening / sub-heading, description, length); the address stays
+            if (class_exists('Oxygen_SEO_Engine')) { try { Oxygen_SEO_Engine::fix_post($id); } catch (Throwable $e) { /* optional */ } }
             if ($live) {
                 delete_post_meta($id, '_oxy_dup'); delete_post_meta($id, '_yoast_wpseo_meta-robots-noindex');
                 Mutqan_Fp::call('replace', ['site' => self::site(), 'url' => $url, 'key' => (string) get_post_meta($id, '_oxy_seo_key', true), 'text' => $new, 'at' => $p->post_date_gmt]);

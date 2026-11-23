@@ -279,6 +279,11 @@ class Oxygen_SEO_Engine {
         foreach ($faq as $q) { $h .= '<h3>' . self::e($q[0]) . '</h3><p>' . self::e($q[1]) . '</p>'; }
         return $h;
     }
+    /* generic, practical sections shared by the guides and (to reach a full-length article) the service pages */
+    private static function checks_html() { return '<h2>خطوات الفحص الأولي</h2><ol><li>سجّل ما تلاحظه بالضبط: متى بدأت المشكلة وما الذي تغيّر قبلها.</li><li>افصل الكهرباء أو أغلق المحبس المعني إن كان في الأمر خطر، ولا تبدأ بأي فك قبل ذلك.</li><li>افحص الأمور البسيطة أولاً كالنظافة والفلاتر والتوصيلات الظاهرة والإعدادات.</li><li>صوّر الجزء المتأثر أو رسالة الخطأ لتشاركها مع الفني عند الحاجة.</li><li>قارن النتيجة بعد كل خطوة ولا تغيّر عدة أمور دفعة واحدة، حتى تعرف ما الذي أثّر فعلاً.</li></ol>'; }
+    private static function mistakes_html() { return '<h2>أخطاء يجب تجنبها</h2><ul><li>تأجيل الفحص بعد ظهور أول عَرَض، فالأعطال الصغيرة تتراكم مع الوقت.</li><li>استخدام قطع أو مواد رخيصة غير مطابقة للمواصفات لمجرد توفير مبلغ بسيط.</li><li>إصلاح العرض دون البحث عن السبب، فتعود المشكلة بعد أيام.</li><li>تجاهل تعليمات الشركة المصنعة عن التنظيف والتشغيل وحدود الاستخدام.</li></ul>'; }
+    private static function schedule_html() { return '<h2>جدول متابعة مقترح</h2><ul><li>أسبوعياً: نظرة سريعة على الأداء والأصوات والروائح والرطوبة.</li><li>شهرياً: تنظيف الأجزاء القابلة للتنظيف حسب دليل الاستخدام.</li><li>كل موسم: فحص أوسع قبل الصيف وبعده وتسجيل الملاحظات.</li><li>سنوياً: زيارة صيانة شاملة من مختص مع حفظ تقرير الزيارة.</li></ul>'; }
+    private static function call_html($dm) { return '<h2>متى تحتاج إلى فني مختص؟</h2><p>تنصحك بالاستعانة بمختص ' . self::e($dm['call']) . ' فتأخير التدخل في هذه الحالات يرفع الكلفة ويزيد المخاطر.</p>'; }
 
     /** Returns ['html','faq','desc','text'] for one item at a revision. $ctx: app, wa, links, img */
     public static function build($item, $rev, $ctx = []) {
@@ -358,10 +363,7 @@ class Oxygen_SEO_Engine {
             $paras = self::rot($dm['paras'], $rev + self::salt(), count($dm['paras']));
             foreach ($paras as $p) { $html .= '<p>' . self::e($p) . '</p>'; }
             $html .= '<h2>لماذا يهمك هذا الموضوع؟</h2><p>' . self::e(self::sub('موضوع «{t}» ليس ترفاً معرفياً؛ فهو يحدد كم تدفع في الفواتير، وكم يعيش الجهاز أو النظام، ومتى تظهر الأعطال. من يفهم الأساسيات في {d} يتخذ قرارات أهدأ وأرخص، ويتعامل مع الفني بثقة أكبر ويعرف ما يُطلب منه فعلاً.', $r)) . '</p>';
-            $html .= '<h2>خطوات الفحص الأولي</h2><ol><li>سجّل ما تلاحظه بالضبط: متى بدأت المشكلة وما الذي تغيّر قبلها.</li><li>افصل الكهرباء أو أغلق المحبس المعني إن كان في الأمر خطر، ولا تبدأ بأي فك قبل ذلك.</li><li>افحص الأمور البسيطة أولاً كالنظافة والفلاتر والتوصيلات الظاهرة والإعدادات.</li><li>صوّر الجزء المتأثر أو رسالة الخطأ لتشاركها مع الفني عند الحاجة.</li><li>قارن النتيجة بعد كل خطوة ولا تغيّر عدة أمور دفعة واحدة، حتى تعرف ما الذي أثّر فعلاً.</li></ol>';
-            $html .= '<h2>أخطاء يجب تجنبها</h2><ul><li>تأجيل الفحص بعد ظهور أول عَرَض، فالأعطال الصغيرة تتراكم مع الوقت.</li><li>استخدام قطع أو مواد رخيصة غير مطابقة للمواصفات لمجرد توفير مبلغ بسيط.</li><li>إصلاح العرض دون البحث عن السبب، فتعود المشكلة بعد أيام.</li><li>تجاهل تعليمات الشركة المصنعة عن التنظيف والتشغيل وحدود الاستخدام.</li></ul>';
-            $html .= '<h2>جدول متابعة مقترح</h2><ul><li>أسبوعياً: نظرة سريعة على الأداء والأصوات والروائح والرطوبة.</li><li>شهرياً: تنظيف الأجزاء القابلة للتنظيف حسب دليل الاستخدام.</li><li>كل موسم: فحص أوسع قبل الصيف وبعده وتسجيل الملاحظات.</li><li>سنوياً: زيارة صيانة شاملة من مختص مع حفظ تقرير الزيارة.</li></ul>';
-            $html .= '<h2>متى تحتاج إلى فني مختص؟</h2><p>تنصحك بالاستعانة بمختص ' . self::e($dm['call']) . ' فتأخير التدخل في هذه الحالات يرفع الكلفة ويزيد المخاطر.</p>';
+            $html .= self::checks_html() . self::mistakes_html() . self::schedule_html() . self::call_html($dm);
             $faq = [
                 ['هل أستطيع معالجة الأمر بنفسي؟', 'يمكنك إجراء الفحوص الأولية المذكورة في هذا الدليل، أما الأعمال التي تتعلق بالكهرباء أو الغاز أو الضغط العالي أو الارتفاعات فاتركها لمختص حفاظاً على السلامة.'],
                 ['كم يستغرق التشخيص عادة؟', 'تشخيص معظم الحالات يتم في الزيارة الأولى، وقد يحتاج طلب قطعة أو فحص إضافي إلى زيارة ثانية.'],
@@ -378,22 +380,40 @@ class Oxygen_SEO_Engine {
         $html .= self::links_html($ctx['links'] ?? []);
         return ['html' => $html, 'faq' => $faq, 'desc' => self::trim_desc($desc), 'text' => strip_tags($html)];
     }
-    /** Search-result description: what the service covers + the call to order + offers. No keyword stuffing, no English, no personal data. */
+    /** Search-result description: starts with the focus keyword, then what the service covers + the call to order. 100-160 characters, no claims. */
     public static function desc_for($item) {
+        $item = self::seo_item($item);
         $svc = self::data('services');
         if (($item['track'] ?? '') === 'commercial' && isset($svc[$item['sid']])) {
-            $s = $svc[$item['sid']];
-            $where = !empty($item['place']) ? 'محيط ' . $item['place'] : (!empty($item['brand']) ? $item['city'] . ' لأجهزة ' . $item['brand'] : $item['city']);
-            $lead = $s['n'] . ' في ' . $where . ': ' . (array_values($s['items'] ?? [])[0] ?? '');
+            $bits = array_values($svc[$item['sid']]['items'] ?? []);
             $cta = ' اطلب فنياً الآن وتصفّح العروض.';
         } else {
-            $pts = array_values($item['points'] ?? []);
-            $lead = preg_replace('/\s*\|.*$/u', '', (string) ($item['title'] ?? '')) . ($pts ? ': ' . $pts[0] : '');
+            $bits = array_values($item['points'] ?? []);
             $cta = ' اطلب فنياً أو تصفّح العروض.';
         }
-        $room = 158 - mb_strlen($cta);
-        if (mb_strlen($lead) > $room) { $lead = mb_substr($lead, 0, $room - 1); $sp = mb_strrpos($lead, ' '); if ($sp > 40) { $lead = mb_substr($lead, 0, $sp); } $lead = preg_replace('/[\s،.:]+$/u', '', $lead) . '…'; } else { $lead = rtrim($lead, '.') . '.'; }
-        return $lead . $cta;
+        return self::compose_desc((string) ($item['kw'] ?? ''), $bits, $cta);
+    }
+    /** keyword + as many of $bits as fit + call to action, between 100 and 160 characters */
+    public static function compose_desc($kw, $bits, $cta = ' اطلب فنياً الآن وتصفّح العروض.') {
+        $kw = trim((string) $kw);
+        $bits = array_values(array_filter(array_map(function ($b) { return trim(preg_replace('/[\s.،:]+$/u', '', self::strip_claims_text(wp_strip_all_tags((string) $b)))); }, (array) $bits), 'strlen'));
+        $lead = $kw;
+        foreach ($bits as $i => $b) {
+            $sep = ($lead === '' ? '' : ($i === 0 ? ': ' : '، '));
+            $room = 158 - mb_strlen($cta) - mb_strlen($lead) - mb_strlen($sep) - 1;
+            if (mb_strlen($b) > $room) {
+                if ($i > 0 || $room < 25) { break; }
+                $b = mb_substr($b, 0, $room); $sp = mb_strrpos($b, ' '); if ($sp > 15) { $b = mb_substr($b, 0, $sp); }
+                $b = preg_replace('/[\s،.:]+$/u', '', $b);
+                $lead .= $sep . $b; break;
+            }
+            $lead .= $sep . $b;
+            if (mb_strlen($lead) + mb_strlen($cta) >= 115) { break; }
+        }
+        $d = rtrim($lead, '.') . '.' . $cta;
+        if (mb_strlen($d) < 100) { $d .= ' حجز بلا تسجيل وتأكيد على واتساب.'; }
+        if (mb_strlen($d) > 160) { $d = mb_substr($d, 0, 157); $sp = mb_strrpos($d, ' '); if ($sp > max(40, mb_strlen($kw))) { $d = mb_substr($d, 0, $sp); } $d = preg_replace('/[\s،.:]+$/u', '', $d) . '…'; }
+        return $d;
     }
     private static function item_of_post($id) {
         $k = (string) get_post_meta($id, '_oxy_seo_key', true); if ($k === '') { return null; }
@@ -585,29 +605,316 @@ class Oxygen_SEO_Engine {
         }
         return false;
     }
-    /** The address carries the keyword (Arabic, like the title) + 4 characters so two sites never share it. */
+    /* ---------- on-page SEO (the checks of Oxygen_Daily_Report) + the owner's content rules, applied before any article is saved ---------- */
+
+    /**
+     * Owner rule: an article never states a price, a percentage, a phone number, a licence, years of experience or a rating
+     * (the same list the network review applies, see network/common.py BAD). Matched on the visible text only, never on links.
+     */
+    const CLAIM_RE = '/ريال|ر\.\s?س(?!\p{L})|(?<![A-Za-z])SAR(?![A-Za-z])|[0-9٠-٩]+(?:[.,٫][0-9٠-٩]+)?\s?(?:%|٪|بالمئة|بالمائة|في\s?المئة|في\s?المائة)|(?<![0-9٠-٩])(?:\+?966|00966|0)\s?5[0-9٠-٩](?:[\s-]?[0-9٠-٩]){7}(?![0-9٠-٩])|(?<![0-9٠-٩])(?:800|920)[\s-]?[0-9٠-٩]{3}[\s-]?[0-9٠-٩]{3,4}(?![0-9٠-٩])|مرخص|ترخيص|تراخيص|رخص[ةه]|(?:سنوات|سنة|أعوام|عام[ا\x{064B}]*|عقود)\s+(?:من\s+)?(?:ال)?خبر[ةه]|خبر[ةه]\s+(?:تمتد\s+|تزيد\s+(?:عن|على)\s+|تتجاوز\s+|تفوق\s+|أكثر\s+من\s+|لأكثر\s+من\s+|منذ\s+)?[0-9٠-٩]+|[0-9٠-٩]+\s*(?:سنة|سنوات|عام[ا\x{064B}]*|أعوام)\s+(?:من\s+)?(?:ال)?خبر|★|⭐|تقييم\s*[0-9٠-٩]|(?<![0-9٠-٩])[0-9٠-٩](?:[.,][0-9٠-٩])?\s?(?:\/|من)\s?(?:5|٥|10|١٠)(?![0-9٠-٩])|نجوم/u';
+    const MIN_WORDS = 620;     // the report wants 600+; a little margin
+    const SEO_FIX_VER = 1;     // bump to make the backfill revisit every managed post
+
+    private static function visible($html) { return html_entity_decode(wp_strip_all_tags(preg_replace('#<[^>]+>#', ' $0 ', (string) $html)), ENT_QUOTES, 'UTF-8'); }
+    public static function has_claim($html) { return (bool) preg_match(self::CLAIM_RE, self::visible($html)); }
+    /** Plain text: drops every sentence that makes a forbidden claim. */
+    public static function strip_claims_text($s) {
+        $s = (string) $s;
+        if (!preg_match(self::CLAIM_RE, $s)) { return $s; }
+        $keep = [];
+        foreach (preg_split('/(?<=[.!؟?…؛])\s+/u', $s) as $x) { if (!preg_match(self::CLAIM_RE, $x)) { $keep[] = $x; } }
+        return trim(implode(' ', $keep));
+    }
+    /** HTML: drops the sentences (or the list item / heading) that make a forbidden claim; links, images and markup stay as they are. */
+    public static function strip_claims($html) {
+        $html = (string) $html;
+        if (!self::has_claim($html)) { return $html; }
+        $html = preg_replace_callback('#<(p|li|h[1-6]|td|th|dd|dt|blockquote|figcaption)\b([^>]*)>(.*?)</\1>#isu', function ($m) {
+            if (!self::has_claim($m[3])) { return $m[0]; }
+            if ($m[1][0] === 'h' || $m[1] === 'li' || $m[1] === 'dt') { return ''; }
+            $keep = [];
+            foreach (preg_split('/(?<=[.!؟?…؛])\s+/u', $m[3]) as $x) { if (!self::has_claim($x)) { $keep[] = $x; } }
+            $in = trim(implode(' ', $keep));
+            return trim(wp_strip_all_tags($in)) === '' ? '' : '<' . $m[1] . $m[2] . '>' . (function_exists('force_balance_tags') ? force_balance_tags($in) : $in) . '</' . $m[1] . '>';
+        }, $html);
+        // text outside those blocks (a bare line, a div or a span)
+        if (self::has_claim($html)) { $html = preg_replace_callback('#(^|>)([^<>]+)(?=<|$)#u', function ($m) { return $m[1] . (preg_match(self::CLAIM_RE, html_entity_decode($m[2], ENT_QUOTES, 'UTF-8')) ? self::strip_claims_text(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8')) : $m[2]); }, $html); }
+        return preg_replace('#<(ul|ol)\b[^>]*>\s*</\1>#iu', '', $html);
+    }
+    private static function strip_claims_faq($faq) {
+        return array_values(array_filter((array) $faq, function ($q) { return is_array($q) && !preg_match(self::CLAIM_RE, (string) ($q[0] ?? '') . ' ' . (string) ($q[1] ?? '')); }));
+    }
+
+    /** Same normalisation as the report (Oxygen_Daily_Report::norm), so what we aim at is what gets measured. */
+    private static function norm($s) {
+        if (class_exists('Oxygen_Daily_Report')) { return Oxygen_Daily_Report::norm($s); }
+        $s = html_entity_decode(strip_tags((string) $s), ENT_QUOTES, 'UTF-8');
+        $s = preg_replace('/[\x{064B}-\x{065F}\x{0670}\x{0640}]/u', '', $s);
+        $s = strtr($s, ['أ' => 'ا', 'إ' => 'ا', 'آ' => 'ا', 'ى' => 'ي', 'ة' => 'ه']);
+        return trim(mb_strtolower(preg_replace('/[\s\-_]+/u', ' ', $s)));
+    }
+    private static function seo_words($html) { return count(preg_split('/\s+/u', self::norm($html), -1, PREG_SPLIT_NO_EMPTY)); }
+    /** Keyword density in % the way the report computes it. */
+    public static function kw_density($html, $kw) {
+        $nk = self::norm($kw); $t = self::norm($html); $wc = count(preg_split('/\s+/u', $t, -1, PREG_SPLIT_NO_EMPTY));
+        if ($nk === '' || !$wc) { return 0.0; }
+        return mb_substr_count($t, $nk) * count(preg_split('/\s+/u', $nk)) / $wc * 100;
+    }
+    /** A keyword is letters, digits and spaces only, so the address (sanitize_title) carries all of it. */
+    public static function clean_kw($kw) { return trim(preg_replace('/\s+/u', ' ', preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', (string) $kw))); }
+
+    /** Place wordings the generators put in titles (longest first); [found in title, short form used in the keyword]. */
+    private static function place_forms($item) {
+        $c = [];
+        $add = function ($full, $short = null) use (&$c) { $full = trim((string) $full); if ($full !== '') { $c[$full] = $short !== null ? $short : $full; } };
+        $city = (string) ($item['city'] ?? '');
+        if (!empty($item['district'])) { $d = $item['district']; $add('حي ' . $d . ' بمكة المكرمة', 'حي ' . $d . ' بمكة'); $add('حي ' . $d . ' بمكة'); $add('حي ' . $d . ' بجدة'); $add('حي ' . $d); }
+        if (!empty($item['place'])) { $p = $item['place']; $add('محيط ' . $p . ' بمكة'); $add('محيط ' . $p . ' بجدة'); $add('محيط ' . $p); $add($p); }
+        $add($city, str_replace(['مكة المكرمة وجدة', 'بمكة المكرمة'], ['مكة وجدة', 'بمكة'], $city));
+        foreach (['مكة المكرمة وجدة' => 'مكة وجدة', 'مكة وجدة' => null, 'مكة المكرمة' => 'مكة', 'مكة' => null, 'جدة' => null] as $f => $s) { $add($f, $s); }
+        uksort($c, function ($a, $b) { return mb_strlen($b) <=> mb_strlen($a); });
+        return $c;
+    }
+    /** Service wordings the generators put in titles (longest first). */
+    private static function service_forms($item) {
+        $sid = (string) ($item['sid'] ?? ''); $svc = self::data('services'); $f = [];
+        if (isset($svc[$sid]['n'])) { $f[] = $svc[$sid]['n']; }
+        if (class_exists('Oxygen_SEO_Mega')) { $f = array_merge($f, Oxygen_SEO_Mega::variants($sid), [Oxygen_SEO_Mega::short($sid)]); if (!empty($item['brand'])) { $f[] = Oxygen_SEO_Mega::brand_phrase($sid, $item['brand']); } }
+        $f = array_values(array_unique(array_filter($f)));
+        if (!empty($item['facet']) && mb_strpos((string) $item['facet'], '#') === false) { foreach ($f as $x) { $f[] = $x . ' ' . $item['facet']; } }
+        usort($f, function ($a, $b) { return mb_strlen($b) <=> mb_strlen($a); });
+        return $f;
+    }
+    /** Title tidy-up after a phrase was taken out of it. */
+    private static function tidy_rest($t) {
+        $t = preg_replace('/(^|\s)(في|ب|بـ|لـ|عن|من|على)(?=\s*(?:$|[—|:؟?،!]))/u', '$1', (string) $t);
+        $t = preg_replace('/(^|\s)(?:في|على|عن|من)\s+(?=(?:في|على|عن|من|مع)\s)/u', '$1', $t);   // «خصومات حصرية على مع …» → «… مع …»
+        $t = preg_replace('/\s+([؟?:،!])/u', '$1', $t);
+        $t = preg_replace('/«\s*»|\(\s*\)/u', '', $t);
+        $t = preg_replace('/\s{2,}/u', ' ', $t);
+        $t = preg_replace('/^[\s—|:،\-]+|[\s—|:،\-]+$/u', '', $t);
+        $t = preg_replace('/\s*([—|])\s*(?:[—|]\s*)+/u', ' $1 ', $t);
+        return trim($t);
+    }
+    /** Title within 20-65 characters, never cutting into the keyword at its start. */
+    private static function fit_title($t, $kw, $suffix) {
+        $t = trim($t); $kl = mb_strlen($kw);
+        while (mb_strlen($t) > 65) {
+            $head = mb_substr($t, 0, 66); $cut = 0;
+            foreach ([' — ', ' | ', ': ', '، ', '؟ '] as $sep) { $p = mb_strrpos($head, $sep); if ($p !== false && $p > $kl && $p > $cut) { $cut = $p; } }
+            if (!$cut) { $p = mb_strrpos($head, ' '); if ($p !== false && $p >= $kl) { $cut = $p; } }
+            if (!$cut) { break; }
+            $t = self::tidy_rest(mb_substr($t, 0, $cut) . (mb_substr($t, $cut, 2) === '؟ ' ? '؟' : ''));
+        }
+        if ($suffix !== '' && mb_strlen($t . $suffix) <= 65) { $t .= $suffix; }
+        return $t;
+    }
+
+    /**
+     * The article as it is published: focus keyword = what the article is about (service + place for a service page, the topic for a
+     * guide), title starting with that keyword. The key, the angle and the body builders are unchanged. Idempotent.
+     */
+    public static function seo_item($item) {
+        if (!is_array($item) || !empty($item['seo_v'])) { return $item; }
+        $item['seo_v'] = 1;
+        $brand = self::brand();
+        $title = trim((string) ($item['title'] ?? ''));
+        $suffix = '';
+        if ($brand !== '' && preg_match('/\s*\|\s*' . preg_quote($brand, '/') . '\s*$/u', $title, $m)) { $suffix = ' | ' . $brand; $title = trim(mb_substr($title, 0, mb_strlen($title) - mb_strlen($m[0]))); }
+        $old = self::clean_kw($item['kw'] ?? '');
+        $kw = ''; $rest = null;
+        if (($item['track'] ?? '') === 'commercial') {
+            $sv = ''; $pl = ''; $short = '';
+            foreach (self::service_forms($item) as $f) { if (mb_strpos($title, $f) !== false) { $sv = $f; break; } }
+            foreach (self::place_forms($item) as $f => $s) { if (mb_strpos($sv !== '' ? str_replace($sv, '', $title) : $title, $f) !== false) { $pl = $f; $short = $s; break; } }
+            if ($sv !== '' && $pl !== '') {
+                // the whole keyword has to fit in the address (kw_slug keeps 185 encoded characters): shorter wordings, best first
+                $svs = [$sv]; if (!empty($item['facet']) && mb_substr($sv, -mb_strlen(' ' . $item['facet'])) === ' ' . $item['facet']) { $svs[] = mb_substr($sv, 0, mb_strlen($sv) - mb_strlen(' ' . $item['facet'])); }
+                $pls = [$short]; if (!empty($item['district'])) { $pls[] = 'حي ' . $item['district']; } if (!empty($item['place'])) { $pls[] = $item['place']; } $pls[] = mb_strpos($short, 'جدة') !== false && mb_strpos($short, 'مكة') === false ? 'جدة' : 'مكة';
+                foreach (array_unique($pls) as $b2) { foreach ($svs as $a2) { foreach ([' في ', ' '] as $j) { $c = self::clean_kw($a2 . $j . $b2); if (strlen(sanitize_title($c)) <= 185) { $kw = $c; break 3; } } } }
+                if ($kw === '') { $kw = self::clean_kw($sv . ' في ' . $short); }
+                $r = $title;
+                $p = mb_strpos($r, $sv); $r = mb_substr($r, 0, $p) . ' ' . mb_substr($r, $p + mb_strlen($sv));
+                $p = mb_strpos($r, $pl);
+                if ($p !== false) {
+                    $pre = mb_substr($r, 0, $p); $post = mb_substr($r, $p + mb_strlen($pl));
+                    $pre = preg_replace('/(?:\s+في\s*|بـ|ب)$/u', '', $pre);
+                    $r = $pre . ' ' . $post;
+                }
+                $rest = self::tidy_rest(preg_replace('/^\s*[^\s—|:،؟]+\s*[—|:]\s*/u', '', self::tidy_rest($r)));   // a one-word stub left before a separator («رواد — …»)
+            }
+        }
+        if ($kw === '') {
+            if ($old !== '' && mb_strpos(self::norm($title), self::norm($old)) === 0) { $kw = $old; }
+            elseif ($old !== '' && ($item['track'] ?? '') !== 'commercial') { $kw = $old; $rest = $title; }   // a guide: «topic: the original question»
+            else { $kw = self::clean_kw(preg_split('/\s*(?:—|\||:|؟|\?)\s*/u', $title)[0]); $rest = null; }
+        }
+        if ($kw !== '' && mb_strpos(self::norm($title), self::norm($kw)) !== 0) {
+            $title = $kw . ($rest !== null && count(preg_split('/\s+/u', $rest, -1, PREG_SPLIT_NO_EMPTY)) >= 2 ? (preg_match('/^[—|:]/u', $rest) ? ' ' : (($item['track'] ?? '') === 'commercial' ? ' — ' : ': ')) . $rest : '');
+        }
+        $item['title'] = self::fit_title($title, $kw, $suffix);
+        $item['kw'] = $kw !== '' ? $kw : $old;
+        return $item;
+    }
+
+    /** The address carries the whole keyword (Arabic, like the title) + 4 characters so two sites never share it. */
     public static function kw_slug($item) {
-        $kw = trim((string) ($item['kw'] ?? ''));
+        $kw = self::clean_kw($item['kw'] ?? '');
+        $tail = '-' . substr(md5((string) $item['key'] . home_url()), 0, 4);
         if ($kw === '') { return (string) $item['key']; }
-        $s = sanitize_title(mb_substr($kw, 0, 60));
-        return ($s !== '' ? $s : (string) $item['key']) . '-' . substr(md5((string) $item['key'] . home_url()), 0, 4);
+        // WordPress keeps 200 encoded characters (an Arabic letter takes 6) and Oxygen_Domain_Guard may add «-dN»: stay well under it, cut on a word.
+        $w = preg_split('/\s+/u', $kw); $s = '';
+        while ($w) { $s = sanitize_title(implode(' ', $w)); if (strlen($s) <= 185) { break; } array_pop($w); }
+        return ($s !== '' ? $s : (string) $item['key']) . $tail;
     }
-    /** A sub-heading with the exact keyword right after the opening paragraph, when the template has none. */
+    /** A sub-heading with the exact keyword right after the opening paragraph, when the article has none. */
     public static function kw_heading($html, $kw) {
-        if ($kw === '' || preg_match('#<h[23][^>]*>[^<]*' . preg_quote($kw, '#') . '#u', (string) $html)) { return $html; }
+        $html = (string) $html;
+        if ($kw === '') { return $html; }
+        if (preg_match_all('#<h[23][^>]*>(.*?)</h[23]>#isu', $html, $m) && mb_strpos(self::norm(implode(' ', $m[1])), self::norm($kw)) !== false) { return $html; }
         $h = '<h2>' . esc_html($kw) . ': كل ما تحتاج معرفته</h2>';
-        $pos = mb_strpos((string) $html, '</p>');
-        return $pos === false ? $h . $html : mb_substr($html, 0, $pos + 4) . $h . mb_substr($html, $pos + 4);
+        $at = self::after_intro($html);
+        return $at === null ? $h . $html : substr($html, 0, $at) . $h . substr($html, $at);
     }
+    /** byte offset right after the first paragraph that has words (the cover image paragraph does not count) */
+    private static function after_intro($html) {
+        if (preg_match_all('#<p\b[^>]*>(.*?)</p>#isu', $html, $m, PREG_OFFSET_CAPTURE)) {
+            foreach ($m[0] as $i => $x) { if (trim(wp_strip_all_tags($m[1][$i][0])) !== '') { return $x[1] + strlen($x[0]); } }
+        }
+        return null;
+    }
+    /** The keyword inside the first 10% of the text (an AI rewrite may open without it). */
+    public static function kw_lead($html, $kw) {
+        $html = (string) $html;
+        if ($kw === '') { return $html; }
+        $words = preg_split('/\s+/u', self::norm($html), -1, PREG_SPLIT_NO_EMPTY);
+        if (mb_strpos(implode(' ', array_slice($words, 0, max(1, (int) ceil(count($words) * 0.1)))), self::norm($kw)) !== false) { return $html; }
+        $p = '<p>تبحث عن <strong>' . esc_html($kw) . '</strong>؟ هنا خلاصة عملية تساعدك على فهم الحالة واتخاذ القرار المناسب قبل طلب الخدمة.</p>';
+        // after a leading cover image, before everything else
+        if (preg_match('#^\s*(?:<p>\s*<img[^>]*>\s*</p>\s*)+#u', $html, $m)) { return $m[0] . $p . substr($html, strlen($m[0])); }
+        return $p . $html;
+    }
+    /**
+     * Brings a short article to full length with the practical sections the engine already has (the domain's explanatory paragraphs,
+     * the check / mistakes / follow-up lists, more scenario angles). Nothing new is claimed; it stops once the article is 600+ words
+     * and the keyword density is in range. The sections go before the order steps / FAQ so the article still ends with them.
+     */
+    public static function extend($html, $item, $rev = 0) {
+        $html = (string) $html; $kw = (string) ($item['kw'] ?? '');
+        $need = function ($h) use ($kw) { return self::seo_words($h) < self::MIN_WORDS || ($kw !== '' && self::kw_density($h, $kw) > 2.4 && self::seo_words($h) < 1100); };
+        if (!$need($html)) { return $html; }
+        $dm = self::domain($item['dom'] ?? 'general');
+        $svc = self::data('services'); $n = isset($svc[$item['sid'] ?? '']['n']) ? $svc[$item['sid']]['n'] : $dm['label'];
+        $r = ['t' => $n, 'kw' => $n, 'd' => $dm['label'], 'n' => $n];   // the added text names the service, not the full keyword (density)
+        $has = function ($heading) use (&$html) { return mb_strpos($html, '<h2>' . self::e($heading) . '</h2>') !== false; };
+        $blocks = [];
+        $left = array_values(array_filter($dm['paras'], function ($p) use ($html) { return mb_strpos($html, self::e($p)) === false; }));
+        if ($left && !$has('معلومات مفيدة عن ' . $dm['label'])) { $b = '<h2>معلومات مفيدة عن ' . self::e($dm['label']) . '</h2>'; foreach ($left as $p) { $b .= '<p>' . self::e($p) . '</p>'; } $blocks[] = $b; }
+        $lists = [];
+        foreach ([['خطوات الفحص الأولي', self::checks_html()], ['أخطاء يجب تجنبها', self::mistakes_html()], ['جدول متابعة مقترح', self::schedule_html()]] as $x) { if (!$has($x[0])) { $lists[] = $x[1]; } }
+        $k = $lists ? ((int) ($item['idx'] ?? 0) + self::salt()) % count($lists) : 0;
+        $blocks = array_merge($blocks, array_slice($lists, $k), array_slice($lists, 0, $k));
+        if (!$has('متى تحتاج إلى فني مختص؟')) { $blocks[] = self::call_html($dm); }
+        $angles = self::data('angles'); $base = self::angle_index((int) ($item['idx'] ?? 0), (int) $rev);
+        for ($j = 1; $j < count($angles); $j++) {
+            $a = $angles[($base + $j) % count($angles)];
+            if ($has($a[2])) { continue; }
+            $b = '<h2>' . self::e($a[2]) . '</h2><p>' . self::e(self::sub($a[1], $r)) . '</p>';
+            foreach ($a[3] as $p) { $b .= '<p>' . self::e(self::sub($p, $r)) . '</p>'; }
+            $blocks[] = $b;
+        }
+        $add = '';
+        foreach ($blocks as $b) { $b = self::strip_claims($b); if (!$need($html . $add)) { break; } $add .= $b; }
+        if ($add === '') { return $html; }
+        foreach (['<h2>خطوات الطلب</h2>', '<h2>هل تحتاج مساعدة مباشرة؟</h2>', '<h2>أسئلة شائعة</h2>', '<h2>مقالات ذات صلة</h2>'] as $mark) {
+            $p = strpos($html, $mark); if ($p !== false) { return substr($html, 0, $p) . $add . substr($html, $p); }
+        }
+        return $html . $add;
+    }
+    /** Every rule above on one built article. $b = build() output. Returns ['item', 'b', 'slug']. */
+    public static function prepare($item, $b, $rev = 0) {
+        $item = self::seo_item($item);
+        $kw = (string) $item['kw'];
+        $html = self::strip_claims((string) ($b['html'] ?? ''));
+        $html = self::kw_lead($html, $kw);
+        $html = self::kw_heading($html, $kw);
+        $html = self::extend($html, $item, $rev);
+        $b['html'] = $html;
+        $b['text'] = strip_tags($html);
+        $b['faq'] = self::strip_claims_faq($b['faq'] ?? []);
+        $desc = self::strip_claims_text((string) ($b['desc'] ?? ''));
+        if ($kw !== '' && (mb_strpos(self::norm($desc), self::norm($kw)) === false || mb_strlen($desc) < 100 || mb_strlen($desc) > 160)) { $desc = self::desc_for($item); }
+        $b['desc'] = $desc;
+        return ['item' => $item, 'b' => $b, 'slug' => self::kw_slug($item)];
+    }
+    private static function seo_meta($id, $kw, $desc) {
+        update_post_meta($id, '_yoast_wpseo_focuskw', $kw); update_post_meta($id, '_yoast_wpseo_metadesc', $desc);
+        update_post_meta($id, 'rank_math_focus_keyword', $kw); update_post_meta($id, 'rank_math_description', $desc);
+    }
+
+    /**
+     * Repairs one already published managed article in place (engine articles and the older `_oxygen_ac_managed` ones): focus keyword,
+     * meta description, keyword sub-heading / opening, full length, forbidden claims. The address (post_name) is never changed:
+     * those URLs are already indexed. Returns true when something was written.
+     */
+    public static function fix_post($id) {
+        $p = get_post($id);
+        if (!$p || $p->post_type !== 'post') { return false; }
+        $item = self::item_of_post($id);
+        $html = (string) $p->post_content; $title = (string) $p->post_title;
+        if ($item) {
+            $item = self::seo_item($item);
+            $kw = (string) $item['kw'];
+            $title = $item['title'];
+        } else {
+            $kw = self::clean_kw(get_post_meta($id, '_oxy_seo_kw', true) ?: (get_post_meta($id, '_oxygen_ac_focus_keyword', true) ?: get_post_meta($id, 'rank_math_focus_keyword', true)));
+        }
+        $html = self::strip_claims($html);
+        if ($kw !== '') { $html = self::kw_lead($html, $kw); $html = self::kw_heading($html, $kw); }
+        if ($item) { $html = self::extend($html, $item, (int) get_post_meta($id, '_oxy_seo_rev', true)); }
+        if ($item) { $desc = self::desc_for($item); }
+        else {
+            $sent = preg_split('/(?<=[.!؟?])\s+/u', trim(preg_replace('/\s+/u', ' ', self::strip_claims_text(self::visible($html)))));
+            $desc = self::compose_desc($kw, array_slice($sent, 0, 3), ' اطلب فنياً الآن.');
+        }
+        $upd = ['ID' => $id];
+        if ($html !== $p->post_content) { $upd['post_content'] = $html; }
+        if ($title !== $p->post_title) { $upd['post_title'] = $title; }
+        if ($desc !== $p->post_excerpt) { $upd['post_excerpt'] = $desc; }
+        if (count($upd) > 1) { $ok = wp_update_post($upd, true); if (is_wp_error($ok) || !$ok) { return false; } }
+        if ($kw !== '') { self::seo_meta($id, $kw, $desc); }
+        if (get_post_meta($id, '_oxy_seo_key', true)) {
+            if ($kw !== '') { update_post_meta($id, '_oxy_seo_kw', $kw); }
+            update_post_meta($id, '_oxy_seo_desc', $desc);
+            $faq = json_decode((string) get_post_meta($id, '_oxy_seo_faq', true), true);
+            if (is_array($faq)) { update_post_meta($id, '_oxy_seo_faq', wp_json_encode(self::strip_claims_faq($faq), JSON_UNESCAPED_UNICODE)); }
+        }
+        return count($upd) > 1;
+    }
+    /** Hourly backfill: managed posts not yet repaired by this version, newest first, 20 per run. */
+    public static function seo_backfill($limit = 20) {
+        $ids = get_posts(['post_type' => 'post', 'post_status' => ['publish', 'draft', 'pending', 'future'], 'numberposts' => (int) $limit, 'orderby' => 'date', 'order' => 'DESC', 'fields' => 'ids', 'no_found_rows' => true,
+            'meta_query' => ['relation' => 'AND',
+                ['relation' => 'OR', ['key' => '_oxy_seo_key', 'compare' => 'EXISTS'], ['key' => '_oxygen_ac_managed', 'compare' => 'EXISTS']],
+                ['relation' => 'OR', ['key' => '_oxy_seo_fix', 'compare' => 'NOT EXISTS'], ['key' => '_oxy_seo_fix', 'value' => self::SEO_FIX_VER, 'compare' => '<', 'type' => 'NUMERIC']]]]);
+        $n = 0;
+        foreach ($ids as $id) {
+            try { if (self::fix_post((int) $id)) { $n++; } } catch (Throwable $e) { /* one bad post never stops the batch */ }
+            update_post_meta((int) $id, '_oxy_seo_fix', self::SEO_FIX_VER);
+        }
+        return $n;
+    }
+
     public static function publish_item($item, $kind, $force_status, $map) {
         $s = self::settings();
+        $item = self::seo_item($item);
         $ctx = self::ctx($item, $map);
-        $b = self::build($item, 0, $ctx);
+        $b = self::prepare($item, self::build($item, 0, $ctx))['b'];
         // one article, one place on the web: too close to anything of the network → AI rewrite, else held as a draft
         $g = class_exists('Oxygen_Uniq') ? Oxygen_Uniq::gate($item, $b) : null;
         if ($g) { $b['html'] = $g['html']; if ($g['status']) { $force_status = $g['status']; } }
+        if (!empty($g['rewritten'])) { $b = self::prepare($item, $b)['b']; }   // the AI's text gets the same rules
         $author = get_users(['role' => 'administrator', 'number' => 1, 'fields' => 'ID']);
-        $b['html'] = self::kw_heading($b['html'], (string) $item['kw']);
         $id = wp_insert_post([
             'post_type' => 'post', 'post_status' => $force_status ?: $s['status'], 'post_title' => $item['title'], 'post_name' => self::kw_slug($item),
             'post_content' => $b['html'], 'post_excerpt' => $b['desc'], 'post_author' => $author ? (int) $author[0] : 1,
@@ -624,6 +931,7 @@ class Oxygen_SEO_Engine {
         update_post_meta($id, '_oxy_seo_desc', $b['desc']);
         update_post_meta($id, '_oxy_seo_faq', wp_json_encode($b['faq'], JSON_UNESCAPED_UNICODE));
         update_post_meta($id, '_oxy_seo_img', $ctx['img']);
+        update_post_meta($id, '_oxy_seo_fix', self::SEO_FIX_VER);   // already written to the current rules: the backfill can skip it
         // Real WordPress post data: tags from the keyword system + compatibility with Yoast / Rank Math so editors see the same focus keyword.
         self::tag_post($id, $item, $b);
         $cat = self::term($item['track'] === 'commercial' ? 'خدمات ' . self::brand() . '' : 'أدلة وإرشادات');
@@ -725,8 +1033,9 @@ class Oxygen_SEO_Engine {
         $rev = (int) get_post_meta($id, '_oxy_seo_rev', true) + 1;
         // an AI-rewritten article keeps its own text; a copy taken out of the index is not worth refreshing
         if (get_post_meta($id, '_oxy_rewritten', true) || get_post_meta($id, '_oxy_dup', true) !== '') { update_post_meta($id, '_oxy_seo_updated', current_time('mysql')); return false; }
+        $item = self::seo_item($item);
         $ctx = self::ctx($item, $map);
-        $b = self::build($item, $rev, $ctx);
+        $b = self::prepare($item, self::build($item, $rev, $ctx), $rev)['b'];
         // a refresh must not turn a unique article back into the template text other sites carry
         if (class_exists('Oxygen_Uniq') && class_exists('Mutqan_Fp')) {
             $chk = Mutqan_Fp::call('check', ['text' => $b['html'], 'url' => (string) get_permalink($id)]);
@@ -734,6 +1043,8 @@ class Oxygen_SEO_Engine {
         }
         wp_update_post(['ID' => $id, 'post_title' => $item['title'], 'post_content' => $b['html'], 'post_excerpt' => $b['desc']]);
         update_post_meta($id, '_oxy_seo_rev', $rev);
+        update_post_meta($id, '_oxy_seo_kw', $item['kw']);
+        update_post_meta($id, '_oxy_seo_fix', self::SEO_FIX_VER);
         self::tag_post($id, $item, $b);
         update_post_meta($id, '_oxy_seo_angle', self::angle_label($item['idx'], $rev));
         update_post_meta($id, '_oxy_seo_updated', current_time('mysql'));
@@ -748,6 +1059,7 @@ class Oxygen_SEO_Engine {
     public static function tick() {
         if (!self::active()) { return; }
         try { self::classify_batch(); } catch (Throwable $e) { /* optional */ }
+        try { self::seo_backfill(20); } catch (Throwable $e) { /* optional: repairs older posts, 20 an hour */ }
         self::ensure_hub();
         if (class_exists('Oxygen_Network') && Oxygen_Network::is_satellite()) { if (class_exists('Oxygen_Network_SEO')) { Oxygen_Network_SEO::tick(); } return; }
         $s = self::settings();

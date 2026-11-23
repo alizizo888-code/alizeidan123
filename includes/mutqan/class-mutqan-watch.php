@@ -108,6 +108,8 @@ final class Mutqan_Watch {
         try { $rows = Mutqan_Store::select('orders', [], ['limit' => 300, 'order' => '-createdAt'], $sys); }
         catch (Throwable $e) { error_log('[mutqan] watch ' . $e->getMessage()); return ['alerts' => 0, 'moved' => 0]; }
         $alerts = 0; $moved = 0;
+        // a new order from a number that came through a referral link (Mutqan_Growth, idea 20)
+        if (class_exists('Mutqan_Growth')) { try { Mutqan_Growth::attach_referrals($rows); } catch (Throwable $e) { error_log('[mutqan] referral ' . $e->getMessage()); } }
         foreach ($rows as $o) {
             try {
                 $seen = is_array($o['watch'] ?? null) ? $o['watch'] : [];

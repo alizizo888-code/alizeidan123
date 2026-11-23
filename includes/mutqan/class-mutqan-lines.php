@@ -29,7 +29,7 @@ final class Mutqan_Lines {
     /** The numbers the owner sent (2026-11-21), with the job each was given. The owner changes any of it from the desk. */
     const SEED = [
         ['phone' => '966549247636', 'role' => 'manager',  'label' => 'المدير', 'status' => 'pending', 'note' => 'الرقم الموحد على Meta — يتفعل كمدير بعد ربطه'],
-        ['phone' => '966549423050', 'role' => 'sales',    'label' => 'مبيعات ١', 'status' => 'active', 'channels' => ['sites', 'articles', 'blogger'], 'note' => 'رقم المواقع الأساسي'],
+        ['phone' => '966549423050', 'role' => 'sales',    'label' => 'مبيعات ١', 'status' => 'active', 'channels' => ['sites', 'articles', 'blogger'], 'note' => 'رقم المواقع الأساسي', 'center' => true],   // owner, 2026-11-23: linked in the WhatsApp Center (Evolution) — one engine per number, so the hub lets go of it
         ['phone' => '966536554731', 'role' => 'sales',    'label' => 'مبيعات ٢ (الطوارئ)', 'status' => 'active', 'channels' => ['sites', 'emergency'], 'note' => 'واتساب أعمال على موبايل المالك + رقم الطوارئ', 'center' => true],
         ['phone' => '966549665320', 'role' => 'sales',    'label' => 'مبيعات ٣', 'status' => 'active', 'channels' => ['ads', 'maps', 'haraj', 'articles', 'blogger']],
         ['phone' => '966549715646', 'role' => 'sales',    'label' => 'مبيعات ٤', 'status' => 'active', 'channels' => ['ads', 'maps', 'haraj', 'articles', 'blogger']],
