@@ -195,6 +195,21 @@ final class Mutqan_PayChoice {
     }
 
     /** POST /paychoice — {op: view|choose, o, k, method}. Open to anyone holding the link. */
+    const CARD_OFF = 'ماكينة الشبكة غير متاحة حاليًا — مع فنيين تانيين. تقدر تدفع كاش للفني أو تحويل بنكي أو بالرابط 🌷';
+
+    /** Ways that stay on the page but cannot be picked now (owner, 2026-11-24): the card machine switched off in «طرق الدفع»
+     *  is not hidden — the customer sees it and is told the machine is out with other technicians. */
+    public static function off_methods() {
+        $card = null;
+        try {
+            foreach (Mutqan_Store::select('payment_methods', [], ['limit' => 100], self::sys()) as $m) {
+                if (!empty($m['deleted']) || (string) ($m['type'] ?? '') !== 'card_on_site') { continue; }
+                $card = ($card === true) ? true : (!isset($m['enabled']) || (bool) $m['enabled']);
+            }
+        } catch (Throwable $e) { /* unknown: leave it on */ }
+        return $card === false ? ['card' => self::CARD_OFF] : [];
+    }
+
     public static function handle($in) {
         $op = (string) ($in['op'] ?? 'view');
         if (class_exists('Mutqan_Limiter')) { Mutqan_Limiter::hit('paychoice', 60, 3600); }
@@ -208,12 +223,15 @@ final class Mutqan_PayChoice {
                 'payLink' => (string) ($o['payLink'] ?? ''),
                 'service' => (string) ($o['specialtyName'] ?? ($o['serviceName'] ?? '')),
                 'methods' => self::METHODS,
+                'off' => (object) self::off_methods(),
             ];
         };
         if ($op === 'view') { return $view($o); }
         if ($op === 'choose') {
             $m = (string) ($in['method'] ?? '');
             if (!isset(self::METHODS[$m])) { throw new Mutqan_Error('bad_method', 'اختار طريقة من القائمة.', 400); }
+            $off = self::off_methods();
+            if (isset($off[$m])) { throw new Mutqan_Error('method_off', $off[$m], 409); }
             $choice = ['method' => $m, 'label' => self::METHODS[$m], 'account' => mb_substr((string) ($in['account'] ?? ''), 0, 80), 'at' => gmdate('c')];
             Mutqan_Store::update('orders', $o['id'], ['paymentChoice' => $choice], self::sys());
             $n = (string) ($o['number'] ?? substr((string) $o['id'], -5));
