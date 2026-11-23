@@ -301,6 +301,19 @@ final class Mutqan_WA_Journey {
         return 'قيّم الخدمة برقم من 1 لـ 5 ⭐ (5 = ممتازة).';
     }
 
+    /**
+     * «تقييم بعد ساعتين» (owner, 2026-11-23 — idea 14): the customer who didn't answer the rating question at the end of the
+     * job is asked once more, two hours later (Mutqan_Watch calls this once per order).
+     */
+    public static function rate_again($o) {
+        if (!self::enabled() || empty($o['id']) || (string) ($o['clientPhone'] ?? '') === '') { return false; }
+        $tech = (string) ($o['technicianName'] ?? '');
+        self::put((string) $o['clientPhone'], $o['id'], 'rate');
+        self::step($o, 'wa_rate_again', 'اتطلب من العميل التقييم تاني بعد ساعتين');
+        return self::tell_customer($o, "👋 أتمنى المكيف شغال معاك تمام بعد زيارة الفني" . ($tech !== '' ? ' ' . $tech : '') . ".
+قيّم الخدمة برقم من *1* لـ *5* ⭐ — رأيك بيوصل للمدير مباشرة وبيفرق معانا.");
+    }
+
     /* ------------------------------------------------------------------ 4. the customer cancelled: ask why, try to keep him */
 
     const WB_REASONS = [

@@ -54,9 +54,17 @@ final class Mutqan_Dispatch {
         $profiles = self::profiles();
         $orders = self::recent_orders();
         $site = self::site_tech($profiles, $s);
-        $pool = $site ? array_values(array_filter($profiles, function ($t) use ($site) { return ($t['userId'] ?? '') !== $site['userId']; })) : $profiles;
+        $backupId = (string) ($s['backupTechId'] ?? '');
+        // the site technician and the standby technician are fall-backs, not part of the first choice
+        $pool = array_values(array_filter($profiles, function ($t) use ($site, $backupId) { $u = (string) ($t['userId'] ?? ''); return (!$site || $u !== $site['userId']) && ($backupId === '' || $u !== $backupId); }));
         $tech = self::pick($order, $pool, $orders, (string) ($s['strategy'] ?? 'smart'));
         if ($tech) { return self::link($order, $tech, 'auto'); }
+        // «الفني الاحتياطي» (owner, 2026-11-23): nobody fits → the standby technician, before the site technician / the pool.
+        $backup = self::backup_tech($profiles, $s);
+        if ($backup && (!$site || $backup['userId'] !== $site['userId']) && self::available($backup, $orders)
+            && !in_array((string) $backup['userId'], self::skipped($order), true)) {
+            return self::link($order, $backup, 'backup');
+        }
         if ($site && ($s['siteFallback'] ?? true) !== false) {
             $doc = self::link($order, $site, 'site-fallback');
             self::warn_staff($order, 'لم يُسند لفني حقيقي (لا يوجد فني متاح) — راجعه وأسنده يدويًا');
@@ -95,6 +103,56 @@ final class Mutqan_Dispatch {
         return null;
     }
 
+    public static function backup_tech($profiles, $s) {
+        $id = (string) ($s['backupTechId'] ?? '');
+        if ($id === '') { return null; }
+        foreach ($profiles as $t) { if ($t['userId'] === $id && ($t['active'] ?? true) !== false) { return $t; } }
+        return null;
+    }
+
+    /** Technicians this order must not go back to: «couldn't fix it», or passed on it without accepting. */
+    public static function skipped($order) {
+        return array_map('strval', array_merge((array) ($order['abortedTechIds'] ?? []), (array) ($order['skipTechIds'] ?? [])));
+    }
+
+    /**
+     * Working hours, in Makkah time — onShift() in assignment.js. shift = ['from' => '08:00', 'to' => '23:00', 'off' => [5]]
+     * (0 = Sunday … 5 = Friday). Over midnight is allowed. No shift = any time.
+     */
+    public static function on_shift($t, $now = null) {
+        $sh = $t['shift'] ?? null;
+        if (!is_array($sh)) { return true; }
+        $now = $now ?? time();
+        $d = (new DateTime('@' . $now))->setTimezone(new DateTimeZone('Asia/Riyadh'));
+        $day = (int) $d->format('w'); $min = (int) $d->format('G') * 60 + (int) $d->format('i');
+        $hm = function ($v) { return preg_match('/^(\d{1,2}):(\d{2})$/', trim((string) $v), $m) ? (int) $m[1] * 60 + (int) $m[2] : null; };
+        $from = $hm($sh['from'] ?? ''); $to = $hm($sh['to'] ?? '');
+        $off = array_map('intval', (array) ($sh['off'] ?? []));
+        if ($from === null || $to === null || $from === $to) { return !in_array($day, $off, true); }
+        if ($from < $to) { return !in_array($day, $off, true) && $min >= $from && $min < $to; }
+        if ($min >= $from) { return !in_array($day, $off, true); }
+        return $min < $to && !in_array(($day + 6) % 7, $off, true);
+    }
+
+    public static function norm_ar($v) {
+        $v = mb_strtolower((string) $v);
+        $v = str_replace(['أ', 'إ', 'آ'], 'ا', $v);
+        $v = str_replace(['ى', 'ة'], ['ي', 'ه'], $v);
+        $v = preg_replace('/[\x{064B}-\x{0652}\x{0640}]/u', '', $v);
+        $v = preg_replace('/(^|\s)ال/u', ' ', $v);
+        return trim(preg_replace('/\s+/u', ' ', $v));
+    }
+
+    /** Coverage area — inZone() in assignment.js. No zones, or an order with no address yet, matches. */
+    public static function in_zone($t, $order) {
+        $zones = array_values(array_filter(array_map([__CLASS__, 'norm_ar'], (array) ($t['zones'] ?? []))));
+        if (!$zones || !is_array($order)) { return true; }
+        $where = self::norm_ar(implode(' ', array_filter([$order['address'] ?? '', $order['city'] ?? '', $order['district'] ?? '', $order['area'] ?? '', $order['neighborhood'] ?? ''], 'is_string')));
+        if ($where === '') { return true; }
+        foreach ($zones as $z) { if (mb_strpos($where, $z) !== false) { return true; } }
+        return false;
+    }
+
     public static function capacity($t) { $c = (float) ($t['dailyCapacity'] ?? 0); return $c > 0 ? $c : self::DEFAULT_CAPACITY; }
 
     private static function is_today($iso) {
@@ -120,6 +178,7 @@ final class Mutqan_Dispatch {
         if (($t['active'] ?? true) === false) { return false; }
         // frozen by the owner, or prepaid with too little credit (Mutqan_Wallet)
         if (class_exists('Mutqan_Wallet') && Mutqan_Wallet::blocked($t, $orders) !== '') { return false; }
+        if (!self::on_shift($t)) { return false; }
         return self::remaining($t, $orders) > 0;
     }
 
@@ -204,8 +263,8 @@ final class Mutqan_Dispatch {
     /** pickTechnician() — smart, capacity or nearest. Null when nobody can take it. */
     public static function pick($order, $techs, $orders, $strategy = 'smart') {
         // a technician who already reported «couldn't fix it» on this job is not sent back to it
-        $skip = array_map('strval', (array) ($order['abortedTechIds'] ?? []));
-        $avail = array_values(array_filter($techs, function ($t) use ($orders, $skip) { return self::available($t, $orders) && !in_array((string) ($t['userId'] ?? ''), $skip, true); }));
+        $skip = self::skipped($order);
+        $avail = array_values(array_filter($techs, function ($t) use ($orders, $skip, $order) { return self::available($t, $orders) && self::in_zone($t, $order) && !in_array((string) ($t['userId'] ?? ''), $skip, true); }));
         if (!$avail) { return null; }
         if ($strategy === 'capacity') {
             usort($avail, function ($a, $b) use ($orders) { return self::remaining($b, $orders) <=> self::remaining($a, $orders); });
