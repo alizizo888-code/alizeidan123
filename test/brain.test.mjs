@@ -52,7 +52,7 @@ const wp = async (op, b) => {
   if (op === 'transcribe') return { text: b.url.includes('wash') ? 'السلام عليكم عايز أغسل مكيف سبليت' : '' }
   if (op === 'traits_ask') return b.stars >= 4 ? { text: '🌟 إيه أكتر حاجة عجبتك في الفني؟\n1️⃣ مظهره' } : null
   if (op === 'traits_set') { calls.push('traits:' + b.picks.join(',')); return { labels: b.picks.map((k) => ({ 1: 'مظهره وشكله', 4: 'أسلوبه وكلامه', 6: 'متقن' })[k] || 'x'), tech: 'الفني علي' } }
-  if (op === 'pay_proof') { calls.push('pay_proof:' + b.id); return { ok: true } }
+  if (op === 'pay_proof') { calls.push('pay_proof:' + b.id); return { ok: true, caption: '🧾 إيصال تحويل — طلب #' + b.id } }
   if (op === 'tech_ask') return { reply: 'جرّب تغيّر الكاباستور (سؤال: ' + b.text + ')' }
   if (op === 'create') { const o = { id: 'o' + (Object.keys(orders).length + 1), number: 1000 + Object.keys(orders).length + 1, status: 'new', clientPhone: b.phone, clientName: b.name, service: b.service, address: b.address, preferredTime: b.time, site: 'رعد السماء', agreedPrice: b.price }; orders[o.id] = o; if (b.confirmed) o.customerConfirmed = true; o.acQuote = b.acQuote; o.spec = b.spec; o.mode = b.mode; o.acType = b.acType; o.desc = b.desc; emit('order.created', o); return { ...view(o), details: ['🛠 الخدمة: ' + b.service + ' [' + b.mode + '/' + (b.acType || '-') + ']', '📅 الموعد: ' + b.time] } }
   if (op === 'claim') { const o = b.seal ? Object.values(orders).find((x) => b.seal.startsWith(x.seal || '#')) : byNum(b.number); if (!o || o.claimCode !== b.code) return null; const first = !o.customerConfirmed; Object.assign(o, { clientPhone: b.phone, customerConfirmed: true }); return { first, card: first ? '🔔 *طلب جديد — رعد السماء*\nرقم الطلب: #' + o.number : '', ...view(o) } }
@@ -144,8 +144,8 @@ m = await say(CUST, '2')
 t('…«2»: which bank (the list), the room hears his choice', /اختار البنك/.test(to(m, CUST)) && /1️⃣ مصرف الراجحي/.test(to(m, CUST)) && !/رأيك في الخدمة/.test(to(m, CUST)) && /اختار الدفع: \*تحويل بنكي\*/.test(to(m, ROOM)), JSON.stringify(m))
 m = await say(CUST, '1')
 t('…«1»: that bank — the IBAN alone to copy, «send the receipt», then the rating as choices', /اسم الحساب/.test(to(m, CUST)) && m.some((x) => x.text.trim() === 'SA0000001111' || / SA0000001111$/.test(x.text)) && /صورة الإيصال/.test(to(m, CUST)) && /5️⃣ راضي جدًا/.test(to(m, CUST)) && !/بتتمسح/.test(to(m, CUST)), JSON.stringify(m))
-m = await brain.inbound({ line: 'l1', phone: CUST, text: '', kind: 'image', name: 'العميل' }).then(() => take())
-t('…his receipt picture: on the order, thanked', calls.some((c) => c.startsWith('pay_proof:')) && /وصلنا الإيصال/.test(to(m, CUST)), JSON.stringify(m))
+m = await brain.inbound({ line: 'l1', phone: CUST, text: '', kind: 'image', name: 'العميل', media: 'https://oxygen11.com/wp-content/uploads/mwc/r.jpg' }); await sleep(); m = take()
+t('…his receipt picture: on the order, thanked', calls.some((c) => c.startsWith('pay_proof:')) && /وصلنا الإيصال/.test(to(m, CUST)) && m.some((x) => T.pkey(x.phone) === T.pkey(ROOM) && /إيصال تحويل/.test(x.text) && /r\.jpg$/.test(x.image || '')), JSON.stringify(m))
 PAY.on = false
 m = await say(CUST, '5')
 t('5 → the technician hears his rating; a pleased customer gets the detailed rating in one message', /قيّمك \*5\/5\*/.test(to(m, TECH)) && /أكتر حاجة عجبتك/.test(to(m, CUST)), JSON.stringify(m))
@@ -499,6 +499,20 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   r = await say(SX, 'الغي الطلب'); await sleep(); r = r.concat(take())
   t('cancel before the technician accepted → cancelled by the site at once, room told', orders.ox.status === 'cancelled' && /تم إلغاء طلبك/.test(to(r, SX)) && /لغى طلب #1999/.test(to(r, ROOM)), JSON.stringify(r))
   SITE.on = false
+}
+
+// ===== held turns survive a restart; a double tap is answered once (owner, 2026-11-24) =====
+{
+  const HR = '966500000091'
+  store.set('heldAll', { [T.pkey(HR)]: { texts: ['مرحبا'], at: Date.now() - 5000, due: Date.now() - 1000, line: 'l1', phone: HR, name: 'حامد' } })
+  const n1 = await brain.resumeHeld(); await flush(); let r = take()
+  t('a turn held before a restart is answered once after it', n1 === 1 && r.length > 0 && JSON.stringify(r).includes('500000091'), JSON.stringify(r))
+  const n2 = await brain.resumeHeld(); await flush(); r = take()
+  t('…and never a second time', n2 === 0 && !to(r, HR), JSON.stringify(r))
+  const DT = '966500000092'
+  r = await say(DT, 'السلام عليكم')
+  await Promise.all([brain.inbound({ line: 'l1', phone: DT, text: 'كم سعر الغسيل' }), brain.inbound({ line: 'l1', phone: DT, text: 'كم سعر الغسيل' })]); await flush(); r = take()
+  t('the same words twice in a row (double tap) → answered once', (to(r, DT).match(/---/g) || []).length < 1 && to(r, DT).length > 0, JSON.stringify(r))
 }
 
 console.log(`wa-hub brain: ${pass} passed, ${fail} failed`)

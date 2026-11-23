@@ -37,7 +37,8 @@ export const DEFAULTS = {
 
 export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now = () => Date.now(), log = () => {}, later = (fn, ms) => setTimeout(fn, ms), cancel = (h) => clearTimeout(h) }) {
   // «الفني الفني علي»: a technician whose name already starts with «الفني» is named once.
-  const send = (phone, text, o) => rawSend(phone, String(text).replace(/(الفن[يى])\s+(?=الفن[يى]\s)/g, ''), o)
+  const outAt = new Map()   // pk → how many times we wrote to him (a repeated message after our answer is a real answer, not a double tap)
+  const send = (phone, text, o) => { const k = T.pkey(phone); outAt.set(k, (outAt.get(k) || 0) + 1); return rawSend(phone, String(text).replace(/(الفن[يى])\s+(?=الفن[يى]\s)/g, ''), o) }
   const cfg = () => { const c = { ...DEFAULTS, ...(store.get('settings', {}) || {}) }; const wc = store.get('wpConfig', {}) || {}; if (!c.testPhone) c.testPhone = wc.testCustomer || ''; if (Number.isFinite(wc.hoursFrom)) c.hoursFrom = wc.hoursFrom; if (Number.isFinite(wc.hoursTo)) c.hoursTo = wc.hoursTo; if (Array.isArray(wc.washVideos)) c.washVideos = wc.washVideos; if (/1️⃣ طلب خدمة|نقدّم خدمات صيانة وإصلاح جميع أنواع المكيفات/.test(c.welcome || '')) c.welcome = DEFAULTS.welcome
     // The desk's numbers (Mutqan_Lines): the manager becomes the room once the owner marked it active.
     if (wc.managerPhone) c.roomPhone = wc.managerPhone
@@ -276,12 +277,21 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
 
   // «اترد عليه؟» — a turn the bot holds back while a person may answer. One per chat; a new message joins it.
   const held = new Map()   // pk → {timer, texts:[], at}
+  // Held turns are also written down (owner, 2026-11-24): a restart of the hub used to lose them and the customer was
+  // never answered. On start, resumeHeld() answers each one once — as if its timer had run.
+  const inMeta = new Map()   // pk → {line, phone, name} of his last message (what a resumed turn needs)
+  const replaying = new Set()
+  const lastIn = new Map()   // pk → our message count when his last message came
+  const keepHeld = (pk, v) => { const all = store.get('heldAll', {}) || {}; if (v) all[pk] = v; else delete all[pk]; store.set('heldAll', all) }
   function holdThen(pk, text, ms, fn) {
+    if (replaying.has(pk)) return Promise.resolve(fn(text)).catch((e) => log('error', 'held: ' + (e?.message || e)))
     const h = held.get(pk) || { texts: [], at: now() }
     if (h.timer) cancel(h.timer)
     h.texts.push(text)
+    const m = inMeta.get(pk) || {}
+    keepHeld(pk, { texts: h.texts, at: h.at, due: now() + ms, line: m.line || '', phone: m.phone || '', name: m.name || '' })
     h.timer = later(() => {
-      held.delete(pk)
+      held.delete(pk); keepHeld(pk, null)
       const c = store.chat(pk)
       if (c && (c.humanAt || 0) >= h.at) return   // a person answered meanwhile: the bot keeps out
       return Promise.resolve(fn(h.texts.join('\n'))).catch((e) => log('error', 'held: ' + (e?.message || e)))
@@ -289,15 +299,43 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (h.timer && h.timer.unref) h.timer.unref()
     held.set(pk, h)
   }
+  /** After a restart: every turn that was held and not answered — answered once now (a person who answered meanwhile wins). */
+  async function resumeHeld() {
+    const all = store.get('heldAll', {}) || {}
+    store.set('heldAll', {})
+    let n = 0
+    for (const [pk, h] of Object.entries(all)) {
+      if (!h || !h.phone || !Array.isArray(h.texts) || !h.texts.length || now() - (h.at || 0) > 6 * 3600000) continue
+      const c = store.chat(pk)
+      if (c && (c.humanAt || 0) >= (h.at || 0)) continue
+      const lastOut = store.msgs(pk, 3).filter((m) => m.dir === 'out' && m.at > (h.at || 0))
+      if (lastOut.length) continue                  // something already answered it: no second answer
+      replaying.add(pk)
+      try { await inbound({ line: h.line, phone: h.phone, text: h.texts.join('\n'), kind: 'text', name: h.name, replay: true }); n++ }
+      catch (e) { log('error', 'resume held: ' + (e?.message || e)) }
+      finally { replaying.delete(pk) }
+    }
+    if (n) log('chat', 'رجّعت ' + n + ' رسالة كانت مستنية قبل إعادة التشغيل')
+    return n
+  }
   const humanActive = (c, within) => c && c.humanAt && now() - c.humanAt < within
 
   /**
    * Every message that arrives on a linked line. `fromMe` is a person typing on the phone itself: it is kept, and the
    * bot gives way — it speaks again only if the customer writes and nobody answers him for two minutes.
    */
-  async function inbound({ line, phone, text = '', kind = 'text', name = '', fromMe = false, self = false, media = '', mime = '' }) {
+  async function inbound({ line, phone, text = '', kind = 'text', name = '', fromMe = false, self = false, media = '', mime = '', replay = false }) {
     const pk = T.pkey(phone); if (!pk) return
     text = String(text || '').trim()
+    if (!fromMe) inMeta.set(pk, { line, phone, name })
+    // the same words twice in a row within a minute (a double tap, a resend): answered once (owner, 2026-11-24)
+    const ck = (store.chat(pk) || {}).kind || ''
+    if (!fromMe && !replay && text && kind === 'text' && !['tech', 'staff', 'team', 'room'].includes(ck) && !(cfg().ourNumbers || {})[pk] && pk !== T.pkey(cfg().roomPhone || '')) {
+      const prev = store.msgs(pk, 1)[0]
+      const dup = prev && prev.dir === 'in' && T.norm(String(prev.text || '')) === T.norm(text) && now() - (prev.at || 0) < 60000 && lastIn.get(pk) === (outAt.get(pk) || 0)
+      if (dup && (held.has(pk) || now() - (prev.at || 0) < 20000)) { log('chat', 'رسالة مكررة اتجاهلت'); return }
+      lastIn.set(pk, outAt.get(pk) || 0)
+    }
     // a voice note (owner, 2026-11-23): heard and answered like a written message — the words are kept with it
     let heard = ''
     if (!fromMe && ['voice', 'audio'].includes(kind) && media) {
@@ -311,7 +349,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       mirror(pk, line, 'out', shown, 'phone')
       return
     }
-    store.addMsg({ pk, line, dir: 'in', text: heard ? '🎤 ' + heard : shown, kind, by: name })
+    if (!replay) store.addMsg({ pk, line, dir: 'in', text: heard ? '🎤 ' + heard : shown, kind, by: name })
     if (heard) { text = heard; kind = 'text' }
     const c = store.touchChat(pk, { phone: T.intl(phone), line: c0?.line || line, name: name || c0?.name || '', lastAt: now(), lastText: shown, unread: (c0?.unread || 0) + 1 })
     mirror(pk, line, 'in', shown)
@@ -322,7 +360,11 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       let ap = null; try { ap = JSON.parse(store.get('awaitproof:' + pk) || 'null') } catch {}
       if (ap && now() - ap.at < 3 * DAY) {
         store.set('awaitproof:' + pk, '')
-        wp('pay_proof', { id: ap.o, kind }).catch(() => {})
+        // saved and stamped on the site; operations get the picture itself here with the order written under it
+        wp('pay_proof', { id: ap.o, kind, url: media || '' }).then((r) => {
+          const room = cfg().roomPhone
+          if (r && r.caption && room) send(T.intl(room), r.caption, { purpose: 'room', image: kind === 'image' && /^https:\/\//.test(media || '') ? media : '', dedup: 'proof-' + ap.o + '-' + ap.at })
+        }).catch(() => {})
         return say(phone, line, 'وصلنا الإيصال ✅ شكرًا ليك، والعمليات هتأكد الدفع 🌷')
       }
     }
@@ -1470,5 +1512,5 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     try { const r = await wp('report', { what: 'report' }); if (r?.text) toRoom('🌙 *ملخص اليوم*\n' + r.text, 'daily-' + day) } catch (e) { log('warn', 'daily: ' + e.message) }
   }
 
-  return { onEvent, inbound, contact, cfg, template, daily, who }
+  return { onEvent, inbound, contact, cfg, template, daily, who, resumeHeld }
 }

@@ -464,5 +464,7 @@ const server = http.createServer(async (req, res) => {
 if (process.env.HUB_NO_LISTEN !== '1') {
   server.listen(PORT, () => console.log('mutqan wa-hub on :' + PORT))
   initLines().catch((e) => log('error', 'lines: ' + e.message))
+  // turns held before a restart: answered once, a few seconds after start (the lines need a moment to come up)
+  setTimeout(() => brain.resumeHeld().catch((e) => log('error', 'resume: ' + e.message)), 8000)
 }
 export { server, store, brain, send, pump }
