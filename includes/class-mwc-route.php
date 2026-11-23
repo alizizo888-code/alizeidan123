@@ -24,7 +24,9 @@ class MWC_Route {
         add_action('mwc_bot_incoming', function ($m, $chat, $acc) {
             self::to_hub(['account' => (int) $acc['id'], 'chat_id' => (int) $chat['id'], 'phone' => $chat['wa_id'], 'name' => $chat['name'] ?: $chat['push_name'],
                 'text' => in_array($m['type'], ['text', 'template'], true) ? $m['body'] : ($m['type'] === 'location' ? self::loc_url($m['body']) : ($m['body'] ?? '')),
-                'kind' => $m['type'] === 'template' ? 'text' : $m['type'], 'source' => $chat['source'] ?? '', 'brand' => $acc['config']['brand'] ?? '', 'fromMe' => false]);
+                'kind' => $m['type'] === 'template' ? 'text' : $m['type'], 'source' => $chat['source'] ?? '', 'brand' => $acc['config']['brand'] ?? '', 'fromMe' => false,
+                // a voice note / picture / file: where it is, so the bot can listen to it (owner, 2026-11-23)
+                'media' => in_array($m['type'], ['voice', 'audio', 'image', 'document'], true) ? (string) ($m['media_url'] ?? '') : '', 'mime' => (string) ($m['mime'] ?? '')]);
         }, 10, 3);
         // موظف رد بنفسه (من التطبيق أو من الموبايل): البوت يعرف إن فيه بني آدم شغال على المحادثة
         add_action('mwc_sent', function ($row, $chat, $acc) {
