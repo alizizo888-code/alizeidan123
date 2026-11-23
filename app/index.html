@@ -1025,6 +1025,9 @@ function msgHTML(m, prev) {
   const showBody = m.body && !['location', 'contact'].includes(m.type);
   inner += `${showBody ? `<span class="txt">${linkify(m.body)}</span>` : ''}<span class="meta">${m.dir === 'out' ? `<span class="tick ${m.status}">${TICKS[m.status] || ''}</span>` : ''}${fmtTime(m.ts)}</span><div style="clear:both"></div>`;
   if (m.status === 'failed') inner += `<div class="err">⚠️ ${esc(m.error || 'ما اتبعتتش')} <button data-retry="${m.id}">إعادة</button></div>`;
+  // اتمسحت/اتعدّلت عند صاحبها — عندنا متسجلة (صاحب الشغل 2026-11-24)
+  if ((m.edits || []).length) inner += `<div class="msg-hist" style="margin-top:4px;padding:4px 8px;border-radius:8px;background:#f59e0b22;font-size:12px;color:#b45309">✏️ اتعدّلت ${m.edits.length > 1 ? m.edits.length + ' مرات' : ''} — ${m.edits.map(e => `الساعة ${fmtTime(e.at)} كانت: «${esc(String(e.old || '').slice(0, 300))}»`).join('<br>')}</div>`;
+  if (m.deleted_at) inner += `<div class="msg-del" style="margin-top:4px;padding:4px 8px;border-radius:8px;background:#ef444422;font-size:12px;color:#b91c1c">🗑️ اتمسحت ${m.dir === 'in' ? 'عند العميل' : 'عند الجميع'} — ${fmtDay(m.deleted_at)} الساعة ${fmtTime(m.deleted_at)}</div>`;
   const day = !prev || dayKey(prev.ts) !== dayKey(m.ts) ? `<div class="daysep">${fmtDay(m.ts)}</div>` : '';
   return day + `<div class="m ${m.dir} ${first ? 'first' : ''}" data-mid="${m.id}"><div class="bub">${inner}</div><button class="mbtn">${ICON.down}</button></div>`;
 }

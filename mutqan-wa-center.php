@@ -2,7 +2,7 @@
 /**
  * Plugin Name: مركز الواتساب — Mutqan WA Center
  * Description: صندوق محادثات واتساب موحّد لكل أرقام أكسجين/متقن (Meta الرسمي + أرقام QR على السيرفر عبر Evolution API) — صوت، ريكورد، صور، فيديو، ملفات، بروفايل العميل، ردود جاهزة وأزرار خدمات قابلة للتعديل.
- * Version: 1.5.4
+ * Version: 1.5.5
  * Author: Oxygen / Mutqan
  * Text Domain: mutqan-wa-center
  * Requires PHP: 7.4
@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('MWC_VERSION', '1.5.4');
+define('MWC_VERSION', '1.5.5');
 define('MWC_DIR', plugin_dir_path(__FILE__));
 define('MWC_URL', plugin_dir_url(__FILE__));
 define('MWC_NS', 'mwc/v1');

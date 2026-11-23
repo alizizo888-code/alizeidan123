@@ -228,7 +228,7 @@ class MWC_Evolution extends MWC_Provider {
     /** ينشئ الرقم على السيرفر لو مش موجود، يربط الـwebhook، ويرجّع QR */
     function connect() {
         $hook = add_query_arg('s', get_option('mwc_webhook_secret'), rest_url(MWC_NS . '/webhook/evolution'));
-        $events = ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE', 'QRCODE_UPDATED', 'CONTACTS_UPSERT', 'SEND_MESSAGE'];
+        $events = ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'MESSAGES_DELETE', 'MESSAGES_EDITED', 'CONNECTION_UPDATE', 'QRCODE_UPDATED', 'CONTACTS_UPSERT', 'SEND_MESSAGE'];
         $st = $this->state();
         if ($st === 'unknown' || $st === '') {
             $this->call('POST', 'instance/create', ['instanceName' => $this->cfg['instance'] ?? ('mwc' . $this->acc['id']),
