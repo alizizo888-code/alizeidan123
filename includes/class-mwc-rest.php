@@ -563,7 +563,9 @@ class MWC_Rest {
         }
         // لو الرسالة متسجلة قبل كده (رسالة طالعة اتبعتت من التطبيق) ما نكررهاش
         global $wpdb;
-        if ($m['ext_id'] && $wpdb->get_var($wpdb->prepare("SELECT id FROM " . MWC_Store::t('messages') . " WHERE ext_id=%s", $m['ext_id']))) return;
+        // نفس الاتجاه بس: رسالة من رقم في المركز لرقم تاني في المركز ليها نفس الـid على الجهتين — كانت الواردة بتتشال
+        // على إنها مكررة، فالرسايل بين رقمين من أرقامنا (والاختبارات) ما كانتش بتظهر ولا بتوصل للبوت (2026-11-23)
+        if ($m['ext_id'] && $wpdb->get_var($wpdb->prepare("SELECT id FROM " . MWC_Store::t('messages') . " WHERE ext_id=%s AND direction=%s", $m['ext_id'], $from_me ? 'out' : 'in'))) return;
         self::ingest($acc, $jid, $from_me ? '' : ($d['pushName'] ?? ''), $m, $from_me);
     }
 }
