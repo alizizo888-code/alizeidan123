@@ -423,10 +423,12 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   ]
   const OPEN_WELCOMES = ['أهلًا وسهلًا 🌷 وعليكم السلام\nأقدر أساعدك إزاي؟', 'أهلًا بيك 🌷\nتحت أمرك — محتاج إيه؟', 'مرحبًا بيك 🌷\nقولّي أقدر أخدمك في إيه؟']
   const pickOne = (L) => L[Math.floor(now() / 1000) % L.length]
-  function welcome(g) {
+  function welcome(g, text = '') {
     const C = cfg()
+    const r = replyGreet(text)
     if (!C.welcome || C.welcome === DEFAULTS.welcome) {
       let t = g.known === false ? pickOne(OPEN_WELCOMES) : pickOne(WELCOMES).replace(/\{site\}/g, g.site || C.siteName)
+      if (r) t = r + '\n' + t.replace(/^السلام عليكم و/, '').replace(/ وعليكم السلام/, '')
       if (g.known !== false && g.source) t += '\nشايفين إنك جاي من «' + g.source + '» — نقدر نساعدك فيها على طول.'
       if (!isOpen()) t += '\n\n' + C.afterHours.replace(/\{phone\}/g, C.emergencyPhone)
       return t
@@ -440,9 +442,46 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     return t + '\n\n' + M.sectionsText(C.offSections)
   }
   /** One line before getting straight to what he asked for — no list of everything we do. */
-  function hello(g) {
+  function hello(g, text = '') {
     const C = cfg()
-    return 'مرحبًا بكم في *' + (g.site || C.siteName) + '* 🌷' + (isOpen() ? '' : '\n' + C.afterHours.replace(/\{phone\}/g, C.emergencyPhone))
+    const r = replyGreet(text)
+    return (r ? r + '\n' : '') + 'مرحبًا بكم في *' + (g.site || C.siteName) + '* 🌷' + (isOpen() ? '' : '\n' + C.afterHours.replace(/\{phone\}/g, C.emergencyPhone))
+  }
+
+  /** «السلام عليكم» gets its answer first, always (owner, 2026-11-24: «يرد السلام، يرد التحية»). */
+  function replyGreet(text) {
+    const n = T.norm(String(text || ''))
+    if (/سلام عليكم|السلام|سلام عليك|السلامو|سلامو/.test(n)) return 'وعليكم السلام ورحمة الله وبركاته 🌷'
+    if (/صباح الخير|صباحو|صباح الفل|صباح النور/.test(n)) return 'صباح النور والسرور ☀️'
+    if (/مساء الخير|مساءو|مساء الفل|مساء النور/.test(n)) return 'مساء النور والسرور 🌙'
+    if (/^(هلا|اهلا|أهلا|مرحبا|مرحب|هاي|هلو)/.test(n)) return 'أهلًا وسهلًا بيك 🌷'
+    return ''
+  }
+
+  /**
+   * A first word on what he describes (owner, 2026-11-24): «بيهرب مية»، «التبريد ضعيف»… — the likely causes in two
+   * lines, that the technician checks them on the spot, and the question that matters: when were they last washed.
+   * A small piece of care: it does not book anything, it makes him feel heard.
+   */
+  function diagnose(text) {
+    const n = T.norm(String(text || ''))
+    const L = []
+    if (/(بيهرب|يهرب|تهريب|بينقط|ينقط|تنقيط|بيسرب|يسرب|تسريب|مي[هة] ?(بتنزل|نازله|بتنقط)|ماي[هة]|موي[هة])/.test(n) && /(مكيف|تكييف|سبليت|شباك|مي|ماي|موي)/.test(n))
+      L.push('💧 تهريب المية من المكيف غالبًا بيكون من *انسداد خرطوم التصريف* أو *فلتر/صينية متسخة*، وأحيانًا من ميل في التركيب.')
+    if (/(تبريد ضعيف|التبريد ضعيف|مش بيبرد|ما يبرد|مايبرد|لا يبرد|بيطلع هوا سخن|هوا حار|هواء حار|ضعيف|مش ساقع|مو بارد)/.test(n))
+      L.push('🌡️ ضعف التبريد أسبابه المعتادة: *فلاتر وكويل متسخين* (وده أشهر سبب)، أو *نقص فريون*، أو مشكلة في *المكثف/الكمبروسر*.')
+    if (/(صوت|ازعاج|إزعاج|طقطق|بيزن|يزن|خبط|اهتزاز)/.test(n) && /(مكيف|تكييف|سبليت|شباك|المروح)/.test(n))
+      L.push('🔊 الصوت العالي غالبًا من *مروحة محتاجة تنظيف/تزييت* أو *قطعة مفكوكة* أو اهتزاز في القاعدة.')
+    if (/(ريح[ةه]|ريحه وحشه|رائح[ةه]|عفن)/.test(n))
+      L.push('👃 الريحة غالبًا من *تراكم أوساخ ورطوبة* جوه الوحدة — الغسيل الكامل بيحلها في أغلب الأحوال.')
+    if (/(مش بيشتغل|ما يشتغل|مايشتغل|لا يشتغل|فاصل|بيفصل|يفصل|واقف|مش راضي يشتغل|عطلان|خربان)/.test(n) && /(مكيف|تكييف|سبليت|شباك|غرف[ةه]|ثلاج)/.test(n))
+      L.push('⚡ لو بيفصل أو مش بيشتغل: ممكن *كباستور (مكثف تشغيل)*، أو *حماية/فيوز*، أو مشكلة في *الريموت أو الكارت*.')
+    if (/(ثلج|تلج|بيجمد|تجميد على|فريزر|غرف[ةه] (تبريد|تجميد))/.test(n) && /(مش|ضعيف|ما|لا|حرار|بيسيح|ساح)/.test(n))
+      L.push('❄️ في غرف التبريد والتجميد: أشهر الأسباب *نقص الفريون*، *جوان باب تالف*، أو *مروحة/ديفروست* مش شغالين.')
+    if (!L.length) return ''
+    L.push('', 'وطبعًا الفني أول ما يوصل *هيفحص ويأكد السبب بالظبط* قبل أي شغل 👨‍🔧')
+    if (/(مكيف|تكييف|سبليت|شباك)/.test(n) && !/غسيل|غسلت|اغسل/.test(n)) L.push('وسؤال صغير: *آخر مرة المكيفات اتغسلت إمتى؟* 🧼 الغسيل والصيانة الدورية كل 3–4 شهور بتحل أغلب المشاكل دي وبتوفر كهربا كمان.')
+    return L.join('\n')
   }
 
   /** What we last talked about with him: the last order summary or the last service he asked for, before today. */
@@ -462,9 +501,10 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
    * new one.
    */
   async function welcomeBack(c, line, phone, text, name, g, since) {
-    if (wantsService(text)) { say(phone, line, 'أهلًا بعودتك' + (g.name ? ' يا ' + g.name : '') + ' 🌷'); return startFrom(store.chat(c.pk), line, phone, text, name) }
+    const rg = replyGreet(text)
+    if (wantsService(text)) { const dx = diagnose(text); say(phone, line, (rg ? rg + '\n' : '') + 'أهلًا بعودتك' + (g.name ? ' يا ' + g.name : '') + ' 🌷' + (dx ? '\n\n' + dx : '')); return startFrom(store.chat(c.pk), line, phone, text, name) }
     const topic = g.lastService || lastTopic(c.pk, since)
-    const L = ['أهلًا بعودتك' + (g.name ? ' يا ' + g.name : '') + ' 🌷 نورتنا تاني في *' + (g.site || cfg().siteName) + '*.']
+    const L = [(rg ? rg + '\n' : '') + 'أهلًا بعودتك' + (g.name ? ' يا ' + g.name : '') + ' 🌷 نورتنا تاني في *' + (g.site || cfg().siteName) + '*.']
     if (g.lastService) L.push('آخر مرة نفذنالك «' + g.lastService + '»' + (g.lastDays ? ' من ' + g.lastDays + ' يوم' : '') + (g.warrantyLeft ? '، وضمانها لسه ساري ' + g.warrantyLeft + ' يوم 🛡' : '') + '.')
     else if (topic) L.push('آخر مرة كنا بنتكلم عن «' + topic + '».')
     L.push('', topic ? 'تحب نكمل في نفس الموضوع، ولا محتاج خدمة جديدة؟' : 'تحت أمرك، إيش اللي تحتاجه النهارده؟')
@@ -579,10 +619,10 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (first) {
       store.touchChat(c.pk, { welcomedAt: now() })
       // He said what he wants: one line of welcome, then straight to it. A bare greeting: the welcome and the sections.
-      if (!isOpen() && EMERGENCY.test(T.norm(text))) { say(phone, line, hello(g)); return reception(store.chat(c.pk), line, phone, text, name) }
-      if (wantsService(text)) { say(phone, line, hello(g)); return startFrom(store.chat(c.pk), line, phone, text, name) }
+      if (!isOpen() && EMERGENCY.test(T.norm(text))) { say(phone, line, hello(g, text)); return reception(store.chat(c.pk), line, phone, text, name) }
+      if (wantsService(text)) { const dx = diagnose(text); say(phone, line, hello(g, text) + (dx ? '\n\n' + dx : '')); return startFrom(store.chat(c.pk), line, phone, text, name) }
       saveFlow(c.pk, { step: 'main' })
-      say(phone, line, welcome(g))
+      say(phone, line, welcome(g, text))
       return
     }
     if (humanActive(c, 30 * 60000)) return holdThen(c.pk, text, C.humanFirstSec * 1000, (t) => reception(store.chat(c.pk), line, phone, t, name))
@@ -608,7 +648,9 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     }
     if (it === 'human') return notifyHuman(c, text, true)
     if (M.isMenu(text) || /^[1-9]$/.test(n)) return flow(c, line, phone, text, name, flowOf(c) || { step: 'main' })
-    if (wantsService(text)) return startFrom(c, line, phone, text, name)
+    if (wantsService(text)) { const dx = diagnose(text); if (dx) say(phone, line, (replyGreet(text) ? replyGreet(text) + '\n' : '') + dx); return startFrom(c, line, phone, text, name) }
+    // a greeting in the middle of the day's talk gets its answer, not silence
+    if (replyGreet(text) && n.length < 30) return say(phone, line, replyGreet(text) + '\nتحت أمرك — أقدر أساعدك في إيه؟')
 
     // The site's AI: understands the request, prices and bargains within the owner's floor, books, hands over.
     const g = await greetOf(c, text)

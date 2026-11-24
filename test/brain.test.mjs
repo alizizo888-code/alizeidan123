@@ -501,6 +501,17 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   SITE.on = false
 }
 
+// ===== greeting returned, a first word on the fault (owner, 2026-11-24) =====
+{
+  const G1 = '966577712301'
+  let r = await say(G1, 'السلام عليكم')
+  t('«السلام عليكم» is answered «وعليكم السلام» first', /^وعليكم السلام ورحمة الله وبركاته/.test(to(r, G1)), to(r, G1))
+  const G2 = '966577712302'
+  r = await say(G2, 'السلام عليكم المكيف بيهرب مية والتبريد ضعيف')
+  const x = to(r, G2)
+  t('a described fault: likely causes, the technician checks on the spot, and when were they washed', /وعليكم السلام/.test(x) && /خرطوم التصريف/.test(x) && /نقص فريون/.test(x) && /هيفحص ويأكد السبب/.test(x) && /اتغسلت إمتى/.test(x), x)
+}
+
 // ===== held turns survive a restart; a double tap is answered once (owner, 2026-11-24) =====
 {
   const HR = '966500000091'
