@@ -103,7 +103,7 @@ class MWC_Route {
     /* ======================= التوجيه ======================= */
     static function routing() {
         $r = get_option('mwc_routing');
-        return array_merge(['technicians' => [], 'auto' => [], 'manager_account' => 0, 'room_phone' => '966536554731', 'notify_manager' => 0, 'rr' => []], is_array($r) ? $r : []);
+        return array_merge(['technicians' => [], 'auto' => [], 'manager_account' => 0, 'room_phone' => '966536554731', 'notify_manager' => 0, 'store_link' => 1, 'rr' => []], is_array($r) ? $r : []);
     }
 
     static function save_routing($in) {
@@ -112,7 +112,7 @@ class MWC_Route {
             return ['name' => sanitize_text_field($t['name'] ?? ''), 'phone' => MWC_Leads::norm($t['phone'] ?? ''), 'branch' => sanitize_text_field($t['branch'] ?? ''), 'skill' => sanitize_text_field($t['skill'] ?? '')];
         }, (array) $in['technicians']), function ($t) { return $t['name'] !== '' && $t['phone'] !== ''; }));
         if (isset($in['auto'])) { $a = []; foreach ((array) $in['auto'] as $acc => $names) $a[(int) $acc] = array_values(array_filter(array_map('sanitize_text_field', (array) $names))); $r['auto'] = $a; }
-        foreach (['manager_account', 'notify_manager'] as $k) if (isset($in[$k])) $r[$k] = (int) $in[$k];
+        foreach (['manager_account', 'notify_manager', 'store_link'] as $k) if (isset($in[$k])) $r[$k] = (int) $in[$k];
         if (isset($in['room_phone'])) $r['room_phone'] = MWC_Leads::norm($in['room_phone']);
         update_option('mwc_routing', $r, false);
         MWC_Store::log('routing', 'تعديل إعدادات التوجيه والفنيين');

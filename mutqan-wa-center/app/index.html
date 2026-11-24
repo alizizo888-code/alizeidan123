@@ -2261,6 +2261,7 @@ function setRouting(el) {
         ${rt.hub.linked ? `<button class="btn ${rt.hub.on ? 'danger' : ''}" id="rBot">${rt.hub.on ? '⏸️ إيقاف البوت' : '▶️ تشغيل البوت'}</button>` : '<span style="color:var(--warn)">البوت لسه مش متوصل بالسيرفر</span>'}</div>
       <div class="card"><b>📥 رقم المدير وغرفة العمليات</b><div class="grid3" style="margin-top:8px"><div class="fld"><label>رقم المدير (بيبعت منه للفنيين والعمليات)</label><select id="rMgr"><option value="0">تلقائي (أول رقم مدير متصل)</option>${S.accounts.map(a => `<option value="${a.id}" ${rt.manager_account == a.id ? 'selected' : ''}>${esc(a.label)} — ${esc(localPhone(a.phone))}</option>`).join('')}</select></div>
         <div class="fld"><label>رقم غرفة العمليات</label><input id="rRoom" dir="ltr" value="${esc(localPhone(rt.room_phone || ''))}"></div></div></div>
+      <div class="card"><b>📲 رابط صفحة الطلب</b><p class="muted" style="margin:6px 0">أول ما البوت يفهم الخدمة (مثلًا مكيفات ← غسيل)، بيبعت للعميل رابط صفحة الطلب والخدمة متحددة فيها — يكمّل العدد والموقع والموعد بضغطة.</p><label class="chip" style="font-size:14px"><input type="checkbox" id="rStore" ${rt.store_link !== 0 ? 'checked' : ''}> شغّال</label></div>
       <div class="card"><b>🔄 التوزيع التلقائي</b><p class="muted" style="margin:6px 0">أي عميل جديد على الرقم بيتوزع بالدور على الموظفين اللي تختارهم.</p>${S.accounts.filter(a => a.active).map(a => `<div class="row" style="flex-wrap:wrap;gap:6px;padding:6px 0;border-bottom:1px solid var(--line)"><span class="tag" style="background:${esc(a.color)};min-width:90px;text-align:center">${esc(a.label)}</span>${(rt.staff || []).map(s => `<label class="chip"><input type="checkbox" class="rAuto" data-acc="${a.id}" value="${esc(s)}" style="width:auto;margin-left:4px" ${((rt.auto || {})[a.id] || []).includes(s) ? 'checked' : ''}>${esc(s)}</label>`).join('')}</div>`).join('')}</div>
       <div class="card"><b>🛠️ الفنيين</b> <span class="muted" style="font-size:12.5px">(اللي بيتحوّلهم كروت العملاء على واتساب)</span><div id="rT" style="margin-top:8px"></div><button class="btn ghost" id="rTA">+ فني</button></div>
       <button class="btn" id="rS">حفظ</button>`;
@@ -2270,7 +2271,7 @@ function setRouting(el) {
     $('#rBot', el) && ($('#rBot', el).onclick = async () => { try { await API.hubSave(!rt.hub.on); toast(rt.hub.on ? 'البوت اتوقف' : 'البوت اشتغل ✅'); setRouting(el); } catch (e) { toast(e.message); } });
     $('#rS', el).onclick = async () => {
       const auto = {}; $$('.rAuto', el).forEach(c => { if (c.checked) (auto[c.dataset.acc] = auto[c.dataset.acc] || []).push(c.value); });
-      try { S.routing = await API.routingSave({technicians: techs, auto, manager_account: +$('#rMgr', el).value, room_phone: $('#rRoom', el).value}); toast('اتحفظ ✅'); setRouting(el); } catch (e) { toast(e.message); }
+      try { S.routing = await API.routingSave({technicians: techs, auto, manager_account: +$('#rMgr', el).value, room_phone: $('#rRoom', el).value, store_link: $('#rStore', el).checked ? 1 : 0}); toast('اتحفظ ✅'); setRouting(el); } catch (e) { toast(e.message); }
     };
   }).catch(e => el.innerHTML = `<div class="empty">${esc(e.message)}</div>`);
 }
