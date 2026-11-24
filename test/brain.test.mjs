@@ -511,7 +511,7 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   const G2 = '966577712302'
   r = await say(G2, 'السلام عليكم المكيف بيهرب مية والتبريد ضعيف')
   const x = to(r, G2)
-  t('a described fault: likely causes, the technician checks on the spot, and when were they washed', /وعليكم السلام/.test(x) && /خرطوم التصريف/.test(x) && /نقص فريون/.test(x) && /هيفحص ويأكد السبب/.test(x) && /اتغسلت إمتى/.test(x), x)
+  t('a described fault: short — a wash or a technician to check, and an offer to book', /وعليكم السلام/.test(x) && /محتاج غسيل/.test(x) && /الفني يشوفه ويأكد السبب/.test(x) && /أحجزلك/.test(x) && x.split('\n').length < 30, x)
 }
 
 // ===== the store link once the service is understood (owner, 2026-11-24) =====
