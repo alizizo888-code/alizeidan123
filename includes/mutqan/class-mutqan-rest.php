@@ -929,6 +929,10 @@ final class Mutqan_Rest {
         $full = esc_attr($nb['full']);
         $html = preg_replace('#<title>.*?</title>#su', '<title>' . esc_html($nb['full'] . ' — صيانة تكييف وغرف تبريد وتجميد وسباكة وكهرباء') . '</title>', $html, 1);
         $html = preg_replace('#(<meta property="og:title" content=")[^"]*(")#u', '${1}' . $full . '${2}', $html, 1);
+        // the card WhatsApp shows under our order link (owner, 2026-11-24): a picture and one line
+        $img = esc_url(home_url('/app/wa-card.png'));
+        if (strpos($html, 'og:image') === false) { $html = str_replace('</head>', '<meta property="og:image" content="' . $img . '" /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta name="twitter:card" content="summary_large_image" /></head>', $html); }
+        $html = preg_replace('#(<meta property="og:description" content=")[^"]*(")#u', '${1}' . esc_attr('اطلب صيانة أو غسيل أو تركيب مكيف في دقيقة — فنيين معتمدين وضمان على الشغل') . '${2}', $html, 1);
         $html = preg_replace('#(<meta name="(?:apple-mobile-web-app-title|application-name)" content=")[^"]*(")#u', '${1}' . esc_attr($nb['name']) . '${2}', $html);
         $html = preg_replace('#<script type="application/ld\+json">.*?</script>#su', '', $html, 1);
         // Only swap the splash emblem where this face has an emblem of its own; the stock one is a
