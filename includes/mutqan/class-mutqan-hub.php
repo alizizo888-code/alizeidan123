@@ -326,6 +326,14 @@ final class Mutqan_Hub {
             }
             case 'greet': return self::greet((string) ($in['phone'] ?? ''), (string) ($in['text'] ?? ''), (string) ($in['brand'] ?? ''));
             case 'converse': return self::converse($in);
+            // «رابط صفحة الطلب» (owner, 2026-11-24): switched on/off from the WhatsApp center's settings
+            case 'store_link': {
+                if (class_exists('MWC_Route') && empty(MWC_Route::routing()['store_link'])) { return ['off' => true]; }
+                $q = ['specialty' => preg_replace('/[^a-z_]/', '', (string) ($in['spec'] ?? 'ac')) ?: 'ac', 'src' => 'wa'];
+                foreach (['kind', 'type'] as $k) { if (!empty($in[$k])) { $q[$k] = mb_substr(sanitize_text_field((string) $in[$k]), 0, 40); } }
+                if ((int) ($in['qty'] ?? 0) > 0) { $q['qty'] = min(49, (int) $in['qty']); }
+                return ['url' => home_url('/app/') . '#/new?' . http_build_query($q, '', '&', PHP_QUERY_RFC3986)];
+            }
             case 'quote': return self::quote((string) ($in['text'] ?? ''));
             // The WhatsApp menu's price: counted by type (split / window / other), priced by the owner's table — never by a model.
             case 'ac_price': return self::ac_price($in);
