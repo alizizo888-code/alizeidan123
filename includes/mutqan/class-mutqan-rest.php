@@ -38,7 +38,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner', 'fp', 'field', 'trainer', 'concierge', 'lines', 'outreach', 'paychoice', 'growth', 'schedule', 'proof', 'techid'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner', 'fp', 'field', 'trainer', 'concierge', 'lines', 'outreach', 'paychoice', 'growth', 'schedule', 'proof', 'techid', 'maintenance'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -58,6 +58,13 @@ final class Mutqan_Rest {
                 try { $out = Mutqan_WA_Central::inbound((string) $req->get_body(), (string) $req->get_header('x-mutqan-signature')); $res = new WP_REST_Response(['data' => $out], 200); }
                 catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
                 return $res;
+            }]);
+        // «وضع الصيانة»: the customer app asks on start (a cached app shell would otherwise open as usual)
+        register_rest_route(self::NS, '/maint', ['methods' => 'GET', 'permission_callback' => '__return_true',
+            'callback' => function () {
+                $o = get_option('mutqan_maintenance', []); $o = is_array($o) ? $o : [];
+                $res = new WP_REST_Response(['on' => !empty($o['on']), 'title' => (string) ($o['title'] ?? ''), 'msg' => (string) ($o['msg'] ?? '')], 200);
+                $res->header('Cache-Control', 'no-store'); return $res;
             }]);
         // One unchanging download address per Android app; the phone is sent to the public release file.
         register_rest_route(self::NS, '/apk', ['methods' => 'GET', 'permission_callback' => '__return_true',
@@ -692,6 +699,7 @@ final class Mutqan_Rest {
     public static function h_schedule($req, $p) { return Mutqan_Schedule::handle(self::body($req), $p); }
     public static function h_proof($req, $p) { return Mutqan_Proof::handle(self::body($req), $p); }
     public static function h_techid($req, $p) { return Mutqan_TechId::handle(self::body($req), $p); }
+    public static function h_maintenance($req, $p) { return Mutqan_Maintenance::handle(self::body($req), $p); }
 
     /** «طرق الدفع» page of one order — open to whoever holds its link (Mutqan_PayChoice). */
     public static function h_paychoice($req, $p) { return Mutqan_PayChoice::handle(self::body($req)); }
