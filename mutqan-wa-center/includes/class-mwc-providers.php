@@ -166,7 +166,8 @@ class MWC_Evolution extends MWC_Provider {
         $type = $m['type'];
         $quoted = !empty($m['reply_to']) ? ['quoted' => ['key' => ['id' => $m['reply_to']]]] : [];
         if ($type === 'text' || $type === 'template') {
-            $r = $this->call('POST', 'message/sendText/' . $this->inst(), ['number' => $num, 'text' => $m['body']] + $quoted);
+            // a link shows its card (picture + title) under the text — our order page link (2026-11-24)
+            $r = $this->call('POST', 'message/sendText/' . $this->inst(), ['number' => $num, 'text' => $m['body'], 'linkPreview' => (bool) preg_match('#https?://#', (string) $m['body'])] + $quoted);
         } elseif ($type === 'voice') {
             $r = $this->call('POST', 'message/sendWhatsAppAudio/' . $this->inst(), ['number' => $num, 'audio' => $this->media_payload($m)] + $quoted, 120);
         } elseif ($type === 'location') {
