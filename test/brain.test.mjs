@@ -31,9 +31,11 @@ const RATE1 = { on: false }   // the one-message rating (owner, 2026-11-24)   //
 const events = []
 function emit(type, o, extra = {}) { events.push({ type, order: view(o), ...extra }) }
 async function flush() { while (events.length) await brain.onEvent(events.shift()) }
+let STORE_OFF = false
 const wp = async (op, b) => {
   calls.push(op + ' ' + JSON.stringify(b).slice(0, 120))
   const byNum = (n) => Object.values(orders).find((o) => String(o.number).includes(String(n)))
+  if (op === 'store_link') { if (STORE_OFF) return { off: true }; const q = ['specialty=' + b.spec, 'src=wa', b.kind && 'kind=' + b.kind, b.type && 'type=' + encodeURIComponent(b.type), b.qty > 0 && 'qty=' + b.qty].filter(Boolean).join('&'); return { url: 'https://oxygen11.com/app/#/new?' + q } }
   if (op === 'order') { const o = b.id ? orders[b.id] : b.number ? byNum(b.number) : Object.values(orders).find((x) => T.pkey(x.clientPhone) === T.pkey(b.phone) && !['completed', 'cancelled'].includes(x.status)); return o ? view(o) : null }
   if (op === 'patch') {
     const o = orders[b.id]; const was = o.status; Object.assign(o, b.patch)
@@ -521,6 +523,11 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   t('service understood → one link with the section, the kind, the type and the count', /#\/new\?specialty=ac&src=wa&kind=wash&type=%D8%B3%D8%A8%D9%84%D9%8A%D8%AA&qty=2/.test(to(r, SL)), to(r, SL))
   r = await say(SL, 'وكمان 3 شباك')
   t('…and not again within half an hour', !/#\/new\?/.test(to(r, SL)), to(r, SL))
+  STORE_OFF = true
+  const SO = '966577712304'
+  r = await say(SO, 'عايز اغسل مكيف سبليت')
+  t('switched off in the center → no link, the WhatsApp booking goes on', !/#\/new\?/.test(to(r, SO)) && /سعر|ر\.س|نوع|الحي|موقع/.test(to(r, SO)), to(r, SO))
+  STORE_OFF = false
 }
 
 // ===== held turns survive a restart; a double tap is answered once (owner, 2026-11-24) =====

@@ -719,10 +719,12 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const k = 'storeSent:' + c.pk
     if (now() - (Number(store.get(k, 0)) || 0) < 30 * 60000) return
     store.set(k, now())
-    const base = String(C.storeUrl || 'https://oxygen11.com/app/').replace(/#.*$/, '').replace(/\/?$/, '/')
-    const q = ['specialty=' + spec, 'src=wa', kind && 'kind=' + kind, type && 'type=' + encodeURIComponent(type), qty > 0 && 'qty=' + qty].filter(Boolean).join('&')
     const what = spec === 'ac' ? ({ wash: 'غسيل المكيفات', maintenance: 'صيانة المكيفات', install: 'تركيب المكيفات' }[kind] || 'المكيفات') : 'الخدمة'
-    say(phone, line, '📲 ولو تحب تكمّل من الصفحة — ' + what + ' جاهزة قدامك، تحدد العدد والموقع والموعد في دقيقة:\n' + base + '#/new?' + q)
+    // the site builds the link (its own address) and says whether it is switched on (the center's settings)
+    return wp('store_link', { spec, kind, type, qty }).then((r) => {
+      if (!r || r.off || !r.url) { if (r && r.off) store.set(k, 0); return }
+      say(phone, line, '📲 ولو تحب تكمّل من الصفحة — ' + what + ' جاهزة قدامك، تحدد العدد والموقع والموعد في دقيقة:\n' + r.url)
+    }).catch(() => {})
   }
 
   async function startFrom(c, line, phone, text, name, extra = {}) {
