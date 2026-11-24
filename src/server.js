@@ -421,6 +421,9 @@ const server = http.createServer(async (req, res) => {
       // one of our own numbers handing back what we sent it a moment ago (a team alert): not a message to answer
       if (!b.fromMe && isEcho(b.text) && (brain.cfg().ourNumbers || {})[pk]) { log('chat', 'رسالة من رقمنا لرقمنا (تنبيه للفريق) — اتجاهلت'); return }
       if (!b.fromMe) { const c0 = store.chat(pk); if (!c0 || c0.line !== line) store.touchChat(pk, { phone: intl(b.phone), line }) }
+      // the center handed this chat to the AI («الذكاء يتولى»): good for the next half hour, renewed by every message
+      if (!b.fromMe && b.takeover) store.touchChat(pk, { aiTake: Date.now() + 30 * 60000, kind: 'customer', botOff: 0 })
+      if (!b.fromMe && b.takeover === false) { const c1 = store.chat(pk); if (c1 && c1.aiTake) store.touchChat(pk, { aiTake: 0 }) }
       brain.inbound({ line, phone: String(b.phone), text: String(b.text || ''), kind: String(b.kind || 'text'), name: String(b.name || ''), fromMe: !!b.fromMe, media: /^https:\/\//.test(String(b.media || '')) ? String(b.media) : '', mime: String(b.mime || '') })
         .catch((e) => log('error', 'center inbound: ' + (e?.message || e)))
       return

@@ -530,6 +530,18 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   STORE_OFF = false
 }
 
+// ===== «الذكاء يتولى»: the center hands a chat to the AI (owner, 2026-11-24) =====
+{
+  const AT = '966577712305'
+  await say(AT, 'السلام عليكم')
+  await brain.inbound({ line: 'l1', phone: AT, text: 'تحت أمرك يا فندم', fromMe: true }); await flush(); take()
+  let r = await say(AT, 'عايز اغسل مكيف سبليت')
+  const heldBefore = !to(r, AT)
+  store.touchChat(T.pkey(AT), { aiTake: Date.now() + 30 * 60000 })
+  r = await say(AT, 'عايز اغسل مكيف شباك')
+  t('a person answered → the bot waits; handed to the AI → it answers at once', heldBefore && to(r, AT).length > 0, to(r, AT))
+}
+
 // ===== held turns survive a restart; a double tap is answered once (owner, 2026-11-24) =====
 {
   const HR = '966500000091'

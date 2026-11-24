@@ -318,7 +318,10 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     if (n) log('chat', 'رجّعت ' + n + ' رسالة كانت مستنية قبل إعادة التشغيل')
     return n
   }
-  const humanActive = (c, within) => c && c.humanAt && now() - c.humanAt < within
+  // «الذكاء يتولى» (owner, 2026-11-24): the center handed this chat to the AI — for a test, or while operations are busy.
+  // Then a person's reply does not make the bot step aside, and nothing marks the chat personal or off.
+  const aiTakes = (c) => !!(c && c.aiTake && c.aiTake > now())
+  const humanActive = (c, within) => c && !aiTakes(c) && c.humanAt && now() - c.humanAt < within
 
   /**
    * Every message that arrives on a linked line. `fromMe` is a person typing on the phone itself: it is kept, and the
@@ -354,7 +357,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     const c = store.touchChat(pk, { phone: T.intl(phone), line: c0?.line || line, name: name || c0?.name || '', lastAt: now(), lastText: shown, unread: (c0?.unread || 0) + 1 })
     mirror(pk, line, 'in', shown)
     // family, friends: the owner answers them himself — never the owner's own test phone (live tests, 2026-11-23)
-    if (c.kind === 'personal' && !(cfg().testPhone && T.pkey(cfg().testPhone) === pk)) return
+    if (c.kind === 'personal' && !aiTakes(c) && !(cfg().testPhone && T.pkey(cfg().testPhone) === pk)) return
     // the transfer receipt he was asked for (a picture or a file): on the order, operations told
     if (['image', 'document'].includes(kind)) {
       let ap = null; try { ap = JSON.parse(store.get('awaitproof:' + pk) || 'null') } catch {}
@@ -596,8 +599,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       if (humanActive(c, 10 * 60000) && !askedAfter) return holdThen(c.pk, text, C.humanFirstSec * 1000, go)
       return go(text)
     }
-    if (c.botOff && c.botOff > now()) return notifyHuman(c, text, false)
-    if (!C.autoReply) return notifyHuman(c, text, false)
+    if (c.botOff && c.botOff > now() && !aiTakes(c)) return notifyHuman(c, text, false)
+    if (!C.autoReply && !aiTakes(c)) return notifyHuman(c, text, false)
 
     const g = await greetOf(c, text)
     // Someone the phone knows by name, who did not come through our sites and never ordered: personal — left alone.
@@ -605,7 +608,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     // «1» after an expired menu made a real conversation «personal» and the bot went silent for good, live test 2026-11-23)
     const served = !!c.welcomedAt || store.msgs(c.pk, 40).some((m) => m.dir === 'out' && m.by === 'reply')
     const testing = C.testPhone && T.pkey(C.testPhone) === c.pk
-    if (C.ignoreContacts && c.contact && !served && !testing && !g.fromUs && (g.kind || 'new') === 'new' && !SERVICE_WORDS.some((w) => T.norm(text).includes(T.norm(w)))) {
+    if (C.ignoreContacts && c.contact && !served && !testing && !aiTakes(c) && !g.fromUs && (g.kind || 'new') === 'new' && !SERVICE_WORDS.some((w) => T.norm(text).includes(T.norm(w)))) {
       store.touchChat(c.pk, { kind: 'personal' }); log('chat', 'اتجاهل (من الأسماء المتسجلة): ' + c.contact)
       return
     }

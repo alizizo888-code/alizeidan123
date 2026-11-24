@@ -21,7 +21,7 @@ export function openStore(file) {
     CREATE TABLE IF NOT EXISTS log (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, kind TEXT, text TEXT);
   `)
   // Columns added after the first release: added in place, old rows keep working.
-  for (const col of ['humanAt INTEGER DEFAULT 0', "contact TEXT DEFAULT ''", "greet TEXT DEFAULT ''"]) { try { db.exec('ALTER TABLE chats ADD COLUMN ' + col) } catch {} }
+  for (const col of ['humanAt INTEGER DEFAULT 0', "contact TEXT DEFAULT ''", "greet TEXT DEFAULT ''", 'aiTake INTEGER DEFAULT 0']) { try { db.exec('ALTER TABLE chats ADD COLUMN ' + col) } catch {} }
   try { db.exec("ALTER TABLE outbox ADD COLUMN media TEXT DEFAULT ''") } catch {}   // a photo sent with the text as its caption
   const q = (sql) => db.prepare(sql)
   const now = () => Date.now()
