@@ -512,6 +512,17 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   t('a described fault: likely causes, the technician checks on the spot, and when were they washed', /وعليكم السلام/.test(x) && /خرطوم التصريف/.test(x) && /نقص فريون/.test(x) && /هيفحص ويأكد السبب/.test(x) && /اتغسلت إمتى/.test(x), x)
 }
 
+// ===== the store link once the service is understood (owner, 2026-11-24) =====
+{
+  const SL = '966577712303'
+  let r = await say(SL, 'السلام عليكم')
+  t('no store link on a bare greeting', !/#\/new\?/.test(to(r, SL)), to(r, SL))
+  r = await say(SL, 'عايز اغسل 2 سبليت')
+  t('service understood → one link with the section, the kind, the type and the count', /#\/new\?specialty=ac&src=wa&kind=wash&type=%D8%B3%D8%A8%D9%84%D9%8A%D8%AA&qty=2/.test(to(r, SL)), to(r, SL))
+  r = await say(SL, 'وكمان 3 شباك')
+  t('…and not again within half an hour', !/#\/new\?/.test(to(r, SL)), to(r, SL))
+}
+
 // ===== held turns survive a restart; a double tap is answered once (owner, 2026-11-24) =====
 {
   const HR = '966500000091'
@@ -523,7 +534,7 @@ if (process.env.SCEN_OUT) fs.writeFileSync(process.env.SCEN_OUT, transcript.join
   const DT = '966500000092'
   r = await say(DT, 'السلام عليكم')
   await Promise.all([brain.inbound({ line: 'l1', phone: DT, text: 'كم سعر الغسيل' }), brain.inbound({ line: 'l1', phone: DT, text: 'كم سعر الغسيل' })]); await flush(); r = take()
-  t('the same words twice in a row (double tap) → answered once', (to(r, DT).match(/---/g) || []).length < 1 && to(r, DT).length > 0, JSON.stringify(r))
+  t('the same words twice in a row (double tap) → answered once', (to(r, DT).match(/نوع المكيفات إيه/g) || []).length === 1, JSON.stringify(r))
 }
 
 console.log(`wa-hub brain: ${pass} passed, ${fail} failed`)

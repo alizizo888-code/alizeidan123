@@ -89,6 +89,8 @@ export function createLines({ dataDir, onMessage, onStatus, onContact, log = pin
     const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }))
     const sock = makeWASocket({
       version, logger: log, browser: Browsers.ubuntu('Chrome'), printQRInTerminal: false, markOnlineOnConnect: false, syncFullHistory: false,
+      // a link in our text shows its card (picture + title) — the order page (2026-11-24); needs link-preview-js
+      generateHighQualityLinkPreview: true,
       // cached signal keys: no half-written key files when many messages arrive together (a broken session = «waiting for this message»)
       auth: { creds: state.creds, keys: cachedKeys(state.keys, log) },
       msgRetryCounterCache: retryCache,

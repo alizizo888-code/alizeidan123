@@ -706,10 +706,35 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   }
 
   /** From his own words («غسيل مكيف اسبليت و مكيف شباك بكام»): straight to the right step, nothing guessed. */
+  /**
+   * «متجر الواتساب» (owner, 2026-11-24): the moment the service is understood — the section and its kind (مكيفات ←
+   * غسيل / صيانة / تركيب) — a link to our order page with that service already chosen (and the type and count when he
+   * said them). One tap and he is inside the page with his service in front of him. The WhatsApp flow goes on too.
+   * Once per chat per half hour.
+   */
+  const SEC_SPEC = { 2: 'fridge', 3: 'plumbing', 4: 'electric', 5: 'general', 6: 'cameras', 7: 'general' }
+  function storeLink(c, line, phone, { spec = 'ac', kind = '', type = '', qty = 0 } = {}) {
+    const C = cfg()
+    if (C.storeLinks === false) return
+    const k = 'storeSent:' + c.pk
+    if (now() - (Number(store.get(k, 0)) || 0) < 30 * 60000) return
+    store.set(k, now())
+    const base = String(C.storeUrl || 'https://oxygen11.com/app/').replace(/#.*$/, '').replace(/\/?$/, '/')
+    const q = ['specialty=' + spec, 'src=wa', kind && 'kind=' + kind, type && 'type=' + encodeURIComponent(type), qty > 0 && 'qty=' + qty].filter(Boolean).join('&')
+    const what = spec === 'ac' ? ({ wash: 'غسيل المكيفات', maintenance: 'صيانة المكيفات', install: 'تركيب المكيفات' }[kind] || 'المكيفات') : 'الخدمة'
+    say(phone, line, '📲 ولو تحب تكمّل من الصفحة — ' + what + ' جاهزة قدامك، تحدد العدد والموقع والموعد في دقيقة:\n' + base + '#/new?' + q)
+  }
+
   async function startFrom(c, line, phone, text, name, extra = {}) {
     const n = T.norm(text); const pa = M.parseAc(text)
     // Not an AC job (plumbing, electricity, carpentry, cameras…): that section's own services, never the AC wash.
     const sec = M.sectionOf(text)
+    {
+      const kind = REPAIR.test(n) && !/(غسيل|غسل|اغسل|تنظيف)/.test(n) ? 'maintenance' : INSTALL.test(n) && !/(غسيل|غسل|اغسل)/.test(n) ? 'install' : 'wash'
+      const type = pa.split && !pa.window ? 'سبليت' : pa.window && !pa.split ? 'شباك' : ''
+      if (sec && !pa.found) { if (SEC_SPEC[sec]) storeLink(c, line, phone, { spec: SEC_SPEC[sec] }) }
+      else if (!PARTS.test(n)) storeLink(c, line, phone, { spec: 'ac', kind, type, qty: type ? pa.units : 0 })
+    }
     if ((cfg().offSections || []).includes(sec || 1)) { saveFlow(c.pk, null); say(phone, line, M.STOPPED); return notifyHuman(c, 'طلب خدمة متوقفة: ' + text, false) }
     if (sec && !pa.found) { saveFlow(c.pk, { step: 'sub', sec, ...extra }); return say(phone, line, M.subMenu(sec) + M.FOOT) }
     if (PARTS.test(n)) return partAnswer(c, line, phone, text)
@@ -832,6 +857,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
         const S = M.SUBS[m.sec]; const it = S && k ? S.items[k - 1] : null
         if (!it) return say(phone, line, (S ? M.subMenu(m.sec) : M.sectionsText(C.offSections)) + M.FOOT)
         Object.assign(m, { step: 'rep_desc', svc: 'repair', spec: it[1], label: S.name + ' — ' + it[0] }); saveFlow(c.pk, m)
+        storeLink(c, line, phone, { spec: it[1] || SEC_SPEC[m.sec] || 'general' })
         return say(phone, line, 'اكتب تفاصيل المطلوب باختصار 👇\n(مثال: ' + S.ex + ')')
       }
       case 'back': {
@@ -845,8 +871,8 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       }
       case 'home': {
         if (k === 1) return startFrom(c, line, phone, 'غسيل', name)
-        if (k === 2) { saveFlow(c.pk, { step: 'rep_type', svc: 'repair', pre: m.pre || '', place: m.place || '' }); return say(phone, line, '🔧 *صيانة وإصلاح* — نوع الجهاز إيه؟\n' + M.KINDS + '\n7️⃣ غرفة تبريد / تجميد\n8️⃣ حاجة تانية (سباكة، كهربا، أجهزة…)' + M.FOOT) }
-        if (k === 3) { saveFlow(c.pk, { step: 'ins_type', svc: 'install', spec: 'ac', place: m.place || '' }); return say(phone, line, '🛠 *تركيب / فك ونقل* — نوع المكيف؟\n' + M.KINDS + M.FOOT) }
+        if (k === 2) { saveFlow(c.pk, { step: 'rep_type', svc: 'repair', pre: m.pre || '', place: m.place || '' }); storeLink(c, line, phone, { spec: 'ac', kind: 'maintenance' }); return say(phone, line, '🔧 *صيانة وإصلاح* — نوع الجهاز إيه؟\n' + M.KINDS + '\n7️⃣ غرفة تبريد / تجميد\n8️⃣ حاجة تانية (سباكة، كهربا، أجهزة…)' + M.FOOT) }
+        if (k === 3) { saveFlow(c.pk, { step: 'ins_type', svc: 'install', spec: 'ac', place: m.place || '' }); storeLink(c, line, phone, { spec: 'ac', kind: 'install' }); return say(phone, line, '🛠 *تركيب / فك ونقل* — نوع المكيف؟\n' + M.KINDS + M.FOOT) }
         if (k === 4) {
           let t = null; try { t = await wp('ac_table', {}) } catch {}
           saveFlow(c.pk, { step: 'table' })
