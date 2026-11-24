@@ -207,7 +207,7 @@ class MWC_Rest {
         global $wpdb;
         if ($e = self::deny('contacts_edit')) return $e;
         $f = [];
-        if ($req->has_param('bot') && in_array($req->get_param('bot'), ['default', 'on', 'off'], true)) $f['bot'] = $req->get_param('bot');
+        if ($req->has_param('bot') && in_array($req->get_param('bot'), ['default', 'on', 'off', 'ai'], true)) $f['bot'] = $req->get_param('bot');
         if ($req->has_param('source_url')) $f['source_url'] = esc_url_raw($req->get_param('source_url'));
         foreach (['name', 'tags', 'source'] as $k) if ($req->has_param($k)) $f[$k] = sanitize_text_field($req->get_param($k));
         if ($req->has_param('notes')) $f['notes'] = sanitize_textarea_field($req->get_param('notes'));
@@ -425,7 +425,7 @@ class MWC_Rest {
     static function bot_allowed($chat, $acc) {
         $b = $chat['bot'] ?? 'default';
         if ($b === 'off') return false;
-        if ($b === 'on') return true;
+        if ($b === 'on' || $b === 'ai') return true;
         return ($acc['config']['bot'] ?? 'on') !== 'off';
     }
 

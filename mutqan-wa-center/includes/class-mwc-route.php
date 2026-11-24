@@ -26,7 +26,9 @@ class MWC_Route {
                 'text' => in_array($m['type'], ['text', 'template'], true) ? $m['body'] : ($m['type'] === 'location' ? self::loc_url($m['body']) : ($m['body'] ?? '')),
                 'kind' => $m['type'] === 'template' ? 'text' : $m['type'], 'source' => $chat['source'] ?? '', 'brand' => $acc['config']['brand'] ?? '', 'fromMe' => false,
                 // a voice note / picture / file: where it is, so the bot can listen to it (owner, 2026-11-23)
-                'media' => in_array($m['type'], ['voice', 'audio', 'image', 'document'], true) ? (string) ($m['media_url'] ?? '') : '', 'mime' => (string) ($m['mime'] ?? '')]);
+                'media' => in_array($m['type'], ['voice', 'audio', 'image', 'document'], true) ? (string) ($m['media_url'] ?? '') : '', 'mime' => (string) ($m['mime'] ?? ''),
+                // «الذكاء يتولى» (2026-11-24): this customer is handed to the AI — it answers even when a person wrote
+                'takeover' => ($chat['bot'] ?? '') === 'ai']);
         }, 10, 3);
         // موظف رد بنفسه (من التطبيق أو من الموبايل): البوت يعرف إن فيه بني آدم شغال على المحادثة
         add_action('mwc_sent', function ($row, $chat, $acc) {

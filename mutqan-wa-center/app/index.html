@@ -922,7 +922,7 @@ function renderList() {
       <div class="t2">${tick}<span class="pv ell">${esc(c.preview || '')}</span>
         ${(c.labels || []).slice(0, 2).map(l => `<span class="tag" style="background:${esc(lbl[l] || '#667')}">${esc(l)}</span>`).join('')}
         ${!S.curAcc ? `<span class="tag" style="background:${esc(a.color)}">${esc(a.label)}</span>` : ''}
-        ${c.bot === 'off' ? '<span title="الرد الآلي ممنوع للعميل ده">🚫🤖</span>' : c.bot === 'on' ? '<span title="الرد الآلي مفعّل دايمًا">🤖</span>' : ''}${c.pinned ? '📌' : ''}${c.unread ? `<span class="bdg">${c.unread}</span>` : ''}</div>
+        ${c.bot === 'off' ? '<span title="الرد الآلي ممنوع للعميل ده">🚫🤖</span>' : c.bot === 'on' ? '<span title="الرد الآلي مفعّل دايمًا">🤖</span>' : c.bot === 'ai' ? '<span title="الذكاء الاصطناعي متولي المحادثة">🧠</span>' : ''}${c.pinned ? '📌' : ''}${c.unread ? `<span class="bdg">${c.unread}</span>` : ''}</div>
       ${c.source ? `<div class="muted ell" style="font-size:11.5px">📍 ${esc(c.source)}</div>` : ''}</div></div>`;
   }).join('');
   $$('#list .citem').forEach(e => { e.onclick = () => openChat(+e.dataset.id); e.oncontextmenu = ev => { ev.preventDefault(); chatMenu(+e.dataset.id, ev); }; longPress(e, ev => chatMenu(+e.dataset.id, ev)); });
@@ -986,11 +986,17 @@ function renderChatHead() {
   $('#chead').innerHTML = `<button class="ibtn backbtn" id="backb">${ICON.back}</button>${avatar(c, 'sm')}
     <div class="grow"><div class="ell" style="font-size:16px">${esc(nameOf(c))}</div>
       <div class="muted ell" style="font-size:12.5px">${esc(fmtPhone(c.wa_id))} • عبر <span class="tag" style="background:${esc(a.color)}">${esc(a.label)} ${esc(localPhone(a.phone))}</span>${c.assigned ? ' • مسند: ' + esc(c.assigned) : ''}</div></div>
-    ${can('chat_send') ? '<button class="ibtn" id="hTr" title="تحويل">🔀</button>' : ''}<button class="ibtn" id="hCall" title="اتصال">${ICON.phone}</button>
+    ${can('contacts_edit') ? `<button class="ibtn" id="hAi" title="${c.bot === 'ai' ? 'الذكاء متولي المحادثة — اضغط ترجعها لكم' : 'خلّي الذكاء الاصطناعي يتولى المحادثة دي'}" style="${c.bot === 'ai' ? 'background:#7c3aed33;border-radius:50%' : ''}">🧠</button>` : ''}${can('chat_send') ? '<button class="ibtn" id="hTr" title="تحويل">🔀</button>' : ''}<button class="ibtn" id="hCall" title="اتصال">${ICON.phone}</button>
     <button class="ibtn" id="hMenu" title="المزيد">${ICON.dots}</button>`;
   $('#backb').onclick = e => { e.stopPropagation(); closeChat(); };
   $('#hCall').onclick = e => { e.stopPropagation(); location.href = 'tel:+' + c.wa_id; };
   $('#hTr') && ($('#hTr').onclick = e => { e.stopPropagation(); transferDialog(c.id); });
+  // «الذكاء يتولى» (2026-11-24): for a test, or while operations are busy — one tap on, one tap back
+  $('#hAi') && ($('#hAi').onclick = async e => {
+    e.stopPropagation();
+    const to = c.bot === 'ai' ? 'default' : 'ai';
+    try { await API.updateContact(c.contact_id, {bot: to}); S.chats.forEach(x => { if (x.contact_id === c.contact_id) x.bot = to; }); renderList(); renderChatHead(); toast(to === 'ai' ? '🧠 الذكاء الاصطناعي متولي المحادثة دي — بيرد حتى لو حد منكم كتب' : 'رجعت المحادثة لكم ✅'); } catch (err) { toast(err.message); }
+  });
   $('#hMenu').onclick = e => { e.stopPropagation(); chatMenu(c.id, e); };
   $('#chead').onclick = () => openProfile();
 }
@@ -1433,7 +1439,7 @@ async function openProfile(refresh) {
     <div class="psec"><h4>جه منين؟</h4><div class="srcbox">${k.source ? `<b>📍 ${esc(k.source)}</b>` : '<span class="muted">مش معروف لسه</span>'}${k.source_url ? `<div style="margin-top:4px"><a href="${esc(k.source_url)}" target="_blank" dir="ltr" style="word-break:break-all">${esc(k.source_url)}</a></div>` : ''}
         ${d.first_msg ? `<div class="muted" style="font-size:12.5px;margin-top:6px">أول رسالة (${fmtDate(+d.first_msg.ts)}): «${esc(String(d.first_msg.body).slice(0, 160))}»</div>` : ''}
         ${d.lead ? `<div class="muted" style="font-size:12.5px;margin-top:6px">في قاعدة العملاء: ${esc((S.leadStatuses || {})[d.lead.status] || d.lead.status)} • ${esc(d.lead.city)} • ${esc(d.lead.category)} • اتبعتله ${d.lead.sent_count} مرة</div>` : ''}</div>
-      <h4 style="margin-top:14px">الرد الآلي للعميل ده</h4><div class="botsw" id="pbot">${[['default', 'زي إعداد الرقم (' + (d.account_bot === 'off' ? 'مقفول' : 'مفعّل') + ')'], ['on', '🤖 مفعّل دايمًا'], ['off', '🚫 ممنوع']].map(([v, t]) => `<button data-bot="${v}" class="${(k.bot || 'default') === v ? 'on' + (v === 'off' ? ' off' : '') : ''}">${t}</button>`).join('')}</div>
+      <h4 style="margin-top:14px">الرد الآلي للعميل ده</h4><div class="botsw" id="pbot">${[['default', 'زي إعداد الرقم (' + (d.account_bot === 'off' ? 'مقفول' : 'مفعّل') + ')'], ['on', '🤖 مفعّل دايمًا'], ['ai', '🧠 الذكاء يتولى المحادثة'], ['off', '🚫 ممنوع']].map(([v, t]) => `<button data-bot="${v}" class="${(k.bot || 'default') === v ? 'on' + (v === 'off' ? ' off' : '') : ''}">${t}</button>`).join('')}</div>
       <p class="muted" style="font-size:12px;margin:6px 0 0">«ممنوع» = البوت ما يردش عليه خالص (قريب، زميل، عميل مهم بترد عليه بنفسك).</p></div>
     <div class="psec"><h4>النبذة</h4><div>${esc(k.about || (d.provider === 'meta' ? 'Meta الرسمي ما بيعرضش النبذة ولا الصورة — بتظهر لو نفس العميل كلّم رقم من أرقام QR' : '—'))}</div></div>
     <div class="psec"><h4>بيانات للفريق</h4>
