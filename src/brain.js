@@ -354,6 +354,15 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     }
     if (!replay) store.addMsg({ pk, line, dir: 'in', text: heard ? '🎤 ' + heard : shown, kind, by: name })
     if (heard) { text = heard; kind = 'text' }
+    // a voice note we could not hear: never a menu guessed from nothing — ask him to write it, and a person is told
+    if (!fromMe && !replay && !heard && ['voice', 'audio'].includes(kind)) {
+      const cv = store.chat(pk)
+      if (cv && !['tech', 'staff', 'team', 'room', 'personal'].includes(cv.kind) && !humanActive(cv, 30 * 60000)) {
+        notifyHuman(cv, '🎤 رسالة صوتية من العميل (مقدرتش أسمعها) — اسمعها من مركز الواتساب', false)
+        if (now() - Number(cv.ackAt || 0) > 120000) { store.touchChat(pk, { ackAt: now() }); say(phone, line, 'وصلتني رسالتك الصوتية 🎤🌷 بلّغت الموظف يسمعها ويرد عليك حالًا.\nولو تحب أسرّع لك الطلب، اكتبلي الخدمة والحي في سطر.') }
+      }
+      return
+    }
     const c = store.touchChat(pk, { phone: T.intl(phone), line: c0?.line || line, name: name || c0?.name || '', lastAt: now(), lastText: shown, unread: (c0?.unread || 0) + 1 })
     mirror(pk, line, 'in', shown)
     // family, friends: the owner answers them himself — never the owner's own test phone (live tests, 2026-11-23)
