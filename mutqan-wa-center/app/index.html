@@ -271,6 +271,13 @@ body.light .psec{border-bottom-color:var(--panel2)}
   #emoji{width:auto;left:8px}
   .grid2{grid-template-columns:1fr}
   .mbox{max-height:100dvh}
+  .modal{padding:0;place-items:stretch}
+  .mbox,.mbox.wide{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;border-radius:0;min-width:0;overflow:hidden}
+  .mbody{min-width:0;overflow-x:hidden;padding:12px}
+  .mbody *{max-width:100%;box-sizing:border-box}
+  .mbody .lrow{flex-wrap:wrap}
+  .mbody table{display:block;overflow-x:auto}
+  #stabs{margin:-12px -12px 12px!important}
 }
 @media (min-width:761px){.backbtn{display:none!important}}
 </style>
@@ -361,7 +368,7 @@ const ROLES = {manager:'المدير / التوجيه', sales:'مبيعات', ou
 const EMOJIS = '😀😁😂🤣😊😍😘😎🤔😅🙏👍👌👏💪🤝✌️🙌🔥✨❤️💚💙⭐✅❌⚠️⏰📍📞📷🎥🎤📄💲🧾🛠️🔧🔩❄️🌬️🏠🚚🕌🌙☀️🎉😢😡🤗🙂😉😇🤲👋🫡💯🆗🆕🔔'.match(/\p{Extended_Pictographic}️?|\p{Emoji_Presentation}/gu);
 
 /* ---------------- state ---------------- */
-const S = {
+const S = {bg: localStorage.getItem('mwc_bg') !== '0', 
   me:'', accounts:[], config:{}, chats:new Map(), msgs:new Map(), curAcc:0, curChat:null, filter:'all', q:'',
   since:0, replyTo:null, profile:null, loadingOlder:false, newBelow:0,
   sound: localStorage.getItem('mwc_sound') !== '0', notif: localStorage.getItem('mwc_notif') === '1',
@@ -809,7 +816,7 @@ async function pollLoop() {
 }
 function nextPoll() {
   if (pollFails) return Math.min(30000, 3000 * Math.pow(2, pollFails - 1));
-  if (document.hidden) return 15000;
+  if (document.hidden) return S.bg ? 5000 : 60000;
   return Date.now() - lastSeen < 180000 ? 3000 : 6000;   // هدوء 3 دقايق ← نص السرعة، والرسايل لسه بتوصل في ثواني
 }
 function setOffline(on) {
@@ -1540,6 +1547,7 @@ $('#btnNotif').onclick = e => {
     ['▶️ تجربة الصوت', () => { unlockAudio(); SND.incoming(); }],
     [(S.ring ? '🔁 تكرار النغمة لحد ما ترد: شغّال' : '🔁 تكرار النغمة لحد ما ترد: مقفول'), () => { S.ring = !S.ring; localStorage.setItem('mwc_ring', S.ring ? '1' : '0'); if (!S.ring) stopRing(); else if (unreadTotal()) startRing(); toast(S.ring ? 'هيفضل يرن كل 20 ثانية لحد ما تفتح الرسالة' : 'النغمة هتجي مرة واحدة'); }],
     [(S.notif ? '✓ إشعارات الجهاز: شغالة' : '📲 تفعيل إشعارات الجهاز'), async () => { if (!('Notification' in window)) return toast('المتصفح مش بيدعم الإشعارات'); const p = await Notification.requestPermission(); S.notif = p === 'granted' ? !S.notif || true : false; localStorage.setItem('mwc_notif', S.notif ? '1' : '0'); toast(S.notif ? 'الإشعارات اتفعلت ✅' : 'لازم تسمح بالإشعارات من المتصفح'); }],
+    [(S.bg ? '🛰️ التشغيل في الخلفية والإشعارات: شغّال' : '🛰️ التشغيل في الخلفية والإشعارات: مقفول'), () => setBackground(!S.bg)],
     [document.body.classList.contains('light') ? '🌙 الوضع الليلي' : '☀️ الوضع النهاري', () => { document.body.classList.toggle('light'); localStorage.setItem('mwc_theme', document.body.classList.contains('light') ? 'light' : 'dark'); }],
     DEMO ? null : ['🚪 خروج', () => { localStorage.removeItem('mwc_token'); sessionStorage.setItem('mwc_no_sso', '1'); location.reload(); }],
   ].filter(Boolean), e);
@@ -1662,7 +1670,29 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { if ($('.modal')) return; if (!$('#prof').classList.contains('hidden')) return $('#prof').classList.add('hidden'); if (S.curChat && innerWidth <= 760) closeChat(); }
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); $('#q').focus(); }
 });
-window.addEventListener('popstate', () => { if (S.curChat && innerWidth <= 760) closeChat(); });
+/* رجوع (زرار الموبايل / السحب من الطرف / السهم): يقفل اللي مفتوح خطوة خطوة، وعمره ما يطلع بره التطبيق */
+(function backGuard() {
+  const push = () => { try { history.pushState({mwc: Date.now()}, ''); } catch (e) {} };
+  push(); let armed = 0;
+  window.addEventListener('popstate', () => {
+    const mods = document.querySelectorAll('.modal');
+    if (mods.length) { mods[mods.length - 1].remove(); push(); return; }
+    const v = $('#viewer'); if (v && !v.classList.contains('hidden')) { v.classList.add('hidden'); push(); return; }
+    if (!$('#prof').classList.contains('hidden')) { $('#prof').classList.add('hidden'); push(); return; }
+    if (S.curChat) { closeChat(); push(); return; }
+    if (S.view && S.view !== 'chats' && typeof setView === 'function') { setView('chats'); push(); return; }
+    push();   // الصفحة الرئيسية: منخرجش من التطبيق
+    if (Date.now() - armed > 2000) { armed = Date.now(); toast('انت في الصفحة الرئيسية'); }
+  });
+  // سحب المحادثة يمين أو شمال = رجوع لقايمة المحادثات (زي واتساب)
+  let sx = 0, sy = 0, st = 0;
+  document.addEventListener('touchstart', e => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); }, {passive: true});
+  document.addEventListener('touchend', e => {
+    if (!S.curChat || innerWidth > 760 || $('.modal')) return;
+    const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) > 90 && Math.abs(dy) < 60 && Date.now() - st < 600 && !e.target.closest('#tbox,.bub .media,input,textarea')) closeChat();
+  }, {passive: true});
+})();
 document.addEventListener('click', () => { try { ac(); } catch (e) {} }, {once: true});
 
 /* ======================================================================
@@ -2172,7 +2202,14 @@ async function setupPWA() {
     return reg;
   } catch (e) { console.warn('sw', e); }
 }
+/* التشغيل في الخلفية: إشعارات الجهاز حتى والتطبيق مقفول + متابعة أسرع والتطبيق في الخلفية. مفعّل افتراضيًا، والمستخدم يقفله من القايمة. */
+async function setBackground(on) {
+  S.bg = !!on; localStorage.setItem('mwc_bg', on ? '1' : '0');
+  if (on) { const ok = await enablePush(true); toast(ok ? 'التشغيل في الخلفية والإشعارات اتفعّلوا ✅' : 'اتفعّل التشغيل في الخلفية — بس الإشعارات محتاجة إذن من الموبايل (الإعدادات ← التطبيقات ← الإشعارات)'); }
+  else { try { const reg = await navigator.serviceWorker?.getRegistration?.(); const sub = reg && await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch (e) {} S.notif = false; localStorage.setItem('mwc_notif', '0'); toast('اتقفل التشغيل في الخلفية والإشعارات'); }
+}
 async function enablePush(ask) {
+  if (!S.bg) return false;
   try {
     if (!S.vapid || !('PushManager' in window)) return false;
     if (ask && Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') return false;
