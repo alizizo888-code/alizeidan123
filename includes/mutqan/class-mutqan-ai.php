@@ -540,20 +540,25 @@ final class Mutqan_AI {
     public static function transcribe($bytes, $mime) {
         if ($bytes === '' || strlen($bytes) > 15 * 1024 * 1024) { return ''; }
         $mime = $mime !== '' ? preg_replace('/;.*$/', '', $mime) : 'audio/ogg';
-        $r = self::vision(base64_encode($bytes), $mime, 'ده تسجيل صوتي من عميل لشركة صيانة مكيفات في السعودية. اكتب الكلام اللي اتقال فيه بالحرف وباللهجة اللي اتقال بيها، من غير أي تعليق أو مقدمة. لو مفيش كلام مفهوم اكتب: ---', false);
-        $t = trim((string) ($r['text'] ?? ''));
-        if ($t !== '' && $t !== '---') { return mb_substr($t, 0, 2000); }
+        // Whisper first (owner, 2026-11-28: voice notes were «heard» by the vision model as words nobody said — a customer
+        // saying «الو» got the carpentry menu). The vision model is only the fallback when Groq is not set up or fails.
         $s = self::settings(); $c = $s['providers']['groq'] ?? [];
-        if (!self::usable('groq', $c)) { return ''; }
-        $b = 'mq' . wp_generate_password(16, false, false);
-        $ext = strpos($mime, 'mpeg') !== false ? 'mp3' : (strpos($mime, 'mp4') !== false || strpos($mime, 'm4a') !== false ? 'm4a' : 'ogg');
-        $body = "--$b\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-large-v3\r\n"
-            . "--$b\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nar\r\n"
-            . "--$b\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voice.$ext\"\r\nContent-Type: $mime\r\n\r\n" . $bytes . "\r\n--$b--\r\n";
-        $res = wp_remote_post('https://api.groq.com/openai/v1/audio/transcriptions', ['timeout' => 60, 'headers' => ['Authorization' => 'Bearer ' . $c['key'], 'Content-Type' => 'multipart/form-data; boundary=' . $b], 'body' => $body]);
-        if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) >= 300) { return ''; }
-        $j = json_decode((string) wp_remote_retrieve_body($res), true);
-        return mb_substr(trim((string) ($j['text'] ?? '')), 0, 2000);
+        if (self::usable('groq', $c)) {
+            $b = 'mq' . wp_generate_password(16, false, false);
+            $ext = strpos($mime, 'mpeg') !== false ? 'mp3' : (strpos($mime, 'mp4') !== false || strpos($mime, 'm4a') !== false ? 'm4a' : 'ogg');
+            $body = "--$b\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-large-v3\r\n"
+                . "--$b\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\nar\r\n"
+                . "--$b\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voice.$ext\"\r\nContent-Type: $mime\r\n\r\n" . $bytes . "\r\n--$b--\r\n";
+            $res = wp_remote_post('https://api.groq.com/openai/v1/audio/transcriptions', ['timeout' => 60, 'headers' => ['Authorization' => 'Bearer ' . $c['key'], 'Content-Type' => 'multipart/form-data; boundary=' . $b], 'body' => $body]);
+            if (!is_wp_error($res) && (int) wp_remote_retrieve_response_code($res) < 300) {
+                $j = json_decode((string) wp_remote_retrieve_body($res), true);
+                $t = trim((string) ($j['text'] ?? ''));
+                if ($t !== '') { return mb_substr($t, 0, 2000); }
+            }
+        }
+        $r = self::vision(base64_encode($bytes), $mime, 'ده تسجيل صوتي من عميل لشركة صيانة في السعودية. اكتب الكلام اللي اتقال فيه بالحرف وبس، من غير أي إضافة أو تخمين. لو مش مفهوم أو فاضي اكتب ---');
+        $t = trim((string) ($r['text'] ?? ''));
+        return ($t !== '' && $t !== '---') ? mb_substr($t, 0, 2000) : '';
     }
 
     /** Raw Messages API call (used by run() and by the owner agent with tools). @return array [code, data, raw, retry] */
