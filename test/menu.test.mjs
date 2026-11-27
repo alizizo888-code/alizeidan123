@@ -34,4 +34,9 @@ t('time: 22 → late, 23 and 2 am → tomorrow', M.timeChoices(22).mode === 'lat
 { const p = M.parseAc('مكيف سبليت دولابي'); t('«سبليت دولابي» → one standing unit, not split + standing', p.other === 1 && p.split === 0 && p.otherType === 'standing', p) }
 { const p = M.parseAc('2 كاسيت و سبليت'); t('«2 كاسيت و سبليت» → cassette 2 + split 1', p.other === 2 && p.split === 1 && p.otherType === 'cassette', p) }
 console.log(`wa-hub menu: ${pass} passed, ${fail} failed`)
+// 0559308830 (2026-11-28): her own words inside «خدمات تانية» pick the item instead of the same menu again
+t('«اجهزه» → home appliances', M.subPick(7, 'اجهزه') === 2)
+t('«نوع الثلاجه توشيبا» → home appliances', M.subPick(7, 'نوع الثلاجه توشيبا') === 2)
+t('«متى يجي الفني» is not a menu choice', M.subPick(7, 'متى يجي الفني') === -1)
+t('fridge article first message → appliances directly', M.subPick(7, 'أحتاج خدمة (من مقال: صيانة ثلاجات باناسونيك)', false) === 2)
 process.exit(fail ? 1 : 0)

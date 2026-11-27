@@ -571,6 +571,12 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
     // The menu: in the middle of a booking it has the floor; at the main menu it takes the numbers — unless an order's
     // own question (a rating, why he cancelled, «تأكيد») is waiting for a digit.
     const fm = flowOf(c)
+    // a person from the team talked with him in the last 3 hours: no menus over the person's head (0559308830, 2026-11-28 —
+    // after the team said «الفني يجيلك» the bot kept answering «متى يجي» with the «خدمات تانية» menu)
+    if (humanActive(c, 3 * 3600000) && (c.humanAt || 0) > (c.flowAt || 0)) {
+      if (/(متى|امتى|فين|وين|الفني|يجي|يوصل|تاخر|مستني|منتظر)/.test(T.norm(text)) || T.norm(text).trim() === '؟') return notifyHuman(c, 'العميل بيسأل: ' + text, true, true)
+      return holdThen(c.pk, text, C.humanFirstSec * 1000, () => notifyHuman(store.chat(c.pk), 'رسالة من العميل: ' + text, false))
+    }
     if (fm && !humanActive(c, 10 * 60000) && !(c.botOff && c.botOff > now())) {
       const js = stageOf(phone)?.s
       const digit = M.isMenu(text) || /^\d$/.test(T.norm(text).trim())
@@ -695,7 +701,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   function saveFlow(pk, m) {
     const c = store.chat(pk); let L = {}; try { L = JSON.parse(c?.lead || '{}') } catch {}
     if (m) { m.at = now(); L.m = m } else delete L.m
-    store.touchChat(pk, { lead: JSON.stringify(L) })
+    store.touchChat(pk, m ? { lead: JSON.stringify(L), flowAt: now() } : { lead: JSON.stringify(L) })
   }
   function wantsService(text) {
     const n = T.norm(text)
@@ -743,7 +749,11 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       else if (!PARTS.test(n)) storeLink(c, line, phone, { spec: 'ac', kind, type, qty: type ? pa.units : 0 })
     }
     if ((cfg().offSections || []).includes(sec || 1)) { saveFlow(c.pk, null); say(phone, line, M.STOPPED); return notifyHuman(c, 'طلب خدمة متوقفة: ' + text, false) }
-    if (sec && !pa.found) { saveFlow(c.pk, { step: 'sub', sec, ...extra }); return say(phone, line, M.subMenu(sec) + M.FOOT) }
+    if (sec && !pa.found) {
+      const i = M.subPick(sec, text, false)
+      if (i >= 0) return flow(c, line, phone, String(i + 1), name, { step: 'sub', sec, ...extra })
+      saveFlow(c.pk, { step: 'sub', sec, ...extra }); return say(phone, line, M.subMenu(sec) + M.FOOT)
+    }
     if (PARTS.test(n)) return partAnswer(c, line, phone, text)
     if (REPAIR.test(n) && !/(غسيل|غسل|اغسل|تنظيف)/.test(n)) return flow(c, line, phone, '2', name, { step: 'home', ...extra, pre: text })
     if (INSTALL.test(n) && !/(غسيل|غسل|اغسل)/.test(n)) return flow(c, line, phone, '3', name, { step: 'home', ...extra })
@@ -861,8 +871,18 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
         return reception(store.chat(c.pk), line, phone, text, name)
       }
       case 'sub': {
-        const S = M.SUBS[m.sec]; const it = S && k ? S.items[k - 1] : null
-        if (!it) return say(phone, line, (S ? M.subMenu(m.sec) : M.sectionsText(C.offSections)) + M.FOOT)
+        const S = M.SUBS[m.sec]
+        let it = S && k ? S.items[k - 1] : null
+        if (!it && S && k === null) { const i = M.subPick(m.sec, text); if (i >= 0) it = S.items[i] }
+        if (!it) {
+          // A number outside the list: the sub-menu once more. Words that are not a choice («متى يجي الفني», «؟»): never the
+          // same menu again — out of the menu, into the conversation (and a person if it is about an order or the technician).
+          if (k !== null && S && !m.again) { m.again = 1; saveFlow(c.pk, m); return say(phone, line, 'اختار رقم من القائمة 👇\n' + M.subMenu(m.sec) + M.FOOT) }
+          saveFlow(c.pk, null)
+          if (/(متى|امتى|إمتى|فين|وين|الفني|يجي|يوصل|تاخرتو|اتأخر|تاخر|مستني|منتظر)/.test(n) || n === '؟' || n === '') return notifyHuman(store.chat(c.pk) || c, 'العميل بيسأل: ' + text, true, true)
+          if (wantsService(text)) return startFrom(store.chat(c.pk) || c, line, phone, text, name)
+          return reception(store.chat(c.pk) || c, line, phone, text, name)
+        }
         Object.assign(m, { step: 'rep_desc', svc: 'repair', spec: it[1], label: S.name + ' — ' + it[0] }); saveFlow(c.pk, m)
         storeLink(c, line, phone, { spec: it[1] || SEC_SPEC[m.sec] || 'general' })
         return say(phone, line, 'اكتب تفاصيل المطلوب باختصار 👇\n(مثال: ' + S.ex + ')')
@@ -1114,7 +1134,7 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
   async function infoOr(text, fallback) { try { const r = await wp('info', { text }); if (r && r.text) return r.text } catch {} return fallback }
 
   /** A person is needed: the chat is marked, dealt to the next agent, and the agent hears it on WhatsApp. */
-  function notifyHuman(c, text, ack) {
+  function notifyHuman(c, text, ack, waiting = false) {
     const C = cfg()
     let agent = (C.agents || []).find((a) => a.name === c.agent)
     if (!agent && (C.agents || []).length) {
@@ -1129,7 +1149,15 @@ export function createBrain({ store, wp, send: rawSend, mirror = () => {}, now =
       if (agent?.phone) send(T.intl(agent.phone), msg, { purpose: 'agent', dedup: 'h-' + c.pk + '-' + Math.floor(now() / 1800000) })
       else toRoom(msg, 'h-' + c.pk + '-' + Math.floor(now() / 1800000))
     }
-    if (ack && fresh) return say(c.phone, c.line, 'تمام 🌷 بلّغت موظف خدمة العملاء وهيرد عليك هنا حالًا.')
+    if (!fresh) wp('chat_alert', { title: '⏰ عميل لسه مستني رد — ' + (c.name || c.phone), body: String(text || '').slice(0, 200) }).catch(() => {})
+    if (ack) {
+      const last = Number(c.ackAt || 0)
+      if (now() - last < 120000) return
+      store.touchChat(c.pk, { ackAt: now() })
+      return say(c.phone, c.line, waiting
+        ? 'معاك حق 🙏 بتابع حالًا مع العمليات والفني وهنرد عليك هنا بالموعد بالظبط.'
+        : fresh ? 'تمام 🌷 بلّغت موظف خدمة العملاء وهيرد عليك هنا حالًا.' : 'بلّغتهم تاني دلوقتي 🙏 الموظف هيرد عليك هنا حالًا.')
+    }
   }
 
   /** «عايز أغسل مكيفين في العزيزية بكرة» — the order is built from the chat and handed to the website. */

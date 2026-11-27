@@ -84,6 +84,23 @@ export function sectionOf(t) {
   if (/(دهان|دهانات|بويه|ديكور|ترميم|بلاط|تبليط|سيراميك|غساله|غسالات|ثلاجه|ثلاجات|نشافه|فرن)/.test(n)) return 7
   return 0
 }
+/**
+ * Pick a sub-service from his own words (customer 0559308830, 2026-11-28: «اجهزه», «صيانة ثلاجه», «نوع الثلاجه توشيبا»
+ * all got the same sub-menu again and again for three hours). Returns the item index or -1.
+ */
+export function subPick(sec, t, loose = true) {
+  const n = norm(t)
+  const S = SUBS[sec]; if (!S) return -1
+  if (sec === 7 && /(ثلاج|غسال|نشاف|فريزر|فرن|ميكرو|اجهز|جهاز|براد|توشيبا|سامسونج|ال جي|باناسونيك|شارب)/.test(n)) return S.items.findIndex((x) => x[1] === 'appliances')
+  if (sec === 7 && /(دهان|بويه|ديكور)/.test(n)) return 0
+  if (sec === 7 && /(ترميم|بلاط|تبليط|سيراميك)/.test(n)) return 1
+  if (!loose) return -1
+  for (let i = 0; i < S.items.length; i++) {
+    const words = norm(S.items[i][0]).replace(/[()،,]/g, ' ').split(/\s+/).filter((w) => w.length >= 4)
+    if (words.some((w) => n.includes(w) || n.includes(w.replace(/ه$/, '')))) return i
+  }
+  return -1
+}
 export const isMenu = (t) => /^(0|٠|القائمه|قائمه|القائمة|قائمة|منيو|menu|الرئيسيه|ابدا من جديد|من الاول|رجوع للقائمه)$/.test(norm(t).replace(/[!.،,؟?]/g, '').trim())
 
 /** The owner's three videos (2026-11-21), kept in the hub's settings so he can change them. */
