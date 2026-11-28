@@ -55,6 +55,11 @@ const NotifySettings = lazyRetry(() => import('../pages/NotifySettings'))
 const WpHub = lazyRetry(() => import('../pages/WpHub'))
 const HotlineLink = lazyRetry(() => import('../pages/HotlineLink'))
 const Backups = lazyRetry(() => import('../pages/Backups'))
+const Invoices = lazyRetry(() => import('../pages/Invoices'))
+const Quotes = lazyRetry(() => import('../pages/Quotes'))
+const Customers = lazyRetry(() => import('../pages/Customers'))
+const DigitalTwin = lazyRetry(() => import('../pages/DigitalTwin'))
+const Changelog = lazyRetry(() => import('../pages/Changelog'))
 
 const BRANDS = {
   oxygen: { name: 'المركز', host: 'https://oxygen11.com', accent: '#38bdf8' },
@@ -437,6 +442,11 @@ export default function DeskApp() {
               <Route path="/staff/wp" element={<WpHub />} />
               <Route path="/staff/link" element={<HotlineLink />} />
               <Route path="/staff/backups" element={<Backups />} />
+              <Route path="/staff/invoices" element={<Invoices />} />
+              <Route path="/staff/quotes" element={<Quotes />} />
+              <Route path="/staff/customers" element={<Customers />} />
+              <Route path="/staff/twin" element={<DigitalTwin />} />
+              <Route path="/staff/changelog" element={<Changelog />} />
               <Route path="*" element={<Navigate to={HOME} replace />} />
             </Route>
           )}
