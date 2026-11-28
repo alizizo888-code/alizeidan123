@@ -38,7 +38,7 @@ final class Mutqan_Rest {
     /* ------------------------------------------------------------------ routing */
 
     public static function routes() {
-        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner', 'fp', 'field', 'trainer', 'concierge', 'lines', 'outreach', 'paychoice', 'growth', 'schedule', 'proof', 'techid', 'maintenance'] as $name) {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner', 'fp', 'field', 'trainer', 'concierge', 'lines', 'outreach', 'paychoice', 'growth', 'schedule', 'proof', 'techid', 'maintenance', 'teamgeo'] as $name) {
             register_rest_route(self::NS, '/' . $name, [
                 'methods' => 'POST', 'permission_callback' => '__return_true',
                 'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
@@ -699,6 +699,8 @@ final class Mutqan_Rest {
     public static function h_schedule($req, $p) { return Mutqan_Schedule::handle(self::body($req), $p); }
     public static function h_proof($req, $p) { return Mutqan_Proof::handle(self::body($req), $p); }
     public static function h_techid($req, $p) { return Mutqan_TechId::handle(self::body($req), $p); }
+    /** «بث موقعي»: team members share their live location (Mutqan_TeamGeo). */
+    public static function h_teamgeo($req, $p) { return Mutqan_TeamGeo::handle(self::body($req), $p); }
     public static function h_maintenance($req, $p) { return Mutqan_Maintenance::handle(self::body($req), $p); }
 
     /** «طرق الدفع» page of one order — open to whoever holds its link (Mutqan_PayChoice). */
