@@ -74,6 +74,8 @@ final class Mutqan_WebPush {
         $doc = [
             'endpoint' => $endpoint, 'p256dh' => self::b64u($p256), 'auth' => self::b64u($auth),
             'userId' => (string) ($p['id'] ?? ''), 'role' => $role, 'admin' => in_array($role, self::ADMIN_ROLES, true),
+            // Which installed app this device subscription belongs to (desk: control / ops / tech / wa; site app: web).
+            'app' => in_array(($in['app'] ?? ''), ['control', 'ops', 'tech', 'wa', 'web'], true) ? (string) $in['app'] : 'web',
             'ua' => mb_substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 160), 'at' => gmdate('c'),
         ];
         self::put(self::id($endpoint), $doc);
@@ -159,8 +161,30 @@ final class Mutqan_WebPush {
         return Mutqan_Store::select(self::SUBS, $f, ['limit' => 300], self::sys());
     }
 
+    /**
+     * Keep the installed apps apart: a team-wide alert never rings the technician app or the WhatsApp app,
+     * WhatsApp messages ring the WhatsApp app when the person has it, and someone who installed the
+     * operations app gets team alerts there instead of a second copy in the owner app.
+     */
+    public static function route_apps($subs, $doc) {
+        $t = is_array($doc['target'] ?? null) ? $doc['target'] : [];
+        $broadcast = empty($t['user']);
+        $ev = (string) ($doc['event'] ?? '');
+        $isMsg = (bool) preg_match('/msg|message|chat|phone_wa/', $ev);
+        $has = [];
+        foreach ($subs as $s) { $has[(string) ($s['userId'] ?? '')][(string) ($s['app'] ?? 'web')] = true; }
+        return array_values(array_filter($subs, function ($s) use ($broadcast, $isMsg, $has) {
+            $app = (string) ($s['app'] ?? 'web'); $mine = $has[(string) ($s['userId'] ?? '')] ?? [];
+            if ($isMsg && !empty($mine['wa'])) { return $app === 'wa'; }
+            if ($app === 'wa') { return $isMsg; }
+            if ($broadcast && $app === 'tech') { return false; }
+            if ($broadcast && $app === 'control' && !empty($mine['ops'])) { return false; }
+            return true;
+        }));
+    }
+
     public static function deliver($doc) {
-        $subs = self::targets($doc['target'] ?? []);
+        $subs = self::route_apps(self::targets($doc['target'] ?? []), $doc);
         if (!$subs) { return 0; }
         $hi = ($doc['priority'] ?? '') === 'high';
         $payload = wp_json_encode([

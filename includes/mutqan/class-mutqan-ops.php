@@ -49,6 +49,8 @@ final class Mutqan_Ops {
         if ($op === 'pos') { if (is_numeric($in['acc'] ?? null) && (float) $in['acc'] > Mutqan_Track::MAX_ACCURACY_M) { return ['ok' => false, 'reason' => 'low_accuracy']; } return self::ping($p, $in['lat'] ?? null, $in['lng'] ?? null); }
         // «الخريطة الحية»: every technician (code, colour, trail, speed, next job, ETA), operations staff and customers.
         if ($op === 'fleet') { return Mutqan_Route::fleet(); }
+        // «التوأم الرقمي»: the real visitors on the sites right now + today's count by source (owner, 2026-11-28).
+        if ($op === 'presence') { return class_exists('Mutqan_Presence') ? Mutqan_Presence::now() : ['visitors' => [], 'today' => []]; }
         // invoices: plain and tax (owner, 2026-11-22)
         if (strpos($op, 'invoice_') === 0) { return Mutqan_Invoice::op($op, $in, $p); }
         // quotations, their wordings, the AI writer and the document reader (owner, 2026-11-22)
