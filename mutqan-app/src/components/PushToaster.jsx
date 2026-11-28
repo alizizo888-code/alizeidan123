@@ -1,3 +1,4 @@
+import { openUrl } from '../lib/openUrl'
 import { SwipeItem } from './Gestures'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -41,7 +42,7 @@ export default function PushToaster() {
       {items.map((m) => (
         <SwipeItem key={m.id} className="pointer-events-auto max-w-md w-full mx-auto" onSwipe={() => setItems((l) => l.filter((x) => x.id !== m.id))}>
         <div className={`pointer-events-auto max-w-md w-full mx-auto rounded-2xl shadow-2xl border flex items-start gap-3 p-3 ${m.hi ? 'bg-rose-600 border-rose-300 text-white' : 'bg-slate-900 border-white/10 text-white'}`}>
-          <button className="flex-1 min-w-0 flex gap-3 text-right" onClick={() => { setItems((l) => l.filter((x) => x.id !== m.id)); if (m.url) navigate(String(m.url).replace(/^#/, '')) }}>
+          <button className="flex-1 min-w-0 flex gap-3 text-right" onClick={() => { setItems((l) => l.filter((x) => x.id !== m.id)); if (m.url) openUrl(navigate, m.url) }}>
             <span className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center ${m.hi ? 'bg-white/20' : 'bg-white/10'}`}><Bell size={17} className={m.hi ? 'animate-pulse' : ''} /></span>
             <span className="min-w-0"><span className="block text-sm font-black truncate">{m.title}</span><span className="block text-xs opacity-90 line-clamp-2">{m.body}</span></span>
           </button>

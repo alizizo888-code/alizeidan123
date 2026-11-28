@@ -40,7 +40,15 @@ export default function Notifications() {
 
   async function open(n) {
     if (!n.read) db.updateShared('notifications', n.id, { read: true }).catch(() => {})
-    if (n.url) navigate(n.url.replace(/^#/, ''))
+    if (!n.url) return
+    // A full address (the WhatsApp centre «https://oxygen11.com/wa-center/», a pay page…) is a page of its own: opened as
+    // a page. Handed to the in-app router it matched no screen and left a white page (owner, 2026-11-28).
+    const u = String(n.url)
+    if (/^https?:\/\//i.test(u)) {
+      try { const x = new URL(u); if (x.origin === location.origin && x.hash.startsWith('#/')) { navigate(x.hash.slice(1)); return } } catch { /* fall through */ }
+      window.location.assign(u); return
+    }
+    navigate(u.replace(/^#/, '').replace(/^(?!\/)/, '/'))
   }
   async function readAll() {
     for (const n of unread) db.updateShared('notifications', n.id, { read: true }).catch(() => {})

@@ -1,3 +1,4 @@
+import { openUrl } from '../lib/openUrl'
 import { voiceOn } from '../lib/voiceAlert'
 import { CALL_EVENTS } from '../lib/push'
 import { useEffect, useRef, useState } from 'react'
@@ -41,7 +42,7 @@ export default function OrderAlarm() {
     return () => { window.__ALARM_UI__ = false; window.removeEventListener('mutqan:push', on); off(); stopAlarm() }
   }, [])
   if (!items.length) return null
-  const open = (m) => { hush([m]); stopAlarm(); setItems((l) => l.filter((x) => x.id !== m.id)); if (m.url) navigate(String(m.url).replace(/^#/, '')) }
+  const open = (m) => { hush([m]); stopAlarm(); setItems((l) => l.filter((x) => x.id !== m.id)); if (m.url) openUrl(navigate, m.url) }
   const close = (m) => { hush([m]); setItems((l) => { const n = l.filter((x) => x.id !== m.id); if (!n.length) stopAlarm(); return n }) }
   const closeAll = () => { hush(items); setItems([]); stopAlarm() }
   // The alarm never takes over the screen: the newest alert is shown in full, older ones shrink to one line, and the whole stack is capped at under half the screen (scrolls inside),
