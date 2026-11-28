@@ -10,7 +10,8 @@ self.addEventListener('push', (e) => {
   try { d = e.data ? e.data.json() : {} } catch { d = { body: e.data ? e.data.text() : '' } }
   e.waitUntil((async () => {
     const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true })
-    if (wins.some((w) => w.visibilityState === 'visible' && w.focused)) return
+    const page = self.registration.scope.split('?')[0]
+    if (wins.some((w) => w.visibilityState === 'visible' && w.focused && w.url.split('#')[0].split('?')[0] === page)) return
     const hi = d.priority === 'high'
     const icon = new URL('icon-oxygen-192.png', self.registration.scope).href
     const ev = String(d.event || '')
@@ -28,10 +29,16 @@ self.addEventListener('push', (e) => {
 self.addEventListener('notificationclick', (e) => {
   e.notification.close()
   const url = e.notification.data && e.notification.data.url ? String(e.notification.data.url).replace(/^#/, '') : ''
+  // Open the alert inside THIS app only (its scope is its own page: desk.html / desk-ops.html / desk-tech.html / desk-wa.html).
+  const page = self.registration.scope
   e.waitUntil((async () => {
     const all = await clients.matchAll({ type: 'window', includeUncontrolled: true })
-    const w = all[0]
-    if (w) { await w.focus(); if (url) w.navigate(w.url.split('#')[0] + '#' + url).catch(() => {}); return }
-    await clients.openWindow(self.registration.scope + 'desk.html' + (url ? '#' + url : ''))
+    const w = all.find((c) => c.url.split('#')[0].split('?')[0] === page.split('?')[0])
+    if (w) {
+      await w.focus()
+      if (url) { try { await w.navigate(page + '#' + url) } catch { w.postMessage({ type: 'mq-open', url }) } }
+      return
+    }
+    await clients.openWindow(page + (url ? '#' + url : ''))
   })())
 })
