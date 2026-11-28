@@ -1,0 +1,579 @@
+{
+ "date": "2026-11-27",
+ "time": "11:08",
+ "sites": [
+  {
+   "id": "oxygen",
+   "host": "oxygen11.com",
+   "http": 200,
+   "seconds": 1.5,
+   "stats": {
+    "id": "oxygen",
+    "brand": "أكسجين",
+    "host": "oxygen11.com",
+    "day": "2026-11-27",
+    "phase": "core",
+    "day_no": null,
+    "quota": null,
+    "today": 20,
+    "total": 2019,
+    "last": {
+     "title": "تركيب مكيفات تي سي إل في مكة على أيدي أمهر المهندسين المختصين",
+     "link": "https://oxygen11.com/%d8%aa%d8%b1%d9%83%d9%8a%d8%a8-%d9%85%d9%83%d9%8a%d9%81%d8%a7%d8%aa-%d8%aa%d9%8a-%d8%b3%d9%8a-%d8%a5%d9%84-%d9%81%d9%8a-%d9%85%d9%83%d8%a9-48e5/",
+     "at": "2026-11-27T07:19:37+00:00"
+    },
+    "indexnow_today": 48,
+    "sitemap": "https://oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795766941
+   }
+  },
+  {
+   "id": "mutqan",
+   "host": "mutqan.oxygen11.com",
+   "http": 200,
+   "seconds": 1.2,
+   "stats": {
+    "id": "mutqan",
+    "brand": "متقن",
+    "host": "mutqan.oxygen11.com",
+    "day": "2026-11-27",
+    "phase": "core",
+    "day_no": null,
+    "quota": null,
+    "today": 27,
+    "total": 1926,
+    "last": {
+     "title": "صيانة مكيفات تيريم في مكة — مهندس يعاين ويصلح | متقن",
+     "link": "https://mutqan.oxygen11.com/oxy-m-0d685e-ac-maint-t22-d44/",
+     "at": "2026-11-27T08:08:31+00:00"
+    },
+    "indexnow_today": 45,
+    "sitemap": "https://mutqan.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795766942
+   }
+  },
+  {
+   "id": "motakhases",
+   "host": "motakhases-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.8,
+   "stats": {
+    "id": "motakhases",
+    "brand": "المتخصص",
+    "host": "motakhases-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-24",
+    "phase": "steady",
+    "day_no": 23,
+    "quota": 10,
+    "today": 8,
+    "total": 930,
+    "last": {
+     "title": "غرف تبريد للمدارس حي التيسير بمكة — أسرع فني للمنازل والمحلات",
+     "link": "https://motakhases-maintenance-general-contracting.oxygen11.com/%d8%ba%d8%b1%d9%81-%d8%aa%d8%a8%d8%b1%d9%8a%d8%af-%d9%84%d9%84%d9%85%d8%af%d8%a7%d8%b1%d8%b3-%d8%ad%d9%8a-%d8%a7%d9%84%d8%aa%d9%8a%d8%b3%d9%8a%d8%b1-%d8%a8%d9%85%d9%83%d8%a9-32e9/",
+     "at": "2026-11-24T16:42:42+00:00"
+    },
+    "indexnow_today": 23,
+    "sitemap": "https://motakhases-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795541414
+   }
+  },
+  {
+   "id": "muhandis",
+   "host": "muhandis-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 2.3,
+   "stats": {
+    "id": "muhandis",
+    "brand": "المهندس",
+    "host": "muhandis-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-24",
+    "phase": "steady",
+    "day_no": 22,
+    "quota": 10,
+    "today": 3,
+    "total": 1130,
+    "last": {
+     "title": "تصليح ثلاجات في حي الروضة بمكة — تواصل مع أفضل معلم واطلب الآن",
+     "link": "https://muhandis-maintenance-general-contracting.oxygen11.com/%d8%aa%d8%b5%d9%84%d9%8a%d8%ad-%d8%ab%d9%84%d8%a7%d8%ac%d8%a7%d8%aa-%d9%81%d9%8a-%d8%ad%d9%8a-%d8%a7%d9%84%d8%b1%d9%88%d8%b6%d8%a9-%d8%a8%d9%85%d9%83%d8%a9-0b55/",
+     "at": "2026-11-24T04:23:13+00:00"
+    },
+    "indexnow_today": 6,
+    "sitemap": "https://muhandis-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795499724
+   }
+  },
+  {
+   "id": "aqsa",
+   "host": "aqsa-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 2.4,
+   "stats": {
+    "id": "aqsa",
+    "brand": "الأقصى",
+    "host": "aqsa-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-27",
+    "phase": "steady",
+    "day_no": 26,
+    "quota": 10,
+    "today": 4,
+    "total": 1204,
+    "last": {
+     "title": "صيانة المكيفات في مكة — أعطال كونكا الشائعة و | الأقصى",
+     "link": "https://aqsa-maintenance-general-contracting.oxygen11.com/%d8%b5%d9%8a%d8%a7%d9%86%d8%a9-%d8%a7%d9%84%d9%85%d9%83%d9%8a%d9%81%d8%a7%d8%aa-%d9%81%d9%8a-%d9%85%d9%83%d8%a9-b8f4/",
+     "at": "2026-11-27T07:29:33+00:00"
+    },
+    "indexnow_today": 8,
+    "sitemap": "https://aqsa-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795766941
+   }
+  },
+  {
+   "id": "raad",
+   "host": "raad-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 2.0,
+   "stats": {
+    "id": "raad",
+    "brand": "رعد السماء",
+    "host": "raad-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-21",
+    "phase": "steady",
+    "day_no": 20,
+    "quota": 10,
+    "today": 10,
+    "total": 994,
+    "last": {
+     "title": "هل تبحث عن فني غرف تبريد للمستودعات في حي الحمراء بمكة المكرمة؟ اتصل بنا | رعد السماء",
+     "link": "https://raad-maintenance-general-contracting.oxygen11.com/oxy-net-raad-cold-room-c87bf3-c10-f7d221/",
+     "at": "2026-11-21T21:15:45+00:00"
+    },
+    "indexnow_today": 12,
+    "sitemap": "https://raad-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795302253
+   }
+  },
+  {
+   "id": "mutamakkin",
+   "host": "mutamakkin-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 3.9,
+   "stats": {
+    "id": "mutamakkin",
+    "brand": "المتمكن",
+    "host": "mutamakkin-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-27",
+    "phase": "steady",
+    "day_no": 26,
+    "quota": 10,
+    "today": 4,
+    "total": 1154,
+    "last": {
+     "title": "صيانة مكيفات في حي النسيم بمكة — تواصل مع أفضل معلم وزيارة اليوم",
+     "link": "https://mutamakkin-maintenance-general-contracting.oxygen11.com/%d8%b5%d9%8a%d8%a7%d9%86%d8%a9-%d9%85%d9%83%d9%8a%d9%81%d8%a7%d8%aa-%d9%81%d9%8a-%d8%ad%d9%8a-%d8%a7%d9%84%d9%86%d8%b3%d9%8a%d9%85-%d8%a8%d9%85%d9%83%d8%a9-b03f/",
+     "at": "2026-11-27T07:30:52+00:00"
+    },
+    "indexnow_today": 10,
+    "sitemap": "https://mutamakkin-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795766942
+   }
+  },
+  {
+   "id": "khabeer",
+   "host": "khabeer-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 2.3,
+   "stats": {
+    "id": "khabeer",
+    "brand": "الخبير",
+    "host": "khabeer-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-24",
+    "phase": "steady",
+    "day_no": 23,
+    "quota": 10,
+    "today": 8,
+    "total": 1121,
+    "last": {
+     "title": "غسيل مكيف شباك في حي النوارية بمكة — أفضل شركة تصلك فوراً واطلب",
+     "link": "https://khabeer-maintenance-general-contracting.oxygen11.com/%d8%ba%d8%b3%d9%8a%d9%84-%d9%85%d9%83%d9%8a%d9%81-%d8%b4%d8%a8%d8%a7%d9%83-%d9%81%d9%8a-%d8%ad%d9%8a-%d8%a7%d9%84%d9%86%d9%88%d8%a7%d8%b1%d9%8a%d8%a9-%d8%a8%d9%85%d9%83%d8%a9-0af6/",
+     "at": "2026-11-24T17:12:06+00:00"
+    },
+    "indexnow_today": 27,
+    "sitemap": "https://khabeer-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795541414
+   }
+  },
+  {
+   "id": "homeservice",
+   "host": "homeservice-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 2.5,
+   "stats": {
+    "id": "homeservice",
+    "brand": "هوم سيرفيس",
+    "host": "homeservice-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-23",
+    "phase": "steady",
+    "day_no": 21,
+    "quota": 10,
+    "today": 1,
+    "total": 1026,
+    "last": {
+     "title": "أفضل شركة صيانة غرف التبريد للشركات والمكاتب في حي العوالي بمكة المكرمة تصلك فوراً | هوم سيرفيس",
+     "link": "https://homeservice-maintenance-general-contracting.oxygen11.com/%d8%a3%d9%81%d8%b6%d9%84-%d8%b4%d8%b1%d9%83%d8%a9-%d8%b5%d9%8a%d8%a7%d9%86%d8%a9-%d8%ba%d8%b1%d9%81-%d8%a7%d9%84%d8%aa%d8%a8%d8%b1%d9%8a%d8%af-%d9%84%d9%84%d8%b4%d8%b1%d9%83%d8%a7%d8%aa-%d9%88%d8%a7-6/",
+     "at": "2026-11-23T00:11:45+00:00"
+    },
+    "indexnow_today": 2,
+    "sitemap": "https://homeservice-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795392765
+   }
+  },
+  {
+   "id": "ibtikar",
+   "host": "ibtikar-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.7,
+   "stats": {
+    "id": "ibtikar",
+    "brand": "ابتكار راحة",
+    "host": "ibtikar-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-27",
+    "phase": "steady",
+    "day_no": 26,
+    "quota": 10,
+    "today": 4,
+    "total": 1068,
+    "last": {
+     "title": "غسيل مكيفات في حي الفيصلية بمكة — خدمة على مدار الساعة واطلب الآن",
+     "link": "https://ibtikar-maintenance-general-contracting.oxygen11.com/%d8%ba%d8%b3%d9%8a%d9%84-%d9%85%d9%83%d9%8a%d9%81%d8%a7%d8%aa-%d9%81%d9%8a-%d8%ad%d9%8a-%d8%a7%d9%84%d9%81%d9%8a%d8%b5%d9%84%d9%8a%d8%a9-%d8%a8%d9%85%d9%83%d8%a9-88d6/",
+     "at": "2026-11-27T07:10:16+00:00"
+    },
+    "indexnow_today": 8,
+    "sitemap": "https://ibtikar-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795766942
+   }
+  },
+  {
+   "id": "mutamad",
+   "host": "mutamad-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.6,
+   "stats": {
+    "id": "mutamad",
+    "brand": "المعتمد",
+    "host": "mutamad-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-22",
+    "phase": "steady",
+    "day_no": 20,
+    "quota": 10,
+    "today": 0,
+    "total": 1005,
+    "last": {
+     "title": "أسرع فني غرف تجميد للشقق في حي الروضة بمكة المكرمة للمنازل والمحلات واطلب الآن | المعتمد",
+     "link": "https://mutamad-maintenance-general-contracting.oxygen11.com/oxy-net-mutamad-freezer-room-c7d1f3-c28-f1e207/",
+     "at": "2026-11-21T22:30:50+00:00"
+    },
+    "indexnow_today": 0,
+    "sitemap": "https://mutamad-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795316520
+   }
+  },
+  {
+   "id": "misriya",
+   "host": "misriya-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 1.2,
+   "stats": {
+    "id": "misriya",
+    "brand": "المصرية",
+    "host": "misriya-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-27",
+    "phase": "steady",
+    "day_no": 26,
+    "quota": 10,
+    "today": 4,
+    "total": 1241,
+    "last": {
+     "title": "غسيل مكيف شباك في حي العزيزية بمكة — فني جاهز للزيارة وزيارة",
+     "link": "https://misriya-maintenance-general-contracting.oxygen11.com/%d8%ba%d8%b3%d9%8a%d9%84-%d9%85%d9%83%d9%8a%d9%81-%d8%b4%d8%a8%d8%a7%d9%83-%d9%81%d9%8a-%d8%ad%d9%8a-%d8%a7%d9%84%d8%b9%d8%b2%d9%8a%d8%b2%d9%8a%d8%a9-%d8%a8%d9%85%d9%83%d8%a9-32d1/",
+     "at": "2026-11-27T07:35:00+00:00"
+    },
+    "indexnow_today": 9,
+    "sitemap": "https://misriya-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795766942
+   }
+  },
+  {
+   "id": "nukhba",
+   "host": "nukhba-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 2.1,
+   "stats": {
+    "id": "nukhba",
+    "brand": "النخبة",
+    "host": "nukhba-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-27",
+    "phase": "steady",
+    "day_no": 25,
+    "quota": 10,
+    "today": 3,
+    "total": 1114,
+    "last": {
+     "title": "غسيل المكيفات ريم في جدة — نخبة الفنيين في كل زيارة | النخبة",
+     "link": "https://nukhba-maintenance-general-contracting.oxygen11.com/%d8%ba%d8%b3%d9%8a%d9%84-%d8%a7%d9%84%d9%85%d9%83%d9%8a%d9%81%d8%a7%d8%aa-%d8%b1%d9%8a%d9%85-%d9%81%d9%8a-%d8%ac%d8%af%d8%a9-ed95/",
+     "at": "2026-11-27T04:51:17+00:00"
+    },
+    "indexnow_today": 9,
+    "sitemap": "https://nukhba-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795766943
+   }
+  },
+  {
+   "id": "riyada",
+   "host": "riyada-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.5,
+   "stats": {
+    "id": "riyada",
+    "brand": "الريادة",
+    "host": "riyada-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-25",
+    "phase": "steady",
+    "day_no": 23,
+    "quota": 10,
+    "today": 1,
+    "total": 1271,
+    "last": {
+     "title": "اصلاح تكيفات لينوكس حي النخيل بجدة — مكتب بفنيين جاهزين للزيارة",
+     "link": "https://riyada-maintenance-general-contracting.oxygen11.com/%d8%a7%d8%b5%d9%84%d8%a7%d8%ad-%d8%aa%d9%83%d9%8a%d9%81%d8%a7%d8%aa-%d9%84%d9%8a%d9%86%d9%88%d9%83%d8%b3-%d8%ad%d9%8a-%d8%a7%d9%84%d9%86%d8%ae%d9%8a%d9%84-%d8%a8%d8%ac%d8%af%d8%a9-4b71/",
+     "at": "2026-11-25T00:47:09+00:00"
+    },
+    "indexnow_today": 3,
+    "sitemap": "https://riyada-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795573047
+   }
+  },
+  {
+   "id": "baraa",
+   "host": "baraa-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.6,
+   "stats": {
+    "id": "baraa",
+    "brand": "البراعة",
+    "host": "baraa-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-27",
+    "phase": "steady",
+    "day_no": 25,
+    "quota": 10,
+    "today": 4,
+    "total": 1313,
+    "last": {
+     "title": "صيانة التكييف المركزي والدكت في مكة — براعة فنية وتشطيب نظيف",
+     "link": "https://baraa-maintenance-general-contracting.oxygen11.com/%d8%b5%d9%8a%d8%a7%d9%86%d8%a9-%d8%a7%d9%84%d8%aa%d9%83%d9%8a%d9%8a%d9%81-%d8%a7%d9%84%d9%85%d8%b1%d9%83%d8%b2%d9%8a-%d9%88%d8%a7%d9%84%d8%af%d9%83%d8%aa-%d9%81%d9%8a-%d9%85%d9%83%d8%a9-e8b5/",
+     "at": "2026-11-27T07:54:48+00:00"
+    },
+    "indexnow_today": 8,
+    "sitemap": "https://baraa-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795766943
+   }
+  },
+  {
+   "id": "safwa",
+   "host": "safwa-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.5,
+   "stats": {
+    "id": "safwa",
+    "brand": "الصفوة",
+    "host": "safwa-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-24",
+    "phase": "steady",
+    "day_no": 23,
+    "quota": 10,
+    "today": 8,
+    "total": 1249,
+    "last": {
+     "title": "تركيب سبليت في حي بطحاء قريش بمكة — أفضل شركة تصلك فوراً وزيارة",
+     "link": "https://safwa-maintenance-general-contracting.oxygen11.com/%d8%aa%d8%b1%d9%83%d9%8a%d8%a8-%d8%b3%d8%a8%d9%84%d9%8a%d8%aa-%d9%81%d9%8a-%d8%ad%d9%8a-%d8%a8%d8%b7%d8%ad%d8%a7%d8%a1-%d9%82%d8%b1%d9%8a%d8%b4-%d8%a8%d9%85%d9%83%d8%a9-9a87/",
+     "at": "2026-11-24T16:15:55+00:00"
+    },
+    "indexnow_today": 23,
+    "sitemap": "https://safwa-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795541416
+   }
+  },
+  {
+   "id": "tamayuz",
+   "host": "tamayuz-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.6,
+   "stats": {
+    "id": "tamayuz",
+    "brand": "التميز",
+    "host": "tamayuz-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-27",
+    "phase": "steady",
+    "day_no": 25,
+    "quota": 10,
+    "today": 4,
+    "total": 791,
+    "last": {
+     "title": "غسيل المكيفات في حي الزايدي بمكة — شركة بضمان معتمد | التميز",
+     "link": "https://tamayuz-maintenance-general-contracting.oxygen11.com/%d8%ba%d8%b3%d9%8a%d9%84-%d8%a7%d9%84%d9%85%d9%83%d9%8a%d9%81%d8%a7%d8%aa-%d9%81%d9%8a-%d8%ad%d9%8a-%d8%a7%d9%84%d8%b2%d8%a7%d9%8a%d8%af%d9%8a-%d8%a8%d9%85%d9%83%d8%a9-7dd1/",
+     "at": "2026-11-27T07:40:10+00:00"
+    },
+    "indexnow_today": 9,
+    "sitemap": "https://tamayuz-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795766943
+   }
+  },
+  {
+   "id": "nasmat",
+   "host": "nasmat-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.5,
+   "stats": {
+    "id": "nasmat",
+    "brand": "نسمة الحجاز",
+    "host": "nasmat-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-23",
+    "phase": "steady",
+    "day_no": 21,
+    "quota": 10,
+    "today": 1,
+    "total": 1225,
+    "last": {
+     "title": "تواصل مع أفضل معلم اصلاح تكيفات في حي الهجرة بمكة المكرمة | نسمة الحجاز",
+     "link": "https://nasmat-maintenance-general-contracting.oxygen11.com/%d8%a3%d9%81%d8%b6%d9%84-%d9%85%d8%b9%d9%84%d9%85-%d8%a7%d8%b5%d9%84%d8%a7%d8%ad-%d8%aa%d9%83%d9%8a%d9%81%d8%a7%d8%aa-%d8%ad%d9%8a-%d8%a7%d9%84%d9%87%d8%ac%d8%b1%d8%a9-%d8%a8%d9%85%d9%83%d8%a9-%d8%a7/",
+     "at": "2026-11-23T00:11:46+00:00"
+    },
+    "indexnow_today": 2,
+    "sitemap": "https://nasmat-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795392766
+   }
+  },
+  {
+   "id": "wahat",
+   "host": "wahat-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.5,
+   "stats": {
+    "id": "wahat",
+    "brand": "واحة الراحة",
+    "host": "wahat-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-27",
+    "phase": "steady",
+    "day_no": 25,
+    "quota": 10,
+    "today": 4,
+    "total": 1264,
+    "last": {
+     "title": "غسيل مكيف شباك في حي الزاهر بمكة — معلم يصلك فوراً وزيارة اليوم",
+     "link": "https://wahat-maintenance-general-contracting.oxygen11.com/%d8%ba%d8%b3%d9%8a%d9%84-%d9%85%d9%83%d9%8a%d9%81-%d8%b4%d8%a8%d8%a7%d9%83-%d9%81%d9%8a-%d8%ad%d9%8a-%d8%a7%d9%84%d8%b2%d8%a7%d9%87%d8%b1-%d8%a8%d9%85%d9%83%d8%a9-3e52/",
+     "at": "2026-11-27T07:34:54+00:00"
+    },
+    "indexnow_today": 8,
+    "sitemap": "https://wahat-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795766943
+   }
+  },
+  {
+   "id": "amaan",
+   "host": "amaan-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.5,
+   "stats": {
+    "id": "amaan",
+    "brand": "الأمان",
+    "host": "amaan-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-23",
+    "phase": "steady",
+    "day_no": 21,
+    "quota": 10,
+    "today": 0,
+    "total": 1201,
+    "last": {
+     "title": "غسيل المكيفات الطارئة ليلاً في حي الصفا بمكة المكرمة — أمان وثقة في كل عمل | الأمان",
+     "link": "https://amaan-maintenance-general-contracting.oxygen11.com/%d8%ba%d8%b3%d9%8a%d9%84-%d8%a7%d9%84%d9%85%d9%83%d9%8a%d9%81%d8%a7%d8%aa-%d8%a7%d9%84%d8%b7%d8%a7%d8%b1%d8%a6%d8%a9-%d9%84%d9%8a%d9%84%d8%a7%d9%8b-%d8%ad%d9%8a-%d8%a7%d9%84%d8%b5%d9%81%d8%a7-%d8%a8-c/",
+     "at": "2026-11-22T21:33:31+00:00"
+    },
+    "indexnow_today": 0,
+    "sitemap": "https://amaan-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795392766
+   }
+  },
+  {
+   "id": "kafaa",
+   "host": "kafaa-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.4,
+   "stats": {
+    "id": "kafaa",
+    "brand": "الكفاءة",
+    "host": "kafaa-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-27",
+    "phase": "steady",
+    "day_no": 25,
+    "quota": 10,
+    "today": 3,
+    "total": 1226,
+    "last": {
+     "title": "غسيل مكيف شباك في حي الشرفية بجدة — أفضل فني | الكفاءة",
+     "link": "https://kafaa-maintenance-general-contracting.oxygen11.com/%d8%ba%d8%b3%d9%8a%d9%84-%d9%85%d9%83%d9%8a%d9%81-%d8%b4%d8%a8%d8%a7%d9%83-%d9%81%d9%8a-%d8%ad%d9%8a-%d8%a7%d9%84%d8%b4%d8%b1%d9%81%d9%8a%d8%a9-%d8%a8%d8%ac%d8%af%d8%a9-4da1/",
+     "at": "2026-11-27T04:17:25+00:00"
+    },
+    "indexnow_today": 6,
+    "sitemap": "https://kafaa-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795766943
+   }
+  },
+  {
+   "id": "jawda",
+   "host": "jawda-maintenance-general-contracting.oxygen11.com",
+   "http": 200,
+   "seconds": 0.4,
+   "stats": {
+    "id": "jawda",
+    "brand": "الجودة",
+    "host": "jawda-maintenance-general-contracting.oxygen11.com",
+    "day": "2026-11-22",
+    "phase": "steady",
+    "day_no": 20,
+    "quota": 10,
+    "today": 1,
+    "total": 1068,
+    "last": {
+     "title": "صيانة غرف التبريد عند «تسرب ماء داخل الغرفة» في جدة | الجودة",
+     "link": "https://jawda-maintenance-general-contracting.oxygen11.com/oxy-net-jawda-cold-room-620f14-f76364/",
+     "at": "2026-11-22T01:32:21+00:00"
+    },
+    "indexnow_today": 1,
+    "sitemap": "https://jawda-maintenance-general-contracting.oxygen11.com/wp-sitemap.xml",
+    "gsc_tokens": 0,
+    "time": 1795316522
+   }
+  }
+ ],
+ "down": []
+}

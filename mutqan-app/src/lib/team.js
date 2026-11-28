@@ -1,0 +1,54 @@
+import { post, setSession, currentUser } from './_api'
+
+// The server's group id is a constant ('main'); never let this lookup block a save.
+let gidCache = null
+
+const op = (name, body) => post('/team', { op: name, ...(body || {}) })
+const unwrap = (k) => (r) => (r && k in r ? r[k] : r)
+
+async function enter(r) {
+  setSession(r.token, r.user)
+  return { user: r.user, role: r.user?.role || null }
+}
+
+export const team = {
+  groupId: () => (gidCache ? Promise.resolve(gidCache) : op('groupId').then((r) => (gidCache = r.value || 'main')).catch(() => 'main')),
+  config: () => op('config'),
+  canManage: () => op('canManage').then((r) => !!r.value).catch(() => false),
+  currentMember: () => op('currentMember').then((r) => r.member),
+  login: async ({ handle, password }) => enter(await op('login', { handle, password })),
+  loginRoster: () => op('loginRoster'),
+  // One staff address + the shared operations password (each person still signs in under their own name).
+  opsShared: () => op('opsShared'),
+  setOpsShared: (password) => op('setOpsShared', { password }),
+  setStaffHome: (url) => op('setStaffHome', { url }),
+  inviteInfo: (code) => op('inviteInfo', { code }),
+  acceptInvite: async (args) => enter(await op('acceptInvite', args)),
+  requestAccess: (args) => op('requestAccess', args),
+
+  listMembersPage: (a = {}) => op('listMembersPage', a),
+  listPending: () => op('listPending').then(unwrap('list')),
+  createMember: (a) => op('createMember', a),
+  bulkCreateMembers: (rows) => op('bulkCreateMembers', { rows }).then(unwrap('results')),
+  createInvite: (a) => op('createInvite', a),
+  revokeInvite: (code) => op('revokeInvite', { code }),
+  listInvitesPage: (a = {}) => op('listInvitesPage', a),
+  approveMember: (userId, role) => op('approveMember', { userId, role }),
+  rejectMember: (userId) => op('rejectMember', { userId }),
+  rejectAllPending: () => op('rejectAllPending'),
+  setRole: (userId, role) => op('setRole', { userId, role }),
+  disableMember: (userId) => op('disableMember', { userId }),
+  enableMember: (userId) => op('enableMember', { userId }),
+  deleteMember: (userId) => op('deleteMember', { userId }),
+  resetPassword: (userId) => op('resetPassword', { userId }),
+  getRolePowers: () => op('getRolePowers'),
+  setRolePowers: (role, powers) => op('setRolePowers', { role, powers }),
+  setSelfSignup: (value) => op('setSelfSignup', { value }),
+  setLoginConfig: (cfg) => op('setLoginConfig', cfg),
+  syncRoles: async () => ({ changed: false }),
+
+  // Modal entry points (loaded lazily so this module has no React dependency)
+  async signIn(options) { const m = await import('../components/TeamLogin'); return m.openTeamLogin ? m.openTeamLogin(options) : null },
+  async openAdmin(options) { const m = await import('../components/TeamAdmin'); return m.openTeamAdmin ? m.openTeamAdmin(options) : null },
+  me: () => currentUser(),
+}

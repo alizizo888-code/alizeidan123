@@ -1,0 +1,1102 @@
+{
+ "hostinger": [
+  {
+   "id": "oxygen",
+   "name": "أكسجين",
+   "url": "https://oxygen11.com/"
+  },
+  {
+   "id": "mutqan",
+   "name": "متقن",
+   "url": "https://mutqan.oxygen11.com/"
+  },
+  {
+   "id": "motakhases",
+   "name": "المتخصص",
+   "url": "https://motakhases-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "muhandis",
+   "name": "المهندس",
+   "url": "https://muhandis-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "aqsa",
+   "name": "الأقصى",
+   "url": "https://aqsa-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "raad",
+   "name": "رعد السماء",
+   "url": "https://raad-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "mutamakkin",
+   "name": "المتمكن",
+   "url": "https://mutamakkin-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "khabeer",
+   "name": "الخبير",
+   "url": "https://khabeer-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "homeservice",
+   "name": "هوم سيرفيس",
+   "url": "https://homeservice-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "ibtikar",
+   "name": "ابتكار راحة",
+   "url": "https://ibtikar-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "mutamad",
+   "name": "المعتمد",
+   "url": "https://mutamad-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "misriya",
+   "name": "المصرية",
+   "url": "https://misriya-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "nukhba",
+   "name": "النخبة",
+   "url": "https://nukhba-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "riyada",
+   "name": "الريادة",
+   "url": "https://riyada-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "baraa",
+   "name": "البراعة",
+   "url": "https://baraa-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "safwa",
+   "name": "الصفوة",
+   "url": "https://safwa-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "tamayuz",
+   "name": "التميز",
+   "url": "https://tamayuz-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "nasmat",
+   "name": "نسمة الحجاز",
+   "url": "https://nasmat-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "wahat",
+   "name": "واحة الراحة",
+   "url": "https://wahat-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "amaan",
+   "name": "الأمان",
+   "url": "https://amaan-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "kafaa",
+   "name": "الكفاءة",
+   "url": "https://kafaa-maintenance-general-contracting.oxygen11.com/"
+  },
+  {
+   "id": "jawda",
+   "name": "الجودة",
+   "url": "https://jawda-maintenance-general-contracting.oxygen11.com/"
+  }
+ ],
+ "blogs": [
+  {
+   "id": "oxygen",
+   "name": "أكسجين",
+   "title": "أكسجين | دليل تبريد البيوت في مكة وجدة",
+   "group": 1,
+   "url": "https://blog.oxygen11.com/",
+   "blogspot": "https://oxygen11-ac.blogspot.com/",
+   "live": true,
+   "color": "#38bdf8",
+   "angle": "صيانة وغسيل وتركيب المكيفات",
+   "posts": [
+    [
+     "سبليت أم شباك أم مركزي؟ مقارنة عملية لبيوت مكة وجدة",
+     "https://blog.oxygen11.com/2026/11/blog-post_808.html"
+    ],
+    [
+     "لماذا تتكرر مشاكل التكييف؟ تشخيص عملي للأسباب",
+     "https://blog.oxygen11.com/2026/11/blog-post_02.html"
+    ],
+    [
+     "الدليل الشامل إلى التكييف في البيوت: كل ما تحتاج معرفته",
+     "https://blog.oxygen11.com/2026/11/blog-post.html"
+    ],
+    [
+     "7 علامات تخبرك أن مكيفك يحتاج غسيلاً قبل الصيف",
+     "https://blog.oxygen11.com/2026/11/7.html"
+    ]
+   ],
+   "pages": [
+    [
+     "سياسة الخصوصية",
+     "https://blog.oxygen11.com/p/blog-page_52.html"
+    ],
+    [
+     "تواصل معنا",
+     "https://blog.oxygen11.com/p/blog-page_146.html"
+    ],
+    [
+     "أسعار تقريبية",
+     "https://blog.oxygen11.com/p/blog-page_791.html"
+    ],
+    [
+     "خدمات التكييف",
+     "https://blog.oxygen11.com/p/blog-page_01.html"
+    ],
+    [
+     "من نحن",
+     "https://blog.oxygen11.com/p/blog-page.html"
+    ]
+   ]
+  },
+  {
+   "id": "mutqan",
+   "name": "متقن",
+   "title": "متقن للتبريد التجاري وغرف التجميد",
+   "group": 1,
+   "url": "https://blog-mutqan.oxygen11.com/",
+   "blogspot": "https://mutqan-cold-rooms.blogspot.com/",
+   "live": true,
+   "color": "#12a39a",
+   "angle": "غرف التبريد والتجميد والثلاجات التجارية",
+   "posts": [
+    [
+     "لماذا يتكوّن الثلج على مبخر غرفة التبريد وكيف تمنعه",
+     "https://blog-mutqan.oxygen11.com/2026/11/blog-post.html"
+    ]
+   ],
+   "pages": [
+    [
+     "سياسة الخصوصية",
+     "https://blog-mutqan.oxygen11.com/p/blog-page_782.html"
+    ],
+    [
+     "اطلب معاينة",
+     "https://blog-mutqan.oxygen11.com/p/blog-page_704.html"
+    ],
+    [
+     "مشاريعنا",
+     "https://blog-mutqan.oxygen11.com/p/blog-page_919.html"
+    ],
+    [
+     "حلول التبريد التجاري",
+     "https://blog-mutqan.oxygen11.com/p/blog-page_01.html"
+    ],
+    [
+     "قصتنا",
+     "https://blog-mutqan.oxygen11.com/p/blog-page.html"
+    ]
+   ]
+  },
+  {
+   "id": "motakhases",
+   "name": "المتخصص",
+   "title": "عيادة الثلاجات من المتخصص",
+   "group": 1,
+   "url": "https://blog-motakhases.oxygen11.com/",
+   "blogspot": "https://almotakhases-fridges.blogspot.com/",
+   "live": true,
+   "color": "#1d4ed8",
+   "angle": "الثلاجات والفريزرات المنزلية",
+   "posts": [
+    [
+     "الثلاجة تعمل ولا تبرد: خطوات الفحص قبل استدعاء الفني",
+     "https://blog-motakhases.oxygen11.com/2026/11/blog-post.html"
+    ]
+   ],
+   "pages": [
+    [
+     "سياسة الخصوصية",
+     "https://blog-motakhases.oxygen11.com/p/blog-page_111.html"
+    ],
+    [
+     "احجز فني",
+     "https://blog-motakhases.oxygen11.com/p/blog-page_404.html"
+    ],
+    [
+     "ضمان الإصلاح",
+     "https://blog-motakhases.oxygen11.com/p/blog-page_203.html"
+    ],
+    [
+     "أعطال الثلاجات الشائعة",
+     "https://blog-motakhases.oxygen11.com/p/blog-page_01.html"
+    ],
+    [
+     "تعرّف علينا",
+     "https://blog-motakhases.oxygen11.com/p/blog-page.html"
+    ]
+   ]
+  },
+  {
+   "id": "muhandis",
+   "name": "المهندس",
+   "title": "دفتر المهندس للكهرباء المنزلية",
+   "group": 1,
+   "url": "https://blog-muhandis.oxygen11.com/",
+   "blogspot": "https://almuhandis-electric.blogspot.com/",
+   "live": true,
+   "color": "#0f766e",
+   "angle": "الكهرباء والإنارة المنزلية",
+   "posts": [
+    [
+     "لماذا يفصل القاطع الكهربائي باستمرار؟ دليل التشخيص الآمن",
+     "https://blog-muhandis.oxygen11.com/2026/11/blog-post.html"
+    ]
+   ],
+   "pages": [
+    [
+     "اتصل بالمهندس",
+     "https://blog-muhandis.oxygen11.com/p/blog-page_479.html"
+    ],
+    [
+     "سياسة الخصوصية",
+     "https://blog-muhandis.oxygen11.com/p/blog-page_233.html"
+    ],
+    [
+     "السلامة أولاً",
+     "https://blog-muhandis.oxygen11.com/p/blog-page_93.html"
+    ],
+    [
+     "خدمات الكهرباء",
+     "https://blog-muhandis.oxygen11.com/p/blog-page_01.html"
+    ],
+    [
+     "عن الفريق",
+     "https://blog-muhandis.oxygen11.com/p/blog-page.html"
+    ]
+   ]
+  },
+  {
+   "id": "aqsa",
+   "name": "الأقصى",
+   "title": "الأقصى: سباكة بلا تسريبات",
+   "group": 1,
+   "url": "https://blog-aqsa.oxygen11.com/",
+   "blogspot": "https://alaqsa-plumbing.blogspot.com/",
+   "live": true,
+   "color": "#b45309",
+   "angle": "السباكة وكشف التسربات",
+   "posts": [
+    [
+     "فاتورة الماء ارتفعت فجأة؟ كيف تكتشف التسريب المخفي بنفسك",
+     "https://blog-aqsa.oxygen11.com/2026/11/blog-post.html"
+    ]
+   ],
+   "pages": [
+    [
+     "سياسة الخصوصية",
+     "https://blog-aqsa.oxygen11.com/p/blog-page_870.html"
+    ],
+    [
+     "اطلب سباك",
+     "https://blog-aqsa.oxygen11.com/p/blog-page_699.html"
+    ],
+    [
+     "خدمات السباكة",
+     "https://blog-aqsa.oxygen11.com/p/blog-page_138.html"
+    ],
+    [
+     "كشف التسربات",
+     "https://blog-aqsa.oxygen11.com/p/blog-page_01.html"
+    ],
+    [
+     "من نحن",
+     "https://blog-aqsa.oxygen11.com/p/blog-page.html"
+    ]
+   ]
+  },
+  {
+   "id": "raad",
+   "name": "رعد السماء",
+   "title": "رعد السماء — بيت نظيف بلا حشرات",
+   "group": 1,
+   "url": "https://blog-raad.oxygen11.com/",
+   "blogspot": "https://raad-alsamaa-pest.blogspot.com/",
+   "live": true,
+   "color": "#6d28d9",
+   "angle": "مكافحة الحشرات والقوارض",
+   "posts": [
+    [
+     "الصراصير في المطبخ: من أين تأتي وكيف تقطع طريقها",
+     "https://blog-raad.oxygen11.com/2026/11/blog-post.html"
+    ]
+   ],
+   "pages": [
+    [
+     "سياسة الخصوصية",
+     "https://blog-raad.oxygen11.com/p/blog-page_777.html"
+    ],
+    [
+     "احجز رشّة",
+     "https://blog-raad.oxygen11.com/p/blog-page_505.html"
+    ],
+    [
+     "أمان الأسرة",
+     "https://blog-raad.oxygen11.com/p/blog-page_45.html"
+    ],
+    [
+     "برامج المكافحة",
+     "https://blog-raad.oxygen11.com/p/blog-page_01.html"
+    ],
+    [
+     "من نحن",
+     "https://blog-raad.oxygen11.com/p/blog-page.html"
+    ]
+   ]
+  },
+  {
+   "id": "mutamakkin",
+   "name": "المتمكن",
+   "title": "المتمكن | ماء نقي وخزانات آمنة",
+   "group": 1,
+   "url": "https://blog-mutamakkin.oxygen11.com/",
+   "blogspot": "https://almutamakkin-tanks.blogspot.com/",
+   "live": true,
+   "color": "#be123c",
+   "angle": "تنظيف وتعقيم وعزل خزانات المياه",
+   "posts": [
+    [
+     "مكافحة الحشرات في مناخ مكة وجدة: ما الذي يختلف وكيف تستعد",
+     "https://blog-mutamakkin.oxygen11.com/2026/11/blog-post_250.html"
+    ],
+    [
+     "خطة المتمكن الوقائية لـالسباكة شهراً بشهر",
+     "https://blog-mutamakkin.oxygen11.com/2026/11/blog-post_577.html"
+    ],
+    [
+     "أخطاء خزانات المياه التي يصلحها فنيو المتمكن كل أسبوع",
+     "https://blog-mutamakkin.oxygen11.com/2026/11/blog-post_998.html"
+    ],
+    [
+     "كيف تدفع السعر العادل في خزانات المياه دون مفاجآت",
+     "https://blog-mutamakkin.oxygen11.com/2026/11/blog-post_276.html"
+    ],
+    [
+     "لماذا تتكرر مشاكل خزانات المياه؟ تشخيص عملي للأسباب",
+     "https://blog-mutamakkin.oxygen11.com/2026/11/blog-post_907.html"
+    ],
+    [
+     "الدليل الشامل إلى خزانات المياه في البيوت: كل ما تحتاج معرفته",
+     "https://blog-mutamakkin.oxygen11.com/2026/11/blog-post_01.html"
+    ],
+    [
+     "كل كم شهر تنظف خزان الماء؟ وعلامات تقول إن الوقت حان",
+     "https://blog-mutamakkin.oxygen11.com/2026/11/blog-post.html"
+    ]
+   ],
+   "pages": [
+    [
+     "سياسة الخصوصية",
+     "https://blog-mutamakkin.oxygen11.com/p/blog-page_475.html"
+    ],
+    [
+     "مناطق الخدمة",
+     "https://blog-mutamakkin.oxygen11.com/p/blog-page_891.html"
+    ],
+    [
+     "أسئلة شائعة",
+     "https://blog-mutamakkin.oxygen11.com/p/blog-page_238.html"
+    ],
+    [
+     "تنظيف وتعقيم وعزل خزانات المياه",
+     "https://blog-mutamakkin.oxygen11.com/p/blog-page_01.html"
+    ],
+    [
+     "من نحن",
+     "https://blog-mutamakkin.oxygen11.com/p/blog-page.html"
+    ]
+   ]
+  },
+  {
+   "id": "khabeer",
+   "name": "الخبير",
+   "title": "اسأل الخبير عن أجهزة بيتك",
+   "group": 1,
+   "url": "https://blog-khabeer.oxygen11.com/",
+   "blogspot": "https://alkhabeer-appliances.blogspot.com/",
+   "live": true,
+   "color": "#0369a1",
+   "angle": "الغسالات والأفران والأجهزة المنزلية",
+   "posts": [
+    [
+     "الدليل الشامل إلى التبريد في البيوت: كل ما تحتاج معرفته",
+     "https://blog-khabeer.oxygen11.com/2026/11/blog-post_712.html"
+    ],
+    [
+     "السباكة في مناخ مكة وجدة: ما الذي يختلف وكيف تستعد",
+     "https://blog-khabeer.oxygen11.com/2026/11/blog-post_86.html"
+    ],
+    [
+     "خطة الخبير الوقائية للأجهزة المنزلية شهراً بشهر",
+     "https://blog-khabeer.oxygen11.com/2026/11/blog-post_263.html"
+    ],
+    [
+     "أخطاء الأجهزة المنزلية التي يصلحها فنيو الخبير كل أسبوع",
+     "https://blog-khabeer.oxygen11.com/2026/11/blog-post_767.html"
+    ],
+    [
+     "كيف تدفع السعر العادل في الأجهزة المنزلية دون مفاجآت",
+     "https://blog-khabeer.oxygen11.com/2026/11/blog-post_267.html"
+    ],
+    [
+     "لماذا تتكرر مشاكل الأجهزة المنزلية؟ تشخيص عملي للأسباب",
+     "https://blog-khabeer.oxygen11.com/2026/11/blog-post_01.html"
+    ],
+    [
+     "الغسالة لا تصرف الماء: الأسباب والحلول قبل استدعاء الفني",
+     "https://blog-khabeer.oxygen11.com/2026/11/blog-post.html"
+    ]
+   ],
+   "pages": [
+    [
+     "سياسة الخصوصية",
+     "https://blog-khabeer.oxygen11.com/p/blog-page_63.html"
+    ],
+    [
+     "مناطق الخدمة",
+     "https://blog-khabeer.oxygen11.com/p/blog-page_636.html"
+    ],
+    [
+     "أسئلة شائعة",
+     "https://blog-khabeer.oxygen11.com/p/blog-page_168.html"
+    ],
+    [
+     "الغسالات والأفران والأجهزة المنزلية",
+     "https://blog-khabeer.oxygen11.com/p/blog-page_01.html"
+    ],
+    [
+     "من نحن",
+     "https://blog-khabeer.oxygen11.com/p/blog-page.html"
+    ]
+   ]
+  },
+  {
+   "id": "homeservice",
+   "name": "هوم سيرفيس",
+   "title": "هوم سيرفيس — تقويم صيانة البيت",
+   "group": 1,
+   "url": "https://blog-homeservice.oxygen11.com/",
+   "blogspot": "https://homeservice-maintenance.blogspot.com/",
+   "live": true,
+   "color": "#15803d",
+   "angle": "جداول الصيانة الدورية للمنزل",
+   "posts": [
+    [
+     "خمسة أسباب وراء أغلب مشكلات التكييف",
+     "https://blog-homeservice.oxygen11.com/2026/11/blog-post_113.html"
+    ],
+    [
+     "الدليل الشامل إلى الدهانات في البيوت: كل ما تحتاج معرفته",
+     "https://blog-homeservice.oxygen11.com/2026/11/blog-post_992.html"
+    ],
+    [
+     "كيف يؤثر مناخ المنطقة الغربية على الصيانة العامة؟",
+     "https://blog-homeservice.oxygen11.com/2026/11/blog-post_345.html"
+    ],
+    [
+     "خطة هوم سيرفيس الوقائية لـالصيانة العامة شهراً بشهر",
+     "https://blog-homeservice.oxygen11.com/2026/11/blog-post_462.html"
+    ],
+    [
+     "ما لا يخبرك به أحد عن أخطاء الصيانة العامة",
+     "https://blog-homeservice.oxygen11.com/2026/11/blog-post_673.html"
+    ],
+    [
+     "كيف تدفع السعر العادل في الصيانة العامة دون مفاجآت",
+     "https://blog-homeservice.oxygen11.com/2026/11/blog-post_01.html"
+    ],
+    [
+     "تقويم صيانة البيت: ماذا تفحص كل شهر وكل موسم",
+     "https://blog-homeservice.oxygen11.com/2026/11/blog-post.html"
+    ]
+   ],
+   "pages": [
+    [
+     "سياسة الخصوصية",
+     "https://blog-homeservice.oxygen11.com/p/blog-page_735.html"
+    ],
+    [
+     "مناطق الخدمة",
+     "https://blog-homeservice.oxygen11.com/p/blog-page_353.html"
+    ],
+    [
+     "أسئلة شائعة",
+     "https://blog-homeservice.oxygen11.com/p/blog-page_01.html"
+    ],
+    [
+     "من نحن",
+     "https://blog-homeservice.oxygen11.com/p/blog-page.html"
+    ]
+   ]
+  },
+  {
+   "id": "ibtikar",
+   "name": "ابتكار راحة",
+   "title": "ابتكار راحة: تكييف مركزي أوفر",
+   "group": 1,
+   "url": "https://blog-ibtikar.oxygen11.com/",
+   "blogspot": "https://ibtikar-raha-hvac.blogspot.com/",
+   "live": true,
+   "color": "#c2410c",
+   "angle": "التكييف المركزي والكونسيلد وتوفير الكهرباء",
+   "posts": [
+    [
+     "عروض الطاقة الشمسية: كيف تقارن بينها وتختار الأنسب",
+     "https://blog-ibtikar.oxygen11.com/2026/11/blog-post_692.html"
+    ],
+    [
+     "قبل أن تتصل بالفني: افهم أعطال الكهرباء الشائعة",
+     "https://blog-ibtikar.oxygen11.com/2026/11/blog-post_259.html"
+    ],
+    [
+     "التكييف من الألف إلى الياء: دليل عملي لأصحاب البيوت في مكة وجدة",
+     "https://blog-ibtikar.oxygen11.com/2026/11/blog-post_238.html"
+    ],
+    [
+     "كيف يؤثر مناخ المنطقة الغربية على التكييف؟",
+     "https://blog-ibtikar.oxygen11.com/2026/11/blog-post_935.html"
+    ],
+    [
+     "خطة ابتكار راحة الوقائية لـالتكييف شهراً بشهر",
+     "https://blog-ibtikar.oxygen11.com/2026/11/blog-post_01.html"
+    ],
+    [
+     "أخطاء التكييف التي يصلحها فنيو ابتكار راحة كل أسبوع",
+     "https://blog-ibtikar.oxygen11.com/2026/11/blog-post.html"
+    ],
+    [
+     "كيف تخفض فاتورة التكييف المركزي 20% دون أن تتنازل عن البرودة",
+     "https://blog-ibtikar.oxygen11.com/2026/11/20.html"
+    ]
+   ],
+   "pages": [
+    [
+     "سياسة الخصوصية",
+     "https://blog-ibtikar.oxygen11.com/p/blog-page_732.html"
+    ],
+    [
+     "مناطق الخدمة",
+     "https://blog-ibtikar.oxygen11.com/p/blog-page_440.html"
+    ],
+    [
+     "أسئلة شائعة",
+     "https://blog-ibtikar.oxygen11.com/p/blog-page_342.html"
+    ],
+    [
+     "التكييف المركزي والكونسيلد وتوفير الطاقة",
+     "https://blog-ibtikar.oxygen11.com/p/blog-page_01.html"
+    ],
+    [
+     "من نحن",
+     "https://blog-ibtikar.oxygen11.com/p/blog-page.html"
+    ]
+   ]
+  },
+  {
+   "id": "mutamad",
+   "name": "المعتمد",
+   "title": "المعتمد — صيانة أحياء جدة",
+   "group": 1,
+   "url": "https://blog-mutamad.oxygen11.com/",
+   "blogspot": "https://almutamad-jeddah-maintenance.blogspot.com/",
+   "live": true,
+   "color": "#334155",
+   "angle": "خدمات الصيانة حسب أحياء جدة",
+   "posts": [
+    [
+     "ما لا يخبرك به أحد عن أخطاء نقل الأثاث",
+     "https://blog-mutamad.oxygen11.com/2026/11/blog-post_408.html"
+    ],
+    [
+     "كيف تدفع السعر العادل في الأقفال الذكية دون مفاجآت",
+     "https://blog-mutamad.oxygen11.com/2026/11/blog-post_827.html"
+    ],
+    [
+     "لماذا تتكرر مشاكل الصيانة العامة؟ تشخيص عملي للأسباب",
+     "https://blog-mutamad.oxygen11.com/2026/11/blog-post_513.html"
+    ],
+    [
+     "الدليل الشامل إلى الصيانة العامة في البيوت: كل ما تحتاج معرفته",
+     "https://blog-mutamad.oxygen11.com/2026/11/blog-post_970.html"
+    ],
+    [
+     "الصيانة العامة في مناخ مكة وجدة: ما الذي يختلف وكيف تستعد",
+     "https://blog-mutamad.oxygen11.com/2026/11/blog-post_398.html"
+    ],
+    [
+     "خطة المعتمد الوقائية لـالصيانة العامة شهراً بشهر",
+     "https://blog-mutamad.oxygen11.com/2026/11/blog-post_01.html"
+    ],
+    [
+     "دليل خدمات الصيانة في جدة: ما الذي يميز كل منطقة؟",
+     "https://blog-mutamad.oxygen11.com/2026/11/blog-post.html"
+    ]
+   ],
+   "pages": [
+    [
+     "سياسة الخصوصية",
+     "https://blog-mutamad.oxygen11.com/p/blog-page_76.html"
+    ],
+    [
+     "مناطق الخدمة",
+     "https://blog-mutamad.oxygen11.com/p/blog-page_479.html"
+    ],
+    [
+     "أسئلة شائعة",
+     "https://blog-mutamad.oxygen11.com/p/blog-page_271.html"
+    ],
+    [
+     "خدمات الصيانة حسب أحياء جدة",
+     "https://blog-mutamad.oxygen11.com/p/blog-page_01.html"
+    ],
+    [
+     "من نحن",
+     "https://blog-mutamad.oxygen11.com/p/blog-page.html"
+    ]
+   ]
+  },
+  {
+   "id": "misriya",
+   "name": "المصرية",
+   "title": "المصرية — خدمات الصيانة في أحياء مكة",
+   "group": 1,
+   "url": "https://blog-misriya.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#a21caf",
+   "angle": "خدمات الصيانة حسب أحياء مكة المكرمة",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "nukhba",
+   "name": "النخبة",
+   "title": "النخبة لكاميرات المراقبة وأنظمة الأمان",
+   "group": 1,
+   "url": "https://blog-nukhba.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#0e7490",
+   "angle": "كاميرات المراقبة وأنظمة الأمان",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "riyada",
+   "name": "الريادة",
+   "title": "الريادة | طاقة شمسية للبيوت والمزارع",
+   "group": 1,
+   "url": "https://blog-riyada.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#7c3aed",
+   "angle": "أنظمة الطاقة الشمسية",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "baraa",
+   "name": "البراعة",
+   "title": "البراعة في الدهانات والديكور",
+   "group": 1,
+   "url": "https://blog-baraa.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#ca8a04",
+   "angle": "الدهانات وورق الجدران والديكور",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "safwa",
+   "name": "الصفوة",
+   "title": "الصفوة للتنظيف العميق والتعقيم",
+   "group": 1,
+   "url": "https://blog-safwa.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#db2777",
+   "angle": "التنظيف العميق والتعقيم",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "tamayuz",
+   "name": "التميز",
+   "title": "التميز في التبليط والترميم والعزل",
+   "group": 1,
+   "url": "https://blog-tamayuz.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#0d9488",
+   "angle": "التبليط والترميم والعزل",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "nasmat",
+   "name": "نسمة الحجاز",
+   "title": "نسمة الحجاز — دش وساتلايت وشاشات",
+   "group": 1,
+   "url": "https://blog-nasmat.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#2563eb",
+   "angle": "تركيب الدش والساتلايت وضبط القنوات",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "wahat",
+   "name": "واحة الراحة",
+   "title": "واحة الراحة لنقل الأثاث والعفش",
+   "group": 1,
+   "url": "https://blog-wahat.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#65a30d",
+   "angle": "نقل الأثاث وفكه وتركيبه",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "amaan",
+   "name": "الأمان",
+   "title": "الأمان للأقفال الذكية والأبواب",
+   "group": 1,
+   "url": "https://blog-amaan.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#dc2626",
+   "angle": "الأقفال الذكية والأبواب",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "kafaa",
+   "name": "الكفاءة",
+   "title": "الكفاءة لعقود صيانة المنشآت",
+   "group": 1,
+   "url": "https://blog-kafaa.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#0891b2",
+   "angle": "عقود الصيانة للشركات والمنشآت",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "jawda",
+   "name": "الجودة",
+   "title": "الجودة للمقاولات العامة والترميم",
+   "group": 1,
+   "url": "https://blog-jawda.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#9a3412",
+   "angle": "المقاولات العامة والإشراف الهندسي",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "nasim",
+   "name": "نسيم البارد",
+   "title": "نسيم البارد | دليل اختيار وتركيب المكيفات",
+   "group": 2,
+   "url": "https://blog-nasim.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#0284c7",
+   "angle": "تركيب المكيفات الجديدة واختيار المقاس المناسب",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "qimma",
+   "name": "القمة للتبريد",
+   "title": "القمة للتبريد | غرف التبريد التجارية",
+   "group": 2,
+   "url": "https://blog-qimma.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#0e7490",
+   "angle": "غرف تبريد المطاعم والمحلات التجارية",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "baroda",
+   "name": "برودة",
+   "title": "برودة | صيانة ثلاجات البيت",
+   "group": 2,
+   "url": "https://blog-baroda.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#0369a1",
+   "angle": "ثلاجات وفريزرات المنازل",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "taqa",
+   "name": "الطاقة الآمنة",
+   "title": "الطاقة الآمنة | كهرباء البيت بأمان",
+   "group": 2,
+   "url": "https://blog-taqa.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#ca8a04",
+   "angle": "لوحات الكهرباء والتأريض والسلامة",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "nabea",
+   "name": "النبع",
+   "title": "النبع | كشف التسربات والسباكة",
+   "group": 2,
+   "url": "https://blog-nabea.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#0891b2",
+   "angle": "كشف التسربات بدون تكسير",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "hisn",
+   "name": "الحصن",
+   "title": "الحصن | مكافحة الحشرات بضمان",
+   "group": 2,
+   "url": "https://blog-hisn.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#4d7c0f",
+   "angle": "بق الفراش والنمل الأبيض",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "safaa",
+   "name": "صفاء الماء",
+   "title": "صفاء الماء | خزانات نظيفة ومعزولة",
+   "group": 2,
+   "url": "https://blog-safaa.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#2563eb",
+   "angle": "عزل وتعقيم الخزانات الأرضية",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "muhtarif",
+   "name": "المحترف",
+   "title": "المحترف | صيانة الأجهزة المنزلية",
+   "group": 2,
+   "url": "https://blog-muhtarif.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#9333ea",
+   "angle": "الغسالات والسخانات وغسالات الصحون",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "baytak",
+   "name": "بيتك",
+   "title": "بيتك | صيانة الشقق والعمائر",
+   "group": 2,
+   "url": "https://blog-baytak.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#16a34a",
+   "angle": "صيانة الشقق المؤجرة والعمائر",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "manakh",
+   "name": "المناخ",
+   "title": "المناخ | التكييف المركزي",
+   "group": 2,
+   "url": "https://blog-manakh.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#ea580c",
+   "angle": "التكييف المركزي للفلل والمكاتب",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "amin",
+   "name": "الأمين",
+   "title": "الأمين | صيانة طوارئ جدة",
+   "group": 2,
+   "url": "https://blog-amin.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#475569",
+   "angle": "الصيانة الطارئة في جدة",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "dar",
+   "name": "الدار",
+   "title": "الدار | صيانة بيوت مكة",
+   "group": 2,
+   "url": "https://blog-dar.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#be185d",
+   "angle": "صيانة البيوت القديمة في مكة",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "ayn",
+   "name": "العين الساهرة",
+   "title": "العين الساهرة | كاميرات المراقبة",
+   "group": 2,
+   "url": "https://blog-ayn.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#047857",
+   "angle": "كاميرات المحلات والمستودعات",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "shams",
+   "name": "شمس الحجاز",
+   "title": "شمس الحجاز | الطاقة الشمسية",
+   "group": 2,
+   "url": "https://blog-shams.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#d97706",
+   "angle": "الطاقة الشمسية للاستراحات والمزارع",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "lamsa",
+   "name": "لمسة فن",
+   "title": "لمسة فن | دهانات وديكور",
+   "group": 2,
+   "url": "https://blog-lamsa.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#e11d48",
+   "angle": "الديكور وورق الجدران",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "naqaa",
+   "name": "النقاء",
+   "title": "النقاء | تنظيف وتعقيم",
+   "group": 2,
+   "url": "https://blog-naqaa.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#0d9488",
+   "angle": "تنظيف ما بعد التشطيب والتعقيم",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "itqan",
+   "name": "الإتقان",
+   "title": "الإتقان | عزل الأسطح والترميم",
+   "group": 2,
+   "url": "https://blog-itqan.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#b91c1c",
+   "angle": "عزل الأسطح المائي والحراري",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "ishara",
+   "name": "الإشارة",
+   "title": "الإشارة | تركيب وضبط الدش",
+   "group": 2,
+   "url": "https://blog-ishara.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#1e40af",
+   "angle": "الدش المركزي للعمائر",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "rahhal",
+   "name": "الرحّال",
+   "title": "الرحّال | نقل الأثاث",
+   "group": 2,
+   "url": "https://blog-rahhal.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#a16207",
+   "angle": "نقل الأثاث بين مكة وجدة",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "miftah",
+   "name": "المفتاح الذهبي",
+   "title": "المفتاح الذهبي | الأقفال الذكية",
+   "group": 2,
+   "url": "https://blog-miftah.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#6d28d9",
+   "angle": "فتح الأبواب وطوارئ الأقفال",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "idara",
+   "name": "الإدارة الذكية",
+   "title": "الإدارة الذكية | صيانة المنشآت",
+   "group": 2,
+   "url": "https://blog-idara.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#1d4ed8",
+   "angle": "صيانة الفنادق والمنشآت الموسمية",
+   "posts": [],
+   "pages": []
+  },
+  {
+   "id": "bina",
+   "name": "البناء المتين",
+   "title": "البناء المتين | ترميم وتشطيب",
+   "group": 2,
+   "url": "https://blog-bina.oxygen11.com/",
+   "blogspot": null,
+   "live": false,
+   "color": "#78350f",
+   "angle": "ترميم وتشطيب الفلل",
+   "posts": [],
+   "pages": []
+  }
+ ]
+}

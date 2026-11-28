@@ -1,0 +1,1 @@
+{ "name": "accounts-hub", "version": "0.1.0", "private": true, "description": "Multi-account publishing hub (Blogger / WordPress / landing pages) — no dependencies, Node >= 22.5 (node:sqlite)", "scripts": { "start": "node src/server.js", "test": "node src/selftest.js" } }

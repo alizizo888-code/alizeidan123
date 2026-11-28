@@ -1,0 +1,24 @@
+# فحص السيو لمواقع ووردبريس — 2026-11-09 14:30
+
+- **oxygen** (oxygen11.com): خريطة الموقع عليها noindex
+- **mutqan** (mutqan.oxygen11.com): خريطة الموقع عليها noindex
+- **motakhases** (motakhases-maintenance-general-contracting.oxygen11.com): سليم
+- **muhandis** (muhandis-maintenance-general-contracting.oxygen11.com): سليم
+- **aqsa** (aqsa-maintenance-general-contracting.oxygen11.com): سليم
+- **raad** (raad-maintenance-general-contracting.oxygen11.com): سليم
+- **mutamakkin** (mutamakkin-maintenance-general-contracting.oxygen11.com): سليم
+- **khabeer** (khabeer-maintenance-general-contracting.oxygen11.com): سليم
+- **homeservice** (homeservice-maintenance-general-contracting.oxygen11.com): سليم
+- **ibtikar** (ibtikar-maintenance-general-contracting.oxygen11.com): سليم
+- **mutamad** (mutamad-maintenance-general-contracting.oxygen11.com): سليم
+- **misriya** (misriya-maintenance-general-contracting.oxygen11.com): سليم
+- **nukhba** (nukhba-maintenance-general-contracting.oxygen11.com): سليم
+- **riyada** (riyada-maintenance-general-contracting.oxygen11.com): سليم
+- **baraa** (baraa-maintenance-general-contracting.oxygen11.com): سليم
+- **safwa** (safwa-maintenance-general-contracting.oxygen11.com): سليم
+- **tamayuz** (tamayuz-maintenance-general-contracting.oxygen11.com): سليم
+- **nasmat** (nasmat-maintenance-general-contracting.oxygen11.com): سليم
+- **wahat** (wahat-maintenance-general-contracting.oxygen11.com): سليم
+- **amaan** (amaan-maintenance-general-contracting.oxygen11.com): سليم
+- **kafaa** (kafaa-maintenance-general-contracting.oxygen11.com): سليم
+- **jawda** (jawda-maintenance-general-contracting.oxygen11.com): سليم

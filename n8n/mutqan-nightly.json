@@ -1,0 +1,389 @@
+{
+ "name": "متقن — ملخص الليلة للماستر",
+ "nodes": [
+  {
+   "id": "242c4ff1-7495-4d3c-93a9-7f870e33385f",
+   "name": "كل يوم 10:15 م",
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1.2,
+   "position": [
+    0,
+    0
+   ],
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "cronExpression",
+       "expression": "15 22 * * *"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": "d8c33734-350c-4cb9-9963-0985136c5f0d",
+   "name": "الإعدادات",
+   "type": "n8n-nodes-base.set",
+   "typeVersion": 3.4,
+   "position": [
+    220,
+    0
+   ],
+   "parameters": {
+    "assignments": {
+     "assignments": [
+      {
+       "id": "s1",
+       "name": "site",
+       "value": "https://oxygen11.com/wp-json/mutqan/v1/n8n",
+       "type": "string"
+      },
+      {
+       "id": "s2",
+       "name": "secret",
+       "value": "PASTE_SECRET_FROM_APP",
+       "type": "string"
+      }
+     ]
+    },
+    "options": {}
+   }
+  },
+  {
+   "id": "1266327e-51c2-4c70-a27a-59b25ffc1eda",
+   "name": "فلوس اليوم body",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    440,
+    0
+   ],
+   "parameters": {
+    "jsCode": "const body = JSON.stringify({ op: 'command', text: 'فلوس النهارده' });\nreturn [{ json: { body } }];"
+   }
+  },
+  {
+   "id": "df3c3b22-8b17-45be-9325-6ad6d71faa70",
+   "name": "فلوس اليوم sign",
+   "type": "n8n-nodes-base.crypto",
+   "typeVersion": 1,
+   "position": [
+    660,
+    0
+   ],
+   "parameters": {
+    "action": "hmac",
+    "type": "SHA256",
+    "value": "={{ $json.body }}",
+    "dataPropertyName": "sig",
+    "secret": "={{ $('الإعدادات').first().json.secret }}",
+    "encoding": "hex"
+   }
+  },
+  {
+   "id": "8c9f6266-1565-409b-a62e-9ece47f5bc45",
+   "name": "فلوس اليوم send",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    880,
+    0
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $('الإعدادات').first().json.site }}",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "X-Mutqan-Signature",
+       "value": "={{ $json.sig }}"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "sendBody": true,
+    "contentType": "raw",
+    "rawContentType": "application/json",
+    "body": "={{ $json.body }}",
+    "options": {}
+   }
+  },
+  {
+   "id": "e7501337-cd86-4379-b726-a69bdccebb12",
+   "name": "التنبيهات body",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    440,
+    200
+   ],
+   "parameters": {
+    "jsCode": "const body = JSON.stringify({ op: 'command', text: 'التنبيهات' });\nreturn [{ json: { body } }];"
+   }
+  },
+  {
+   "id": "5d4e2bcf-8673-433d-a7cb-efd9ae7e2724",
+   "name": "التنبيهات sign",
+   "type": "n8n-nodes-base.crypto",
+   "typeVersion": 1,
+   "position": [
+    660,
+    200
+   ],
+   "parameters": {
+    "action": "hmac",
+    "type": "SHA256",
+    "value": "={{ $json.body }}",
+    "dataPropertyName": "sig",
+    "secret": "={{ $('الإعدادات').first().json.secret }}",
+    "encoding": "hex"
+   }
+  },
+  {
+   "id": "91d651ba-be39-4d02-87d5-15df6603d4e1",
+   "name": "التنبيهات send",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    880,
+    200
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $('الإعدادات').first().json.site }}",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "X-Mutqan-Signature",
+       "value": "={{ $json.sig }}"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "sendBody": true,
+    "contentType": "raw",
+    "rawContentType": "application/json",
+    "body": "={{ $json.body }}",
+    "options": {}
+   }
+  },
+  {
+   "id": "1d011fee-3bb8-4aa5-b229-18401d15e7da",
+   "name": "دمج",
+   "type": "n8n-nodes-base.merge",
+   "typeVersion": 3,
+   "position": [
+    1120,
+    100
+   ],
+   "parameters": {
+    "mode": "append"
+   }
+  },
+  {
+   "id": "2299de04-e923-4361-b4ab-1a7c544c74ab",
+   "name": "ابعت للماستر body",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1340,
+    100
+   ],
+   "parameters": {
+    "jsCode": "const body = JSON.stringify({ op: 'master', text: '🌙 *ملخص الليلة*\\n\\n' + $input.all().map(i => (i.json.data && i.json.data.text) || '').filter(Boolean).join('\\n\\n') });\nreturn [{ json: { body } }];"
+   }
+  },
+  {
+   "id": "4f1ad149-edbb-4375-9609-922434879e1c",
+   "name": "ابعت للماستر sign",
+   "type": "n8n-nodes-base.crypto",
+   "typeVersion": 1,
+   "position": [
+    1560,
+    100
+   ],
+   "parameters": {
+    "action": "hmac",
+    "type": "SHA256",
+    "value": "={{ $json.body }}",
+    "dataPropertyName": "sig",
+    "secret": "={{ $('الإعدادات').first().json.secret }}",
+    "encoding": "hex"
+   }
+  },
+  {
+   "id": "03051afd-5429-4363-b68a-66969ea0bd7d",
+   "name": "ابعت للماستر send",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1780,
+    100
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $('الإعدادات').first().json.site }}",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "X-Mutqan-Signature",
+       "value": "={{ $json.sig }}"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "sendBody": true,
+    "contentType": "raw",
+    "rawContentType": "application/json",
+    "body": "={{ $json.body }}",
+    "options": {}
+   }
+  }
+ ],
+ "connections": {
+  "كل يوم 10:15 م": {
+   "main": [
+    [
+     {
+      "node": "الإعدادات",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "الإعدادات": {
+   "main": [
+    [
+     {
+      "node": "فلوس اليوم body",
+      "type": "main",
+      "index": 0
+     },
+     {
+      "node": "التنبيهات body",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "فلوس اليوم body": {
+   "main": [
+    [
+     {
+      "node": "فلوس اليوم sign",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "فلوس اليوم sign": {
+   "main": [
+    [
+     {
+      "node": "فلوس اليوم send",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "التنبيهات body": {
+   "main": [
+    [
+     {
+      "node": "التنبيهات sign",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "التنبيهات sign": {
+   "main": [
+    [
+     {
+      "node": "التنبيهات send",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "ابعت للماستر body": {
+   "main": [
+    [
+     {
+      "node": "ابعت للماستر sign",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "ابعت للماستر sign": {
+   "main": [
+    [
+     {
+      "node": "ابعت للماستر send",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "فلوس اليوم send": {
+   "main": [
+    [
+     {
+      "node": "دمج",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "التنبيهات send": {
+   "main": [
+    [
+     {
+      "node": "دمج",
+      "type": "main",
+      "index": 1
+     }
+    ]
+   ]
+  },
+  "دمج": {
+   "main": [
+    [
+     {
+      "node": "ابعت للماستر body",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "timezone": "Asia/Riyadh"
+ },
+ "active": false
+}

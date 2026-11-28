@@ -1,0 +1,14 @@
+{
+  "appId": "com.oxygen11.wacenter",
+  "appName": "مركز الواتساب",
+  "webDir": "www",
+  "backgroundColor": "#111b21",
+  "server": {
+    "url": "https://oxygen11.com/wa-center/",
+    "androidScheme": "https",
+    "errorPath": "offline.html",
+    "allowNavigation": ["oxygen11.com", "*.oxygen11.com"]
+  },
+  "android": { "backgroundColor": "#111b21", "allowMixedContent": false },
+  "plugins": { "LocalNotifications": { "smallIcon": "ic_stat_icon_config_sample", "iconColor": "#00a884" } }
+}

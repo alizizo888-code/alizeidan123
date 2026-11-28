@@ -1,0 +1,1091 @@
+<?php
+if (!defined('ABSPATH')) { exit; }
+
+/**
+ * REST surface of the Mutqan web app: /wp-json/mutqan/v1/{db,auth,team,ai,upload,push,geocode,config}
+ * plus serving the built app at /app/.
+ */
+final class Mutqan_Rest {
+    const NS = 'mutqan/v1';
+
+    public static function boot() {
+        add_action('init', ['Mutqan_Store', 'maybe_install'], 1);
+        add_action('init', [__CLASS__, 'heal_static_app'], 1);
+        add_action('init', [__CLASS__, 'serve_app'], 2);
+        add_action('rest_api_init', [__CLASS__, 'routes']);
+        // Cross-origin use (the static Oxygen front on oxygen11.com talks to this API). Token auth, no cookies -> safe to allow the brand origins.
+        add_action('rest_api_init', function () {
+            add_filter('rest_pre_serve_request', function ($served) {
+                $o = isset($_SERVER['HTTP_ORIGIN']) ? (string) $_SERVER['HTTP_ORIGIN'] : '';
+                if ($o !== '' && (preg_match('#^(https://([a-z0-9-]+\.)?oxygen11\.com|https://localhost|capacitor://localhost|http://localhost)$#i', $o) || self::linked_origin($o))) { // + the native app shell origins, + sites the owner linked on their own domains
+                    header('Access-Control-Allow-Origin: ' . $o);
+                    header('Vary: Origin');
+                    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Mutqan-Token, X-Mutqan-Anon, X-WP-Nonce');
+                    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+                }
+                return $served;
+            });
+        }, 20);
+        add_action('mutqan_purge', ['Mutqan_Store', 'purge_expired']);
+        add_action('mutqan_remind', [__CLASS__, 'send_reminders']);
+        // أي نسخة لـ Chatwoot رفضها (كان وقتها واقع أو بطيء) بتتعاد هنا بدل ما الرسالة تضيع من صندوق الفريق
+        add_action('mutqan_remind', function () { if (class_exists('Mutqan_Chatwoot')) { Mutqan_Chatwoot::drain(); } }, 20);
+        add_action('init', function () { if (!wp_next_scheduled('mutqan_remind')) { wp_schedule_event(time() + 120, 'mutqan_5min', 'mutqan_remind'); } }, 3);
+        add_filter('cron_schedules', function ($s) { $s['mutqan_5min'] = ['interval' => 300, 'display' => 'Mutqan 5 min']; return $s; });
+        add_action('init', function () { if (!wp_next_scheduled('mutqan_purge')) { wp_schedule_event(time() + 600, 'daily', 'mutqan_purge'); } }, 3);
+    }
+
+    /* ------------------------------------------------------------------ routing */
+
+    public static function routes() {
+        foreach (['db', 'auth', 'team', 'ai', 'agent', 'sales', 'orderbot', 'ops', 'devices', 'network', 'push', 'webpush', 'relay', 'callnet', 'promo', 'wa', 'shop', 'link', 'desk', 'native', 'hubadmin', 'source', 'owner', 'fp', 'field', 'trainer', 'concierge', 'lines', 'outreach', 'paychoice', 'growth', 'schedule', 'proof', 'techid', 'maintenance', 'teamgeo'] as $name) {
+            register_rest_route(self::NS, '/' . $name, [
+                'methods' => 'POST', 'permission_callback' => '__return_true',
+                'callback' => function ($req) use ($name) { return self::guard($req, [__CLASS__, 'h_' . $name]); },
+            ]);
+        }
+        // Chatwoot (the team's inbox) → here: an agent's reply goes out from the customer's own line.
+        register_rest_route(self::NS, '/chatwoot', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                try { $out = Mutqan_Chatwoot::webhook((string) $req->get_body(), (string) $req->get_param('k')); $res = new WP_REST_Response(['data' => $out], 200); }
+                catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+                catch (Throwable $e) { error_log('[mutqan] chatwoot hook ' . $e->getMessage()); $res = new WP_REST_Response(['error' => ['code' => 'server_error']], 500); }
+                return $res;
+            }]);
+        // n8n (on the VPS) → here, signed with the central's secret.
+        register_rest_route(self::NS, '/n8n', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                try { $out = Mutqan_WA_Central::inbound((string) $req->get_body(), (string) $req->get_header('x-mutqan-signature')); $res = new WP_REST_Response(['data' => $out], 200); }
+                catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+                return $res;
+            }]);
+        // «وضع الصيانة»: the customer app asks on start (a cached app shell would otherwise open as usual)
+        register_rest_route(self::NS, '/maint', ['methods' => 'GET', 'permission_callback' => '__return_true',
+            'callback' => function () {
+                $o = get_option('mutqan_maintenance', []); $o = is_array($o) ? $o : [];
+                $res = new WP_REST_Response(['on' => !empty($o['on']), 'title' => (string) ($o['title'] ?? ''), 'msg' => (string) ($o['msg'] ?? '')], 200);
+                $res->header('Cache-Control', 'no-store'); return $res;
+            }]);
+        // One unchanging download address per Android app; the phone is sent to the public release file.
+        register_rest_route(self::NS, '/apk', ['methods' => 'GET', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                $to = Mutqan_Native::apk_target((string) $req->get_param('f'));
+                if ($to === '') { return new WP_REST_Response(['error' => ['code' => 'not_found', 'message' => 'تطبيق غير معروف.']], 404); }
+                $res = new WP_REST_Response(null, 302);
+                $res->header('Location', $to); $res->header('Cache-Control', 'public, max-age=300');
+                return $res;
+            }]);
+        // The phone asks for work instead of being called: a gateway on a handset has no address of
+        // its own. Signed with the same secret as the webhook, so there is nothing extra to set up.
+        register_rest_route(self::NS, '/wa-pull', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                try { $out = Mutqan_WA::pull_signed((string) $req->get_body(), (string) $req->get_header('x-mq-signature')); $res = new WP_REST_Response(['data' => $out], 200); }
+                catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+                catch (Throwable $e) { error_log('[mutqan] wa-pull ' . $e->getMessage()); $res = new WP_REST_Response(['error' => ['code' => 'server_error']], 500); }
+                $res->header('Cache-Control', 'no-store');
+                return $res;
+            }]);
+        // The WhatsApp hub on the VPS asks its short data questions here, signed with the secret made at pairing.
+        register_rest_route(self::NS, '/hub', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                try { $res = new WP_REST_Response(['data' => Mutqan_Hub::api((string) $req->get_body(), (string) $req->get_header('x-mq-hub'))], 200); }
+                catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+                catch (Throwable $e) { error_log('[mutqan] hub ' . $e->getMessage()); $res = new WP_REST_Response(['error' => ['code' => 'server_error', 'message' => $e->getMessage()]], 500); }
+                $res->header('Cache-Control', 'no-store');
+                return $res;
+            }]);
+        // The free AI providers' keys (GitHub secrets) handed over by a workflow signed in as an administrator.
+        register_rest_route(self::NS, '/ai-keys', ['methods' => ['GET', 'POST'], 'permission_callback' => function () { return current_user_can('manage_options'); },
+            'callback' => function ($req) {
+                try { $out = $req->get_method() === 'POST' ? Mutqan_Hub::save_ai_keys((array) $req->get_json_params()) : Mutqan_Hub::ai_status(); return new WP_REST_Response(['data' => $out], 200); }
+                catch (Mutqan_Error $e) { return new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+            }]);
+        register_rest_route(self::NS, '/wa-hook', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                try { $out = Mutqan_WA::webhook((string) $req->get_body(), (string) $req->get_header('x-mq-signature')); $res = new WP_REST_Response(['data' => $out], 200); }
+                catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status); }
+                catch (Throwable $e) { error_log('[mutqan] wa-hook ' . $e->getMessage()); $res = new WP_REST_Response(['error' => ['code' => 'server_error']], 500); }
+                $res->header('Cache-Control', 'no-store');
+                return $res;
+            }]);
+        register_rest_route(self::NS, '/tg-hook', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) {
+                try { $res = new WP_REST_Response(Mutqan_Telegram::webhook((string) $req->get_body(), (string) $req->get_header('x-telegram-bot-api-secret-token')), 200); }
+                catch (Mutqan_Error $e) { $res = new WP_REST_Response(['error' => $e->slug], $e->status); }
+                catch (Throwable $e) { error_log('[mutqan] tg-hook ' . get_class($e) . ' @ ' . basename($e->getFile()) . ':' . $e->getLine()); $res = new WP_REST_Response(['ok' => true], 200); }
+                $res->header('Cache-Control', 'no-store');
+                return $res;
+            }]);
+        register_rest_route(self::NS, '/upload', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_upload']); }]);
+        // The whole operation in one small answer, for any screen that redraws itself.
+        register_rest_route(self::NS, '/live', ['methods' => 'GET', 'permission_callback' => '__return_true',
+            'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_live']); }]);
+        // A technician's phone says where it is, while they have a job open. Small and frequent, so
+        // it is its own route rather than a document write.
+        register_rest_route(self::NS, '/track', ['methods' => 'POST', 'permission_callback' => '__return_true',
+            'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_track']); }]);
+        register_rest_route(self::NS, '/geocode', ['methods' => 'GET', 'permission_callback' => '__return_true',
+            'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_geocode']); }]);
+		register_rest_route(self::NS, '/places', ['methods' => 'GET', 'permission_callback' => '__return_true',
+			'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_places']); }]);
+        register_rest_route(self::NS, '/config', ['methods' => 'GET', 'permission_callback' => '__return_true',
+            'callback' => function ($req) { return self::guard($req, [__CLASS__, 'h_config']); }]);
+    }
+
+    private static function guard($req, $fn) {
+        try {
+            Mutqan_Auth::reset_memo();
+            $p = Mutqan_Auth::principal($req);
+            if (class_exists('Mutqan_Block')) { Mutqan_Block::check_request($p); }
+            $out = call_user_func($fn, $req, $p);
+            $res = new WP_REST_Response(['data' => $out], 200);
+        } catch (Mutqan_Error $e) {
+            $res = new WP_REST_Response(['error' => ['code' => $e->slug, 'message' => $e->getMessage()]], $e->status);
+        } catch (Throwable $e) {
+            error_log('[mutqan] ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+            $res = new WP_REST_Response(['error' => ['code' => 'server_error', 'message' => 'حدث خطأ في الخادم.']], 500);
+        }
+        $res->header('Cache-Control', 'no-store');
+        return $res;
+    }
+
+    private static function body($req) {
+        $b = $req->get_json_params();
+        return is_array($b) ? $b : [];
+    }
+
+    /* ------------------------------------------------------------------ /db */
+
+    public static function h_db($req, $p) {
+        $in = self::body($req);
+        if (($in['op'] ?? '') === 'batch') {
+            $out = [];
+            foreach (array_slice((array) ($in['ops'] ?? []), 0, 20) as $one) {
+                try { $out[] = ['ok' => true, 'data' => self::db_one(is_array($one) ? $one : [], $p)]; }
+                catch (Mutqan_Error $e) { $out[] = ['ok' => false, 'error' => ['code' => $e->slug, 'message' => $e->getMessage()], 'status' => $e->status]; }
+            }
+            return $out;
+        }
+        return self::db_one($in, $p);
+    }
+
+    private static function db_one($in, $p) {
+        $op = (string) ($in['op'] ?? '');
+        $coll = (string) ($in['coll'] ?? '');
+        $filters = isset($in['filters']) && is_array($in['filters']) ? $in['filters'] : [];
+        $opts = isset($in['opts']) && is_array($in['opts']) ? $in['opts'] : [];
+        $private = in_array($op, ['select', 'count', 'insert', 'update', 'delete'], true);
+        if ($private && ($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'سجّل الدخول أو افتح التطبيق من جديد.', 401); }
+        $write = in_array($op, ['insert', 'insertShared', 'update', 'updateShared', 'upsertShared', 'delete', 'deleteShared'], true);
+        if ($write && !Mutqan_Policy::is_staff($p)) { Mutqan_Limiter::hit('db_write', 240, 600); }
+
+        switch ($op) {
+            case 'select': case 'selectShared': return Mutqan_Store::select($coll, $filters, $opts, $p, $private);
+            case 'count': case 'countShared': return Mutqan_Store::count($coll, $filters, $p, $private);
+            case 'groupByShared': return Mutqan_Store::group_by($coll, (string) ($in['field'] ?? ''), $filters, (int) ($opts['limit'] ?? 20), $p);
+            case 'sumShared': return Mutqan_Store::sum($coll, (string) ($in['field'] ?? ''), $filters, $p);
+            case 'stamps': {
+                $out = [];
+                foreach (array_slice((array) ($in['topics'] ?? []), 0, 30) as $c) { $out[(string) $c] = Mutqan_Store::stamp((string) $c, $p); }
+                return $out;
+            }
+            case 'insert': case 'insertShared': {
+                $doc = Mutqan_Store::insert($coll, $in['data'] ?? [], $in['id'] ?? null, $opts, $p, $private);
+                if ($coll === 'orders' && !$private) { self::after_order_created($doc); if (self::alert_new_order($doc)) { $doc['waSent'] = true; } }
+                if ($coll === 'order_msgs' && !$private) { self::after_order_msg($doc); if (class_exists('Mutqan_Order_AI')) { Mutqan_Order_AI::on_message($doc); } }
+                if ($coll === 'tech_applications' && !$private) { self::alert_tech_application($doc); }
+                if (in_array($coll, ['handoffs', 'warranty_claims', 'calls'], true) && !$private) { self::alert_customer_action($coll, $doc); }
+                return $doc;
+            }
+            case 'update': case 'updateShared': return Mutqan_Store::update($coll, $in['id'] ?? '', $in['data'] ?? [], $p);
+            case 'upsertShared': return Mutqan_Store::upsert($coll, $in['data'] ?? [], $in['id'] ?? null, $opts, $p);
+            case 'delete': case 'deleteShared': return ['deleted' => Mutqan_Store::delete($coll, $in['id'] ?? '', $p, $private)];
+        }
+        throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
+    }
+
+    /** Reaches every admin (owner, operations, supervisor): push + a row in the notification center. */
+    public static function admin_alert($title, $body, $url, $event, $priority = 'high', $orderId = null) {
+        $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
+        try {
+            Mutqan_Store::insert('_push', ['target' => ['admins' => true], 'title' => mb_substr($title, 0, 120), 'body' => mb_substr($body, 0, 700), 'url' => $url, 'sound' => 'bell', 'priority' => $priority, 'event' => $event, 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 7 * 86400)], $sys);
+            Mutqan_Store::insert('notifications', ['userId' => null, 'audience' => 'ops', 'event' => $event, 'title' => mb_substr($title, 0, 120), 'body' => mb_substr($body, 0, 700), 'url' => $url, 'orderId' => $orderId, 'priority' => $priority, 'read' => false, 'at' => gmdate('c')], null, ['visibleTo' => 'creator-and-admin', 'writableBy' => 'admins', 'expiresAt' => gmdate('c', time() + 60 * 86400)], $sys);
+        } catch (Throwable $e) { error_log('[mutqan] admin_alert: ' . $e->getMessage()); }
+        if ($event !== 'telegram_msg' && class_exists('Mutqan_Telegram')) { try { Mutqan_Telegram::notify($title, $body); } catch (Throwable $e) { error_log('[mutqan] telegram notify: ' . get_class($e)); } }
+    }
+
+
+    /* ---- one fact, one line: the same split the app uses (kind / units / customer note / appointment / sent time) ---- */
+    private static function kind_label($d) {
+        $modes = ['wash' => 'غسيل', 'install' => 'تركيب ونقل', 'maintenance' => 'صيانة وفحص'];
+        $m = $d['acQuote']['mode'] ?? '';
+        if (isset($modes[$m])) { return $modes[$m]; }
+        $sd = trim((string) ($d['serviceDetails'] ?? ''));
+        if ($sd === '' || $sd === trim((string) ($d['description'] ?? ''))) { return ''; }
+        $parts = explode(' — ', $sd, 2);
+        return mb_substr(trim($parts[0]), 0, 60);
+    }
+    private static function units_text($d) {
+        $aq = $d['acQuote'] ?? [];
+        $qty = (int) ($aq['qty'] ?? ($d['qty'] ?? 0));
+        $type = (string) ($aq['type'] ?? '');
+        if (!$type && !empty($d['serviceDetails']) && strpos($d['serviceDetails'], ' — ') !== false) { $type = trim(preg_replace('/\s*×\s*\d+\s*$/u', '', explode(' — ', $d['serviceDetails'], 2)[1])); }
+        if (($d['specialtyId'] ?? '') === 'ac') {
+            if (self::kind_label($d) === 'صيانة وفحص') { return $type; }
+            return trim(($type ? $type . ' ' : '') . '× ' . max(1, $qty));
+        }
+        return $qty > 1 ? '× ' . $qty : '';
+    }
+    private static function note_text($d) {
+        $n = trim((string) ($d['description'] ?? ''));
+        $k = self::kind_label($d);
+        return ($k !== '' && ($n === $k || $n === trim((string) ($d['serviceDetails'] ?? '')))) ? '' : mb_substr($n, 0, 280);
+    }
+    private static function full_when($iso) {
+        try { $dt = new DateTime($iso); $dt->setTimezone(new DateTimeZone('Asia/Riyadh')); $now = new DateTime('now', new DateTimeZone('Asia/Riyadh')); } catch (Throwable $e) { return (string) $iso; }
+        $days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+        $months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+        $diff = (int) round((strtotime($dt->format('Y-m-d')) - strtotime($now->format('Y-m-d'))) / 86400);
+        $h = (int) $dt->format('G');
+        $t = (($h % 12) ?: 12) . ':' . $dt->format('i') . ' ' . ($h < 12 ? 'ص' : 'م');
+        // Same day: «اليوم». Any other day: the weekday by name with its date next to it (year only when it is not this year).
+        $day = $diff === 0 ? 'اليوم' : $days[(int) $dt->format('w')] . ' ' . $dt->format('j') . ' ' . $months[(int) $dt->format('n') - 1] . ($dt->format('Y') !== $now->format('Y') ? ' ' . $dt->format('Y') : '');
+        return $day . ' — ' . $t;
+    }
+    private static function when_text($d) {
+        if (!empty($d['appointmentAt']) && strtotime((string) $d['appointmentAt'])) { return self::full_when((string) $d['appointmentAt']); }
+        if (($d['priority'] ?? '') === 'urgent') { return '⚡ عاجل — الآن'; }
+        return !empty($d['preferredTime']) ? (string) $d['preferredTime'] : 'أقرب وقت';
+    }
+
+
+    /** The order as the customer receives it on WhatsApp (same layout as the app's message). */
+    /** The face the customer ordered from; the two core sites keep their own (build-branded) name. */
+    private static function order_brand_name($d) {
+        $b = isset($d['brand']) && class_exists('Oxygen_Network') && Oxygen_Network::valid($d['brand']) ? Oxygen_Network::brand($d['brand']) : null;
+        return $b && empty($b['core']) ? $b['name'] : 'متقن';
+    }
+
+    /**
+     * Every fact of the agreement, for the verification page (owner, 2026-11-23): the seal signs them all, so nobody can
+     * change the number of units, the wash (inside only / inside and outside), the price, the day or the time later.
+     * @return array<int,array{0:string,1:string}> [label, value]
+     */
+    public static function seal_facts($d, $price = null) {
+        $F = [];
+        $add = function ($l, $v) use (&$F) { $v = trim((string) $v); if ($v !== '') { $F[] = [$l, mb_substr($v, 0, 200)]; } };
+        $add('رقم الطلب', '#' . Mutqan_Store::num($d));
+        $add('جهة الطلب', self::origin_text($d));
+        $add('الخدمة', self::spec_label($d['specialtyId'] ?? ''));
+        $add('نوع الطلب', self::kind_label($d));
+        $add('تفاصيل الخدمة', (string) ($d['serviceLabel'] ?? ''));
+        $aq = (array) ($d['acQuote'] ?? []);
+        $items = isset($aq['items']) && is_array($aq['items']) ? $aq['items'] : ($aq ? [$aq] : []);
+        $U = [];
+        foreach ($items as $it) {
+            if (empty($it['type']) && empty($it['qty'])) { continue; }
+            $scope = ($aq['mode'] ?? '') === 'wash' || ($it['mode'] ?? '') === 'wash' ? (array_key_exists('full', $it) ? (!empty($it['full']) ? ' — غسيل داخلي وخارجي' : ' — غسيل داخلي فقط') : '') : '';
+            $U[] = trim((string) ($it['type'] ?? 'مكيف')) . ' × ' . max(1, (int) ($it['qty'] ?? 1)) . $scope;
+        }
+        $add('المكيفات', $U ? implode('، ', $U) : self::units_text($d));
+        $p = $price ?? ((float) ($d['agreedPrice'] ?? 0) ?: (float) ($d['price'] ?? 0));
+        if ((float) $p > 0) { $add('السعر المتفق عليه', rtrim(rtrim(number_format((float) $p, 2, '.', ''), '0'), '.') . ' ر.س'); }
+        $add('الموعد المطلوب', self::when_text($d));
+        $date = empty($d['appointmentAt']) ? self::day_of_text(($d['preferredTime'] ?? '') ?: 'اليوم') : '';
+        $add('تاريخ الموعد', $date);
+        $add('وقت إرسال الطلب', !empty($d['createdAt']) ? self::full_when((string) $d['createdAt']) : self::full_when(gmdate('c')));
+        $add('العنوان', (string) ($d['address'] ?? ''));
+        if (!empty($d['lat']) && !empty($d['lng'])) {
+            $add('تأكيد الموقع', '✅ العميل بعت اللوكيشن بنفسه');
+            $add('اللوكيشن', 'https://maps.google.com/?q=' . round((float) $d['lat'], 5) . ',' . round((float) $d['lng'], 5));
+        }
+        if (!empty($d['customerConfirmed'])) { $add('تأكيد العميل', '✅ العميل أكّد الطلب' . (($d['confirmedVia'] ?? '') === 'whatsapp' ? ' على واتساب' : '')); }
+        // the full name (owner, 2026-11-23: «ادخل الاقي الاسم») — the phone stays masked
+        $add('العميل', (string) ($d['clientName'] ?? ''));
+        $ph = preg_replace('/\D/', '', (string) ($d['clientPhone'] ?? ''));
+        if (strlen($ph) >= 9) { $add('جوال العميل', '•••' . substr($ph, -4)); }
+        $add('ملاحظات', self::note_text($d));
+        return $F;
+    }
+
+    /** The full order card (as the customer gets it on WhatsApp), with its verification link — for the hub. */
+    public static function order_card($d) {
+        $price = (isset($d['price']) && is_numeric($d['price']) && $d['price'] > 0) ? $d['price'] : (Mutqan_Policy::quoted_total($d) ?: null);
+        $seal = '';
+        try { $seal = class_exists('Mutqan_Shop') ? Mutqan_Shop::seal_for_order($d, $price) : ''; } catch (Throwable $e) { $seal = ''; }
+        return self::order_wa_text($d, $price, $seal);
+    }
+
+    /** Where the order came from: the face (site) and its address, and the door (site button, assistant, WhatsApp). */
+    private static function origin_text($d) {
+        $b = (string) ($d['brand'] ?? '');
+        $host = ($b !== '' && class_exists('Oxygen_Network') && Oxygen_Network::valid($b)) ? (string) Oxygen_Network::host_of($b) : (string) wp_parse_url(home_url('/'), PHP_URL_HOST);
+        $door = ['mutqan_ai' => 'المساعد الذكي', 'whatsapp' => 'واتساب', 'whatsapp_manual' => 'واتساب (يدوي)', 'site' => 'زر الطلب في الموقع'][(string) ($d['source'] ?? '')] ?? 'الموقع / التطبيق';
+        return self::order_brand_name($d) . ($host !== '' ? ' (' . $host . ')' : '') . ' — عن طريق ' . $door;
+    }
+
+    /** «بكرة العصر», «الخميس بعد المغرب»: the day it means, written out, next to his own words. */
+    private static function day_of_text($t) {
+        $t = (string) $t; if ($t === '') { return ''; }
+        try { $now = new DateTime('now', new DateTimeZone('Asia/Riyadh')); } catch (Throwable $e) { return ''; }
+        $add = null;
+        if (preg_match('/بعد\s*(بكر[ةها]|بكرا|غد)/u', $t)) { $add = 2; }
+        elseif (preg_match('/بكر[ةها]|بكرا|غدا|غدًا|الغد/u', $t)) { $add = 1; }
+        elseif (preg_match('/اليوم|النهارد|الحين|الآن|الان|دلوقتي|حالا|أقرب وقت|اقرب وقت/u', $t)) { $add = 0; }
+        else {
+            $wd = ['الأحد' => 0, 'الاحد' => 0, 'الاثنين' => 1, 'الإثنين' => 1, 'الثلاثاء' => 2, 'الأربعاء' => 3, 'الاربعاء' => 3, 'الخميس' => 4, 'الجمعة' => 5, 'الجمعه' => 5, 'السبت' => 6];
+            foreach ($wd as $name => $w) { if (mb_strpos($t, $name) !== false) { $add = ($w - (int) $now->format('w') + 7) % 7; break; } }
+        }
+        if ($add === null) { return ''; }
+        $now->modify('+' . $add . ' day');
+        $days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+        $months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+        return ($add === 0 ? 'اليوم ' : '') . $days[(int) $now->format('w')] . ' ' . $now->format('j') . ' ' . $months[(int) $now->format('n') - 1] . ' ' . $now->format('Y');
+    }
+
+    private static function order_wa_text($d, $price, $seal) {
+        $units = self::units_text($d);
+        if ($units === '' && ($d['specialtyId'] ?? '') !== '') { $units = '× ' . max(1, (int) ($d['qty'] ?? 1)); }
+        $when = self::when_text($d);
+        $date = empty($d['appointmentAt']) ? self::day_of_text(($d['preferredTime'] ?? '') ?: 'اليوم') : '';
+        $code = preg_match('~/v/([A-Z0-9]{8})~', (string) $seal, $m) ? $m[1] : '';
+        $lines = array_filter([
+            '🔔 *طلب جديد — ' . self::order_brand_name($d) . '*',
+            'رقم الطلب: #' . Mutqan_Store::num($d),
+            '🌐 جاي من: ' . self::origin_text($d),
+            !empty($d['clientName']) ? '👤 الاسم: ' . $d['clientName'] : '',
+            !empty($d['clientPhone']) ? '📱 الجوال: ' . $d['clientPhone'] : '',
+            !empty($d['specialtyId']) ? '🛠️ الخدمة: ' . self::spec_label($d['specialtyId']) : '',
+            self::kind_label($d) ? '🧰 نوع الطلب: ' . self::kind_label($d) : '',
+            $units ? ((($d['specialtyId'] ?? '') === 'ac' ? '❄️ المكيفات: ' : '🔢 العدد: ') . $units) : '',
+            self::note_text($d) ? '📝 التفاصيل: ' . self::note_text($d) : '',
+            '⏰ الوقت المطلوب: ' . $when,
+            $date !== '' ? '📅 التاريخ: ' . $date : '',
+            $price ? '💰 السعر المتفق: ' . $price . ' ر.س' : '',
+            !empty($d['address']) ? '🏠 العنوان: ' . mb_substr((string) $d['address'], 0, 160) : '',
+            (isset($d['lat'], $d['lng']) && is_numeric($d['lat']) && is_numeric($d['lng'])) ? '📍 الموقع: https://maps.google.com/?q=' . $d['lat'] . ',' . $d['lng'] : '',
+            !empty($d['taxInvoice']) ? '🧾 مطلوب فاتورة ضريبية' . (!empty($d['invoiceVat']) ? ' — الرقم الضريبي: ' . preg_replace('/\D/', '', (string) $d['invoiceVat']) : '') : '',
+            $code !== '' ? '🔐 كود التوثيق: ' . $code : '',
+            $seal ? '✅ للتحقق من صحة الطلب (توثيق): ' . $seal : '',
+        ]);
+        return implode("\n", $lines) . "\n\nسيصلك إشعار فور إسناد طلبك لفني، وتتابعه من التطبيق.";
+    }
+
+
+    /** A message / request inside an order: delivered to the other side at once (push + the admin alert center), server-side so it arrives even if the sender closes the app. */
+    public static function after_order_msg($m) {
+        // «محادثة واحدة»: what the company / technician writes to the customer on the site also reaches his WhatsApp.
+        if ((($m['channel'] ?? '') === 'ops' || ($m['from'] ?? '') === 'tech') && class_exists('Mutqan_WA')) { try { Mutqan_WA::order_msg_to_wa($m); } catch (Throwable $e) { error_log('[mutqan] order→wa ' . $e->getMessage()); } }
+        $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
+        $ord = Mutqan_Store::get_raw('orders', (string) $m['orderId']) ?: [];
+        $short = '#' . substr((string) $m['orderId'], -5);
+        $from = $m['from']; $kind = $m['kind'];
+        $clientId = $m['clientId'] ?? null; $techId = $m['techId'] ?? null;
+        $urlStaff = '#/staff/order/' . $m['orderId']; $urlClient = '#/order/' . $m['orderId'];
+        $txt = mb_substr((string) ($m['text'] ?? ''), 0, 200);
+        $push = function ($user, $title, $body, $url, $sound = 'chime', $prio = 'normal') use ($sys) {
+            if (!$user) { return; }
+            try { Mutqan_Store::insert('_push', ['target' => ['user' => (string) $user], 'title' => mb_substr($title, 0, 120), 'body' => mb_substr($body, 0, 300), 'url' => $url, 'sound' => $sound, 'priority' => $prio, 'event' => 'order_msg', 'from' => 'system'], null, ['expiresAt' => gmdate('c', time() + 7 * 86400)], $sys, false); }
+            catch (Throwable $e) { error_log('[mutqan] order_msg push: ' . $e->getMessage()); }
+        };
+        if ($from === 'client') {
+            if ($kind === 'nudge') {
+                self::admin_alert('🔔 العميل يستعجل طلبه ' . $short, ($ord['clientName'] ?? 'العميل') . ' يطلب سرعة المتابعة' . ($techId ? ' — الطلب مسند لـ ' . ($ord['technicianName'] ?? 'فني') : ' — لم يُسند بعد'), $urlStaff, 'order_nudge', 'high', $m['orderId']);
+                $push($techId, '🔔 العميل يستعجل ' . $short, 'العميل ينتظر وصولك — حدّث له موعدك.', $urlStaff, 'bell', 'high');
+            } elseif ($kind === 'postpone_req') {
+                $when = !empty($m['newTime']) ? ' — الموعد المقترح: ' . $m['newTime'] : '';
+                self::admin_alert('⏳ العميل يطلب تأجيل الطلب ' . $short, ($txt ?: 'بدون ملاحظة') . $when, $urlStaff, 'order_postpone_req', 'high', $m['orderId']);
+                $push($techId, '⏳ طلب تأجيل ' . $short, ($txt ?: 'العميل يطلب تأجيل الموعد') . $when, $urlStaff, 'bell', 'high');
+            } elseif (($m['channel'] ?? '') === 'ops') {
+                self::admin_alert('💬 رسالة من عميل — ' . $short, $txt, $urlStaff, 'order_msg', 'normal', $m['orderId']);
+            } else {
+                $push($techId, '💬 رسالة من العميل ' . $short, $txt, $urlStaff);
+                if (!$techId) { self::admin_alert('💬 رسالة من عميل — ' . $short, $txt, $urlStaff, 'order_msg', 'normal', $m['orderId']); }
+            }
+        } elseif ($from === 'tech') {
+            $titles = ['eta' => '🚗 الفني سيصل خلال ' . (!empty($m['minutes']) ? (int) $m['minutes'] . ' دقيقة' : '10 دقائق'), 'arrived' => '📍 وصل الفني إلى موقعك', 'postponed' => '⏳ تم تأجيل طلبك'];
+            if ($kind === 'eta' && class_exists('Mutqan_OrderBot')) { Mutqan_OrderBot::on_tech_eta(array_merge($m, ['minutes' => $m['minutes'] ?? 10])); }
+            $title = ($titles[$kind] ?? '💬 رسالة من الفني') . ' ' . $short;
+            $ring = in_array($kind, ['eta', 'arrived', 'postponed'], true);
+            $push($clientId, $title, $txt ?: ($kind === 'arrived' ? 'افتح الباب — الفني عند موقعك.' : ''), $urlClient, $ring ? 'bell' : 'chime', $ring ? 'high' : 'normal');
+            if ($ring || $kind === 'text') { self::admin_alert($title, ($m['fromName'] ?? 'الفني') . ($txt ? ': ' . $txt : ''), $urlStaff, 'order_msg', 'normal', $m['orderId']); }
+        } else {
+            $push($clientId, '💬 رسالة من خدمة العملاء ' . $short, $txt, $urlClient);
+            if (($m['channel'] ?? '') === 'tech') { $push($techId, '💬 رسالة من العمليات ' . $short, $txt, $urlStaff); }
+        }
+    }
+
+    /**
+     * The service's name as the app shows it. The alert operations hears used to read «طلب جديد — ac»:
+     * the internal code, the one thing on the card nobody in the room should have to translate.
+     * Same list as SPECIALTIES in constants.js.
+     */
+    const SPEC_LABELS = ['ac' => 'صيانة وتكييف', 'electric' => 'كهرباء', 'plumbing' => 'سباكة', 'locks' => 'أقفال ذكية', 'appliances' => 'أجهزة منزلية',
+        'satellite' => 'ساتلايت ودش', 'paint' => 'دهان وديكور', 'tiling' => 'تبليط وترميم', 'cameras' => 'كاميرات ومراقبة', 'fridge' => 'التبريد',
+        'cleaning' => 'تنظيف وتعقيم', 'pest' => 'مكافحة الحشرات', 'tanks' => 'خزانات المياه', 'moving' => 'نقل الأثاث', 'solar' => 'طاقة شمسية',
+        'corporate' => 'خدمات الشركات', 'general' => 'الصيانة العامة', 'contracting' => 'مقاولات عامة'];
+    public static function spec_label($id) { $id = (string) $id; return self::SPEC_LABELS[$id] ?? $id; }
+
+    /** Top priority: every new order alerts the whole admin team immediately, server-side (cannot be skipped by the client). */
+    private static function alert_new_order($doc) {
+        $urgent = (($doc['priority'] ?? '') === 'urgent');
+        $ops = (($doc['routing'] ?? '') === 'operations');
+        // The full order, built from what the SERVER stored (the customer cannot change it): everything operations needs to hand it to a technician without opening anything.
+        $price = (isset($doc['price']) && is_numeric($doc['price']) && $doc['price'] > 0) ? $doc['price'] : (Mutqan_Policy::quoted_total($doc) ?: null);   // the AC quote counts too
+        $src = ($doc['source'] ?? '') === 'mutqan_ai' ? 'المساعد الذكي' : (($doc['source'] ?? '') === 'whatsapp_manual' ? 'واتساب (يدوي)' : 'التطبيق / الموقع');
+        $high = (($doc['escalation']['reason'] ?? '') === 'high_value');
+        $lines = array_filter([
+            'الطلب: #' . substr((string) $doc['id'], -5) . ' · المصدر: ' . $src,
+            'الخدمة: ' . Mutqan_Service::label($doc),
+            $price ? 'السعر: ' . $price . ' ر.س' : '',
+            Mutqan_Service::read($doc)['warn'],
+            self::note_text($doc) ? 'التفاصيل: ' . self::note_text($doc) : '',
+            'الموعد: ' . self::when_text($doc),
+            'وقت إرسال الطلب: ' . self::full_when(gmdate('c')),
+            !empty($doc['taxInvoice']) ? 'مطلوب فاتورة ضريبية' . (!empty($doc['invoiceVat']) ? ' — الرقم الضريبي: ' . preg_replace('/\D/', '', (string) $doc['invoiceVat']) : '') : '',
+            !empty($doc['clientName']) ? 'الاسم: ' . $doc['clientName'] : '',
+            !empty($doc['clientPhone']) ? 'الجوال: ' . $doc['clientPhone'] : '',
+            !empty($doc['address']) ? 'العنوان: ' . mb_substr((string) $doc['address'], 0, 120) : '',
+            (isset($doc['lat'], $doc['lng']) && is_numeric($doc['lat']) && is_numeric($doc['lng'])) ? 'الموقع: https://maps.google.com/?q=' . $doc['lat'] . ',' . $doc['lng'] : '',
+            !empty($doc['inhouse']) ? 'تنفيذ داخلي (فني الموقع)' : '',
+            !empty($doc['outsideServiceArea']) ? 'خارج نطاق الخدمة' : '',
+            $high ? 'عميل عالي القيمة' : '',
+        ]);
+        $seal = '';
+        try {
+            $seal = Mutqan_Shop::seal_for_order($doc, $price);
+            if ($seal) { $lines[] = 'توثيق: ' . $seal; }
+        } catch (Throwable $e) { error_log('[mutqan] seal_for_order: ' . $e->getMessage()); }
+        self::admin_alert(($high ? '⭐ ' : '') . ($urgent ? '🚨 طلب عاجل جديد' : ($ops ? '📋 طلب بانتظار التوزيع' : '🆕 طلب جديد')) . (!empty($doc['specialtyId']) ? ' — ' . self::spec_label($doc['specialtyId']) : ''), implode("\n", $lines) ?: 'طلب خدمة جديد بانتظار المعالجة', '#/staff/order/' . $doc['id'], 'new_order', 'high', $doc['id']);
+        // The same order, sent AUTOMATICALLY on WhatsApp by the business number to the customer (his copy + the conversation opens in the WhatsApp inbox). No confirmation step for anyone.
+        $sent = false;
+        // With the hub paired the same card goes out through it, straight away — the order needs no «تأكيد» from him.
+        if (!$ops && !empty($doc['clientPhone']) && class_exists('Mutqan_Hub') && Mutqan_Hub::on()) {
+            try {
+                $sent = Mutqan_Hub::send($doc['clientPhone'], self::order_wa_text($doc, $price, $seal), 'order', 'card-' . $doc['id']) !== false;
+                Mutqan_Store::update('orders', $doc['id'], ['waQueued' => true, 'waQueuedAt' => gmdate('c'), 'customerConfirmed' => true, 'confirmedAt' => gmdate('c'), 'confirmedVia' => 'site'], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user']);
+            } catch (Throwable $e) { error_log('[mutqan] order card via hub: ' . $e->getMessage()); }
+            return $sent;
+        }
+        if (!$ops && !empty($doc['clientPhone']) && !(class_exists('Mutqan_Hub') && Mutqan_Hub::on())) {
+            try {
+                $how = Mutqan_WA::auto_send($doc['clientPhone'], self::order_wa_text($doc, $price, $seal), 'order');
+                $sent = $how !== false;
+                if ($sent) { Mutqan_Store::update('orders', $doc['id'], $how === 'sent' ? ['waSent' => true, 'waSentAt' => gmdate('c')] : ['waQueued' => true, 'waQueuedAt' => gmdate('c')], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user']); }
+            } catch (Throwable $e) { error_log('[mutqan] order wa: ' . $e->getMessage()); }
+        }
+        return $sent;
+    }
+
+    /** Customer actions that need a person: «talk to an employee», a warranty claim, a hotline call. Raised by the server, so they arrive even if the customer's phone dies right after sending. */
+    private static function alert_customer_action($coll, $doc) {
+        if ($coll === 'handoffs') {
+            $reason = (string) ($doc['reason'] ?? 'human');
+            $bits = array_filter([
+                !empty($doc['customerName']) ? 'الاسم: ' . $doc['customerName'] : '',
+                !empty($doc['customerPhone']) ? 'الجوال: ' . $doc['customerPhone'] : '',
+                !empty($doc['service']) ? 'الخدمة: ' . $doc['service'] : '',
+                !empty($doc['summary']) ? 'الملخص: ' . mb_substr((string) $doc['summary'], 0, 300) : '',
+                (isset($doc['price']['list']) && is_numeric($doc['price']['list'])) ? 'السعر: ' . $doc['price']['list'] . ' ر.س' : '',
+                !empty($doc['locationText']) ? 'الموقع: ' . mb_substr((string) $doc['locationText'], 0, 100) : '',
+            ]);
+            self::admin_alert($reason === 'human' ? '🙋 عميل يطلب موظفًا' : '⚠️ تصعيد من المساعد: ' . $reason, implode("\n", $bits) ?: 'عميل يحتاج متابعة', '#/staff/handoff/' . $doc['id'], 'wa_handoff', 'high', !empty($doc['orderId']) ? $doc['orderId'] : null);
+        } elseif ($coll === 'warranty_claims') {
+            $bits = array_filter([!empty($doc['customerName']) ? 'الاسم: ' . $doc['customerName'] : '', !empty($doc['customerPhone']) ? 'الجوال: ' . $doc['customerPhone'] : '', !empty($doc['problem']) ? 'المشكلة: ' . mb_substr((string) $doc['problem'], 0, 300) : '']);
+            self::admin_alert('🛡️ طلب ضمان جديد', implode("\n", $bits) ?: 'طلب ضمان بانتظار المراجعة', '#/staff/warranties', 'warranty_claim', 'high', !empty($doc['orderId']) ? $doc['orderId'] : null);
+        } elseif ($coll === 'calls') {
+            $cb = !empty($doc['callback']);
+            if (($doc['status'] ?? '') !== 'ringing' && !$cb) { return; }
+            $bits = array_filter([!empty($doc['name']) ? 'الاسم: ' . $doc['name'] : '', !empty($doc['phone']) ? 'الجوال: ' . $doc['phone'] : '', $cb ? 'لم يكن أحد متصلًا — يطلب أن نعاود الاتصال به' : '']);
+            // who is calling, by name (owner, 2026-11-22): «من الفني فلان» / «من العميل فلان» (called before) / «من عميل جديد»
+            $who = class_exists('Mutqan_Voice') ? Mutqan_Voice::caller((string) ($doc['phone'] ?? ''), (string) ($doc['name'] ?? '')) : '';
+            self::admin_alert(($cb ? '📞 طلب معاودة اتصال' : '📞 مكالمة على الخط الساخن') . ($who !== '' ? ' ' . $who : ''), implode("\n", $bits) ?: 'عميل يتصل بالخط الساخن', '#/staff/operations?tab=calls', 'hotline_call', 'high');
+        }
+    }
+
+    private static function alert_tech_application($doc) {
+        self::admin_alert('👷 طلب انضمام فني جديد', trim((string) ($doc['name'] ?? $doc['fullName'] ?? '') . ' ' . (string) ($doc['specialty'] ?? self::spec_label($doc['specialtyId'] ?? ''))) ?: 'طلب جديد بانتظار المراجعة', '#/staff/tech-requests', 'tech_application', 'high');
+    }
+
+    /** New order -> WhatsApp message to the owner (if Cloud API is configured in "الشات بوت والطلبات"). */
+    private static function after_order_created($doc) {
+        if (!class_exists('Oxygen_Orders_Chat') || !method_exists('Oxygen_Orders_Chat', 'whatsapp_owner')) { return; }
+        $lines = ['طلب جديد من تطبيق متقن #' . substr((string) $doc['id'], -6)];
+        if (!empty($doc['specialtyId'])) { $lines[] = 'الخدمة: ' . self::spec_label($doc['specialtyId']); }
+        if (!empty($doc['description'])) { $lines[] = 'التفاصيل: ' . mb_substr((string) $doc['description'], 0, 300); }
+        $price = $doc['agreedPrice'] ?? ($doc['priceQuote']['total'] ?? null);
+        if ($price) { $lines[] = 'السعر: ' . $price; }
+        if (!empty($doc['clientName'])) { $lines[] = 'الاسم: ' . $doc['clientName']; }
+        if (!empty($doc['clientPhone'])) { $lines[] = 'الجوال: ' . $doc['clientPhone']; }
+        if (!empty($doc['address'])) { $lines[] = 'العنوان: ' . $doc['address']; }
+        if (isset($doc['lat'], $doc['lng']) && is_numeric($doc['lat']) && is_numeric($doc['lng'])) { $lines[] = 'الموقع: https://maps.google.com/?q=' . $doc['lat'] . ',' . $doc['lng']; }
+        try { Oxygen_Orders_Chat::whatsapp_owner(implode("\n", $lines)); } catch (Throwable $e) { error_log('[mutqan] whatsapp notify failed: ' . $e->getMessage()); }
+    }
+
+    public static function h_wa($req, $p) {
+        if (($p['kind'] ?? 'guest') !== 'user') { throw new Mutqan_Error('unauthorized', 'سجّل الدخول.', 401); }
+        return Mutqan_WA::handle(self::body($req), $p);
+    }
+
+    public static function h_shop($req, $p) {
+        return Mutqan_Shop::handle(self::body($req), $p);
+    }
+
+    public static function h_promo($req, $p) {
+        $in = self::body($req);
+        Mutqan_Limiter::hit('promo', 60, 3600);
+        $dev = $in['deviceId'] ?? '';
+        $op = (string) ($in['op'] ?? 'status');
+        if ($op === 'claim') { list($st, $pct) = Mutqan_Promo::claim($dev); }
+        else { list($st, $pct) = Mutqan_Promo::status($dev); }
+        return ['state' => $st, 'pct' => $pct, 'max' => Mutqan_Promo::MAX_OFF];
+    }
+
+    /* ------------------------------------------------------------------ /auth, /team */
+
+    public static function h_auth($req, $p) {
+        $in = self::body($req);
+        switch ((string) ($in['op'] ?? '')) {
+            case 'signup': return Mutqan_Auth::signup_customer($in);
+            case 'login': return Mutqan_Auth::login($in, false);
+            case 'ops': return Mutqan_Auth::ops_login($in);
+            case 'sessionHealth': Mutqan_Auth::require_owner($p); return Mutqan_Auth::session_health();
+            case 'desk': {
+                // Only WRONG guesses are counted (a correct PIN, e.g. a silent session renewal, never locks the owner out).
+                $dk = class_exists('Oxygen_Desk');
+                $meta = ['app' => $in['app'] ?? '', 'build' => $in['build'] ?? '', 'ua' => $_SERVER['HTTP_USER_AGENT'] ?? ''];
+                if (!Mutqan_Limiter::peek('desk_fail', 12)) { if ($dk) { Oxygen_Desk::log('desk_locked', $meta); } throw new Mutqan_Error('rate_limited', 'محاولات خاطئة كثيرة على هذا الموقع — انتظر ١٥ دقيقة ثم أعد المحاولة.', 429); }
+                if (!$dk) { throw new Mutqan_Error('forbidden', 'غير متاح.', 403); }
+                if (!Oxygen_Desk::pin_is_set()) { Oxygen_Desk::log('desk_unset', $meta); throw new Mutqan_Error('forbidden', 'لم يُضبط رمز الدخول على هذا الموقع بعد — اضبطه من ووردبريس ← أكسجين ← المكتب السري.', 403); }
+                if (!Oxygen_Desk::valid_secret($in['token'] ?? '')) {
+                    $n = Oxygen_Desk::norm_pin($in['token'] ?? '');
+                    Oxygen_Desk::log('desk_bad_pin', $meta + ['info' => 'طول المكتوب ' . mb_strlen($n) . ' (أرقام ' . strlen(preg_replace('/\D/', '', $n)) . ')']);
+                    try { Mutqan_Limiter::hit('desk_fail', 12, 900); } catch (Mutqan_Error $e) { /* counted */ }
+                    throw new Mutqan_Error('forbidden', 'الرمز غير صحيح.', 403);
+                }
+                $sess = Mutqan_Auth::desk_session();
+                Oxygen_Desk::log('desk_ok', $meta);
+                return $sess;
+            }
+            case 'logout': return Mutqan_Auth::logout($req);
+            case 'me': return Mutqan_Auth::me($p);
+            case 'profile': return Mutqan_Auth::update_profile($p, $in);
+            case 'password': return Mutqan_Auth::change_password($p, $in);
+        }
+        throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
+    }
+
+    /** Hotline link code + Telegram (see Mutqan_Link / Mutqan_Telegram). */
+    /** Background notifications: the VAPID key, and each device's push subscription (see Mutqan_WebPush). */
+    public static function h_webpush($req, $p) {
+        if (!class_exists('Mutqan_WebPush')) { throw new Mutqan_Error('push_unavailable', 'غير متاح.', 503); }
+        return Mutqan_WebPush::handle(self::body($req), $p);
+    }
+
+    /** Hotline voice through the site when the phones cannot reach each other (see Mutqan_Relay). */
+    public static function h_relay($req, $p) { return Mutqan_Relay::handle(self::body($req), $p); }
+    /** Calls between customer, technician and operations: who may ring whom (see Mutqan_Callnet). */
+    public static function h_callnet($req, $p) { return Mutqan_Callnet::handle(self::body($req), $p); }
+
+    public static function h_link($req, $p) {
+        return Mutqan_Link::handle(self::body($req), $p);
+    }
+
+    /** The desk apps: device diagnostics (public, rate-limited, no secrets) and the owner's direct doors into WordPress. */
+    public static function h_desk($req, $p) {
+        $in = self::body($req);
+        $op = (string) ($in['op'] ?? '');
+        if (!class_exists('Oxygen_Desk')) { throw new Mutqan_Error('forbidden', 'غير متاح.', 403); }
+        if ($op === 'diag') {
+            Mutqan_Limiter::hit('desk_diag', 60, 3600);
+            Oxygen_Desk::log('diag', ['app' => $in['app'] ?? '', 'build' => $in['build'] ?? '', 'step' => $in['step'] ?? '', 'info' => $in['info'] ?? '', 'ua' => $_SERVER['HTTP_USER_AGENT'] ?? '']);
+            return ['ok' => true];
+        }
+        Mutqan_Auth::require_owner($p);
+        switch ($op) {
+            case 'wp_overview': return Oxygen_Desk::overview();
+            case 'wp_pages': return ['items' => Oxygen_Desk::pages((string) ($in['type'] ?? 'page'), (string) ($in['q'] ?? ''), (int) ($in['limit'] ?? 60))];
+            case 'wp_sso': Mutqan_Limiter::hit('wp_sso', 60, 3600); return ['url' => Oxygen_Desk::make_sso_url((string) ($in['to'] ?? ''), (string) ($in['back'] ?? ''))];
+        }
+        throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
+    }
+
+    public static function h_team($req, $p) {
+        $in = self::body($req);
+        return Mutqan_Auth::team_op((string) ($in['op'] ?? ''), $in, $p);
+    }
+
+    /* ------------------------------------------------------------------ /ai */
+
+    public static function h_ai($req, $p) {
+        $in = self::body($req);
+        // The assistant's voice is for every visitor too (a visitor not signed in used to get the phone's own voice —
+        // often a woman's): one fixed voice, limited per address.
+        if (!empty($in['tts'])) {
+            $key = 'mq_tts_' . md5((string) ($p['id'] ?? '') . ($_SERVER['REMOTE_ADDR'] ?? '')); $n = (int) get_transient($key);
+            if ($n >= 60) { throw new Mutqan_Error('rate_limited', 'كثير.', 429); }
+            set_transient($key, $n + 1, 600);
+            return Mutqan_AI::tts((string) $in['tts']);
+        }
+        if (($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
+        return Mutqan_AI::run($in['prompt'] ?? '', is_array($in['opts'] ?? null) ? $in['opts'] : [], $p);
+    }
+
+    /** Owner/operations control assistant (Claude with business-only tools). */
+    public static function h_agent($req, $p) { return Mutqan_Agent::handle(self::body($req), $p); }
+    public static function h_ops($req, $p) { return Mutqan_Ops::handle(self::body($req), $p); }
+    /** A site the owner linked from the app, on its own domain (https only, exact host or its www). */
+    public static function linked_origin($o) {
+        if (!class_exists('Oxygen_Network') || !preg_match('#^https://(www\.)?([a-z0-9.-]+)$#i', (string) $o, $m)) { return false; }
+        $h = strtolower($m[2]);
+        foreach (Oxygen_Network::extras() as $x) { if (strtolower((string) ($x['host'] ?? '')) === $h) { return true; } }
+        return false;
+    }
+    public static function h_network($req, $p) { return Mutqan_Network::handle(self::body($req), $p); }
+    public static function h_devices($req, $p) { return Mutqan_Devices::handle(self::body($req), $p); }
+
+    /** «العقل التجاري»: the sales brain's policy, today's plan, the playbook and the simulator (owner/operations). */
+    public static function h_sales($req, $p) { return Mutqan_Sales::handle(self::body($req), $p); }
+
+    /** «مساعد الطلب»: answers the customer inside his order's conversation and relays to the technician / the room. */
+    /** «جاي منين»: an article code (#oxygen/a26) → the article, and the search across every site of the network. */
+    /** The network's article memory (Mutqan_Fp): check / add / rewrite, used by every site before it publishes. */
+    public static function h_fp($req, $p) { return Mutqan_Fp::handle(self::body($req), $p); }
+    /** «أرقامنا»: each company number and its job (manager / sales / outreach / reserve). */
+    public static function h_lines($req, $p) { return Mutqan_Lines::handle(self::body($req), $p); }
+    /** «حملات الاستقطاب»: the prospects base and the daily invitation plan. */
+    public static function h_outreach($req, $p) { return Mutqan_Outreach::handle(self::body($req), $p); }
+    /** The field: map pin cards, old customers nearby, «couldn't fix it» reports. */
+    public static function h_field($req, $p) { return Mutqan_Field::handle(self::body($req), $p); }
+    public static function h_trainer($req, $p) { return Mutqan_Trainer::handle(self::body($req), $p); }
+    public static function h_source($req, $p) { return Mutqan_Source::handle(self::body($req), $p); }
+    /** The owner's delete controls (orders, warranties, technicians, services). */
+    public static function h_owner($req, $p) { return Mutqan_Owner::handle(self::body($req), $p); }
+    public static function h_hubadmin($req, $p) { return Mutqan_Hub::h_admin(self::body($req), $p); }
+    public static function h_concierge($req, $p) { return Mutqan_Concierge::handle(self::body($req), $p); }
+    public static function h_orderbot($req, $p) { return Mutqan_OrderBot::handle(self::body($req), $p); }
+
+    /* ------------------------------------------------------------------ /push (in-app notifications) */
+
+    /** 15 minutes before a booked appointment: push to the customer (account) and to the team. Runs from cron and, throttled, from inbox polls. */
+    public static function send_reminders() {
+        $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
+        try {
+            $rows = Mutqan_Store::select('orders', ['appointmentAt' => ['gte' => gmdate('Y-m-d')]], ['limit' => 200], $sys);
+        } catch (Throwable $e) { return 0; }
+        $now = time(); $n = 0;
+        foreach ($rows as $o) {
+            if (!empty($o['remindedAt']) || empty($o['appointmentAt'])) { continue; }
+            if (in_array($o['status'] ?? '', ['completed', 'cancelled', 'done', 'closed'], true)) { continue; }
+            $at = strtotime((string) $o['appointmentAt']);
+            if (!$at || $at - $now > 15 * 60 || $at - $now < -30 * 60) { continue; }
+            $when = !empty($o['preferredTime']) ? $o['preferredTime'] : 'قريباً';
+            try {
+                Mutqan_Store::update('orders', $o['id'], ['remindedAt' => gmdate('c')], $sys);
+                $exp = ['expiresAt' => gmdate('c', time() + 2 * 86400)];
+                if (!empty($o['clientId'])) {
+                    Mutqan_Store::insert('_push', ['target' => ['user' => (string) $o['clientId']], 'title' => '⏰ موعدك بعد 15 دقيقة', 'body' => 'موعد خدمتك: ' . $when, 'url' => '#/order/' . $o['id'], 'sound' => 'bell', 'priority' => 'high', 'event' => 'appointment_reminder', 'from' => 'system'], null, $exp, $sys);
+                }
+                self::admin_alert('⏰ موعد خلال 15 دقيقة', trim((string) ($o['clientName'] ?? '') . ' · ' . $when . ' · ' . mb_substr((string) ($o['address'] ?? ''), 0, 40)), '#/staff/order/' . $o['id'], 'appointment_reminder', 'high', $o['id']);
+                $n++;
+            } catch (Throwable $e) { error_log('[mutqan] reminder: ' . $e->getMessage()); }
+        }
+        return $n;
+    }
+
+    /** «جلب العملاء» settings (Mutqan_Growth). */
+    public static function h_growth($req, $p) { return Mutqan_Growth::handle(self::body($req), $p); }
+    public static function h_schedule($req, $p) { return Mutqan_Schedule::handle(self::body($req), $p); }
+    public static function h_proof($req, $p) { return Mutqan_Proof::handle(self::body($req), $p); }
+    public static function h_techid($req, $p) { return Mutqan_TechId::handle(self::body($req), $p); }
+    /** «بث موقعي»: team members share their live location (Mutqan_TeamGeo). */
+    public static function h_teamgeo($req, $p) { return Mutqan_TeamGeo::handle(self::body($req), $p); }
+    public static function h_maintenance($req, $p) { return Mutqan_Maintenance::handle(self::body($req), $p); }
+
+    /** «طرق الدفع» page of one order — open to whoever holds its link (Mutqan_PayChoice). */
+    public static function h_paychoice($req, $p) { return Mutqan_PayChoice::handle(self::body($req)); }
+
+    public static function h_push($req, $p) {
+        $in = self::body($req);
+        $op = (string) ($in['op'] ?? '');
+        if ($op === 'inbox' && !get_transient('mutqan_rem_lock')) { set_transient('mutqan_rem_lock', 1, 60); self::send_reminders(); }
+        // the follow-up watch (Mutqan_Watch) rides the same poll, so a quiet site that WP-Cron rarely wakes still gets it
+        if ($op === 'inbox' && class_exists('Mutqan_Watch') && !get_transient('mutqan_watch_lock')) { set_transient('mutqan_watch_lock', 1, 120); try { Mutqan_Watch::sweep(); } catch (Throwable $e) { error_log('[mutqan] watch ' . $e->getMessage()); } }
+        if (($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
+        if ($op === 'inbox') {
+            $raw = $in['since'] ?? 0;
+            if (is_numeric($raw) && $raw > 100000000000) { $raw = (int) ($raw / 1000); }   // browsers send milliseconds
+            $since = Mutqan_Store::to_db_time($raw) ?: gmdate('Y-m-d H:i:s', time() - 3600);
+            // Only what is newer than this device already has. Reading the OLDEST 100 rows of the week and filtering
+            // afterwards meant that once a busy week passed 100 alerts, no new alert reached any phone: no banner, no sound.
+            $items = Mutqan_Store::select('_push', ['createdAt' => ['gte' => $since]], ['limit' => 200, 'order' => 'createdAt'], ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'], false);
+            $out = [];
+            foreach ($items as $m) {
+                if (Mutqan_Store::to_db_time($m['createdAt']) < $since) { continue; }   // '<' not '<=': the client de-duplicates by id
+                $t = $m['target'] ?? [];
+                $mine = (isset($t['user']) && $t['user'] === $p['id'])
+                    || (isset($t['role']) && $t['role'] === ($p['role'] ?? '#'))
+                    || (!empty($t['admins']) && Mutqan_Policy::has_power($p, 'read'));
+                if ($mine) { $out[] = ['id' => $m['id'], 'title' => $m['title'] ?? '', 'body' => $m['body'] ?? '', 'url' => $m['url'] ?? '', 'sound' => $m['sound'] ?? null, 'priority' => $m['priority'] ?? 'normal', 'event' => $m['event'] ?? null, 'at' => $m['createdAt'],
+                    // what the phone says out loud for it (Mutqan_Voice)
+                    'voice' => class_exists('Mutqan_Voice') ? Mutqan_Voice::key((string) ($m['event'] ?? ''), (string) ($m['title'] ?? ''), (string) ($m['body'] ?? '')) : null,
+                    // the full sentence it says about itself, and how urgently (owner, 2026-11-22)
+                    'speak' => class_exists('Mutqan_Voice') ? Mutqan_Voice::sentence($m) : null, 'tier' => class_exists('Mutqan_Voice') ? Mutqan_Voice::tier($m) : null]; }
+            }
+            return ['items' => $out, 'now' => Mutqan_Store::iso(Mutqan_Store::now())];
+        }
+        // «قول التنبيه»: the spoken clip of one of MY alerts — what it is about, in its urgency's voice (Mutqan_Voice).
+        if ($op === 'say') {
+            $m = Mutqan_Store::get_raw('_push', (string) ($in['id'] ?? ''));
+            if (!$m || !class_exists('Mutqan_Voice')) { throw new Mutqan_Error('not_found', 'التنبيه مش موجود.', 404); }
+            $t = $m['target'] ?? [];
+            $mine = (isset($t['user']) && $t['user'] === $p['id']) || (isset($t['role']) && $t['role'] === ($p['role'] ?? '#')) || (!empty($t['admins']) && Mutqan_Policy::has_power($p, 'read'));
+            if (!$mine) { throw new Mutqan_Error('forbidden', 'مش ليك.', 403); }
+            Mutqan_Limiter::hit('push_say', 600, 3600);
+            $wav = Mutqan_Voice::speak($m);
+            return ['text' => Mutqan_Voice::sentence($m), 'tier' => Mutqan_Voice::tier($m), 'wav' => $wav !== '' ? base64_encode($wav) : ''];
+        }
+        if ($op === 'send') {
+            Mutqan_Limiter::hit('push_send', Mutqan_Policy::is_staff($p) ? 400 : 40, 3600);
+            $t = $in['target'] ?? [];
+            $target = [];
+            if (!empty($t['user'])) { $target['user'] = (string) $t['user']; }
+            elseif (!empty($t['role']) && in_array($t['role'], ['operations', 'supervisor', 'technician'], true)) { $target['role'] = $t['role']; }
+            else { $target['admins'] = true; }
+            if (!Mutqan_Policy::is_staff($p) && !isset($target['admins']) && !isset($target['role'])) {
+                if (($target['user'] ?? '') !== $p['id']) { throw new Mutqan_Error('forbidden', 'غير مسموح.', 403); }
+            }
+            $msg = isset($in['message']) && is_array($in['message']) ? $in['message'] : [];
+            $doc = [
+                'target' => $target, 'title' => mb_substr((string) ($msg['title'] ?? ''), 0, 120), 'body' => mb_substr((string) ($msg['body'] ?? ''), 0, 300),
+                'url' => mb_substr((string) ($msg['url'] ?? ''), 0, 200), 'sound' => isset($msg['sound']) ? mb_substr((string) $msg['sound'], 0, 20) : null, 'from' => $p['id'],
+                'priority' => (Mutqan_Policy::is_staff($p) && ($msg['priority'] ?? '') === 'high') ? 'high' : 'normal', 'event' => isset($msg['event']) ? preg_replace('/[^a-z_]/', '', mb_substr((string) $msg['event'], 0, 30)) : null,
+            ];
+            $sys = ['id' => 'system', 'role' => 'owner', 'powers' => ['read', 'write', 'manage'], 'kind' => 'user'];
+            Mutqan_Store::insert('_push', $doc, null, ['expiresAt' => gmdate('c', time() + 7 * 86400)], $sys, false);
+            return ['ok' => true];
+        }
+        throw new Mutqan_Error('bad_op', 'عملية غير معروفة.', 400);
+    }
+
+    /* ------------------------------------------------------------------ /upload */
+
+    public static function h_upload($req, $p) {
+        if (($p['kind'] ?? '') !== 'user') { throw new Mutqan_Error('unauthorized', 'سجّل الدخول لرفع الملفات.', 401); }
+        Mutqan_Limiter::hit('upload', Mutqan_Policy::is_staff($p) ? 120 : 20, 3600);
+        $files = $req->get_file_params();
+        $f = $files['file'] ?? null;
+        if (!$f || !isset($f['tmp_name']) || $f['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) { throw new Mutqan_Error('no_file', 'لم يصل ملف.', 400); }
+        if ($f['size'] > 6 * 1024 * 1024) { throw new Mutqan_Error('too_large', 'الحد الأقصى للملف 6 ميجابايت.', 413); }
+        $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif', 'application/pdf' => 'pdf'];
+        $mime = function_exists('finfo_open') ? finfo_file(finfo_open(FILEINFO_MIME_TYPE), $f['tmp_name']) : '';
+        // the team's voice notes from the field (owner order 2026-11-22) — staff only
+        if (Mutqan_Policy::is_staff($p)) { $allowed += ['audio/webm' => 'webm', 'video/webm' => 'webm', 'audio/ogg' => 'ogg', 'audio/mp4' => 'm4a', 'audio/x-m4a' => 'm4a', 'audio/mpeg' => 'mp3', 'audio/aac' => 'aac', 'video/mp4' => 'm4a'];
+            if (strpos((string) $mime, 'video/') === 0 && !preg_match('/\.(webm|m4a)$/i', (string) ($f['name'] ?? ''))) { unset($allowed[$mime]); } }
+        if (!isset($allowed[$mime])) { throw new Mutqan_Error('bad_type', 'نوع الملف غير مدعوم (صور أو PDF فقط).', 415); }
+        $up = wp_upload_dir();
+        $dir = trailingslashit($up['basedir']) . 'mutqan/' . gmdate('Y/m');
+        if (!wp_mkdir_p($dir)) { throw new Mutqan_Error('server_error', 'تعذر حفظ الملف.', 500); }
+        @file_put_contents(trailingslashit($up['basedir']) . 'mutqan/index.html', '');
+        $name = bin2hex(random_bytes(12)) . '.' . $allowed[$mime];
+        if (!move_uploaded_file($f['tmp_name'], $dir . '/' . $name)) { throw new Mutqan_Error('server_error', 'تعذر حفظ الملف.', 500); }
+        return ['url' => trailingslashit($up['baseurl']) . 'mutqan/' . gmdate('Y/m') . '/' . $name];
+    }
+
+    /* ------------------------------------------------------------------ /geocode (OpenStreetMap Nominatim, cached) */
+
+    public static function h_live($req, $p) {
+        if (!Mutqan_Policy::has_power($p, 'read')) { throw new Mutqan_Error('forbidden', 'للفريق فقط.', 403); }
+        return Mutqan_Live::snapshot((string) $req->get_param('v'));
+    }
+
+    public static function h_native($req, $p) { return Mutqan_Native::handle(self::body($req), $p); }
+
+    public static function h_track($req, $p) {
+        // Only the technician themselves, and only about themselves: nobody reports anybody else's
+        // whereabouts, and a customer's app has no business here at all.
+        $id = (string) ($p['id'] ?? '');
+        if (($p['kind'] ?? 'guest') !== 'user' || ($p['role'] ?? null) !== 'technician' || $id === '') {
+            throw new Mutqan_Error('forbidden', 'تحديث الموقع متاح للفني المسجل دخوله فقط.', 403);
+        }
+        // Bound frequent GPS writes per technician so a stuck client cannot overload the database.
+        Mutqan_Limiter::hit('track', 90, 60, $id);
+        $b = json_decode((string) $req->get_body(), true);
+        $b = is_array($b) ? $b : [];
+        return Mutqan_Track::ping($id, $b['lat'] ?? null, $b['lng'] ?? null, $b['acc'] ?? null);
+    }
+
+    public static function h_geocode($req, $p) {
+        if (($p['kind'] ?? 'guest') === 'guest') { throw new Mutqan_Error('unauthorized', 'افتح التطبيق من جديد.', 401); }
+        $lat = (float) $req->get_param('lat'); $lng = (float) $req->get_param('lng');
+        if (abs($lat) > 90 || abs($lng) > 180 || ($lat == 0 && $lng == 0)) { throw new Mutqan_Error('bad_coords', 'إحداثيات غير صالحة.', 400); }
+        $key = 'mq_geo_' . md5(round($lat, 3) . ',' . round($lng, 3));
+        $hit = get_transient($key);
+        if (is_array($hit)) { return $hit; }
+        Mutqan_Limiter::hit('geocode', 30, 3600);
+        $res = wp_remote_get('https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=ar&zoom=18&lat=' . $lat . '&lon=' . $lng, [
+            'timeout' => 10, 'headers' => ['User-Agent' => 'OxygenMutqan/1.0 (' . home_url('/') . ')'],
+        ]);
+        $addr = '';
+        if (!is_wp_error($res) && (int) wp_remote_retrieve_response_code($res) === 200) {
+            $d = json_decode(wp_remote_retrieve_body($res), true);
+            if (is_array($d)) {
+                $a = $d['address'] ?? [];
+                $parts = array_filter([$a['road'] ?? '', $a['neighbourhood'] ?? ($a['suburb'] ?? ''), $a['city'] ?? ($a['town'] ?? ($a['state'] ?? ''))]);
+                $addr = $parts ? implode('، ', $parts) : (string) ($d['display_name'] ?? '');
+            }
+        }
+        $out = ['address' => $addr];
+        if ($addr !== '') { set_transient($key, $out, 30 * DAY_IN_SECONDS); }
+        return $out;
+    }
+
+	public static function h_places($req, $p) {
+		if (!class_exists('Mutqan_Places')) { return ['items' => []]; }
+		if (!Mutqan_Policy::is_staff($p)) { throw new Mutqan_Error('forbidden', 'للفريق فقط.', 403); }
+		$q = (string) $req->get_param('q');
+		$lat = $req->get_param('lat'); $lng = $req->get_param('lng');
+		return ['items' => Mutqan_Places::search($q, is_numeric($lat) ? (float) $lat : null, is_numeric($lng) ? (float) $lng : null)];
+	}
+
+    /* ------------------------------------------------------------------ /config */
+
+    public static function h_config($req, $p) {
+        $ai = Mutqan_AI::any_enabled();
+        $wa = false;
+        if (class_exists('Oxygen_Orders_Chat')) { $s = Oxygen_Orders_Chat::get(); $wa = $s['wa_token'] !== '' && $s['wa_phone_id'] !== '' && $s['wa_owner'] !== ''; }
+        return ['ai' => ['available' => $ai], 'whatsapp' => ['connected' => $wa], 'ownerReady' => Mutqan_Auth::owner_exists(), 'time' => Mutqan_Store::iso(Mutqan_Store::now())];
+    }
+
+    /* ------------------------------------------------------------------ serving /app/ */
+
+    /**
+     * An old static copy of the app (public_html/app/, a past build with gen.txt) shadows the real /app/ route: the web
+     * server answers it before WordPress runs, and its index.html points at build files the plugin no longer ships, so the
+     * app shows only the «إعادة تشغيل» screen. Move that copy aside (renamed, never deleted) so /app/ is served by the plugin.
+     */
+    public static function heal_static_app() {
+        $dir = ABSPATH . 'app';
+        if (!is_dir($dir) || is_link($dir) || !is_file($dir . '/gen.txt') || !is_file($dir . '/index.html')) { return; }
+        if (get_transient('mq_heal_static_app')) { return; }
+        set_transient('mq_heal_static_app', 1, 600);
+        $to = ABSPATH . 'app-static-old-' . gmdate('Ymd-His');
+        if (@rename($dir, $to)) { update_option('mutqan_static_app_moved', ['to' => basename($to), 'at' => gmdate('c')], false); }
+        else { error_log('[mutqan] could not move static app copy aside'); }
+    }
+
+    public static function app_dir() { return plugin_dir_path(dirname(dirname(__FILE__))) . 'app/'; }
+    /**
+     * Where the browser can fetch the build's own files from.
+     *
+     * plugins_url() takes the folder of the file it is given, and app_dir() is already that folder,
+     * so the path asked for here is relative to app/ and must not name it again.
+     */
+    public static function app_assets_url() { return plugins_url('assets/', self::app_dir() . 'index.php'); }
+
+    private static function serve_pwa_file($name) {
+        $ops = ($name === 'ops.webmanifest');
+        $file = self::app_dir() . ($ops ? 'manifest.webmanifest' : $name);
+        $nb = class_exists('Oxygen_Network') ? Oxygen_Network::brand_config() : null;
+        if ($nb) {
+            $own = self::own_icon($nb['id'], $name);
+            if ($own !== '') { $file = $own; }
+        }
+        if (!is_readable($file)) { status_header(404); exit; }
+        $types = ['js' => 'application/javascript; charset=utf-8', 'webmanifest' => 'application/manifest+json; charset=utf-8', 'png' => 'image/png', 'svg' => 'image/svg+xml'];
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        $body = (string) file_get_contents($file);
+        $app_path = (string) wp_parse_url(home_url('/app/'), PHP_URL_PATH);
+        if ($ext === 'js') { $body = str_replace('__BUILD__', (string) (int) @filemtime(self::app_dir() . 'index.html'), $body); }
+        if ($ext === 'webmanifest') { $body = str_replace('__APP__', $app_path, $body); }
+        if ($ext === 'webmanifest' && $nb) {
+            $m = json_decode($body, true);
+            if (is_array($m)) {
+                $m['name'] = $nb['full']; $m['short_name'] = $nb['name'];
+                $m['theme_color'] = $nb['color']; $m['background_color'] = '#f8fafc';
+                $body = wp_json_encode($m, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+        }
+        if ($ops) {
+            // Separate installable "operations supervisor" app: own id/name, opens straight on the operations room.
+            $m = json_decode($body, true);
+            if (is_array($m)) {
+                $b = $nb ? $nb['name'] : (class_exists('Oxygen_SEO_Engine') ? Oxygen_SEO_Engine::brand() : 'متقن');
+                $m['id'] = $app_path . 'ops'; $m['name'] = 'مشرف العمليات — ' . $b; $m['short_name'] = 'مشرف العمليات';
+                $m['description'] = 'غرفة العمليات: الطلبات والإشعارات والواتساب والخط الساخن';
+                $m['start_url'] = $app_path . 'ops#/staff/operations';
+                $m['shortcuts'] = [['name' => 'غرفة العمليات', 'url' => $app_path . 'ops#/staff/operations'], ['name' => 'صندوق الواتساب', 'url' => $app_path . 'ops#/staff/wa-inbox'], ['name' => 'الإشعارات', 'url' => $app_path . 'ops#/notifications']];
+                $body = wp_json_encode($m, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+        }
+        header('Content-Type: ' . $types[$ext]);
+        header('X-Content-Type-Options: nosniff');
+        if ($ext === 'js') { header('Service-Worker-Allowed: ' . $app_path); header('Cache-Control: no-cache'); }
+        elseif ($ext === 'webmanifest') { header('Cache-Control: no-cache'); }
+        else { header('Cache-Control: public, max-age=86400'); }
+        echo $body;
+        exit;
+    }
+
+    /**
+     * Puts this site's own face on the app shell: title, share card, structured data, splash wordmark.
+     *
+     * Every face runs the same build, and that build is compiled with one name baked into it. Until
+     * this ran for core sites too, any face sharing the build wore the baked-in name: opening
+     * oxygen11.com showed متقن. The name a visitor reads now always comes from the host.
+     */
+    public static function brand_html($html, $nb) {
+        $full = esc_attr($nb['full']);
+        $html = preg_replace('#<title>.*?</title>#su', '<title>' . esc_html($nb['full'] . ' — صيانة تكييف وغرف تبريد وتجميد وسباكة وكهرباء') . '</title>', $html, 1);
+        $html = preg_replace('#(<meta property="og:title" content=")[^"]*(")#u', '${1}' . $full . '${2}', $html, 1);
+        // the card WhatsApp shows under our order link (owner, 2026-11-24): a picture and one line
+        $img = esc_url(home_url('/app/wa-card.png'));
+        if (strpos($html, 'og:image') === false) { $html = str_replace('</head>', '<meta property="og:image" content="' . $img . '" /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta name="twitter:card" content="summary_large_image" /></head>', $html); }
+        $html = preg_replace('#(<meta property="og:description" content=")[^"]*(")#u', '${1}' . esc_attr('اطلب صيانة أو غسيل أو تركيب مكيف في دقيقة — فنيين معتمدين وضمان على الشغل') . '${2}', $html, 1);
+        $html = preg_replace('#(<meta name="(?:apple-mobile-web-app-title|application-name)" content=")[^"]*(")#u', '${1}' . esc_attr($nb['name']) . '${2}', $html);
+        $html = preg_replace('#<script type="application/ld\+json">.*?</script>#su', '', $html, 1);
+        // Only swap the splash emblem where this face has an emblem of its own; the stock one is a
+        // plain geometric shield carrying no name, so it is better than another brand's logo.
+        if (self::own_icon($nb['id'], 'icon-192.png') !== '') {
+            $html = preg_replace('#(<div class="mark">).*?</svg>(</div>)#su', '${1}<img src="' . esc_attr((string) wp_parse_url(home_url('/app/'), PHP_URL_PATH)) . 'icon-192.png" alt="" width="64" height="64" style="border-radius:16px;display:block">${2}', $html, 1);
+        }
+        // The wordmark under the emblem on the opening screen. The two original faces have a Latin
+        // wordmark of their own; the rest show their Arabic name there as everywhere else.
+        $latin = !empty($nb['latin']) ? $nb['latin'] : $nb['name'];
+        $html = preg_replace('#(<div class="bt">).*?(</div>)#su', '${1}' . esc_html($latin) . '${2}', $html, 1);
+        $html = str_replace(['مُتقن', 'متقن'], $nb['name'], $html);
+        $html = str_replace('MUTQAN', $latin, $html);
+        $html = preg_replace('#(<meta name="theme-color" content=")[^"]*(")#u', '${1}' . esc_attr($nb['color']) . '${2}', $html);
+        return $html;
+    }
+
+    /** Path to a face's own copy of an app icon, or '' when it has none and the stock one should stand. */
+    private static function own_icon($id, $name) {
+        if ($id === '' || !preg_match('/^[a-z0-9_-]+\.(png|svg)$/', $name)) { return ''; }
+        $f = plugin_dir_path(dirname(dirname(__FILE__))) . 'assets/network/' . $id . '/' . $name;
+        return is_readable($f) ? $f : '';
+    }
+
+    public static function serve_app() {
+        if (empty($_SERVER['REQUEST_URI']) || (defined('WP_CLI') && WP_CLI) || (defined('DOING_CRON') && DOING_CRON) || (defined('DOING_AJAX') && DOING_AJAX)) { return; }
+        $path = isset($_SERVER['REQUEST_URI']) ? (string) wp_parse_url(wp_unslash($_SERVER['REQUEST_URI']), PHP_URL_PATH) : '';
+        $base = rtrim((string) wp_parse_url(home_url('/'), PHP_URL_PATH), '/');
+        $rel = substr($path, strlen($base));
+        // PWA files must live under /app/ so the service worker's scope covers the app (plugin dir paths would not).
+        if (preg_match('#^/app/(sw\.js|manifest\.webmanifest|ops\.webmanifest|icon-192\.png|icon-512\.png|icon-maskable-512\.png|apple-touch-icon\.png|icon\.svg)$#', $rel, $m)) { self::serve_pwa_file($m[1]); }
+        if (preg_match('#^/pay/([A-Za-z0-9]{8})/?$#', $rel, $pm) && (!isset($_SERVER['REQUEST_METHOD']) || in_array($_SERVER['REQUEST_METHOD'], ['GET', 'HEAD'], true))) { Mutqan_Shop::pay_page($pm[1]); }
+        if (preg_match('#^/v/([A-Za-z0-9-]{8,16})/?$#', $rel, $vm) && (!isset($_SERVER['REQUEST_METHOD']) || in_array($_SERVER['REQUEST_METHOD'], ['GET', 'HEAD'], true))) { Mutqan_Shop::seal_page(strtoupper(substr($vm[1], 0, 8)) . substr($vm[1], 8)); }
+        $is_root = ($rel === '' || $rel === '/');
+        if ($is_root) {
+            // Domain front page opens the app (owner can switch it off in the Mutqan settings; ?site=wp bypasses it).
+            if (get_option('mutqan_root_app2', '1') === '0') { return; }
+            if (!empty($_GET['site']) || (defined('REST_REQUEST') && REST_REQUEST) || (function_exists('is_admin') && is_admin())) { return; }
+            // Only a clean front-page visit (tracking params allowed) opens the app; any other query (rest_route, cron, preview, search…) is left to WordPress.
+            foreach (array_keys($_GET) as $k) { if (!preg_match('/^(utm_[a-z_]+|fbclid|gclid|ref|source|v|pwa)$/i', (string) $k)) { return; } }
+            if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] !== 'GET' && $_SERVER['REQUEST_METHOD'] !== 'HEAD') { return; }
+        } elseif ($rel === '/app/ops/') { wp_safe_redirect(home_url('/app/ops')); exit; }
+        elseif ($rel !== '/app' && $rel !== '/app/' && $rel !== '/app/index.html' && $rel !== '/app/ops') { return; }
+        $is_ops = ($rel === '/app/ops');
+        if ($rel === '/app') { wp_safe_redirect(home_url('/app/') . (isset($_SERVER['QUERY_STRING']) && $_SERVER['QUERY_STRING'] !== '' ? '?' . $_SERVER['QUERY_STRING'] : '')); exit; }
+        $file = self::app_dir() . 'index.html';
+        nocache_headers();
+        // Hostinger's server cache (LiteSpeed) kept serving a face's OLD app shell after a deploy — an old order form without
+        // the name/phone step (order #1001, 17 Nov). The shell is tiny; it must never be cached by the server or the CDN.
+        header('X-LiteSpeed-Cache-Control: no-cache');
+        header('CDN-Cache-Control: no-store');
+        do_action('litespeed_control_set_nocache', 'mutqan app shell');
+        header('Content-Type: text/html; charset=utf-8');
+        header('X-Content-Type-Options: nosniff');
+        header('Referrer-Policy: strict-origin-when-cross-origin');
+        if (!is_readable($file)) {
+            status_header(503);
+            echo '<!doctype html><meta charset="utf-8"><title>متقن</title><body dir="rtl" style="font-family:Tahoma;padding:2rem">التطبيق قيد الإعداد: لم يُرفع ملف الواجهة بعد.</body>';
+            exit;
+        }
+        $html = (string) file_get_contents($file);
+        $nb = class_exists('Oxygen_Network') ? Oxygen_Network::brand_config() : null;
+        // One answer to "whose site is this" for the shell and the pages alike. The registry answers
+        // for a registered domain; anywhere else the site's own name stands.
+        if ($nb && class_exists('Oxygen_SEO_Engine')) {
+            $name = Oxygen_SEO_Engine::brand();
+            if ($name !== '' && $name !== $nb['name']) {
+                // A name from outside the registry brings no Latin wordmark with it.
+                $nb['name'] = $name; $nb['full'] = $name . ' ' . Oxygen_Network::SUFFIX; $nb['latin'] = '';
+            }
+        }
+        $hub = $nb ? Oxygen_Network::api_base($nb['id']) : '';
+        $cfg = wp_json_encode(['api' => $hub !== '' ? $hub : esc_url_raw(rest_url(self::NS)), 'app' => home_url('/app/'), 'brand' => $nb], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        // Where this plugin's files actually are, for every chunk the app loads later. It has to be
+        // set before the first module runs, which is why it goes in with the config.
+        // It is the APP folder, not its assets/ folder: the build names its files «assets/X.js», so
+        // pointing at assets/ asked for «assets/assets/X.js» — every on-demand screen 404'd its
+        // preloads, and the app reloaded itself (lost settings, the bell, the sign-in, the boot screen).
+        // Same-host paths, never absolute URLs: the build tags carry crossorigin, so loading them from
+        // home_url()'s host while the visitor is on another name of the site (www.oxygen11.com vs
+        // oxygen11.com) is a cross-origin request with no CORS headers. The browser blocks it and the
+        // app never starts: www sat on the opening screen forever.
+        $assets_path = (string) wp_parse_url(self::app_assets_url(), PHP_URL_PATH);
+        $assets = preg_replace('#assets/$#', '', trailingslashit($assets_path));
+        $inject = '<script>window.__MQ_ASSETS__=' . wp_json_encode($assets, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES)
+            . ';window.__MUTQAN__=' . $cfg . ';</script>';
+        if ($is_root) { $inject .= '<link rel="canonical" href="' . esc_url(home_url('/')) . '">'; }
+        if ($is_root && class_exists('Oxygen_SEO_Engine')) { $inject .= Oxygen_SEO_Engine::gsc_meta_html(); }
+        // The build's own files are served straight from the plugin folder, so the app travels with
+        // the plugin: install it and the app works, with nothing to copy to the web root by hand.
+        // (It used to load them from /assets/ at the site root, and on a site where that copy was
+        // missing the opening screen was all a visitor ever saw.) The folder name is written into
+        // the build, so point the links at wherever the plugin actually sits.
+        $html = preg_replace('#(src|href)="[^"]*/app/assets/#', '${1}="' . esc_attr($assets_path), $html);
+        $app_path = (string) wp_parse_url(home_url('/app/'), PHP_URL_PATH);
+        $html = str_replace(['href="./manifest.webmanifest"', 'href="./icon.svg"'], ['href="' . esc_attr($app_path) . 'manifest.webmanifest"', 'href="' . esc_attr($app_path) . 'apple-touch-icon.png"'], $html);
+        if ($is_root && class_exists('Oxygen_Home_Page')) {
+            try { $seo = Oxygen_Home_Page::seo_block(); $html = str_replace('<div id="root"></div>', '<div id="root">' . $seo['html'] . '</div>', $html); $inject .= $seo['ld']; } catch (Throwable $e) { /* optional */ }
+        }
+        if ($is_ops) { $html = str_replace($app_path . 'manifest.webmanifest', $app_path . 'ops.webmanifest', $html); }
+        if ($nb) { $html = self::brand_html($html, $nb); }
+        $html = preg_replace('/<head>/i', '<head>' . $inject, $html, 1);
+        $html = preg_replace('#</head>#i', self::boot_guard() . '</head>', $html, 1);
+        echo $html;
+        exit;
+    }
+
+    /**
+     * Never leave a visitor stuck on the opening screen, and never show them anything but the app.
+     *
+     * Only the app removes #boot-splash. The shell's own watchdog stood down whenever #root had
+     * children, and on the front page #root always carries the crawlable home content, so there it
+     * never fired and a failed load meant an endless opening screen. This guard keeps the opening
+     * screen up while the app loads (a slow phone just waits a little longer), and if the app's main
+     * script fails to load, or the app has not drawn after 20s, it clears any stale service worker
+     * and cache and reloads the page once, quietly, so the visitor lands on the normal app. Only if
+     * that retry also fails does the repair button appear. The app cancels the timer itself once it
+     * has drawn (clearTimeout(window.__mqWatch)). ES5 only.
+     */
+    private static function boot_guard() {
+        $js = <<<'JS'
+(function(){
+var W=window,D=document,K="mq_boot_retry";
+try{clearTimeout(W.__mqWatch)}catch(e){}
+function booted(){var s=D.getElementById("boot-splash");return !s||(" "+s.className+" ").indexOf(" hide ")>-1}
+function reload(){var p=[];try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){p.push(navigator.serviceWorker.getRegistrations().then(function(g){for(var i=0;i<g.length;i++)g[i].unregister()}))}}catch(e){}try{if(W.caches&&caches.keys){p.push(caches.keys().then(function(k){for(var j=0;j<k.length;j++)caches["delete"](k[j])}))}}catch(e){}var done=0,go=function(){if(done)return;done=1;location.reload()};try{Promise.all(p).then(go,go)}catch(e){go()}setTimeout(go,1500)}
+function retried(){try{var t=+sessionStorage.getItem(K)||0;return Date.now()-t<120000}catch(e){return true}}
+function fail(){
+ if(W.__mqFailed||booted())return;
+ if(D.readyState==="loading"){D.addEventListener("DOMContentLoaded",fail);return}
+ if(!retried()){W.__mqFailed=1;try{sessionStorage.setItem(K,String(Date.now()))}catch(e){}reload();return}
+ W.__mqFailed=1;
+ var d=D.createElement("div");d.dir="rtl";
+ d.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:24px;background:#071a33;color:#fff;font-family:Tahoma,sans-serif;text-align:center";
+ d.innerHTML='<div style="max-width:320px"><h1 style="font-size:19px;margin:8px 0">التطبيق يحتاج إعادة تشغيل سريعة</h1><p style="font-size:13px;opacity:.8;line-height:1.7">اضغط الزر وسيعود كل شيء للعمل — بياناتك محفوظة.</p><button type="button" style="margin-top:14px;width:100%;padding:13px;border:0;border-radius:14px;background:#38bdf8;color:#04121f;font-weight:900;font-size:14px">إصلاح وإعادة التشغيل</button></div>';
+ d.getElementsByTagName("button")[0].onclick=function(){try{sessionStorage.removeItem(K)}catch(e){}reload()};D.body.appendChild(d);
+ var w=setInterval(function(){if(booted()){clearInterval(w);if(d.parentNode)d.parentNode.removeChild(d)}},500);
+}
+W.__mqFail=fail;
+W.addEventListener("error",function(e){var t=e&&e.target;if(t&&t.tagName==="SCRIPT"&&/\/assets\/index-[^\/]*\.js/.test(t.src||""))fail()},true);
+W.__mqWatch=setTimeout(fail,20000);
+})();
+JS;
+        return '<script>' . $js . '</script>';
+    }
+}

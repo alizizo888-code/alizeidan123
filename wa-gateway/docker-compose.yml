@@ -1,0 +1,32 @@
+# The WhatsApp gateway as a service on the VPS (Hostinger Docker Manager). Deployed and updated over Hostinger's API —
+# nobody types a command. Pull mode: it asks oxygen11.com for work every 3 s, so no port, domain or certificate.
+# Sessions (the linked numbers) live in the wa_data volume and survive restarts and updates.
+# Restarting the project pulls the newest gateway code from the wa-gateway branch.
+services:
+  wa:
+    image: node:20-bookworm
+    restart: always
+    working_dir: /app
+    environment:
+      - GATEWAY_TOKEN=${GATEWAY_TOKEN}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - DEVICE_ID=${DEVICE_ID}
+      - SEND_DAILY_CAP=${SEND_DAILY_CAP:-200}
+      - DATA_DIR=/data
+      - PULL_EVERY_MS=3000
+      - PULL_IDLE_MS=3000
+      - AUTO_SESSION=0
+      - TZ=Asia/Riyadh
+    command: >
+      sh -c "([ -d /app/.git ] || git clone -q --depth 1 -b wa-gateway https://github.com/alizizo888-code/alizeidan123.git /app)
+      && (git -C /app pull -q || true) && npm ci --omit=dev --no-audit --no-fund && exec node src/index.js"
+    volumes:
+      - wa_app:/app
+      - wa_data:/data
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+volumes:
+  wa_app: {}
+  wa_data: {}

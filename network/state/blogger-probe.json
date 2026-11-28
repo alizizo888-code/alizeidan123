@@ -1,0 +1,550 @@
+{
+ "date": "2026-11-09",
+ "time": "01:43",
+ "rows": [
+  {
+   "id": "oxygen",
+   "host": "blog.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.251.116.121",
+    "2607:f8b0:4023:1004::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "mutqan",
+   "host": "blog-mutqan.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.250.26.121",
+    "2607:f8b0:4023:100d::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "motakhases",
+   "host": "blog-motakhases.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.251.116.121",
+    "2607:f8b0:4023:1015::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 200,
+   "blogspot": 429
+  },
+  {
+   "id": "muhandis",
+   "host": "blog-muhandis.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.251.116.121",
+    "2607:f8b0:4023:100b::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "aqsa",
+   "host": "blog-aqsa.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.250.115.121",
+    "2607:f8b0:4023:1009::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "raad",
+   "host": "blog-raad.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.250.113.121",
+    "2607:f8b0:4023:1015::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "mutamakkin",
+   "host": "blog-mutamakkin.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.250.115.121",
+    "2607:f8b0:4023:1009::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "khabeer",
+   "host": "blog-khabeer.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.250.114.121",
+    "2607:f8b0:4023:1002::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "homeservice",
+   "host": "blog-homeservice.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.251.186.121",
+    "2607:f8b0:4023:1011::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "ibtikar",
+   "host": "blog-ibtikar.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "172.253.135.121",
+    "2607:f8b0:4023:1000::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "mutamad",
+   "host": "blog-mutamad.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.251.116.121",
+    "2607:f8b0:4023:1009::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "misriya",
+   "host": "blog-misriya.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.250.113.121",
+    "2607:f8b0:4023:1009::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "nukhba",
+   "host": "blog-nukhba.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "172.253.135.121",
+    "2607:f8b0:4023:100d::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "riyada",
+   "host": "blog-riyada.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "172.253.135.121",
+    "2607:f8b0:4023:1000::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "baraa",
+   "host": "blog-baraa.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "173.194.208.121",
+    "2607:f8b0:4023:1004::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 429,
+   "blogspot": 429
+  },
+  {
+   "id": "safwa",
+   "host": "blog-safwa.oxygen11.com",
+   "blog_id": true,
+   "dns": [
+    "142.250.113.121",
+    "2607:f8b0:4023:1000::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 200,
+   "blogspot": 429
+  },
+  {
+   "id": "tamayuz",
+   "host": "blog-tamayuz.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.250.113.121",
+    "2607:f8b0:4023:1017::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "nasmat",
+   "host": "blog-nasmat.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.250.113.121",
+    "2607:f8b0:4023:1011::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "wahat",
+   "host": "blog-wahat.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.250.115.121",
+    "2607:f8b0:4023:100d::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "amaan",
+   "host": "blog-amaan.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "173.194.208.121",
+    "2607:f8b0:4023:1009::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "kafaa",
+   "host": "blog-kafaa.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.250.115.121",
+    "2607:f8b0:4023:1015::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "jawda",
+   "host": "blog-jawda.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "173.194.208.121",
+    "2607:f8b0:4023:1009::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "nasim",
+   "host": "blog-nasim.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "172.253.156.121",
+    "2607:f8b0:4023:1015::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "qimma",
+   "host": "blog-qimma.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "172.253.156.121",
+    "2607:f8b0:4023:1004::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "baroda",
+   "host": "blog-baroda.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "172.253.156.121",
+    "2607:f8b0:4023:100b::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "taqa",
+   "host": "blog-taqa.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.251.116.121",
+    "2607:f8b0:4023:1000::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "nabea",
+   "host": "blog-nabea.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "173.194.208.121",
+    "2607:f8b0:4023:100d::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "hisn",
+   "host": "blog-hisn.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.250.113.121",
+    "2607:f8b0:4023:1000::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "safaa",
+   "host": "blog-safaa.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.251.116.121",
+    "2607:f8b0:4023:1000::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "muhtarif",
+   "host": "blog-muhtarif.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.251.186.121",
+    "2607:f8b0:4023:1009::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "baytak",
+   "host": "blog-baytak.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.251.186.121",
+    "2607:f8b0:4023:1009::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "manakh",
+   "host": "blog-manakh.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "173.194.208.121",
+    "2607:f8b0:4023:100d::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "amin",
+   "host": "blog-amin.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "172.253.135.121",
+    "2607:f8b0:4023:1000::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "dar",
+   "host": "blog-dar.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "172.253.135.121",
+    "2607:f8b0:4023:1017::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "ayn",
+   "host": "blog-ayn.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.250.26.121",
+    "2607:f8b0:4023:1015::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "shams",
+   "host": "blog-shams.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "173.194.208.121",
+    "2607:f8b0:4023:1015::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "lamsa",
+   "host": "blog-lamsa.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.251.186.121",
+    "2607:f8b0:4023:1015::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "naqaa",
+   "host": "blog-naqaa.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.250.26.121",
+    "2607:f8b0:4023:1011::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "itqan",
+   "host": "blog-itqan.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.250.115.121",
+    "2607:f8b0:4023:1015::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "ishara",
+   "host": "blog-ishara.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.250.114.121",
+    "2607:f8b0:4023:1002::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "rahhal",
+   "host": "blog-rahhal.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "142.250.113.121",
+    "2607:f8b0:4023:1009::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "miftah",
+   "host": "blog-miftah.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "173.194.208.121",
+    "2607:f8b0:4023:100d::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "idara",
+   "host": "blog-idara.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "173.194.208.121",
+    "2607:f8b0:4023:1015::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  },
+  {
+   "id": "bina",
+   "host": "blog-bina.oxygen11.com",
+   "blog_id": false,
+   "dns": [
+    "172.253.156.121",
+    "2607:f8b0:4023:1011::79"
+   ],
+   "tls": "FAIL [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1011)",
+   "http": 0,
+   "http_plain": 404
+  }
+ ]
+}

@@ -1,0 +1,25 @@
+{
+  "appId": "com.oxygen11.mutqanwa",
+  "appName": "واتساب الإدارة",
+  "webDir": "www",
+  "backgroundColor": "#075e54",
+  "server": {
+    "url": "https://desk.oxygen11.com/desk-wa.html",
+    "androidScheme": "https",
+    "errorPath": "offline.html",
+    "allowNavigation": [
+      "oxygen11.com",
+      "*.oxygen11.com"
+    ]
+  },
+  "android": {
+    "backgroundColor": "#075e54",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_icon_config_sample",
+      "iconColor": "#0ea5e9"
+    }
+  }
+}

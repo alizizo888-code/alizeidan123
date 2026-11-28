@@ -1,0 +1,141 @@
+{
+ "date": "2026-11-09",
+ "time": "23:28",
+ "since": "2026-11-09T13:05:00",
+ "sites": [
+  {
+   "id": "oxygen",
+   "posts": 20,
+   "other_city": 1,
+   "examples": [
+    "هل تبحث عن فني اصلاح مكيفات في محيط طريق الطائف السيل بمكة؟ اتصل بنا واطلب الآن"
+   ]
+  },
+  {
+   "id": "mutqan",
+   "posts": 20,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "motakhases",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "muhandis",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "aqsa",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "raad",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "mutamakkin",
+   "posts": 2,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "khabeer",
+   "posts": 2,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "homeservice",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "ibtikar",
+   "posts": 2,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "mutamad",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "misriya",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "nukhba",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "riyada",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "baraa",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "safwa",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "tamayuz",
+   "posts": 2,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "nasmat",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "wahat",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "amaan",
+   "posts": 2,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "kafaa",
+   "posts": 3,
+   "other_city": 0,
+   "examples": []
+  },
+  {
+   "id": "jawda",
+   "posts": 2,
+   "other_city": 0,
+   "examples": []
+  }
+ ]
+}

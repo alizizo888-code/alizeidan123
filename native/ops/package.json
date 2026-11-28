@@ -1,0 +1,17 @@
+{
+  "name": "oxygen-native-ops",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@capacitor/core": "6.2.0",
+    "@capacitor/android": "6.2.0",
+    "@capacitor/cli": "6.2.0",
+    "@capacitor/local-notifications": "6.1.0",
+    "@capacitor/geolocation": "6.1.1",
+    "@capacitor-community/background-geolocation": "1.2.26",
+    "@capacitor/app-launcher": "6.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5"
+  }
+}

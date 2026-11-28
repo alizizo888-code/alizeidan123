@@ -1,0 +1,93 @@
+name: Release build (app + plugin + desk) — no local build needed
+
+# Either Claude account (or Ali) ships a release by changing the one line in release.trigger on branch mutqan
+# (or Actions → this workflow → Run). It builds the app and the desk with npm on GitHub, runs the PHP suite, and
+# publishes the three deploy branches of alizizo888-code/alizeidan123 as NEW commits on top (never a force push:
+# the hosting folders are git checkouts that fast-forward):
+#   oxygen-dist → oxygen11.com (folder oxygen-ac-automation-new, the active one) · plugin-dist-mutqan → mutqan + the 20 faces
+#   oxygen-master → desk.oxygen11.com (the desk's live checkout: only the build files are replaced, its PHP/api/bridge stay)
+# Hostinger does not pull by itself: afterwards run hosting_git_deploy-website-repository for each site (see HANDOFF.md).
+# Needs secret MIRROR_TOKEN (Contents: read/write on alizeidan123). Without it — or if that push fails — the builds
+# are pushed to this repo as ci/oxygen-dist, ci/plugin-dist-mutqan, ci/desk-dist for a Claude session to forward.
+on:
+  workflow_dispatch:
+  push:
+    branches: [build-mutqan]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'alizizo888-code/alizeidan123'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MIRROR_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: build-mutqan
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_sqlite, sqlite3, mbstring
+      - name: npm ci
+        run: cd mutqan-app && npm ci --no-audit --no-fund
+      - name: PHP syntax
+        run: find oxygen-ac-automation -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+      - name: Backend tests
+        run: |
+          set +e
+          bash tests/mutqan/run.sh > /tmp/tests.log 2>&1
+          rc=$?
+          echo "passed: $(grep -c '^PASS' /tmp/tests.log)"
+          if grep -q 'FAIL' /tmp/tests.log; then grep FAIL /tmp/tests.log | head -20; exit 1; fi
+          # 2026-11-20: the suite used to stop half-way (a script erroring before printing FAIL) and the release went out
+          # on half the checks. A run that did not reach the end is a failed run.
+          if [ "$rc" -ne 0 ]; then echo "test suite stopped early (exit $rc):"; tail -25 /tmp/tests.log; exit 1; fi
+          exit 0
+      - name: Build
+        run: bash tools/ci-release.sh
+      - name: Publish deploy branches
+        run: |
+          set -e
+          MSG="release $(date -u +%F) from mutqan $(git rev-parse --short HEAD): $(git log -1 --format=%s | head -c 120)"
+          publish() { # $1 out dir  $2 branch  $3 keep-other-files(1/0)  $4 url
+            local W; W=$(mktemp -d)
+            git clone -q --depth 1 -b "$2" "$4" "$W"
+            # Keep the previous release's hashed asset files one more release (owner, 2026-11-22: the apps kept showing
+            # «إصلاح وإعادة التشغيل» — a phone still running the last version asked for a chunk the new release deleted).
+            # Exactly two generations: this build's own files, and the files the previous build listed as its own.
+            local OWN; OWN=$(cd "$1" && find . -path '*/assets/*' -type f | sort)
+            if [ -f "$W/.gen-assets" ]; then
+              while IFS= read -r f; do [ -n "$f" ] && [ -f "$W/$f" ] && [ ! -e "$1/$f" ] && mkdir -p "$1/$(dirname "$f")" && cp -a "$W/$f" "$1/$f"; done < "$W/.gen-assets"
+            fi
+            printf '%s\n' "$OWN" > "$1/.gen-assets"
+            if [ "$3" = 1 ]; then
+              (cd "$W" && rm -rf assets desk.html desk-ops.html desk-tech.html desk-wa.html desk-version.json manifest-control.webmanifest manifest-ops.webmanifest manifest-tech.webmanifest manifest-wa.webmanifest)
+            else
+              (cd "$W" && git ls-files -z | xargs -0 rm -f)
+            fi
+            cp -a "$1/." "$W/"
+            (cd "$W" && git add -A && git -c user.name=oxygen-release -c user.email=noreply@users.noreply.github.com commit -q -m "$2: $MSG" && git push -q origin "HEAD:$2") || return 1
+          }
+          ok=1
+          if [ -n "$MIRROR_TOKEN" ]; then
+            U="https://x-access-token:${MIRROR_TOKEN}@github.com/alizizo888-code/alizeidan123.git"
+            publish out/oxygen-dist oxygen-dist 0 "$U" && publish out/plugin-dist-mutqan plugin-dist-mutqan 0 "$U" && publish out/desk-dist oxygen-master 1 "$U" || ok=0
+          else ok=0; fi
+          if [ "$ok" = 1 ]; then echo "published to alizeidan123"; git push -qf origin "HEAD:refs/heads/build-last-good"; exit 0; fi
+          echo "::warning::MIRROR_TOKEN missing or rejected — builds pushed to ci/* in this repo for forwarding"
+          for b in oxygen-dist plugin-dist-mutqan desk-dist; do  # ci/desk-dist = files to lay over oxygen-master
+            W=$(mktemp -d); cp -a "out/$b/." "$W/"
+            (cd "$W" && git init -q && git checkout -q -b "ci/$b" && git add -A && git -c user.name=oxygen-release -c user.email=noreply@users.noreply.github.com commit -q -m "ci/$b: $MSG" \
+              && git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" "ci/$b")
+          done

@@ -1,0 +1,331 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import express from 'express'
+import pino from 'pino'
+import QRCode from 'qrcode'
+import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers, downloadMediaMessage } from '@whiskeysockets/baileys'
+import { sign, safeEq, cleanId, digits, jidToPhone, phoneToJid, isUserJid, extract, Pacer, applyCmd } from './core.js'
+
+const PORT = Number(process.env.PORT || 8787)
+const TOKEN = process.env.GATEWAY_TOKEN || ''          // WordPress -> gateway
+const HOOK_URL = process.env.WEBHOOK_URL || ''          // gateway -> WordPress
+const HOOK_SECRET = process.env.WEBHOOK_SECRET || ''
+// Asking for work instead of waiting to be called. A gateway on a phone has no address anyone can
+// reach, so WordPress cannot dial it; the phone collects what is waiting for it instead. Leave
+// PULL_URL empty on a machine that can be dialled and nothing changes.
+const PULL_URL = process.env.PULL_URL || (HOOK_URL ? HOOK_URL.replace(/\/wa-hook$/, '/wa-pull') : '')
+// Every three seconds by default: a tiny signed request that is the whole «refresh» — it sends what went out, collects
+// what is waiting (messages to send, numbers to open, a fresh QR to show), and reports every number's state, so the
+// operations screen, the order tracking and the alerts are never more than a few seconds behind. Free: no API, no quota.
+const PULL_EVERY = Math.max(2000, Number(process.env.PULL_EVERY_MS || 3000))
+const PULL_IDLE = Math.max(PULL_EVERY, Number(process.env.PULL_IDLE_MS || 3000))
+const DATA = path.resolve(process.env.DATA_DIR || './data')
+const DAILY_CAP = Number(process.env.SEND_DAILY_CAP || 200)
+const MAX_SESSIONS = Number(process.env.MAX_SESSIONS || 20)
+// Set by «تسجيل الجهاز» in the desk app: this device's id, so its numbers never collide with another device's.
+const DEVICE_ID = cleanId(process.env.DEVICE_ID || '')
+if (!TOKEN || TOKEN.length < 24) { console.error('GATEWAY_TOKEN (>=24 chars) is required'); process.exit(1) }
+if (!HOOK_URL || !HOOK_SECRET) console.warn('WEBHOOK_URL / WEBHOOK_SECRET missing: events will not reach WordPress')
+
+const log = pino({ level: process.env.LOG_LEVEL || 'warn' })
+fs.mkdirSync(path.join(DATA, 'auth'), { recursive: true })
+const META = path.join(DATA, 'sessions.json')
+const meta = (() => { try { return JSON.parse(fs.readFileSync(META, 'utf8')) } catch { return {} } })()
+const saveMeta = () => fs.writeFileSync(META, JSON.stringify(meta, null, 1))
+
+// WhatsApp now hides many senders behind a private id («…@lid») instead of their number. Whatever WhatsApp tells us
+// of the real number is kept here, so a customer is known by his phone and the answer reaches him.
+const LIDF = path.join(DATA, 'lid-map.json')
+const lidMap = (() => { try { return JSON.parse(fs.readFileSync(LIDF, 'utf8')) } catch { return {} } })()
+let lidT = null
+const saveLid = () => { clearTimeout(lidT); lidT = setTimeout(() => { try { fs.writeFileSync(LIDF, JSON.stringify(lidMap)) } catch {} }, 1500) }
+const isLid = (j) => /@lid$/.test(String(j || ''))
+const isPn = (j) => /@s\.whatsapp\.net$/.test(String(j || ''))
+function learnLid(lid, pn) {
+  if (!isLid(lid) || !isPn(pn)) return
+  const l = jidToPhone(lid); const p = jidToPhone(pn)
+  if (l && p && lidMap[l] !== p) { lidMap[l] = p; saveLid() }
+}
+async function realJid(sock, jid, key) {
+  if (!isLid(jid)) return jid
+  for (const a of [key?.remoteJidAlt, key?.senderPn, key?.participantAlt, key?.participantPn]) { if (isPn(a)) { learnLid(jid, a); return a } }
+  const known = lidMap[jidToPhone(jid)]
+  if (known) return known + '@s.whatsapp.net'
+  try { const pn = await sock.signalRepository?.lidMapping?.getPNForLID?.(jid); if (pn && isPn(String(pn).replace(/:\d+@/, '@'))) { const j = String(pn).replace(/:\d+@/, '@'); learnLid(jid, j); return j } } catch {}
+  return jid
+}
+// A number we only know by its private id is answered on that id.
+const toJid = (to) => { const d = digits(to); return lidMap['@' + d] ? d + '@lid' : phoneToJid(d) }
+const markLidOnly = (jid) => { if (isLid(jid)) { const d = jidToPhone(jid); if (!lidMap['@' + d]) { lidMap['@' + d] = 1; saveLid() } } }
+
+// The real person behind a number: profile picture (asked once a day per contact) and the pictures they send.
+const avatarAt = new Map()
+async function avatarOf(sock, jid) {
+  const k = jidToPhone(jid); const last = avatarAt.get(k)
+  if (last && Date.now() - last.at < 24 * 3600 * 1000) return undefined   // already sent today
+  let url = ''
+  try { url = await Promise.race([sock.profilePictureUrl(jid, 'image'), new Promise((r) => setTimeout(() => r(''), 4000))]) || '' } catch { url = '' }
+  avatarAt.set(k, { at: Date.now() }); if (avatarAt.size > 5000) avatarAt.delete(avatarAt.keys().next().value)
+  return url
+}
+const MEDIA_MAX = 1500 * 1024
+async function mediaOf(msg, kind) {
+  if (!['image', 'sticker', 'video', 'document', 'voice', 'audio'].includes(kind)) return undefined
+  let m = msg.message || {}
+  if (m.ephemeralMessage) m = m.ephemeralMessage.message || {}
+  if (m.viewOnceMessage) m = m.viewOnceMessage.message || {}
+  const node = m.imageMessage || m.stickerMessage || m.videoMessage || m.documentMessage || m.audioMessage || {}
+  const out = { mime: String(node.mimetype || ''), size: Number(node.fileLength || 0) || 0 }
+  if (node.jpegThumbnail) { try { out.thumb = Buffer.from(node.jpegThumbnail).toString('base64') } catch {} }
+  // Pictures, stickers, voice notes and small files travel whole; a large video only as its thumbnail.
+  if (out.size && out.size <= MEDIA_MAX && kind !== 'video') {
+    try { const buf = await Promise.race([downloadMediaMessage(msg, 'buffer', {}), new Promise((r) => setTimeout(() => r(null), 15000))]); if (buf && buf.length <= MEDIA_MAX) out.data = Buffer.from(buf).toString('base64') } catch (e) { log.warn({ err: String(e) }, 'media') }
+  }
+  return out.thumb || out.data ? out : undefined
+}
+
+/** id -> runtime state */
+const S = new Map()
+
+// ---- events -> WordPress (HMAC signed, retried) ----
+const outbox = []
+let flushing = false
+async function emit(event) {
+  outbox.push({ event, tries: 0 })
+  if (outbox.length > 2000) outbox.shift()
+  flush()
+}
+async function flush() {
+  if (flushing || !HOOK_URL) return
+  flushing = true
+  while (outbox.length) {
+    const item = outbox[0]
+    const body = JSON.stringify(item.event)
+    try {
+      const r = await fetch(HOOK_URL, { method: 'POST', headers: { 'content-type': 'application/json', 'x-mq-signature': sign(HOOK_SECRET, body) }, body, signal: AbortSignal.timeout(30000) })
+      if (!r.ok && r.status >= 500) throw new Error('hook ' + r.status)
+      outbox.shift()
+      if (item.event.type === 'message') kickPull()
+    } catch (e) {
+      if (++item.tries >= 6) { outbox.shift(); continue }
+      await new Promise((r) => setTimeout(r, 2000 * item.tries))
+    }
+  }
+  flushing = false
+}
+
+// ---- sessions ----
+function view(id) {
+  const s = S.get(id); const m = meta[id] || {}
+  return { id, label: m.label || id, mode: m.mode || 'qr', phone: s?.phone || m.phone || '', status: s?.status || 'stopped', qr: s?.status === 'qr' ? s.qr : null, pairingCode: s?.status === 'code' ? s.code : null, sentToday: s?.pacer.used() || 0, dailyCap: DAILY_CAP, name: s?.name || '' }
+}
+
+async function start(id) {
+  const m = meta[id]
+  if (!m) throw new Error('unknown session')
+  const old = S.get(id)
+  if (old?.sock) { try { old.sock.end(undefined) } catch {} }
+  const st = old || { status: 'connecting', pacer: new Pacer({ dailyCap: DAILY_CAP, minMs: 700, maxMs: 2200 }), queue: [], busy: false, retry: 0 }
+  st.sent = st.sent || new Set()
+  st.status = 'connecting'; st.qr = null; st.code = null
+  S.set(id, st)
+  const { state, saveCreds } = await useMultiFileAuthState(path.join(DATA, 'auth', id))
+  const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }))
+  const sock = makeWASocket({ version, auth: state, logger: log, browser: Browsers.ubuntu('Chrome'), printQRInTerminal: false, markOnlineOnConnect: false, syncFullHistory: false })
+  st.sock = sock
+  sock.ev.on('creds.update', saveCreds)
+  sock.ev.on('connection.update', async (u) => {
+    if (u.qr) {
+      if (m.mode === 'code' && m.phone && !state.creds.registered) {
+        if (!st.code) {
+          try { st.code = (await sock.requestPairingCode(digits(m.phone))).replace(/(.{4})(.{4})/, '$1-$2'); st.status = 'code' } catch (e) { log.warn(e) }
+        }
+      } else { st.qr = await QRCode.toDataURL(u.qr, { margin: 1, width: 300 }); st.status = 'qr' }
+      // The picture travels with the event. On a phone the operations screen is the only place the
+      // code can be scanned from — you cannot hold the handset up to itself.
+      emit({ type: 'status', accountId: id, status: st.status, label: m.label || id, qr: st.qr || null, pairingCode: st.code || null })
+      if (st.code) console.log('\n=====================================\n  كود الربط: ' + st.code + '\n  واتساب ← الأجهزة المرتبطة ← ربط جهاز ← «الربط برقم الهاتف بدلاً من ذلك» واكتب الكود\n=====================================\n')
+      else if (st.status === 'qr') console.log('QR جاهز — امسحه من الديسك ← صندوق الواتساب ← الأرقام (من موبايل تاني)، أو شغّل بـ PAIR_PHONE عشان كود بدل QR')
+    }
+    if (u.connection === 'open') {
+      st.status = 'open'; st.retry = 0; st.qr = null; st.code = null
+      st.phone = jidToPhone(sock.user?.id); st.name = sock.user?.name || ''
+      console.log('✅ الرقم اتوصل: ' + st.phone + ' — سيب Termux شغال في الخلفية')
+      meta[id].phone = st.phone; saveMeta()
+      emit({ type: 'status', accountId: id, status: 'open', phone: st.phone, name: st.name, label: meta[id].label || id })
+    }
+    if (u.connection === 'close') {
+      const code = u.lastDisconnect?.error?.output?.statusCode
+      if (code === DisconnectReason.loggedOut) {
+        st.status = 'logged_out'; fs.rmSync(path.join(DATA, 'auth', id), { recursive: true, force: true })
+        emit({ type: 'status', accountId: id, status: 'logged_out' })
+        return
+      }
+      st.status = 'closed'
+      emit({ type: 'status', accountId: id, status: 'closed' })
+      const wait = Math.min(60000, 2000 * 2 ** Math.min(st.retry++, 5))
+      setTimeout(() => { if (S.get(id) === st && meta[id]) start(id).catch((e) => log.error(e)) }, wait)
+    }
+  })
+  const learnContacts = (list) => { for (const c of list || []) { if (isLid(c.lid) && isPn(c.id)) learnLid(c.lid, c.id); if (isLid(c.id) && isPn(c.phoneNumber || c.jid)) learnLid(c.id, c.phoneNumber || c.jid) } }
+  sock.ev.on('contacts.upsert', learnContacts)
+  sock.ev.on('contacts.update', learnContacts)
+  sock.ev.on('lid-mapping.update', (u) => { for (const x of [].concat(u || [])) learnLid(x?.lid, x?.pn) })
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify' && type !== 'append') return
+    for (const msg of messages) {
+      try {
+        const raw = msg.key?.remoteJid
+        if (!isUserJid(raw) || !msg.message) continue
+        if (st.sent.has(msg.key.id)) continue            // our own message coming back: WordPress already has it
+        const x = extract(msg.message)
+        if (x.kind === 'reaction') continue
+        const jid = await realJid(sock, raw, msg.key)
+        if (isLid(jid)) markLidOnly(jid)
+        // «Message yourself» on a linked number is the owner talking to the system: it is an incoming message from
+        // that number itself, not a reply typed to a customer.
+        const me = st.phone || jidToPhone(sock.user?.id); const myLid = jidToPhone(sock.user?.lid || '')
+        const self = !!msg.key.fromMe && (jidToPhone(jid) === me || (myLid && jidToPhone(raw) === myLid))
+        const phone = self ? me : jidToPhone(jid)
+        const media = await mediaOf(msg, x.kind)
+        const avatar = !msg.key.fromMe ? await avatarOf(sock, jid) : undefined
+        emit({ type: 'message', accountId: id, msgId: msg.key.id, direction: msg.key.fromMe && !self ? 'out' : 'in', phone, name: self ? 'أنا (المالك)' : (msg.pushName || ''), text: x.text, kind: x.kind, ts: Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000), fromPhone: !!msg.key.fromMe && !self, self, lid: isLid(jid) ? jidToPhone(jid) : undefined, media, avatar })
+      } catch (e) { log.warn(e) }
+    }
+  })
+  return st
+}
+
+// Paced outbound queue: random delay, typing indicator, daily cap.
+function enqueueSend(id, to, text) {
+  const st = S.get(id)
+  if (!st || st.status !== 'open') throw Object.assign(new Error('الرقم غير متصل'), { code: 409 })
+  if (!st.pacer.canSend()) throw Object.assign(new Error('تم بلوغ الحد اليومي للإرسال من هذا الرقم (حماية من الحظر)'), { code: 429 })
+  st.pacer.mark()
+  return new Promise((resolve, reject) => { st.queue.push({ to, text, resolve, reject }); drain(id) })
+}
+async function drain(id) {
+  const st = S.get(id)
+  if (!st || st.busy) return
+  st.busy = true
+  while (st.queue.length) {
+    const job = st.queue.shift()
+    try {
+      const jid = toJid(job.to)
+      await st.sock.presenceSubscribe(jid).catch(() => {})
+      await st.sock.sendPresenceUpdate('composing', jid).catch(() => {})
+      await new Promise((r) => setTimeout(r, st.pacer.delay()))
+      const sent = await st.sock.sendMessage(jid, { text: job.text })
+      if (sent?.key?.id) { st.sent.add(sent.key.id); if (st.sent.size > 500) st.sent.delete(st.sent.values().next().value) }
+      await st.sock.sendPresenceUpdate('paused', jid).catch(() => {})
+      job.resolve({ msgId: sent?.key?.id })
+    } catch (e) { job.reject(e) }
+  }
+  st.busy = false
+}
+
+// ---- HTTP API (called only by the WordPress plugin) ----
+const app = express()
+app.disable('x-powered-by')
+app.use(express.json({ limit: '100kb' }))
+app.get('/health', (_q, r) => r.json({ ok: true }))
+app.use((q, r, next) => {
+  const t = String(q.headers.authorization || '').replace(/^Bearer\s+/i, '')
+  if (!safeEq(t, TOKEN)) return r.status(401).json({ error: 'unauthorized' })
+  next()
+})
+const wrap = (fn) => async (q, r) => { try { r.json(await fn(q)) } catch (e) { r.status(e.code && e.code < 600 ? e.code : 500).json({ error: e.message || 'error' }) } }
+
+app.get('/sessions', wrap(() => ({ sessions: Object.keys(meta).map(view) })))
+app.post('/sessions', wrap(async (q) => {
+  const id = cleanId(q.body.id) || 'w' + Date.now().toString(36)
+  if (!meta[id] && Object.keys(meta).length >= MAX_SESSIONS) throw Object.assign(new Error('بلغت الحد الأقصى للأرقام'), { code: 400 })
+  const mode = q.body.mode === 'code' ? 'code' : 'qr'
+  const phone = digits(q.body.phone)
+  if (mode === 'code' && phone.length < 8) throw Object.assign(new Error('أدخل رقم الجوال بالصيغة الدولية'), { code: 400 })
+  meta[id] = { label: String(q.body.label || id).slice(0, 60), mode, phone: mode === 'code' ? phone : (meta[id]?.phone || '') }
+  saveMeta()
+  await start(id)
+  return view(id)
+}))
+app.post('/sessions/:id/restart', wrap(async (q) => { const id = cleanId(q.params.id); if (!meta[id]) throw Object.assign(new Error('not found'), { code: 404 }); await start(id); return view(id) }))
+async function removeSession(id) {
+  const st = S.get(id)
+  try { await st?.sock?.logout() } catch {}
+  try { st?.sock?.end(undefined) } catch {}
+  S.delete(id); delete meta[id]; saveMeta()
+  fs.rmSync(path.join(DATA, 'auth', id), { recursive: true, force: true })
+}
+app.delete('/sessions/:id', wrap(async (q) => { await removeSession(cleanId(q.params.id)); return { ok: true } }))
+app.post('/sessions/:id/send', wrap(async (q) => {
+  const id = cleanId(q.params.id)
+  const to = digits(q.body.to); const text = String(q.body.text || '').slice(0, 4000)
+  if (to.length < 8 || !text.trim()) throw Object.assign(new Error('بيانات ناقصة'), { code: 400 })
+  return enqueueSend(id, to, text)
+}))
+
+// ---- collecting work from WordPress ----
+//
+// One request carries both halves: what was sent since last time, and a request for more. The pace
+// backs off while there is nothing to do, because this runs on a phone battery; it quickens again
+// the moment a batch comes back.
+let pullStop = false
+// A message just handed to WordPress usually has an answer a moment later: ask for it at once, not on the next round.
+let pullWake = null
+const kickPull = () => { if (pullWake) setTimeout(() => pullWake && pullWake(), 400) }
+async function pullLoop() {
+  if (!PULL_URL || !HOOK_SECRET) return
+  let wait = PULL_EVERY
+  let sent = []
+  let done = []
+  while (!pullStop) {
+    let got = 0
+    try {
+      // Each check-in also says which numbers this device carries and how they are — the screen's live view.
+      const sessions = Object.keys(meta).map((id) => { const v = view(id); return { id, status: v.status, phone: v.phone } })
+      const body = JSON.stringify({ sent, done, sessions, device: DEVICE_ID, limit: 10 })
+      sent = []; done = []
+      const r = await fetch(PULL_URL, { method: 'POST', headers: { 'content-type': 'application/json', 'x-mq-signature': sign(HOOK_SECRET, body) }, body, signal: AbortSignal.timeout(20000) })
+      const j = r.ok ? await r.json().catch(() => null) : null
+      const jobs = (j && j.data && Array.isArray(j.data.jobs)) ? j.data.jobs : []
+      got = jobs.length
+      // Orders from the management screen: open a new number, remove one, reconnect one.
+      const cmds = (j && j.data && Array.isArray(j.data.cmds)) ? j.data.cmds : []
+      for (const cmd of cmds) {
+        if (cmd.op === 'add' && !meta[cleanId(cmd.id)] && Object.keys(meta).length >= MAX_SESSIONS) { done.push(cmd.cid); continue }
+        try { const cid = await applyCmd(cmd, { meta, start, remove: removeSession, save: saveMeta }); if (cid) { done.push(cid); console.log('🛠️ أمر من الشاشة: ' + cmd.op + ' ' + cmd.id) } }
+        catch (e) { log.warn({ err: String(e) }, 'cmd') }
+      }
+      got += cmds.length
+      for (const job of jobs) {
+        // The number WordPress names, or the only one connected — a phone usually carries one.
+        const id = (job.acct && S.has(job.acct)) ? job.acct : [...S.keys()].find((k) => S.get(k)?.status === 'open')
+        if (!id) { sent.push({ id: job.id, ok: false }); continue }
+        // Queued, not awaited: the next check-in must not wait for this number's typing pause.
+        try { enqueueSend(id, digits(job.to), String(job.text || '')).then((res) => { sent.push({ id: job.id, ok: true, msgId: res?.msgId || '' }); kickPull() }, (e) => { log.warn({ err: String(e) }, 'pull send'); sent.push({ id: job.id, ok: false }) }) }
+        catch (e) { log.warn({ err: String(e) }, 'pull send'); sent.push({ id: job.id, ok: false }) }
+      }
+    } catch (e) {
+      log.warn({ err: String(e) }, 'pull')
+    }
+    // A number waiting to be scanned keeps the pace at its fastest: the QR must reach the screen while it is still valid.
+    const pairing = Object.keys(meta).some((id) => ['qr', 'code', 'connecting'].includes(S.get(id)?.status))
+    wait = got || pairing ? PULL_EVERY : Math.min(PULL_IDLE, Math.round(wait * 1.5))
+    await new Promise((r) => { const t = setTimeout(r, wait); pullWake = () => { clearTimeout(t); r() } })
+    pullWake = null
+  }
+}
+
+app.listen(PORT, () => console.log('mutqan wa-gateway on :' + PORT))
+// Nothing can call into a phone to ask it to begin, so when it has no number yet it opens one by
+// itself and its QR goes up to the operations screen to be scanned from there.
+if (!Object.keys(meta).length && (process.env.AUTO_SESSION ?? '1') !== '0') {
+  const id = cleanId(process.env.SESSION_ID || (DEVICE_ID ? DEVICE_ID + '-main' : 'main'))
+  // PAIR_PHONE=0536554731 → a pairing code printed right here, typed into WhatsApp on the SAME phone (a QR cannot be scanned by the phone showing it).
+  const pair = digits(process.env.PAIR_PHONE || '').replace(/^0(5\d{8})$/, '966$1').replace(/^(5\d{8})$/, '966$1')
+  meta[id] = { label: process.env.SESSION_LABEL || 'واتساب الشغل', mode: pair ? 'code' : 'qr', phone: pair }
+  saveMeta()
+  console.log('no number linked yet: opening "' + id + '" — scan its QR from the operations screen')
+}
+for (const id of Object.keys(meta)) start(id).catch((e) => log.error(e))
+pullLoop().catch((e) => log.error(e))

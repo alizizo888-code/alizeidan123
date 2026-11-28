@@ -1,0 +1,580 @@
+import FieldPostsBoard from '../components/ops/FieldPostsBoard'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { ChevronRight, Zap, SlidersHorizontal, LocateFixed, Radio, RefreshCw, Users, Headset, Bot, Tag, Sparkles, AlertTriangle, Radar, Wallet, MessageCircle, ShieldCheck, HardHat } from 'lucide-react'
+import { db } from '../lib/db'
+import { push } from '../lib/push'
+import { useAiSettings } from '../hooks/useAiSettings'
+import { isTechAvailable, sortByPriority } from '../assignment'
+import { escalationLabel, handlerLabel, ACTIVE_STATUSES_FOR_ALERTS } from '../workflow'
+import { useLiveShared } from '../lib/useLive'
+import { team } from '../lib/team'
+import { useTeamRole } from '../hooks/useTeamRole'
+import { useTechProfiles } from '../hooks/useTechProfiles'
+import { useAssignment } from '../hooks/useAssignment'
+import { remainingCapacity, capacityOf } from '../assignment'
+import OrderCard from '../components/OrderCard'
+import { useOpsMode } from '../hooks/useOpsMode'
+import { useOrderRouting } from '../hooks/useOrderRouting'
+import ManualOrderModal from '../components/ManualOrderModal'
+import AssignModal from '../components/ops/AssignModal'
+import { openWhatsApp, buildDispatchMessage } from '../lib/waOrder'
+import OpsMap from '../components/ops/OpsMap'
+import LiveFleet from '../components/ops/LiveFleet'
+import IntakeBoard from '../components/ops/IntakeBoard'
+import DispatchBoard from '../components/ops/DispatchBoard'
+import TechTable from '../components/ops/TechTable'
+import OrdersTable from '../components/ops/OrdersTable'
+import OrdersList from '../components/ops/OrdersList'
+import MapFirst from '../components/ops/MapFirst'
+import CallsTab from '../components/CallsTab'
+import { needsFollowUp } from '../lib/callbook'
+import { DONE, RUNNING, isToday, isUnassigned, isForwarded } from '../components/ops/helpers'
+import { serviceScopeLabel, specialtyLabel } from '../constants'
+import { brandMeta } from '../lib/netBrand'
+import AccessDenied from '../components/AccessDenied'
+
+// What the operations room shows (Ali, 18 Nov): the dispatch center — the live map, distributing to technicians
+// (auto or by hand) and the list of orders. The other views stay reachable from «الإدارة» (?tab=…) but are not in the bar.
+const MAIN_TABS = ['live', 'orders', 'intake', 'list']
+// A phone opens on the orders without the map (light, nothing heavy loads); a wide screen on the map with the orders.
+const PHONE = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 767px)').matches
+const TABS = [
+  ['live', '🗺️ الطلبات على الخريطة', () => 0],
+  ['orders', '📋 الطلبات بس', (k, u) => u.length],
+  ['intake', '📥 توزيع الطلبات', (k, u) => u.length],
+  ['list', '📋 قائمة الطلبات', () => 0],
+  ['map', '🗺️ الخريطة الميدانية', () => 0],
+  ['board', '📋 لوحة التوجيه', () => 0],
+  ['table', '📑 جدول الطلبات', () => 0],
+  ['techs', '🧰 الفنيون', () => 0],
+  ['calls', '📞 المكالمات', (k, u, a, h, m) => m],
+  ['alerts', '🔔 محادثات وتنبيهات', (k, u, a, h) => a.length + h.length],
+]
+
+// Desk (private ops app): KPIs, then the field map and live customers FIRST; dispatch/owner settings sink below.
+const DESK_OPS = typeof window !== 'undefined' && window.__DESK_KIND__ === 'ops'
+const ROUTING_LABEL = { both: 'واتساب + غرفة العمليات (معًا)', whatsapp: 'واتساب فقط', operations: 'غرفة العمليات فقط' }
+// Link the receiving person opens: the staff app on this site.
+const orderLink = (o) => { try { return new URL('#/staff/order/' + o.id, window.__MUTQAN__?.app || location.origin + '/app/').toString() } catch { return '' } }
+const ROUTING_NEXT = { both: 'operations', operations: 'whatsapp', whatsapp: 'both' }
+
+export default function OperationsRoom() {
+  const navigate = useNavigate()
+  const { role, isOwner, loading: roleLoading } = useTeamRole()
+  const { profiles, settings, updateSettings } = useTechProfiles()
+  const { data: orders, loading: ordersLoading } = useLiveShared('orders', { order: '-createdAt', limit: 300 })
+  const { autoAssignOrder, linkTech, assignToSite, siteTech, markForwarded } = useAssignment({ profiles, settings, orders })
+  // Network faces: one desk for all 12 sites — the filter row appears as soon as orders from more than one face exist.
+  const [brandF, setBrandF] = useState(() => { try { return new URLSearchParams((location.hash.split('?')[1]) || '').get('brand') || 'all' } catch { return 'all' } })
+  const brandsSeen = useMemo(() => { const m = {}; for (const o of orders) if (o.brand) m[o.brand] = (m[o.brand] || 0) + 1; return m }, [orders])
+  const viewOrders = useMemo(() => (brandF === 'all' ? orders : orders.filter((o) => o.brand === brandF)), [orders, brandF])
+  const { data: crmRows } = useLiveShared('customer_profiles', { limit: 800 })
+  const [sp] = useSearchParams()
+  const [tab, setTab] = useState(() => (TABS.some((x) => x[0] === sp.get('tab')) ? sp.get('tab') : PHONE ? 'orders' : 'live'))
+  useEffect(() => { const t = sp.get('tab'); if (t && TABS.some((x) => x[0] === t)) setTab(t) }, [sp])
+  // a tab opened from a link (e.g. ?tab=calls) may sit off-screen in the scrolling tab bar
+  // Centre the chosen tab inside its own strip only — scrollIntoView would also scroll the whole page down to the strip (and hide the top of the page under the sticky header).
+  useEffect(() => {
+    try {
+      const el = document.querySelector(`[data-tab="${tab}"]`)
+      const page = el && el.closest('.overflow-y-auto')
+      const top = page ? page.scrollTop : 0
+      el?.scrollIntoView({ block: 'nearest', inline: 'center' })
+      if (page) page.scrollTop = top
+    } catch { /* ignore */ }
+  }, [tab])
+  const { data: callLog } = useLiveShared('call_log', { order: '-createdAt', limit: 300 })
+  const { data: callContacts } = useLiveShared('call_contacts', { limit: 1000 })
+  const missedCalls = useMemo(() => callLog.filter((l) => needsFollowUp(l)).length, [callLog])
+  const [assignOrder, setAssignOrder] = useState(null)
+  const [busyId, setBusyId] = useState('')
+  const { data: payRows } = useLiveShared('tech_pay', { limit: 5 })
+  const sharePctVal = Number(payRows?.[0]?.sharePct) || 0
+  const { data: handoffs } = useLiveShared('handoffs', { filters: { status: { in: ['open', 'claimed'] } }, order: '-createdAt', limit: 50 })
+  const { settings: aiSettings } = useAiSettings()
+  const { data: coverageRows } = useLiveShared('coverage', { limit: 1 })
+  const { data: pendingTechs } = useLiveShared('tech_applications', { filters: { status: 'pending' }, limit: 100 })
+  const { inhouse: inhouseOn, setInhouse } = useOpsMode()
+  const routing = useOrderRouting()
+  const [manualOpen, setManualOpen] = useState(false)
+  const inhouseList = useMemo(() => orders.filter((o) => o.inhouse && !['completed', 'closed', 'cancelled'].includes(o.status)), [orders])
+  const [now, setNow] = useState(Date.now())
+  const flaggedRef = useRef(new Set())
+
+  const [gid, setGid] = useState(null)
+  const [running, setRunning] = useState(false)
+  const [notice, setNotice] = useState('')
+  const processingRef = useRef(new Set())
+
+  const [modeLocal, setModeLocal] = useState(null)   // shows the tap at once, before the server confirms
+  const [modeErr, setModeErr] = useState('')
+  const mode = modeLocal || settings?.mode || 'manual'
+  useEffect(() => { if (modeLocal && settings?.mode === modeLocal) setModeLocal(null) }, [settings?.mode, modeLocal])
+  const pickMode = (m) => { setModeErr(''); setModeLocal(m); updateSettings({ mode: m }).catch((e) => { setModeLocal(null); setModeErr((e && e.message) || 'تعذر حفظ أسلوب التوزيع') }) }
+  const strategy = settings?.strategy || 'smart'
+  const unassigned = useMemo(() => orders.filter((o) => o.status === 'new' && !o.technicianId && !o.inhouse && !isForwarded(o)), [orders])
+
+  useEffect(() => { team.groupId().then(setGid) }, [])
+
+  // Clock tick (no data re-fetch) so time-based follow-up rules re-evaluate
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Follow-up automation: technician didn't accept in time → escalate; technician late → notify operations
+  useEffect(() => {
+    if (!gid || ordersLoading) return
+    const fu = aiSettings.followUp
+    const mins = (iso) => (iso ? (now - new Date(iso).getTime()) / 60000 : 0)
+    const lastAt = (o, st) => [...(o.statusHistory || [])].reverse().find((h) => h.status === st)?.at
+    const jobs = []
+    for (const o of orders) {
+      if (o.inhouse) continue
+      const flags = o.followUpFlags || {}
+      if (fu.escalateOnNoAccept && o.status === 'assigned' && !flags.noAccept && mins(o.assignedAt) > Number(fu.techAcceptMin || 15)) jobs.push([o, 'noAccept', 'no_accept'])
+      if (fu.escalateOnNoAccept && o.status === 'forced' && !flags.forcedStale && mins(lastAt(o, 'forced') || o.createdAt) > Number(fu.techAcceptMin || 15)) jobs.push([o, 'forcedStale', 'forced_stale'])
+      if (fu.notifyOpsOnLate && ['accepted', 'en_route'].includes(o.status) && !flags.late && mins(lastAt(o, o.status)) > Number(fu.techLateMin || 60)) jobs.push([o, 'late', 'tech_late'])
+    }
+    for (const [o, flag, reason] of jobs) {
+      const key = `${o.id}:${flag}`
+      if (flaggedRef.current.has(key)) continue
+      flaggedRef.current.add(key)
+      const at = new Date().toISOString()
+      db.updateShared('orders', o.id, {
+        followUpFlags: { ...(o.followUpFlags || {}), [flag]: at },
+        escalation: { reason, level: 'operations', at, by: 'followup_engine' },
+      }).catch(() => {})
+      push.sendToAdmins(gid, { title: `تنبيه متابعة: ${escalationLabel(reason)}`, body: `${specialtyLabel(o.specialtyId)} — ${o.clientName || ''}${o.technicianName ? ` · ${o.technicianName}` : ''}`, url: `#/staff/order/${o.id}`, sound: 'bell' }).catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now, orders, gid, ordersLoading, aiSettings.followUp])
+
+  // Approximate coverage for customers: rounded positions of AVAILABLE technicians only (no names)
+  useEffect(() => {
+    if (!gid || !profiles.length) return
+    const points = profiles
+      .filter((t) => t.homeLat != null && isTechAvailable(t, orders))
+      .map((t) => ({ lat: Math.round(t.homeLat * 50) / 50, lng: Math.round(t.homeLng * 50) / 50 }))
+      .sort((a, b) => a.lat - b.lat || a.lng - b.lng)
+    const cur = coverageRows?.[0]
+    const fresh = cur?.updatedAt && Date.now() - new Date(cur.updatedAt).getTime() < 6 * 3600 * 1000
+    if (fresh && JSON.stringify(cur.points || []) === JSON.stringify(points)) return
+    db.upsertShared('coverage', { points, updatedAt: new Date().toISOString() }, 'default', { groupId: gid, writableBy: 'admins' }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gid, profiles, orders.length, coverageRows?.[0]?.updatedAt])
+
+  const alerts = useMemo(
+    () => orders.filter((o) => o.escalation && ACTIVE_STATUSES_FOR_ALERTS.includes(o.status)),
+    [orders],
+  )
+
+  const kpi = useMemo(() => {
+    const live = orders.filter((o) => !o.inhouse)
+    return {
+      running: live.filter((o) => RUNNING.includes(o.status)).length,
+      assigned: live.filter((o) => ['assigned', 'forced'].includes(o.status)).length,
+      done: orders.filter((o) => DONE.includes(o.status) && isToday(o.completedAt || o.updatedAt)).length,
+      failed: orders.filter((o) => (o.status === 'cancelled' && isToday(o.updatedAt)) || (o.escalation && !DONE.includes(o.status) && o.status !== 'cancelled')).length,
+      techOn: profiles.filter((t) => isTechAvailable(t, orders)).length,
+    }
+  }, [orders, profiles])
+
+  // In-house mode + a site technician: every new in-house order goes straight to him.
+  const siteRef = useRef(new Set())
+  useEffect(() => {
+    if (!inhouseOn || !siteTech || ordersLoading) return
+    for (const o of orders) {
+      if (!o.inhouse || o.technicianId || o.status !== 'new' || siteRef.current.has(o.id)) continue
+      siteRef.current.add(o.id)
+      assignToSite(o).catch(() => siteRef.current.delete(o.id))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inhouseOn, siteTech?.userId, orders, ordersLoading])
+
+  async function autoOne(o) {
+    setBusyId(o.id)
+    try { const t = await autoAssignOrder(o, gid); setNotice(t ? `أُسندت إلى ${t.displayName || 'فني'}${t.userId === siteTech?.userId ? ' (فني الموقع)' : ''}` : 'لا فني مناسب — أُرسلت كمهمة إجبارية') } finally { setBusyId('') }
+  }
+
+  // Auto-distribution: while mode is آلي, any unassigned order gets assigned on sight.
+  const autoRunningRef = useRef(false)
+  useEffect(() => {
+    if (mode !== 'auto' || !gid || ordersLoading || autoRunningRef.current) return
+    if (unassigned.length === 0) return
+    const pending = sortByPriority(unassigned).filter((o) => !processingRef.current.has(o.id))
+    if (pending.length === 0) return
+    autoRunningRef.current = true
+    setRunning(true)
+    let assigned = 0
+    let forced = 0
+    ;(async () => {
+      for (const o of pending) {
+        processingRef.current.add(o.id)
+        const tech = await autoAssignOrder(o, gid)
+        if (tech) assigned++
+        else forced++
+      }
+      processingRef.current.clear()
+      setNotice(`تم التوزيع تلقائيًا: ${assigned} إسناد آلي · ${forced} إسناد إجباري`)
+    })().finally(() => {
+      autoRunningRef.current = false
+      setRunning(false)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, gid, ordersLoading, unassigned.length])
+
+  async function runAuto() {
+    setRunning(true)
+    setNotice('')
+    let assigned = 0
+    let forced = 0
+    try {
+      for (const o of sortByPriority(unassigned)) {
+        if (processingRef.current.has(o.id)) continue
+        processingRef.current.add(o.id)
+        const tech = await autoAssignOrder(o, gid)
+        if (tech) assigned++
+        else forced++
+      }
+      setNotice(`تم التوزيع: ${assigned} إسناد آلي · ${forced} إسناد إجباري`)
+    } finally {
+      processingRef.current.clear()
+      setRunning(false)
+    }
+  }
+
+  const allowed = isOwner || role === 'operations' || role === 'owner'
+  if (roleLoading) return <Centered>جارِ التحقق…</Centered>
+  // Someone who is simply not signed in used to meet a dead end here: a refusal and no way in. The
+  // shared screen says who they are signed in as, if anyone, and opens the sign-in.
+  if (!allowed) return <AccessDenied need="المالك ومشرف العمليات" />
+
+  return (
+    <div className="h-full overflow-y-auto pb-24 bg-[#090c14]" dir="rtl">
+      <header className="sticky top-0 z-20 bg-[#090c14]/90 backdrop-blur border-b border-white/10 pt-[var(--page-sat,env(safe-area-inset-top,0px))]">
+        <div className="max-w-6xl mx-auto w-full px-4 py-3 flex items-center gap-2 overflow-x-auto pl-24">
+          <button onClick={() => navigate('/staff')} className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center">
+            <ChevronRight size={18} className="text-slate-300" />
+          </button>
+          <div className="shrink-0 min-w-[140px]">
+            <p className="text-[11px] text-primary font-bold tracking-widest">غرفة العمليات</p>
+            <h1 className="font-display text-lg font-black text-white truncate">مركز توزيع الطلبات</h1>
+          </div>
+          {(isOwner || routing.opsCreate) && (
+            <button onClick={() => setManualOpen(true)} className="shrink-0 flex items-center gap-1.5 bg-emerald-500 text-black rounded-xl px-3 py-2 text-[11px] font-black">➕ <span>طلب من واتساب</span></button>
+          )}
+          <button onClick={() => navigate('/staff/twin')} className="shrink-0 flex items-center gap-1.5 bg-violet-500 text-white rounded-xl px-3 py-2 text-[11px] font-black">🏢 <span>المقر 3D</span></button>
+          <button onClick={() => navigate('/staff/wa-hub')} className="shrink-0 flex items-center gap-1.5 bg-emerald-500 text-black rounded-xl px-3 py-2 text-[11px] font-black"><MessageCircle size={14} /> <span className="hidden sm:inline">مركز الواتساب</span></button>
+        </div>
+      </header>
+
+      <div className="max-w-6xl mx-auto w-full px-4 pt-5 flex flex-col gap-5">
+        {/* KPI strip */}
+        <section className="grid grid-cols-3 md:grid-cols-6 gap-2">
+          {[
+            ['بانتظار الإسناد', unassigned.length, unassigned.length ? 'text-rose-300' : 'text-slate-300', 'unassigned'],
+            ['جارية', kpi.running, 'text-amber-300', 'running'],
+            ['مُسندة', kpi.assigned, 'text-sky-300', 'assigned'],
+            ['تمت اليوم', kpi.done, 'text-emerald-300', 'doneToday'],
+            ['لم تتم', kpi.failed, kpi.failed ? 'text-rose-300' : 'text-slate-300', 'failed'],
+            ['فنيون متاحون', `${kpi.techOn}/${profiles.length}`, 'text-emerald-300', 'techsOn'],
+          ].map(([l, v, c, k]) => (
+            // every tile opens what it counts (owner, 2026-11-22)
+            <button key={l} data-tile={k} data-tile-label={l} data-tile-value={v} onClick={() => navigate('/staff/admin/list/' + k)} className="rounded-xl bg-white/[0.04] border border-white/10 py-2.5 text-center hover:bg-white/[0.08] active:scale-95 transition"><p className={`text-xl font-black font-display ${c}`}>{v}</p><p className="text-[10px] text-slate-400 font-bold">{l} ←</p></button>
+          ))}
+        </section>
+
+        {/* Dispatch mode: manual / automatic */}
+        <section className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 order-last">
+          <div className="flex items-center gap-2 mb-4">
+            <SlidersHorizontal size={16} className="text-primary" />
+            <h2 className="text-white font-bold text-sm">أسلوب التوزيع</h2>
+          </div>
+
+          <div role="radiogroup" aria-label="أسلوب التوزيع" className="flex gap-2 mb-2">
+            <button type="button" role="radio" aria-checked={mode === 'manual'} onClick={() => pickMode('manual')}
+              className={`flex-1 rounded-xl py-3 text-sm font-black border-2 transition active:scale-95 ${mode === 'manual' ? 'bg-primary text-black border-white/70 shadow-lg' : 'bg-white/5 border-white/10 text-slate-300'}`}>
+              {mode === 'manual' ? '✓ ' : ''}يدوي{mode === 'manual' ? ' — مفعّل' : ''}
+            </button>
+            <button type="button" role="radio" aria-checked={mode === 'auto'} onClick={() => pickMode('auto')}
+              className={`flex-1 rounded-xl py-3 text-sm font-black border-2 transition active:scale-95 ${mode === 'auto' ? 'bg-emerald-500 text-black border-white/70 shadow-lg' : 'bg-white/5 border-white/10 text-slate-300'}`}>
+              {mode === 'auto' ? '✓ ' : ''}آلي{mode === 'auto' ? ' — مفعّل' : ''}
+            </button>
+          </div>
+          <p className="text-[11px] mb-4 text-slate-400">{mode === 'auto' ? 'التوزيع الآلي يعمل: كل طلب جديد يُسند فورًا لأنسب فني.' : 'التوزيع اليدوي: أنت تختار الفني لكل طلب من «إسناد يدوي».'}</p>
+          {modeErr && <p className="text-xs font-bold text-rose-400 mb-3">{modeErr}</p>}
+
+          {mode === 'auto' && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => updateSettings({ strategy: 'nearest' })}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold border ${strategy === 'nearest' ? 'bg-primary/20 border-primary text-primary' : 'bg-white/5 border-white/10 text-slate-400'}`}
+              >
+                <LocateFixed size={14} /> الأقرب جغرافيًا
+              </button>
+              <button
+                onClick={() => updateSettings({ strategy: 'capacity' })}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold border ${strategy === 'capacity' ? 'bg-primary/20 border-primary text-primary' : 'bg-white/5 border-white/10 text-slate-400'}`}
+              >
+                <Users size={14} /> حسب السعة اليومية
+              </button>
+              <button
+                onClick={() => updateSettings({ strategy: 'smart' })}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold border ${strategy === 'smart' ? 'bg-primary/20 border-primary text-primary' : 'bg-white/5 border-white/10 text-slate-400'}`}
+              >
+                <Sparkles size={14} /> مطابقة ذكية
+              </button>
+            </div>
+          )}
+          {mode === 'auto' && strategy === 'smart' && (
+            <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">الطلبات العاجلة تُوزَّع أولًا. ثم يُختار الفني حسب: الأقرب (موقعه المباشر)، المتصل الآن أونلاين، المتفرغ حاليًا، التخصص، عدد ما أنجزه، التقييم، وضغط العمل — مع الالتزام بالسعة اليومية. غير المتصلين يُختارون فقط إذا لم يتوفر أونلاين.</p>
+          )}
+
+          <div className="mt-4 rounded-xl bg-sky-500/[0.07] border border-sky-400/25 p-3 grid gap-2">
+            <p className="text-xs font-black text-sky-200">🏗️ فني الموقع</p>
+            <select value={settings?.siteTechId || ''} onChange={(e) => updateSettings({ siteTechId: e.target.value })} className="bg-white/10 border border-white/15 rounded-lg px-3 py-2 text-xs text-white">
+              <option value="">— بدون —</option>
+              {profiles.map((t) => <option key={t.userId} value={t.userId} className="text-black">{t.displayName || 'فني'}</option>)}
+            </select>
+            <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" checked={settings?.siteFallback !== false} onChange={(e) => updateSettings({ siteFallback: e.target.checked })} /> عند عدم وجود فنيين متاحين (أو كلهم مغلقون) تُرسل الطلبات إليه بدل الإسناد الإجباري</label>
+            <p className="text-[10px] text-slate-500">وعند تفعيل «هندمة الأعمال» تُحوَّل كل الطلبات الجديدة إليه تلقائيًا. لا يدخل في التوزيع العادي ولا تحدّه السعة اليومية.{inhouseOn && !siteTech ? ' ⚠️ الوضع مفعّل ولا يوجد فني موقع محدد.' : ''}</p>
+          </div>
+          {/* «الفني الاحتياطي» + follow-up minutes + auto-transfer (owner, 2026-11-23 — ideas 1, 3, 8, 9). Read by the server
+              (Mutqan_Dispatch / Mutqan_Watch) and by lib/orderWatch.js on the screens. */}
+          <div className="mt-3 rounded-xl bg-amber-500/[0.07] border border-amber-400/25 p-3 grid gap-2" data-dispatch-followup>
+            <p className="text-xs font-black text-amber-200">🛟 الفني الاحتياطي والمتابعة</p>
+            <label className="grid gap-1 text-[11px] text-slate-300">الفني الاحتياطي — بياخد الطلب لو كل الفنيين مشغولين أو برا منطقتهم أو ساعات شغلهم
+              <select value={settings?.backupTechId || ''} onChange={(e) => updateSettings({ backupTechId: e.target.value })} className="bg-white/10 border border-white/15 rounded-lg px-3 py-2 text-xs text-white" data-backup-tech>
+                <option value="">— بدون —</option>
+                {profiles.filter((t) => t.userId !== settings?.siteTechId).map((t) => <option key={t.userId} value={t.userId} className="text-black">{t.displayName || 'فني'}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" checked={settings?.autoTransfer !== false} onChange={(e) => updateSettings({ autoTransfer: e.target.checked })} data-auto-transfer /> في الوضع الآلي: لو الفني ما قبلش في المهلة، الطلب يتحوّل للفني اللي بعده لوحده (لحد 3 مرات)</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[['acceptMinutes', 'مهلة قبول الفني', 5], ['unconfirmedMinutes', 'تنبيه «ما اتأكدش» بعد', 10], ['stallMinutes', 'تنبيه «متعطل» بعد', 60], ['lateMinutes', 'تنبيه «متأخر عن الموعد» بعد', 30]].map(([k, l, d]) => (
+                <label key={k} className="grid gap-1 text-[10px] text-slate-400">{l} (دقيقة)
+                  <input type="number" min="1" max="600" value={settings?.[k] ?? d} onChange={(e) => updateSettings({ [k]: Math.max(1, Math.min(600, Number(e.target.value) || d)) })} className="bg-white/10 border border-white/15 rounded-lg px-2 py-1.5 text-xs text-white" data-watch-min={k} />
+                </label>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500">التنبيهات بتوصل للعمليات والمشرف مرة واحدة لكل مشكلة، والطلبات دي بتظهر في «🚨 محتاج تدخل» في لوحة الطلبات.</p>
+          </div>
+          <button
+            onClick={runAuto}
+            disabled={running || unassigned.length === 0}
+            className="mt-4 w-full flex items-center justify-center gap-2 bg-primary text-black font-display font-black rounded-xl py-3 disabled:opacity-40 active:scale-[0.99] transition-transform"
+          >
+            {running ? <RefreshCw size={16} className="animate-spin" /> : <Zap size={16} />}
+            توزيع الطلبات الجديدة آليًا الآن ({unassigned.length})
+          </button>
+          {notice && <p className="text-emerald-400 text-xs font-bold text-center mt-2">{notice}</p>}
+        </section>
+
+
+        {isOwner && sp.get('settings') === '1' && (
+          <section className={`bg-white/[0.04] border border-white/10 rounded-2xl p-4 ${DESK_OPS ? 'order-last' : ''}`}>
+            <div className="flex items-center gap-2 mb-3"><Radar size={16} className="text-primary" /><h2 className="text-white font-bold text-sm">استقبال الطلبات (المالك)</h2></div>
+            <div className="flex gap-2 flex-wrap">
+
+              <button onClick={() => routing.setMode(ROUTING_NEXT[routing.mode]).catch(() => {})} className={`shrink-0 rounded-xl px-3 py-2 text-[11px] font-black border ${routing.mode === 'both' ? 'bg-emerald-400 text-black border-emerald-200' : routing.mode === 'operations' ? 'bg-amber-400 text-black border-amber-200' : 'bg-white/5 border-white/10 text-slate-200'}`}>
+                📋 توجيه الطلبات: {ROUTING_LABEL[routing.mode]}
+              </button>
+              <button onClick={() => routing.setOpsCreate(!routing.opsCreate).catch(() => {})} className={`shrink-0 rounded-xl px-3 py-2 text-[11px] font-black border ${routing.opsCreate ? 'bg-emerald-400 text-black border-emerald-200' : 'bg-white/5 border-white/10 text-slate-200'}`}>
+                ➕ إنشاء طلبات يدوية: {routing.opsCreate ? 'مفعّل' : 'متوقف'}
+              </button>
+            <button onClick={() => setInhouse(!inhouseOn).catch(() => {})} className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-black border ${inhouseOn ? 'bg-sky-500 text-black border-sky-300' : 'bg-white/5 border-white/10 text-slate-200'}`}>
+              🏗️ هندمة الأعمال: {inhouseOn ? 'مفعّلة' : 'متوقفة'}
+            </button>
+            </div>
+            <TechShareBox />
+            <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">«لمشرف العمليات»: الطلب يدخل غرفة العمليات مباشرة دون واتساب. «للواتساب»: يكمل العميل على واتساب. الطلبات اليدوية: تسمح لمشرف العمليات بتحويل محادثات الواتساب إلى طلبات.</p>
+          </section>
+        )}
+
+        {/* Tabs */}
+        <div className="flex gap-1.5 overflow-x-auto sticky top-[68px] z-10 bg-[#090c14]/95 backdrop-blur py-1.5">
+          <div role="radiogroup" aria-label="أسلوب التوزيع" className="shrink-0 flex rounded-xl bg-white/5 border border-white/10 p-1 ml-1" data-mode-quick>
+            <button type="button" role="radio" aria-checked={mode === 'manual'} onClick={() => pickMode('manual')} className={`rounded-lg px-3 py-1.5 text-xs font-black ${mode === 'manual' ? 'bg-primary text-black' : 'text-slate-300'}`}>يدوي</button>
+            <button type="button" role="radio" aria-checked={mode === 'auto'} onClick={() => pickMode('auto')} className={`rounded-lg px-3 py-1.5 text-xs font-black ${mode === 'auto' ? 'bg-emerald-500 text-black' : 'text-slate-300'}`}>آلي</button>
+          </div>
+          {TABS.filter(([id]) => MAIN_TABS.includes(id) || id === tab).map(([id, label, n]) => (
+            <button key={id} data-tab={id} onClick={() => setTab(id)} className={`shrink-0 rounded-xl px-4 py-2 text-xs font-black border ${tab === id ? 'bg-primary text-black border-primary' : 'bg-white/5 border-white/10 text-slate-300'}`}>
+              {label}{n(kpi, unassigned, alerts, handoffs, missedCalls) ? <span className="mr-1.5 inline-block min-w-[18px] rounded-full bg-rose-500 text-white text-[10px] px-1">{n(kpi, unassigned, alerts, handoffs, missedCalls)}</span> : null}
+            </button>
+          ))}
+        </div>
+
+        {Object.keys(brandsSeen).length > 1 || Object.keys(brandsSeen).some((k) => !brandMeta(k)?.core) ? (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 -mt-1" data-brand-filter>
+            <button onClick={() => setBrandF('all')} className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold border ${brandF === 'all' ? 'bg-primary text-black border-primary' : 'bg-white/5 border-white/10 text-slate-300'}`}>كل المواقع ({orders.length})</button>
+            {Object.entries(brandsSeen).sort((x, y) => y[1] - x[1]).map(([id, n]) => <button key={id} onClick={() => setBrandF(id)} className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-bold border ${brandF === id ? 'border-white/60 bg-white/15 text-white' : 'bg-white/5 border-white/10 text-slate-300'}`}><i className="inline-block w-1.5 h-1.5 rounded-full ml-1" style={{ background: brandMeta(id)?.color || '#64748b' }} />{brandMeta(id)?.name || id} ({n})</button>)}
+          </div>
+        ) : null}
+
+        {(tab === 'live' || tab === 'orders') && <MapFirst mode={tab === 'orders' ? 'list' : 'map'} orders={viewOrders} profiles={profiles} canAssign={role !== 'supervisor'} busyId={busyId} onAssign={setAssignOrder} onAuto={autoOne} onOpenOrder={(o) => navigate(`/staff/order/${o.id}`)} />}
+        {tab === 'map' && <OpsMap orders={viewOrders} profiles={profiles} crm={crmRows} onAssign={setAssignOrder} onAuto={autoOne} onOpenOrder={(o) => navigate(`/staff/order/${o.id}`)} />}
+        <FieldPostsBoard profiles={profiles} />
+        {tab === 'intake' && <IntakeBoard orders={viewOrders} mode={mode} busyId={busyId} onAssign={setAssignOrder} onAuto={autoOne} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onLocate={() => setTab('map')} />}
+        {tab === 'board' && <DispatchBoard orders={viewOrders} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onReassign={setAssignOrder} />}
+        {tab === 'list' && <OrdersList orders={viewOrders} profiles={profiles} canAssign={role !== 'supervisor'} onAssign={setAssignOrder} />}
+        {tab === 'table' && <OrdersTable orders={viewOrders} onOpen={(o) => navigate(`/staff/order/${o.id}`)} onAssign={setAssignOrder} />}
+        {tab === 'calls' && <CallsTab log={callLog} contacts={callContacts} />}
+        {tab === 'techs' && (
+          <>
+            <TechTable profiles={profiles} orders={orders} sharePct={sharePctVal} />
+        {/* Technician board */}
+        <section className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Radio size={16} className="text-primary" />
+            <h2 className="text-white font-bold text-sm">لوحة الفنيين</h2>
+          </div>
+          {profiles.length === 0 ? (
+            <p className="text-slate-500 text-xs text-center py-4">لا يوجد فنيون سجّلوا ملفاتهم بعد</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {profiles.map((t) => {
+                const rem = remainingCapacity(t, orders)
+                return (
+                  <div key={t.userId} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-white font-bold text-sm truncate">{t.displayName || 'فني'}</p>
+                      <p className="text-[11px] text-slate-500">{serviceScopeLabel(t.scope)}</p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className={`text-xs font-black ${rem > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {rem} / {capacityOf(t)}
+                      </span>
+                      <span className={`w-2 h-2 rounded-full ${t.active === false ? 'bg-slate-600' : rem > 0 ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+
+        {(inhouseOn || inhouseList.length > 0) && (
+          <section>
+            <h2 className="text-sky-300 font-bold text-sm mb-1">تنفيذ داخلي ({inhouseList.length})</h2>
+            <p className="text-[11px] text-slate-500 mb-3">{inhouseOn ? `الوضع مفعّل: الطلبات الجديدة تُنفَّذ بواسطة الشركة${siteTech ? ` عبر فني الموقع (${siteTech.displayName || 'فني'})` : ' — حدّد «فني الموقع» لإسنادها تلقائيًا'}، وغير محتسبة في الرصيد أو النسبة أو الدفع.` : 'طلبات قيد التنفيذ الداخلي.'}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+              {inhouseList.map((o) => (
+                <OrderCard key={o.id} order={o} showClient dark onClick={() => navigate(`/staff/order/${o.id}`)} />
+              ))}
+            </div>
+          </section>
+        )}
+
+          </>
+        )}
+        {tab === 'alerts' && (
+          <>
+        {/* Human handoff inbox from MUTQAN AI */}
+        <section className="bg-amber-500/[0.06] border border-amber-500/25 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Headset size={16} className="text-amber-400" />
+            <h2 className="text-white font-bold text-sm">محادثات محوّلة من MUTQAN AI ({handoffs.length})</h2>
+          </div>
+          {handoffs.length === 0 ? (
+            <p className="text-slate-500 text-xs text-center py-3">لا توجد محادثات بانتظار موظف</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {handoffs.map((h) => (
+                <button
+                  key={h.id}
+                  onClick={() => navigate(`/staff/handoff/${h.id}`)}
+                  className="text-right bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-3 py-2.5 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-white font-bold text-sm truncate">{h.customerName}</p>
+                    <span className={`text-[10px] font-black shrink-0 ${h.status === 'open' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                      {h.status === 'open' ? 'بانتظار موظف' : `مع ${h.agentName || 'موظف'}`}
+                    </span>
+                  </div>
+                  {h.reason && h.reason !== 'human' && (
+                    <span className={`inline-block mt-1 text-[10px] font-black rounded-md px-1.5 py-0.5 ${h.priority === 'high' ? 'bg-rose-500/20 text-rose-300' : 'bg-white/10 text-slate-300'}`}>
+                      {h.priority === 'high' ? '⚠️ ' : ''}{escalationLabel(h.reason)}
+                    </span>
+                  )}
+                  <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{h.summary}</p>
+                  {h.service && <p className="text-[10px] text-primary mt-1 font-bold">{specialtyLabel(h.service)}</p>}
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Follow-up & escalation alerts */}
+        {alerts.length > 0 && (
+          <section className="bg-rose-500/[0.06] border border-rose-500/25 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle size={16} className="text-rose-400" />
+              <h2 className="text-white font-bold text-sm">تصعيدات وتنبيهات المتابعة ({alerts.length})</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {alerts.map((o) => (
+                <button key={o.id} onClick={() => navigate(`/staff/order/${o.id}`)} className="text-right bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-white font-bold text-sm truncate">{specialtyLabel(o.specialtyId)} · {o.clientName}</p>
+                    <span className="text-[10px] font-black text-rose-300 shrink-0">{escalationLabel(o.escalation.reason)}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">الجهة: {handlerLabel(o.escalation.level)}{o.technicianName ? ` · الفني: ${o.technicianName}` : ''}</p>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+          </>
+        )}
+      </div>
+      {assignOrder && (
+        <AssignModal order={assignOrder} profiles={profiles.filter((t) => !t.isSite)} orders={orders} siteTech={siteTech} parties={settings?.externalParties || []}
+          onAssign={(o, t) => linkTech(o, t, 'operations')}
+          onSite={(o) => assignToSite(o)}
+          onWhatsApp={async (o) => { openWhatsApp('', buildDispatchMessage(o, { appUrl: orderLink(o) })); await markForwarded(o, 'whatsapp') }}   // WhatsApp opens first, inside the tap (browsers block it after a wait)
+          onExternal={async (o, party) => {
+            openWhatsApp(party.phone, buildDispatchMessage(o, { appUrl: orderLink(o) }))
+            const list = [party, ...(settings?.externalParties || []).filter((x) => x.phone !== party.phone)].slice(0, 12)
+            updateSettings({ externalParties: list }).catch(() => {})
+            await markForwarded(o, 'external', party)
+          }}
+          onClose={() => setAssignOrder(null)} />
+      )}
+      {manualOpen && <ManualOrderModal by={role} onClose={() => setManualOpen(false)} />}
+    </div>
+  )
+}
+
+function Centered({ children }) {
+  return <div className="h-full flex items-center justify-center text-slate-500 text-sm bg-[#090c14]" dir="rtl">{children}</div>
+}
+
+// Owner: the technician's share of each completed service (percent). Empty = technicians do not see earnings figures.
+function TechShareBox() {
+  const { data } = useLiveShared('tech_pay', { limit: 5 })
+  const cur = (data || [])[0]
+  const [v, setV] = useState('')
+  const [c, setC] = useState('')
+  const [saved, setSaved] = useState(false)
+  useEffect(() => { if (cur && v === '') { setV(String(cur.sharePct ?? '')); setC(String(cur.cashSharePct ?? '')) } }, [cur]) // eslint-disable-line
+  const save = async () => {
+    const n = Number(v); if (!(n >= 0 && n <= 100)) return
+    const k = c === '' ? '' : Number(c); if (k !== '' && !(k >= 0 && k <= 100)) return
+    const gid = await team.groupId()
+    // keep the rest of the document (penalty rules live here too)
+    await db.upsertShared('tech_pay', { ...(cur || {}), id: undefined, sharePct: n, cashSharePct: k, updatedAt: new Date().toISOString() }, 'default', { groupId: gid, visibleTo: 'group', writableBy: 'admins' })
+    setSaved(true); setTimeout(() => setSaved(false), 1800)
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] font-bold text-slate-200">
+      💰 نسبة الفني لو العميل حوّل / شبكة
+      <input value={v} onChange={(e) => setV(e.target.value)} inputMode="numeric" placeholder="مثال 80" className="w-14 bg-white/10 rounded-lg px-2 py-1 text-center text-white" dir="ltr" />%
+      <span className="text-slate-400">· لو دفع كاش</span>
+      <input value={c} onChange={(e) => setC(e.target.value)} inputMode="numeric" placeholder="مثال 75" className="w-14 bg-white/10 rounded-lg px-2 py-1 text-center text-white" dir="ltr" />%
+      <button onClick={save} className="rounded-lg bg-primary text-black font-black px-3 py-1">{saved ? 'تم ✓' : 'حفظ'}</button>
+    </div>
+  )
+}

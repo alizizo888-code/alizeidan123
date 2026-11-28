@@ -1,0 +1,87 @@
+# Chatwoot — the team's inbox (phone apps, assignment, canned replies), on the VPS beside n8n and the WhatsApp gateway.
+# Deployed over Hostinger's Docker Manager (project «chatwoot»); nobody types a command.
+# Reached at https://chat.oxygen11.com through the Traefik that already serves n8n (same Docker network, same certificates).
+# Every service has a memory ceiling, so Chatwoot can never starve the WhatsApp gateway (1 CPU / 4 GB server).
+# The secrets come from the project's environment (set at deploy time, never committed):
+#   SECRET_KEY_BASE, POSTGRES_PASSWORD, REDIS_PASSWORD
+x-base: &base
+  image: chatwoot/chatwoot:latest
+  restart: always
+  environment:
+    - RAILS_ENV=production
+    - NODE_ENV=production
+    - INSTALLATION_ENV=docker
+    - FRONTEND_URL=https://chat.oxygen11.com
+    - DEFAULT_LOCALE=ar
+    - SECRET_KEY_BASE=${SECRET_KEY_BASE}
+    - POSTGRES_HOST=postgres
+    - POSTGRES_USERNAME=chatwoot
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    - POSTGRES_DATABASE=chatwoot
+    - REDIS_URL=redis://redis:6379
+    - REDIS_PASSWORD=${REDIS_PASSWORD}
+    - ENABLE_ACCOUNT_SIGNUP=false
+    - ACTIVE_STORAGE_SERVICE=local
+    - RAILS_MAX_THREADS=3
+    - WEB_CONCURRENCY=1
+    - SIDEKIQ_CONCURRENCY=3
+    - OWNER_EMAIL=${OWNER_EMAIL:-}
+    - LINK_URL=${LINK_URL:-}
+  volumes:
+    - cw_storage:/app/storage
+  depends_on: [postgres, redis]
+
+services:
+  rails:
+    <<: *base
+    entrypoint: docker/entrypoints/rails.sh
+    command: ['sh', '-c', 'bundle exec rails db:chatwoot_prepare && bundle exec rails s -p 3000 -b 0.0.0.0']
+    mem_limit: 1100m
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=n8n_default
+      - traefik.http.routers.chatwoot.rule=Host(`chat.oxygen11.com`)
+      - traefik.http.routers.chatwoot.entrypoints=web,websecure
+      - traefik.http.routers.chatwoot.tls=true
+      - traefik.http.routers.chatwoot.tls.certresolver=mytlschallenge
+      - traefik.http.services.chatwoot.loadbalancer.server.port=3000
+    networks: [default, n8n_default]
+  sidekiq:
+    <<: *base
+    command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
+    mem_limit: 750m
+  # One-off: links the owner's Chatwoot account to the bridge on oxygen11.com (reads the owner's access token and
+  # sends it over HTTPS with the bridge's secret), then exits. Harmless to run again; removed once linked.
+  linker:
+    <<: *base
+    restart: 'no'
+    command: ['bundle', 'exec', 'rails', 'runner', "u = User.find_by(email: ENV.fetch('OWNER_EMAIL')); abort('no owner user') unless u; t = (u.access_token || u.create_access_token).token; a = u.accounts.first&.id; require 'net/http'; r = Net::HTTP.post(URI(ENV.fetch('LINK_URL')), { event: 'mutqan_link', token: t, account: a }.to_json, 'Content-Type' => 'application/json'); puts 'mutqan link: ' + r.code + ' ' + r.body.to_s[0, 160]"]
+    mem_limit: 700m
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      - POSTGRES_DB=chatwoot
+      - POSTGRES_USER=chatwoot
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - cw_pg:/var/lib/postgresql/data
+    mem_limit: 400m
+  redis:
+    image: redis:alpine
+    restart: always
+    command: ['sh', '-c', 'redis-server --requirepass "$$REDIS_PASSWORD" --maxmemory 96mb --maxmemory-policy allkeys-lru']
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - cw_redis:/data
+    mem_limit: 128m
+
+networks:
+  n8n_default:
+    external: true
+
+volumes:
+  cw_storage: {}
+  cw_pg: {}
+  cw_redis: {}

@@ -1,0 +1,92 @@
+<?php
+// The 12-site network: host -> brand, runtime brand config, per-brand contacts, order stamping (client cannot claim another face).
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+putenv('MQ_DATA=' . sys_get_temp_dir() . '/mutqan-net-' . getmypid() . '-' . bin2hex(random_bytes(4)));
+require __DIR__ . '/wpshim.php';
+Mutqan_Store::maybe_install();
+$ok = true; $t = function ($n, $c, $x = null) use (&$ok) { echo ($c ? 'PASS ' : 'FAIL ') . "network: $n" . ($c ? '' : '  -> ' . json_encode($x, JSON_UNESCAPED_UNICODE)) . "\n"; if (!$c) { $ok = false; } };
+$R = Oxygen_Network::registry();
+$t('22 faces: 2 core + 10 sites + 10 twins', count($R) === 22 && count(Oxygen_Network::satellites()) === 20 && count(array_filter($R, function ($b) { return !empty($b['twin']); })) === 10, count($R));
+$t('every twin points at a real site, one each', count(array_unique(array_column(array_filter($R, function ($b) { return !empty($b['twin']); }), 'twin'))) === 10 && !array_filter($R, function ($b) use ($R) { return !empty($b['twin']) && (!isset($R[$b['twin']]) || !empty($R[$b['twin']]['twin']) || !empty($R[$b['twin']]['core'])); }));
+$labels = array_column(array_filter($R, function ($b) { return empty($b['core']); }), 'label');
+$t('labels unique + latin', count(array_unique($labels)) === count($labels) && !array_filter($labels, function ($l) { return !preg_match('/^[a-z0-9-]{1,63}$/', $l) && $l !== ''; }), $labels);
+$names = array_column($R, 'name');
+$t('names unique', count(array_unique($names)) === 22);
+$cols = array_column($R, 'color'); $t('colours unique (distinct icons)', count(array_unique($cols)) === 22);
+foreach (['النخبة', 'الريادة', 'البراعة', 'الصفوة', 'التميز', 'نسمة الحجاز', 'واحة الراحة', 'الأمان', 'الكفاءة', 'الجودة', 'المتخصص', 'المهندس', 'الأقصى', 'رعد السماء', 'المتمكن', 'الخبير', 'هوم سيرفيس', 'ابتكار راحة', 'المعتمد', 'المصرية'] as $n) { $t("name $n", in_array($n, $names, true)); }
+$t('host oxygen', Oxygen_Network::id_for_host('oxygen11.com') === 'oxygen' && Oxygen_Network::id_for_host('www.oxygen11.com') === 'oxygen');
+$t('host mutqan', Oxygen_Network::id_for_host('mutqan.oxygen11.com') === 'mutqan');
+$t('host satellite', Oxygen_Network::id_for_host('raad-maintenance-general-contracting.oxygen11.com') === 'raad' && Oxygen_Network::id_for_host('RAAD-MAINTENANCE-GENERAL-CONTRACTING.oxygen11.com:443') === 'raad');
+$t('unknown host -> hub', Oxygen_Network::id_for_host('evil.example.com') === 'oxygen' && Oxygen_Network::id_for_host('x.oxygen11.com') === 'oxygen');
+$c = Oxygen_Network::brand_config('raad');
+$t('config', $c['name'] === 'رعد السماء' && $c['full'] === 'رعد السماء للصيانة والمقاولات العامة' && $c['core'] === false && preg_match('/^#[0-9a-f]{6}$/', $c['color']), $c);
+$t('core flag', Oxygen_Network::brand_config('mutqan')['core'] === true && Oxygen_Network::brand_config('oxygen')['core'] === true);
+$t('api base: every site -> hub (one operations room), only the hub answers locally', Oxygen_Network::api_base('aqsa') === 'https://oxygen11.com/wp-json/mutqan/v1' && Oxygen_Network::api_base('mutqan') === 'https://oxygen11.com/wp-json/mutqan/v1' && Oxygen_Network::api_base('oxygen') === '');
+$sales = class_exists('Mutqan_Lines') ? array_map(function ($r) { return $r['phone']; }, Mutqan_Lines::pool('sales')) : [Oxygen_Network::DEFAULT_PHONE, Oxygen_Network::DEFAULT_PHONE2];
+$kc = Oxygen_Network::contacts('khabeer');
+$t('every satellite starts on two different company sales numbers (rotated by Mutqan_Lines); core sites keep their own', in_array($kc['wa'], $sales, true) && in_array($kc['wa2'], $sales, true) && $kc['wa'] !== $kc['wa2'] && $kc['phone'] === $kc['wa'] && in_array(Oxygen_Network::contacts('jawda')['wa2'], $sales, true) && Oxygen_Network::DEFAULT_PHONE === '9' . '66549423050' && Oxygen_Network::DEFAULT_PHONE2 === '9' . '66536554731' && Oxygen_Network::contacts('mutqan') === ['phone' => '', 'wa' => '', 'wa2' => ''], $kc);
+Oxygen_Network::set_contacts('khabeer', '+966 50 123 4567');
+$t('own number replaces the defaults (digits only, wa follows phone, no second line)', Oxygen_Network::contacts('khabeer') === ['phone' => '966501234567', 'wa' => '966501234567', 'wa2' => ''], Oxygen_Network::contacts('khabeer'));
+$t('unknown id refused', Oxygen_Network::set_contacts('nope', '1') === false && Oxygen_Network::clean_brand('nope') === 'oxygen');
+
+// the JS mirror (desk filter chips) must equal the PHP registry
+$js = file_get_contents(dirname(__DIR__, 2) . '/mutqan-app/src/lib/netBrand.js');
+$jsBlog = substr($js, (int) strpos($js, 'export const BLOG_NETWORK'));
+$js = substr($js, 0, (int) strpos($js, 'export const BLOG_NETWORK') ?: strlen($js));
+preg_match_all("/\\{ id: '(\\w+)', name: '([^']+)', color: '(#[0-9a-f]{6})'/u", $js, $mm, PREG_SET_ORDER);
+$jsmap = []; foreach ($mm as $m) { $jsmap[$m[1]] = [$m[2], $m[3]]; }
+$same = count($jsmap) === 22;
+foreach ($R as $id => $b) { $n = $b['name'] === 'متقن' ? 'مُتقن' : $b['name']; if (!isset($jsmap[$id]) || $jsmap[$id][1] !== $b['color'] || ($id !== 'mutqan' && $jsmap[$id][0] !== $b['name'])) { $same = false; } }
+$t('JS registry mirrors PHP (ids, names, colours)', $same, $jsmap);
+
+// orders carry the face they came from
+$cust = ['id' => 'anon-cust000001', 'role' => null, 'kind' => 'anon', 'powers' => []];
+$ops = ['id' => 'u-ops', 'role' => 'operations', 'kind' => 'user', 'powers' => ['read', 'write', 'manage'], 'name' => 'x'];
+$o = ['visibleTo' => 'creator-and-admin', 'writableBy' => 'admins'];
+$mk = function ($p, $extra = []) use ($o) { return Mutqan_Store::insert('orders', array_merge(['specialtyId' => 'ac', 'clientName' => 'س', 'clientPhone' => '0501234567', 'address' => 'ج'], $extra), null, $o, $p, false); };
+$_SERVER['HTTP_ORIGIN'] = 'https://homeservice-maintenance-general-contracting.oxygen11.com';
+$a = $mk($cust, ['brand' => 'raad']);
+$t('customer cannot claim another face: origin wins', $a['brand'] === 'homeservice', $a['brand'] ?? null);
+$_SERVER['HTTP_ORIGIN'] = 'https://evil.example.com';
+$b = $mk($cust); $t('foreign origin -> hub brand', $b['brand'] === 'oxygen', $b['brand'] ?? null);
+unset($_SERVER['HTTP_ORIGIN']);
+$c2 = $mk($ops, ['brand' => 'misriya']); $t('staff may set the face (manual order)', $c2['brand'] === 'misriya', $c2['brand'] ?? null);
+$c3 = $mk($ops, ['brand' => 'bogus']); $t('staff with a bogus face -> current site', $c3['brand'] === 'oxygen', $c3['brand'] ?? null);
+$u = Mutqan_Store::update('orders', $a['id'], ['brand' => 'aqsa', 'address' => 'جدة'], $cust);
+$t('customer cannot change the face afterwards', $u['brand'] === 'homeservice' && $u['address'] === 'جدة', $u['brand'] ?? null);
+
+// the report: public summary per site, one combined text, sent at the configured hours only
+if (!function_exists('wp_date')) { function wp_date($f) { return date($f); } }
+require_once dirname(__DIR__, 2) . '/oxygen-ac-automation/includes/class-oxygen-network-report.php';
+$fetch = function ($host) { if ($host === 'raad-maintenance-general-contracting.oxygen11.com') { return null; } return ['today' => 12, 'total' => 340, 'quota' => 180, 'phase' => 'burst', 'day_no' => 2, 'gsc_tokens' => 0]; };
+$rows = Oxygen_Network_Report::collect($fetch);
+$t('collect asks the 21 other sites', count($rows) === 21 && !isset($rows['oxygen']));
+$txt = Oxygen_Network_Report::format($rows, ['brand' => 'أكسجين', 'today' => 60, 'total' => 9000], 12);
+$t('report text: counts, down site, hub line, GSC warning', strpos($txt, 'يعمل 20 من 21') !== false && strpos($txt, '🔴 لا يستجيب: رعد السماء') !== false && strpos($txt, 'المركز (أكسجين): 60') !== false && strpos($txt, '12/180') !== false && strpos($txt, 'بلا GSC') !== false, $txt);
+$_SERVER['HTTP_X_SITE_HOST'] = 'oxygen11.com';
+$sent = Oxygen_Network_Report::maybe_send($fetch, 12, false, ['brand' => 'أكسجين', 'today' => 1, 'total' => 1]);
+$t('sends at a configured hour', is_string($sent) && strpos($sent, 'تقرير شبكة المواقع') !== false);
+$t('...but not twice in the same hour', Oxygen_Network_Report::maybe_send($fetch, 12, false, ['brand' => 'x', 'today' => 0, 'total' => 0]) === false);
+$t('...and not at an unconfigured hour', Oxygen_Network_Report::maybe_send($fetch, 3, false, ['brand' => 'x', 'today' => 0, 'total' => 0]) === false);
+$t('five reports a day by default', Oxygen_Network_Report::settings()['hours'] === [9, 12, 15, 18, 21]);
+$_SERVER['HTTP_ORIGIN'] = 'https://evil.example.com';
+$_SERVER['REMOTE_ADDR'] = '10.9.' . mt_rand(1, 250) . '.' . mt_rand(1, 250);
+$e = $mk($cust, ['brand' => 'raad']); $t('foreign origin cannot claim a face', $e['brand'] === 'oxygen', $e['brand'] ?? null);
+$_SERVER['HTTP_ORIGIN'] = 'https://blog-aqsa.oxygen11.com';
+$f = $mk($cust); $t('Blogger face blog-aqsa -> aqsa', $f['brand'] === 'aqsa', $f['brand'] ?? null);
+$_SERVER['HTTP_ORIGIN'] = 'https://blog.oxygen11.com';
+$c3 = array_merge($cust, ['id' => 'anon-cust000003']); $g = $mk($c3); $t('Blogger face blog. -> oxygen', $g['brand'] === 'oxygen', $g['brand'] ?? null);
+$_SERVER['HTTP_ORIGIN'] = 'https://oxygen11.com';
+$h = $mk($cust, ['brand' => 'misriya']); $t('hub app ?via=misriya keeps the tag', $h['brand'] === 'misriya', $h['brand'] ?? null);
+$_SERVER['HTTP_ORIGIN'] = 'https://mutqan.oxygen11.com';
+$i = $mk(['id' => 'anon-cust000002', 'role' => null, 'kind' => 'anon', 'powers' => []], ['brand' => 'misriya']); $t('other faces still cannot claim', $i['brand'] === 'mutqan', $i['brand'] ?? null);
+$_SERVER['REMOTE_ADDR'] = '10.9.' . mt_rand(1, 250) . '.' . mt_rand(1, 250); $_SERVER['HTTP_ORIGIN'] = 'https://blog-nasim.oxygen11.com';
+$c3 = array_merge($cust, ['id' => 'anon-cust000003']); $g = $mk($c3); $t('Blogger-only face blog-nasim -> nasim', $g['brand'] === 'nasim', $g['brand'] ?? null);
+$_SERVER['HTTP_ORIGIN'] = 'https://oxygen11.com';
+$_SERVER['REMOTE_ADDR'] = '10.8.' . mt_rand(1, 250) . '.' . mt_rand(1, 250); $c4 = array_merge($cust, ['id' => 'anon-cust000004']); $g2 = $mk($c4, ['brand' => 'bina']); $t('hub app ?via=bina keeps the Blogger-only tag', $g2['brand'] === 'bina', $g2['brand'] ?? null);
+preg_match_all("/\\{ id: '(\\w+)', name: '([^']+)', color: '(#[0-9a-f]{6})'/u", $jsBlog, $bm, PREG_SET_ORDER);
+$bb = Oxygen_Network::blog_brands(); $sameB = count($bm) === count($bb) && count($bb) === 22; foreach ($bm as $m) { if (!isset($bb[$m[1]]) || $bb[$m[1]]['name'] !== $m[2] || $bb[$m[1]]['color'] !== $m[3]) { $sameB = false; } }
+$t('JS Blogger-only list mirrors PHP (22)', $sameB);
+$t('brand() resolves Blogger-only names', (Oxygen_Network::brand('shams')['name'] ?? '') === 'شمس الحجاز');
+echo $ok ? "ALL PASSED\n" : "SOME FAILED\n";
+exit($ok ? 0 : 1);

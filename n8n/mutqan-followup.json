@@ -1,0 +1,379 @@
+{
+ "name": "متقن — متابعة الأوردرات الجاهزة",
+ "nodes": [
+  {
+   "id": "93b67a8a-2da8-4dab-b8a6-a2ac136e3a49",
+   "name": "أحداث متقن",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 2,
+   "position": [
+    0,
+    0
+   ],
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "mutqan",
+    "options": {}
+   },
+   "webhookId": "c437b354-0584-4e3e-8443-4be487852375"
+  },
+  {
+   "id": "50327396-1a3a-4825-aa78-c343d17a252f",
+   "name": "الإعدادات",
+   "type": "n8n-nodes-base.set",
+   "typeVersion": 3.4,
+   "position": [
+    220,
+    0
+   ],
+   "parameters": {
+    "assignments": {
+     "assignments": [
+      {
+       "id": "s1",
+       "name": "site",
+       "value": "https://oxygen11.com/wp-json/mutqan/v1/n8n",
+       "type": "string"
+      },
+      {
+       "id": "s2",
+       "name": "secret",
+       "value": "PASTE_SECRET_FROM_APP",
+       "type": "string"
+      }
+     ]
+    },
+    "options": {}
+   }
+  },
+  {
+   "id": "bf05ff44-d4fd-4253-942d-5148e47c7eff",
+   "name": "أوردر جاهز؟",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    660,
+    0
+   ],
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "typeValidation": "loose"
+     },
+     "combinator": "and",
+     "conditions": [
+      {
+       "id": "c1",
+       "leftValue": "={{ $('أحداث متقن').first().json.body.event }}",
+       "rightValue": "order_ready",
+       "operator": {
+        "type": "string",
+        "operation": "equals"
+       }
+      }
+     ]
+    },
+    "options": {}
+   }
+  },
+  {
+   "id": "3802d954-fb3f-4d05-b354-0cbe4b6a3f08",
+   "name": "استنى 30 دقيقة",
+   "type": "n8n-nodes-base.wait",
+   "typeVersion": 1.1,
+   "position": [
+    880,
+    -100
+   ],
+   "parameters": {
+    "amount": 30,
+    "unit": "minutes"
+   },
+   "webhookId": "c01d5f98-9a8d-4307-9f92-d35cb23edbcd"
+  },
+  {
+   "id": "732b3848-ab7b-4443-bf30-3607cc065d8a",
+   "name": "حالة الطلب body",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1100,
+    -100
+   ],
+   "parameters": {
+    "jsCode": "const body = JSON.stringify({ op: 'order', order: String($('أحداث متقن').first().json.body.data.order.number || $('أحداث متقن').first().json.body.data.order.id) });\nreturn [{ json: { body } }];"
+   }
+  },
+  {
+   "id": "c9ed3574-0f72-478f-87eb-b453e1c32ffd",
+   "name": "حالة الطلب sign",
+   "type": "n8n-nodes-base.crypto",
+   "typeVersion": 1,
+   "position": [
+    1320,
+    -100
+   ],
+   "parameters": {
+    "action": "hmac",
+    "type": "SHA256",
+    "value": "={{ $json.body }}",
+    "dataPropertyName": "sig",
+    "secret": "={{ $('الإعدادات').first().json.secret }}",
+    "encoding": "hex"
+   }
+  },
+  {
+   "id": "3b3dd4dc-a684-4982-b851-f42418466788",
+   "name": "حالة الطلب send",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1540,
+    -100
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $('الإعدادات').first().json.site }}",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "X-Mutqan-Signature",
+       "value": "={{ $json.sig }}"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "sendBody": true,
+    "contentType": "raw",
+    "rawContentType": "application/json",
+    "body": "={{ $json.body }}",
+    "options": {}
+   }
+  },
+  {
+   "id": "f499f769-06e3-43ff-88d2-8f8ccf2f0260",
+   "name": "لسه من غير فني؟",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    1760,
+    -100
+   ],
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "typeValidation": "loose"
+     },
+     "combinator": "or",
+     "conditions": [
+      {
+       "id": "c2",
+       "leftValue": "={{ $json.data.status }}",
+       "rightValue": "new",
+       "operator": {
+        "type": "string",
+        "operation": "equals"
+       }
+      },
+      {
+       "id": "c3",
+       "leftValue": "={{ $json.data.status }}",
+       "rightValue": "forced",
+       "operator": {
+        "type": "string",
+        "operation": "equals"
+       }
+      }
+     ]
+    },
+    "options": {}
+   }
+  },
+  {
+   "id": "98c3c1f1-d917-4eb2-87f7-649e8ec96d6e",
+   "name": "نبّه الماستر body",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1980,
+    -200
+   ],
+   "parameters": {
+    "jsCode": "const body = JSON.stringify({ op: 'master', text: '⚠️ الطلب #' + ($json.data.number || $json.data.id) + ' لسه من غير فني بعد نص ساعة — رد: اعتمد ' + ($json.data.number || '') });\nreturn [{ json: { body } }];"
+   }
+  },
+  {
+   "id": "80fda89f-5c5f-418c-8bff-bba70857cc1f",
+   "name": "نبّه الماستر sign",
+   "type": "n8n-nodes-base.crypto",
+   "typeVersion": 1,
+   "position": [
+    2200,
+    -200
+   ],
+   "parameters": {
+    "action": "hmac",
+    "type": "SHA256",
+    "value": "={{ $json.body }}",
+    "dataPropertyName": "sig",
+    "secret": "={{ $('الإعدادات').first().json.secret }}",
+    "encoding": "hex"
+   }
+  },
+  {
+   "id": "11c9b74c-39c3-4c80-93c5-00e5a733eb08",
+   "name": "نبّه الماستر send",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    2420,
+    -200
+   ],
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $('الإعدادات').first().json.site }}",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "X-Mutqan-Signature",
+       "value": "={{ $json.sig }}"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "sendBody": true,
+    "contentType": "raw",
+    "rawContentType": "application/json",
+    "body": "={{ $json.body }}",
+    "options": {}
+   }
+  }
+ ],
+ "connections": {
+  "أحداث متقن": {
+   "main": [
+    [
+     {
+      "node": "الإعدادات",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "الإعدادات": {
+   "main": [
+    [
+     {
+      "node": "أوردر جاهز؟",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "أوردر جاهز؟": {
+   "main": [
+    [
+     {
+      "node": "استنى 30 دقيقة",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "استنى 30 دقيقة": {
+   "main": [
+    [
+     {
+      "node": "حالة الطلب body",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "حالة الطلب body": {
+   "main": [
+    [
+     {
+      "node": "حالة الطلب sign",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "حالة الطلب sign": {
+   "main": [
+    [
+     {
+      "node": "حالة الطلب send",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "حالة الطلب send": {
+   "main": [
+    [
+     {
+      "node": "لسه من غير فني؟",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "لسه من غير فني؟": {
+   "main": [
+    [
+     {
+      "node": "نبّه الماستر body",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "نبّه الماستر body": {
+   "main": [
+    [
+     {
+      "node": "نبّه الماستر sign",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "نبّه الماستر sign": {
+   "main": [
+    [
+     {
+      "node": "نبّه الماستر send",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "timezone": "Asia/Riyadh"
+ },
+ "active": false
+}

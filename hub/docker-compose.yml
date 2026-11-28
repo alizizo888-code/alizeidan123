@@ -1,0 +1,43 @@
+# Deploy as a Docker project on the Hostinger VPS (same pattern as the mutqan-wa project). Joins the n8n Traefik network for HTTPS.
+# Environment (project env): HUB_KEY (openssl rand -hex 32), HUB_PASS, HUB_DOMAIN (e.g. hub.vps.oxygen11.com), GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, optional REPORT_WEBHOOK.
+services:
+  hub:
+    image: node:22-bookworm
+    restart: always
+    working_dir: /app
+    environment:
+      - HUB_KEY=${HUB_KEY}
+      - HUB_PASS=${HUB_PASS}
+      - HUB_USER=${HUB_USER:-admin}
+      - HUB_BASE_URL=https://${HUB_DOMAIN}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - REPORT_WEBHOOK=${REPORT_WEBHOOK:-}
+      - HUB_BOT_TOKEN=${HUB_BOT_TOKEN}
+      - GH_TOKEN=${GH_TOKEN:-}
+      - HUB_DB=/data/hub.db
+      - LANDING_DIR=/data/landing
+      - HOST=0.0.0.0
+      - PORT=8787
+      - TZ=Asia/Riyadh
+      - NODE_NO_WARNINGS=1
+    command: >
+      sh -c "([ -d /app/.git ] || git clone -q --depth 1 -b mutqan https://${GH_TOKEN}@github.com/alizizo888-code/mutaqin-oxygen-app.git /app)
+      && (git -C /app pull -q --ff-only || true) && exec node hub/src/server.js"
+    volumes:
+      - hub_app:/app
+      - hub_data:/data
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.hub.rule=Host(`${HUB_DOMAIN}`)
+      - traefik.http.routers.hub.tls=true
+      - traefik.http.routers.hub.entrypoints=web,websecure
+      - traefik.http.routers.hub.tls.certresolver=mytlschallenge
+      - traefik.http.services.hub.loadbalancer.server.port=8787
+    networks: [default, edge]
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+volumes:
+  hub_app: {}
+  hub_data: {}
+networks:
+  edge: { external: true, name: n8n_default }

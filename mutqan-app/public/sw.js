@@ -1,0 +1,56 @@
+/* Mutqan service worker: app shell works offline; API and WordPress are never cached. */
+const V = 'mutqan-__BUILD__'
+self.addEventListener('install', (e) => { self.skipWaiting() })
+self.addEventListener('activate', (e) => {
+  e.waitUntil((async () => {
+    for (const k of await caches.keys()) if (k !== V) await caches.delete(k)
+    await self.clients.claim()
+  })())
+})
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close()
+  const url = e.notification.data && e.notification.data.url ? String(e.notification.data.url).replace(/^#/, '') : ''
+  e.waitUntil((async () => {
+    const all = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+    const w = all[0]
+    if (w) { await w.focus(); if (url) w.postMessage({ type: 'goto', url }); return }
+    await clients.openWindow(self.registration.scope + (url ? '#' + url : ''))
+  })())
+})
+self.addEventListener('fetch', (e) => {
+  const r = e.request
+  if (r.method !== 'GET') return
+  const u = new URL(r.url)
+  if (u.origin !== location.origin || u.pathname.includes('/wp-json/') || u.pathname.includes('/wp-admin') || u.pathname.includes('/wp-login')) return
+  if (r.mode === 'navigate') {   // always try the network first so updates show up; fall back to the cached shell offline
+    e.respondWith(fetch(r).then((res) => { const c = res.clone(); caches.open(V).then((ca) => ca.put('shell', c)); return res }).catch(async () => (await caches.match('shell')) || new Response('<meta charset="utf-8"><body dir="rtl" style="font-family:Tahoma;padding:2rem">لا يوجد اتصال بالإنترنت حاليًا.</body>', { headers: { 'content-type': 'text/html; charset=utf-8' } })))
+    return
+  }
+  if (/\/assets\/|\.(png|svg|webp|woff2?)$/i.test(u.pathname)) {   // hashed build files: cache-first
+    e.respondWith(caches.match(r).then((hit) => hit || fetch(r).then((res) => { if (res.ok) { const c = res.clone(); caches.open(V).then((ca) => ca.put(r, c)) } return res })))
+  }
+})
+
+// Background notifications (Web Push from the site's own server): a new order, a message or a hotline call
+// rings with the app closed and the screen off. When the app is open and in front, it shows the alert itself.
+self.addEventListener('push', (e) => {
+  let d = {}
+  try { d = e.data ? e.data.json() : {} } catch { d = { body: e.data ? e.data.text() : '' } }
+  e.waitUntil((async () => {
+    const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+    if (wins.some((w) => w.visibilityState === 'visible' && w.focused)) return
+    const hi = d.priority === 'high'
+    const icon = new URL('icon-192.png', self.registration.scope).href
+    // Each kind feels different in the hand (the browser plays the phone's own notification sound; the Android app has a tone per kind).
+    const ev = String(d.event || '')
+    const kind = d.kind || (ev.includes('call') ? 'call' : /msg|message|chat|phone_wa/.test(ev) ? 'msg_in' : /new_order|order_bot|wa_handoff|warranty_claim/.test(ev) ? 'order'
+      : /assigned|accepted|rejected|en_route|nearby|arrived|started|progress|completed|contact|distance|order_status/.test(ev) ? 'tech' : 'ops')
+    const VIBE = { order: [500, 150, 500, 150, 900], msg_in: [180, 100, 180], tech: [120, 80, 120, 80, 300], ops: [220, 90, 220, 90, 320], customer: [180, 100, 180], call: [1000, 500, 1000, 500, 1000, 500, 1000], test: [500, 150, 500] }
+    const MARK = { order: '🆕 ', msg_in: '💬 ', tech: '🧰 ', ops: '🛰️ ', call: '📞 ', customer: '' }
+    const title = d.title || 'تنبيه جديد'
+    await self.registration.showNotification(/^\p{Extended_Pictographic}/u.test(title) ? title : (MARK[kind] || '') + title, {
+      body: d.body || '', tag: d.id || undefined, renotify: true, requireInteraction: hi || kind === 'call', silent: false,
+      vibrate: VIBE[kind] || (hi ? VIBE.order : [200, 100, 200]), icon, badge: icon, dir: 'rtl', lang: 'ar', timestamp: Date.now(), data: { url: d.url || '' },
+    })
+  })())
+})

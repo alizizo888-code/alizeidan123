@@ -1,0 +1,230 @@
+{
+ "date": "2026-11-09",
+ "time": "14:30",
+ "sites": [
+  {
+   "id": "oxygen",
+   "host": "oxygen11.com",
+   "problems": [
+    "خريطة الموقع عليها noindex"
+   ],
+   "sitemaps": 6,
+   "home": [
+    200,
+    0.3
+   ]
+  },
+  {
+   "id": "mutqan",
+   "host": "mutqan.oxygen11.com",
+   "problems": [
+    "خريطة الموقع عليها noindex"
+   ],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.5
+   ]
+  },
+  {
+   "id": "motakhases",
+   "host": "motakhases-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "muhandis",
+   "host": "muhandis-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "aqsa",
+   "host": "aqsa-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "raad",
+   "host": "raad-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "mutamakkin",
+   "host": "mutamakkin-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "khabeer",
+   "host": "khabeer-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.3
+   ]
+  },
+  {
+   "id": "homeservice",
+   "host": "homeservice-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.3
+   ]
+  },
+  {
+   "id": "ibtikar",
+   "host": "ibtikar-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "mutamad",
+   "host": "mutamad-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "misriya",
+   "host": "misriya-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "nukhba",
+   "host": "nukhba-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "riyada",
+   "host": "riyada-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "baraa",
+   "host": "baraa-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "safwa",
+   "host": "safwa-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "tamayuz",
+   "host": "tamayuz-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "nasmat",
+   "host": "nasmat-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "wahat",
+   "host": "wahat-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "amaan",
+   "host": "amaan-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.3
+   ]
+  },
+  {
+   "id": "kafaa",
+   "host": "kafaa-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  },
+  {
+   "id": "jawda",
+   "host": "jawda-maintenance-general-contracting.oxygen11.com",
+   "problems": [],
+   "sitemaps": 5,
+   "home": [
+    200,
+    0.2
+   ]
+  }
+ ]
+}

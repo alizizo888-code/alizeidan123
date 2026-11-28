@@ -1,0 +1,24 @@
+<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ربط الحسابات</title>
+<style>:root{--bg:#f4f6f9;--fg:#14202b;--c:#fff;--b:#d7dee7;--ac:#0f766e;--bad:#b91c1c}@media(prefers-color-scheme:dark){:root{--bg:#0e141b;--fg:#e4ebf2;--c:#17202a;--b:#2a3744;--ac:#2dd4bf;--bad:#f87171}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.7 system-ui;padding:16px;max-width:980px;margin:auto}h1{font-size:22px}h2{font-size:17px;margin-top:0}.card{background:var(--c);border:1px solid var(--b);border-radius:14px;padding:16px;margin:14px 0}
+button,.btn{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}button.s{background:transparent;color:var(--fg);border:1px solid var(--b)}
+input{background:var(--bg);color:var(--fg);border:1px solid var(--b);border-radius:8px;padding:8px;font:inherit;width:100%}.row{display:grid;grid-template-columns:1.2fr 1fr 1.4fr auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--b)}
+.ok{color:var(--ac)}.no{color:var(--bad)}small{opacity:.7}.g{display:flex;gap:8px;flex-wrap:wrap;align-items:center}@media(max-width:700px){.row{grid-template-columns:1fr}}#msg{position:sticky;top:8px;background:var(--c);border:1px solid var(--ac);border-radius:10px;padding:8px 12px;display:none}</style>
+<h1>ربط الحسابات وتفعيل المواقع</h1><div id="msg"></div>
+<div class="card"><h2>١) حسابات جوجل (بلوجر + Search Console)</h2><p>اكتب اسماً للحساب (مثلاً: حساب ١) واضغط ربط، سجّل دخولك في جوجل ووافق. تُحفظ الجلسة مشفّرة وتبقى بلا حاجة لكروم.</p>
+<div class="g"><input id="lab" placeholder="اسم الحساب" style="max-width:240px"><button onclick="location='/oauth/start?label='+encodeURIComponent(lab.value)">ربط حساب جوجل</button></div><div id="accs" style="margin-top:12px"></div></div>
+<div class="card"><h2>٢) استيراد المواقع الحالية</h2><p>يضيف الـ٢٢ موقع ووردبريس وكل مدونات بلوجر المعروفة بحالة «إعداد». بعد ربط حساب جوجل اضغط «اكتشاف المدونات» ليربط مدوناته.</p><div class="g"><button onclick="seed()">استيراد المواقع</button><button class="s" id="disc"></button><button class="s" onclick="act('/api/sites/activate-all','تم تفعيل')">تفعيل كل المربوط</button></div></div>
+<div class="card"><h2>٣) مواقع ووردبريس (٢٢)</h2><p>في كل موقع: المستخدمين ← الملف الشخصي ← كلمات مرور التطبيقات ← أضف «Hub». الصق الاسم وكلمة المرور؛ يتحقق النظام ثم يفعّل الموقع.</p><div id="wp"></div></div>
+<div class="card"><h2>٤) مدونات بلوجر</h2><div id="bl"></div></div>
+<script>
+const $=id=>document.getElementById(id),m=t=>{$('msg').style.display='block';$('msg').textContent=t};
+const api=async(u,b)=>{const r=await fetch(u,{method:b?'POST':'GET',headers:{'content-type':'application/json'},body:b?JSON.stringify(b):undefined}),j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j};
+async function act(u,t,b){try{const j=await api(u,b||{});m(t+' '+JSON.stringify(j));load()}catch(e){m('خطأ: '+e.message)}}
+const seed=()=>act('/api/seed','تم الاستيراد');
+async function load(){const S=await api('/api/state');
+$('accs').innerHTML=S.accounts.filter(a=>a.kind==='google').map(a=>`<div class="row"><b>${a.label}</b><span class="${a.status==='active'?'ok':'no'}">${a.status}</span><small>${a.email||''} · ${a.sites} مدونة</small><button class="s" onclick="act('/api/accounts/discover','اكتشاف',{id:${a.id}})">اكتشاف المدونات</button></div>`).join('')||'<small>لا حسابات بعد</small>';
+const g=S.accounts.find(a=>a.kind==='google');$('disc').textContent='اكتشاف مدونات '+(g?g.label:'الحساب');$('disc').onclick=()=>g?act('/api/accounts/discover','اكتشاف',{id:g.id}):m('اربط حساب جوجل أولاً');
+$('wp').innerHTML=S.sites.filter(s=>s.platform==='wordpress').map(s=>`<div class="row"><div><b>${s.title||s.slug}</b><br><small>${s.url}</small></div><span class="${s.status==='live'?'ok':'no'}">${s.status}</span><div class="g"><input id="u${s.id}" placeholder="المستخدم"><input id="p${s.id}" placeholder="كلمة مرور التطبيق"></div><button onclick="act('/api/wp/connect','ربط',{site_id:${s.id},user:$('u${s.id}').value,app_password:$('p${s.id}').value})">ربط وتفعيل</button></div>`).join('')||'<small>اضغط استيراد المواقع</small>';
+$('bl').innerHTML=S.sites.filter(s=>s.platform==='blogger').map(s=>`<div class="row"><b>${s.title||s.slug}</b><span class="${s.status==='live'?'ok':'no'}">${s.status}</span><small>${s.account_id?'مربوطة':'تنتظر حساب جوجل'}</small><button class="s" onclick="act('/api/sites/activate','تفعيل',{id:${s.id}})">تفعيل</button></div>`).join('')||'<small>لا مدونات بعد</small>'}
+load().catch(e=>m(e.message))
+</script>
